@@ -18,8 +18,6 @@ jobs:
              mkdocs-awesome-pages-plugin \
              lazydocs
       # Generating the api-docs
-      - run: lazydocs \
-             --output-path="./docs/api-docs" 
-             mm
+      - run: lazydocs --output-path="./docs/api-docs" mm
       # Deploying GitHub Pages
       - run: mkdocs gh-deploy --force
