@@ -6,11 +6,5 @@ plugins:
   - search
   - awesome-pages
 
-# Construct the navigation between the pages
-nav: 
-  - Home: index.md
-  - About: about.md
-  - ... # api-docs
-
 # Select theme
 theme: readthedocs

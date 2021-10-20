@@ -18,6 +18,6 @@ jobs:
              mkdocs-awesome-pages-plugin \
              lazydocs
       # Generating the api-docs
-      - run: lazydocs --output-path="./docs/api-docs" mm
+      - run: lazydocs --output-path="./docs/api-docs" mm --overview-file="README.md" --src-base-url="https://edavalosanaya.github.io/PyMMDT" 
       # Deploying GitHub Pages
-      - run: mkdocs gh-deploy --force
+      - run: mkdocs gh-deploy
