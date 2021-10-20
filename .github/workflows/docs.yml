@@ -15,7 +15,8 @@ jobs:
       # Installing the needed dependencies to deploy Docs Page
       - run: pip install \
              mkdocs-material \
-             mkdocs-awesome-pages-plugin
+             mkdocs-awesome-pages-plugin \
+             lazydocs
       # Generating the api-docs
       - run: lazydocs \
              --output-path="./docs/api-docs" 
