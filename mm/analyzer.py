@@ -2,7 +2,8 @@
 __package__ = 'mm'
 
 # Built-in Imports
-from typing import List, Optional
+from typing import List, Optional, Union
+import collections
 
 # Third Party Imports
 import networkx as nx
@@ -16,8 +17,12 @@ from .visualization import Visualization
 
 class Analyzer:
 
-    def __init__(self, collector: Collector, processes: List[Process], visualizations:Optional[List[Visualization]]=None):
-        self.collector = collector
+    def __init__(
+            self, 
+            collector: Collector,
+            processes: List[Process], 
+            visualizations: Optional[List[Visualization]]=None
+        ):
         self.processes = {process.name: process for process in processes}
         
         if type(visualizations) != type(None):
@@ -31,32 +36,23 @@ class Analyzer:
         self.data_flow_graph = nx.DiGraph()
 
         # Add the collector and processes in the process graph
-        self.data_flow_graph.add_node(list(self.collector.data_streams.keys()))
         self.data_flow_graph.add_node(list(self.processes.keys()))
  
-        # Now after all the components have been added to the graph,
-        # add the edges and their labels. The labels specific which 
-        # data stream to pull from the src to the destination of the 
-        # edge.
-        
         for process in self.processes.values():
 
             # Connect dependencies to the process
             for x in process.inputs:
                 self.data_flow_graph.add_edge(x, process.name)
 
-        # Calculating the depth of each node
-        # nx.all_pairs_shortest_path_length(G)
+    def update_session(self, in_sample: DataSample) -> None:
+        ...
 
-    # def forward(self, x: DataSample):
+    def get_sample_processes(self, in_sample: DataSample) -> List[Process]:
+        ...
 
-    #     # Determining where the data sample needs to go
-    #     successors = self.data_flow_graph[x.data_stream_name]
+    def get_sample_visuals(self, in_sample: DataSample) -> List[Visualization]:
+        ...
 
-    #     # Feed into those processes and storing their results for each
-    #     for successor for successors:
-    #         successor.__call__(x)
+    def get_all_inputs(self, element: Union[Process, Visualization]) -> dict:
+        ...
 
-    #     # Then 
-
-    #     return None        

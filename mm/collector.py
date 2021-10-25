@@ -29,15 +29,11 @@ class OfflineCollector(Collector):
         dss_times= []
         for ds_name, ds in self.data_streams.items():
 
-            # Extracting the time column and generated tags and indecies
-            time_series = ds.get_timestamps().to_frame()
-            time_series.columns = ['time']
+            # Obtaining each ds's timetrack and adding an ds_type 
+            # identifier to know which data stream
+            time_series = ds.timetrack.copy()
             stream_name_stamp = [ds.name for x in range(len(ds))]
-            stream_index = [x for x in range(len(ds))]
-
-            # Creating the dataframe
             time_series['ds_type'] = stream_name_stamp
-            time_series['ds_index'] = stream_index
 
             # Storing the dataframe with all the other streams
             dss_times.append(time_series)
@@ -49,13 +45,11 @@ class OfflineCollector(Collector):
         if len(self.data_streams) > 1:
             self.global_timetrack = self.global_timetrack.sort_values(by='time')
 
-        # Setting the index to zero to begin iterating over the data
-        self.index = 0
-
     def __iter__(self):
+        self.index = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> DataSample:
         # Stop iterating when index has overcome the size of the data
         if self.index >= len(self):
             raise StopIteration
@@ -65,15 +59,9 @@ class OfflineCollector(Collector):
             next_ds_meta = self.global_timetrack.iloc[self.index]
             next_ds_pointer = next_ds_meta['ds_index']
             next_ds_name = next_ds_meta['ds_type']
-            next_ds_time = next_ds_meta['time']
 
-            # Construct data sample (not loading data yet!)
-            data_sample = DataSample(
-                next_ds_name, 
-                next_ds_time, 
-                next_ds_pointer, 
-                self.data_streams[next_ds_name]
-            )
+            # Get the sample
+            data_sample = self.data_streams[next_ds_name][next_ds_pointer]
 
             # Change the index
             self.index += 1

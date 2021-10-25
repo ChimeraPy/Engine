@@ -2,7 +2,7 @@
 __package__ = 'mm'
 
 # Built-in Imports
-from typing import List
+from typing import List, Optional
 
 class Visualization:
     """Class intended to execute after all the processes to visualize data.
@@ -10,14 +10,12 @@ class Visualization:
     Attributes:
         inputs (list): A list of data stream names that are needed to
         create the visualization
-        outputs (list): A list of output data streams. The list of names
-        are used to create new datastreams.
+        output (str): the name of the output stream from the process
     """
 
-    def __init__(self, per_update: int, inputs: List[str], outputs: List[str]):
+    def __init__(self, inputs: List[str], output: Optional[str]):
         self.inputs = inputs
-        self.outputs = outputs
-        self.per_update = per_update
+        self.output = output
 
     def forward(self, x):
         """Function that generates the visualization.
