@@ -68,5 +68,21 @@ class OfflineCollector(Collector):
 
             return data_sample
 
+    def __getitem__(self, index):
+        
+        if index >= len(self):
+            raise InvalidIndexError
+        else:
+
+            # Determine which datastream is next
+            next_ds_meta = self.global_timetrack.iloc[index]
+            next_ds_pointer = next_ds_meta['ds_index']
+            next_ds_name = next_ds_meta['ds_type']
+
+            # Get the sample
+            data_sample = self.data_streams[next_ds_name][next_ds_pointer]
+
+            return data_sample
+
     def __len__(self):
         return len(self.global_timetrack)

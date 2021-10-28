@@ -1,3 +1,6 @@
+# Ignore debugging configurations
+.vimspector.json
+
 # Ignoring the documentation site
 site/
 
