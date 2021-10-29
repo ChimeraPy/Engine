@@ -42,12 +42,11 @@ class TestProcess(unittest.TestCase):
 
         # Create processes
         draw_text = mm.video.ProcessDrawText(
-            name='draw_video',
-            inputs=['csv', 'video']
+            inputs=['csv', 'video'],
+            output='drawn_video'
         )
         show_video = mm.video.ProcessShowVideo(
-            name='show_video',
-            inputs=['draw_video']
+            inputs=['drawn_video'],
         )
 
         # Initiate collector and analyzer
@@ -68,8 +67,10 @@ class TestProcess(unittest.TestCase):
 
         # Test that the output is indeed a DataSample
         output = self.session.apply(self.processes[0])
+        output2 = self.session.apply(self.processes[1])
 
         self.assertTrue(isinstance(output, mm.DataSample))
+        self.assertTrue(isinstance(output2, mm.DataSample))
 
 if __name__ == "__main__":
     # unittest.main()

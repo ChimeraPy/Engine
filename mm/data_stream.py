@@ -44,6 +44,7 @@ class OfflineDataStream(DataStream):
     def __init__(self, name: str, timetrack: pd.DataFrame):
         super().__init__(name)
         self.timetrack = timetrack
+        self.index = 0
 
     def __iter__(self):
         self.index = 0
@@ -68,7 +69,8 @@ class OfflineDataStream(DataStream):
         # Obtain the mask 
         mask = self.timetrack['time'] > trim_time
         new_timetrack = self.timetrack[mask]
-        new_timetrack.reset_index()
+        new_timetrack.reset_index(inplace=True)
+        new_timetrack = new_timetrack.drop(columns=['index'])
 
         # Store the new timetrack
         self.timetrack = new_timetrack
@@ -78,7 +80,11 @@ class OfflineDataStream(DataStream):
         # Obtain the mask 
         mask = self.timetrack['time'] < trim_time
         new_timetrack = self.timetrack[mask]
-        new_timetrack.reset_index()
-
+        new_timetrack.reset_index(inplace=True)
+        new_timetrack = new_timetrack.drop(columns=['index'])
+        
         # Store the new timetrack
         self.timetrack = new_timetrack
+
+    def set_index(self, new_index):
+        self.index = new_index

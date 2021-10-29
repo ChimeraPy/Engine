@@ -2,7 +2,7 @@
 __package__ = 'mm'
 
 # Built-in Imports
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union, Tuple, Iterator
 import collections
 
 # Third Party Imports
@@ -20,8 +20,7 @@ class Analyzer:
     def __init__(
             self, 
             collector: Collector,
-            processes: List[Process], 
-            # visualizations: Optional[List[Visualization]]=None
+            processes: List[Process]
         ):
         """
         Confirm that processes and visualizations inputs are possible.
@@ -35,26 +34,27 @@ class Analyzer:
         self.data_flow_graph.add_nodes_from(list(collector.data_streams.keys())) # names of the streams
 
         # Constructing process by name look up table
-        self.secondary_stream_table = {x.name: x for x in processes}
+        self.process_lookup_table = {x.output: x for x in processes if x.output not in x.inputs}
 
         # Accounting for each process
         for process in processes:
 
             # Connect dependencies to the process
-            for dependency in process.inputs:
+            for input in process.inputs:
 
                 # If the dependency is the output of another process
-                if dependency in self.secondary_stream_table.keys():
-                    self.data_flow_graph.add_edge(self.secondary_stream_table[dependency], process)
+                if input in self.process_lookup_table.keys():
+                    self.data_flow_graph.add_edge(self.process_lookup_table[input], process)
                 else:
                     # else, the dependecy is a collector's stream
-                    self.data_flow_graph.add_edge(dependency, process)
+                    self.data_flow_graph.add_edge(input, process)
 
         # Then creating a look-up table of the process dependent on
         # which samples
         self.pipeline_lookup = {}
         for data_stream_type in collector.data_streams.keys():
-            self.pipeline_lookup[data_stream_type] = self.data_flow_graph.successors(data_stream_type)
+            all_dependencies = sum(nx.dfs_successors(self.data_flow_graph, data_stream_type).values(), [])
+            self.pipeline_lookup[data_stream_type] = [x for x in all_dependencies if isinstance(x, Process)]
 
     def get_sample_pipeline(self, sample: DataSample) -> List[Process]:
         return self.pipeline_lookup[sample.dtype]

@@ -16,7 +16,7 @@ class OfflineVideoDataStream(OfflineDataStream):
     def __init__(self, 
             name: str, 
             video_path: Union[pathlib.Path, str], 
-            start_time: datetime.datetime
+            start_time: pd.Timestamp
         ):
 
         # Ensure that the video is a str
@@ -41,11 +41,17 @@ class OfflineVideoDataStream(OfflineDataStream):
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
 
+    def set_index(self, new_index):
+        if self.index != new_index:
+            self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, new_index-1)
+            self.index = new_index
+
     def __getitem__(self, index) -> DataSample:
         # Only if the index does not match request index should we 
         # change the location of the buffer reader
         if self.index != index:
             self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, index-1)
+            self.index = index
 
         # Load data
         res, frame = self.video_cap.read()

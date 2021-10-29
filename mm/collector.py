@@ -45,6 +45,9 @@ class OfflineCollector(Collector):
         if len(self.data_streams) > 1:
             self.global_timetrack = self.global_timetrack.sort_values(by='time')
 
+        # For debugging purposes
+        # self.global_timetrack.to_excel('test.xlsx', index=False)
+
     def __iter__(self):
         self.index = 0
         return self
@@ -60,8 +63,12 @@ class OfflineCollector(Collector):
             next_ds_pointer = next_ds_meta['ds_index']
             next_ds_name = next_ds_meta['ds_type']
 
+            # Checking if the pointer aligns with the data stream
+            if next_ds_pointer != self.data_streams[next_ds_name].index:
+               self.data_streams[next_ds_name].set_index(next_ds_pointer)
+
             # Get the sample
-            data_sample = self.data_streams[next_ds_name][next_ds_pointer]
+            data_sample = next(self.data_streams[next_ds_name])
 
             # Change the index
             self.index += 1

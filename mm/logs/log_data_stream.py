@@ -1,6 +1,7 @@
 __package__ = 'logs'
 
 import collections
+import tqdm
 
 import pandas as pd
 
@@ -47,6 +48,10 @@ class OfflineCSVDataStream(OfflineDataStream):
 
         """
 
+        # Testing conditions that cause problems
+        if not hasattr(process, 'output'):
+            raise AttributeError("classmethod: from_process_and_ds requires process to have 'output' parameter.")
+
         # Create data variable that will later be converted to a DataFrame
         data_store = collections.defaultdict(list)
         data_columns = set()
@@ -81,7 +86,7 @@ class OfflineCSVDataStream(OfflineDataStream):
         df = pd.DataFrame(data_store)
 
         # Returning the construct object
-        return cls(name=process.name, data=df, time_column='time', data_columns=list(data_columns))
+        return cls(name=process.output, data=df, time_column='time', data_columns=list(data_columns))
 
     def __getitem__(self, index) -> DataSample:
 

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Optional
 
 from .data_sample import DataSample
 from .process import Process
@@ -10,10 +10,19 @@ class Session:
         self.records = {}
 
     def update(self, sample: DataSample) -> None:
+        # Add the sample to the session data
         self.records[sample.dtype] = sample
-
-    def apply(self, process: Process) -> DataSample:
         
+    def apply(self, process: Process) -> Optional[DataSample]:
+
+        # Before obtainin the needed inputs, determine first if there
+        # is the needed inputs
+        inputs_missing = [x not in self.records for x in process.inputs]
+      
+        # Even if one input is missing, skip it
+        if any(inputs_missing):
+            return None
+
         # First obtain the inputs required for the process
         inputs = [self.records[x] for x in process.inputs]
 
@@ -21,6 +30,7 @@ class Session:
         output = process.forward(*inputs)
 
         # Store the output of the process to the session
-        self.update(output)
+        if isinstance(output, DataSample):
+            self.update(output)
 
         return output

@@ -18,7 +18,7 @@ def _data_sample_construction_decorator(func):
 
             # Construct a data sample around the results
             data_sample = DataSample(
-                args[0].name, # the class is the first argument
+                args[0].output, # the class is the first argument
                 latest_timestamp,
                 rt
             )
@@ -44,12 +44,15 @@ class MetaProcess(type):
 class Process(metaclass=MetaProcess):
     """Generic class that compartmentalizes computational steps for a datastream."""
 
-    def __init__(self, name: str, inputs: List[str]):
-        self.name = name
+    def __init__(self, inputs: List[str], output:Optional[str]=None):
         self.inputs = inputs
+        self.output = output
 
     def __repr__(self):
-        return f"{self.name}"
+        return f"{self.__class__.__name__}"
+
+    def __str__(self):
+        return self.__repr__()
     
     def forward(self, x: DataSample): 
         """A step where an data sample is used as input for the process.
