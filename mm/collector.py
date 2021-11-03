@@ -9,19 +9,46 @@ import pandas as pd
 
 # Internal Imports
 from .data_sample import DataSample
+from .data_stream import OfflineDataStream
 
 ########################################################################
 # Classes
 ########################################################################
 
 class Collector:
+    """Generic collector that stores a data streams.
+
+    Args:
+        data_streams (List[mm.DataStream]): A list of data streams.
+
+    Attributes:
+        data_streams (dict{str: mm.DataStream}): A dictionary of the 
+        data streams that its keys are the name of the data streams.
+
+    """
     
     def __init__(self, data_streams: List):
         self.data_streams = {x.name:x for x in data_streams}
 
 class OfflineCollector(Collector):
+    """Generic collector that stores only offline data streams.
 
-    def __init__(self, data_streams: List):
+    The offline collector allows the use of both __getitem__ and __next__
+    to obtain the data pointer to a data stream to fetch the actual data.
+
+    Args:
+        data_streams (List[mm.DataStream]): A list of data streams.
+
+    Attributes:
+        data_streams (dict{str: mm.DataStream}): A dictionary of the 
+        data streams that its keys are the name of the data streams.
+        global_timetrack (pd.DataFrame): A data frame that stores the time,
+        data stream type, and data pointers to allow the iteration over
+        all samples in all data streams efficiently.
+
+    """
+
+    def __init__(self, data_streams: List[OfflineDataStream]):
         super().__init__(data_streams)
 
         # Data Streams (DSS) times, just extracting all the time stamps
@@ -78,7 +105,7 @@ class OfflineCollector(Collector):
     def __getitem__(self, index):
         
         if index >= len(self):
-            raise InvalidIndexError
+            raise IndexError
         else:
 
             # Determine which datastream is next

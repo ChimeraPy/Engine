@@ -14,17 +14,56 @@ from .data_sample import DataSample
 from .process import Process
 from .collector import Collector
 from .process import Process
+from .session import Session
 
 class Analyzer:
+        """
+        Data Processing and Analysis coordinator. 
 
+        The Analyzer is the coordinator between the other modules. First,
+        the analyzer determines the flow of data from the data streams
+        stored in the collector and the given processes. Once the analyzer
+        constructs the data flow graph, the pipelines for the input 
+        data stream are determined and stored.
+
+        Then, when feeding new data samples, the analyzer send them to
+        the right pipeline and its processes. The original data sample and
+        its subsequent generated data sample in the pipeline are stored
+        in the Session as a means to keep track of the latest sample.
+
+        Args:
+            collector (mm.Collector): The collector used to match the 
+            timetracks of each individual data stream.
+            processes (List[mm.Process]): A list of processes to be executed
+            depending on their inputs and triggers.
+            session (mm.Session): The session that stores all of the latest
+            data samples from original and generated data streams.
+
+        Attributes:
+            collector (mm.Collector)
+            processes (List[mm.Process])
+            session (mm.Session)
+            data_flow_graph (nx.DiGraph): The data flow constructed from
+            the data streams and the processes.
+            pipeline_lookup (dict): A dictionary that stores the pipelines
+            for each type of input data stream.
+
+        Todo:
+            * Make the session have the option to save intermediate 
+            data sample during the analysis, if the user request this feature.
+
+        """
     def __init__(
             self, 
             collector: Collector,
-            processes: List[Process]
+            processes: List[Process],
+            session: Session
         ):
-        """
-        Confirm that processes and visualizations inputs are possible.
-        """
+
+        # Store inputs parameters
+        self.collector = collector
+        self.processes = processes
+        self.session = session
 
         # Construct dependency graph
         self.data_flow_graph = nx.DiGraph()
@@ -33,28 +72,88 @@ class Analyzer:
         self.data_flow_graph.add_nodes_from(processes)
         self.data_flow_graph.add_nodes_from(list(collector.data_streams.keys())) # names of the streams
 
-        # Constructing process by name look up table
-        self.process_lookup_table = {x.output: x for x in processes if x.output not in x.inputs}
+        # Table from generated ds -> processes that generates it
+        self.ds_generated_from_process = {x.output: x for x in processes if x.output not in x.inputs}
+
+        # Table of trigger for processes (not all processes use this)
+        self.trigger_lookup = collections.defaultdict(list)
 
         # Accounting for each process
         for process in processes:
 
-            # Connect dependencies to the process
-            for input in process.inputs:
+            # If the process has a trigger, use that instead of the input
+            if process.trigger:
 
-                # If the dependency is the output of another process
-                if input in self.process_lookup_table.keys():
-                    self.data_flow_graph.add_edge(self.process_lookup_table[input], process)
-                else:
-                    # else, the dependecy is a collector's stream
-                    self.data_flow_graph.add_edge(input, process)
+                # Add that to a lookup table 
+                self.trigger_lookup[process.trigger].append(process)
+
+            # Else, the process gets trigger when new input is available
+            else:
+
+                # Connect dependencies to the process
+                for input in process.inputs:
+
+                    # If the dependency is the output of another process
+                    if input in self.ds_generated_from_process.keys():
+                        self.data_flow_graph.add_edge(self.ds_generated_from_process[input], process)
+                    else:
+                        # else, the dependecy is a collector's stream
+                        self.data_flow_graph.add_edge(input, process)
 
         # Then creating a look-up table of the process dependent on
         # which samples
         self.pipeline_lookup = {}
         for data_stream_type in collector.data_streams.keys():
+            # Determine the processes that are dependent on the data_type
             all_dependencies = sum(nx.dfs_successors(self.data_flow_graph, data_stream_type).values(), [])
+            # The pipeline only consist of subsequent processes
             self.pipeline_lookup[data_stream_type] = [x for x in all_dependencies if isinstance(x, Process)]
 
     def get_sample_pipeline(self, sample: DataSample) -> List[Process]:
-        return self.pipeline_lookup[sample.dtype]
+        """Get the processes that are dependent to this type of data sample.
+
+        Args:
+            sample (mm.DataSample): The data sample that contains the 
+            data type used to select the data pipeline.
+
+        """
+        return self.pipeline_lookup[sample.dtype] + self.trigger_lookup[sample.dtype]
+
+    def step(self, sample: DataSample):
+        """The main routine executed to process a data sample and update 
+        other subsequent data samples.
+
+        Args:
+            sample (mm.DataSample): The new input data sample to will be
+            propagated though its corresponding pipeline and stored.
+
+        """
+        
+        # Add the sample to the analyzer's session data
+        self.session.update(sample)
+
+        # Obtain the processes that are dependent on the sample
+        s_p = self.get_sample_pipeline(sample)
+
+        # Forward the sample throughout all the processes
+        for process in s_p:
+
+            # Obtain the needed inputs for the process 
+            output = self.session.apply(process)
+
+        return None
+
+    def close(self):
+        """The closing routine that executes the processes, collector,
+        session's closing routines as well."""
+
+        # Close all the processes
+        for process in self.processes:
+            process.close()
+
+        # Close all the data streams in the collector
+        for data_stream in self.collector.data_streams.values():
+            data_stream.close()
+
+        # Closing the session
+        self.session.close()

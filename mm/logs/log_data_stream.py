@@ -1,5 +1,6 @@
 __package__ = 'logs'
 
+from typing import List
 import collections
 import tqdm
 
@@ -10,12 +11,29 @@ from mm.process import Process
 from mm.data_sample import DataSample
 
 class OfflineCSVDataStream(OfflineDataStream):
+    """Implementation of Offline DataStream focused on CSV data.
+
+    Args:
+        name (str): The name of the data stream.
+        data (pd.DataFrame): The loaded CSV data in pd.DataFrame form
+        time_column (str): The column within the data that has the 
+        time data
+        data_columns (List[str]): A list of string containing the name
+        of the data columns to select from.
+
+    Attributes:
+        name (str): The name of the data stream.
+        data (pd.DataFrame): The loaded CSV data in pd.DataFrame form
+        data_columns (List[str]): A list of string containing the name
+        of the data columns to select from.
+    """
 
     def __init__(
-            self, name: str, 
+            self, 
+            name: str, 
             data: pd.DataFrame, 
             time_column: str, 
-            data_columns: list
+            data_columns: List[str]
         ):
 
         # Storing the data and which columns to find it
@@ -41,7 +59,7 @@ class OfflineCSVDataStream(OfflineDataStream):
 
         Args:
             process (Process): the applied process
-            in_ds (DataFrame): the incoming data stream to be processed
+            in_ds (OfflineCSVDataStream): the incoming data stream to be processed
 
         Returns:
             self (OfflineCSVDataStream): the generated data stream

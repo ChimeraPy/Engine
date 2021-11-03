@@ -28,7 +28,7 @@ def _data_sample_construction_decorator(func):
     return wrapper
 
 class MetaProcess(type):
-    """
+    """A meta class to ensure that the output of the process is a DataSample
 
     Information: https://stackoverflow.com/questions/57104276/python-subclass-method-to-inherit-decorator-from-superclass-method
     """
@@ -42,11 +42,35 @@ class MetaProcess(type):
         return super(MetaProcess, cls).__new__(cls, name, bases, attr)
 
 class Process(metaclass=MetaProcess):
-    """Generic class that compartmentalizes computational steps for a datastream."""
+    """Generic class that compartmentalizes computational steps for a datastream.
 
-    def __init__(self, inputs: List[str], output:Optional[str]=None):
+    Args:
+        inputs (List[str]): A list of strings that specific what type of 
+        data stream inputs are needed to compute. The order in which they
+        are provided imply the order in the arguments of the ``forward`` method.
+        Whenever a new data sample is obtain for the input, this process
+        is executed.
+
+        output (Optional[str]): The name used to store the output of
+        the ``forward`` method.
+
+        trigger (Optional[str]): An optional parameter that overwrites
+        the inputs as the trigger. Instead of executing this process
+        everytime there is a new data sample for the input, it now only
+        executes this process when a new sample with the ``data_type`` of 
+        the trigger is obtain.
+
+    """
+
+    def __init__(
+            self, 
+            inputs: List[str], 
+            output: Optional[str]=None,
+            trigger: Optional[str]=None
+        ):
         self.inputs = inputs
         self.output = output
+        self.trigger = trigger
 
     def __repr__(self):
         return f"{self.__class__.__name__}"
@@ -64,4 +88,8 @@ class Process(metaclass=MetaProcess):
             NotImplementedError: forward method needs to be overwritten.
         """
         raise NotImplementedError("forward method needs to be implemented.")
+
+    def close(self):
+        """Generic function performed to close the process."""
+        ...
 
