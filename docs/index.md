@@ -1,17 +1,27 @@
-# Welcome to MkDocs
+# PyMMDT
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+Welcome to PyMMDT documentation! The GO-TO spot for easy and modular multimodal analysis and visualization.
 
-## Commands
+## What is PyMMDT?
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+The objective of PyMMDT library is to make multimodal data collection,
+processing, and visualization for both the offline and online setting an 
+easier task. Our modular structure helps make this library flexible to 
+be molded and shaped to your project's needs.
 
-## Project layout
+| ![architecture](imgs/architecture.png) |
+|:--:|
+| *PyMDDT General Architecture* |
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+The general architecture is shown above. Its composed of four main components: ``DataStream``, ``Process``, ``Collector``, and ``Analyzer``. Each component will be discussed in further detail in the subsequent subsections. 
+
+## Roadmap
+
+PyMMDT is still under-development, but we hope that with more effort, time and code contributions, PyMMDT becomes an empowering tool for multimodal data collection, processing, and visualization. Below include features that we hope to include soon:
+
+- Create UI tool
+- Online PyMMDT implementation
+    - Online Collector
+    - Online Data Stream
+    - Sensor
+- Audio subpackage

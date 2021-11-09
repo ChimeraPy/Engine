@@ -1,5 +1,16 @@
-from typing import Optional
+"""Module focused on the ``Session`` implementation.
 
+Contains the following classes:
+    ``Session``
+"""
+
+# Package Management
+__package__ = 'mm'
+
+# Built-in Imports
+from typing import Optional, Dict
+
+# Internal Imports
 from .data_sample import DataSample
 from .process import Process
 
@@ -7,7 +18,7 @@ class Session:
     """Data Storage that contains the latest version of all data types.
 
     Attributes:
-        records (dict): Stores the latest version of a ``data_type`` sample
+        records (Dict[str, DataSample]): Stores the latest version of a ``data_type`` sample
         or the output of a process.
 
     Todo:
@@ -16,8 +27,10 @@ class Session:
 
     """
 
-    def __init__(self):
-        self.records = {}
+    def __init__(self) -> None:
+        """``Session`` Constructor."""
+
+        self.records: Dict[str, DataSample] = {}
 
     def update(self, sample: DataSample) -> None:
         """Function that stores the sample into the records.
@@ -59,12 +72,12 @@ class Session:
 
         return output
 
-    def close(self):
+    def close(self) -> None:
         """Function executed at the end of the data processing.
 
         Todo:
             * Add an argument to session to allow the saving of the session
-            values at the end 
+            values at the end.
 
         """
         ...

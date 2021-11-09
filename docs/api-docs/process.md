@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="../../mm/process.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `process`
 
@@ -11,19 +11,46 @@
 
 ---
 
-<a href="../../mm/process.py#L3"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L44"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+## <kbd>class</kbd> `MetaProcess`
+A meta class to ensure that the output of the process is a DataSample. 
+
+Information: https://stackoverflow.com/questions/57104276/python-subclass-method-to-inherit-decorator-from-superclass-method 
+
+
+
+
+
+---
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `Process`
+Generic class that compartmentalizes computational steps for a datastream. 
 
 
 
+**Args:**
+ 
+ - <b>`inputs`</b> (List[str]):  A list of strings that specific what type of  data stream inputs are needed to compute. The order in which they are provided imply the order in the arguments of the ``forward`` method. Whenever a new data sample is obtain for the input, this process is executed. 
 
-<a href="../../mm/process.py#L5"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+ - <b>`output`</b> (Optional[str]):  The name used to store the output of the ``forward`` method. 
+
+
+ - <b>`trigger`</b> (Optional[str]):  An optional parameter that overwrites the inputs as the trigger. Instead of executing this process everytime there is a new data sample for the input, it now only executes this process when a new sample with the ``data_type`` of  the trigger is obtain. 
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L79"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(inputs: List[str], outputs: List[str])
+__init__(
+    inputs: List[str],
+    output: Optional[str] = None,
+    trigger: Optional[str] = None
+)
 ```
 
 
@@ -35,12 +62,24 @@ __init__(inputs: List[str], outputs: List[str])
 
 ---
 
-<a href="../../mm/process.py#L9"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L106"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
-### <kbd>method</kbd> `forward`
+### <kbd>method</kbd> `close`
 
 ```python
-forward(x)
+close()
+```
+
+Generic function performed to close the process. 
+
+---
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/process.py#L13"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>function</kbd> `wrapper`
+
+```python
+wrapper(*args, **kwargs)
 ```
 
 

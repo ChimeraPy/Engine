@@ -1,3 +1,10 @@
+"""Module focused on Video Data Streams
+
+Contains the following classes:
+    ``OfflineVideoDataStream``
+
+"""
+
 # Subpackage Management
 __package__ = 'video'
 
@@ -16,13 +23,17 @@ class OfflineVideoDataStream(OfflineDataStream):
 
     Args:
         name (str): The name of the data stream.
+
         video_path (Union[pathlib.Path, str]): The path to the video file
+
         start_time (pd.Timestamp): The timestamp used to dictate the 
         beginning of the video.
 
     Attributes:
         name (str): The name of the data stream.
-        video_path (Union[pathlib.Path, str]): The path to the video file
+
+        video_path (Union[pathlib.Path, str]): The path to the video file.
+
         start_time (pd.Timestamp): The timestamp used to dictate the 
         beginning of the video.
     """

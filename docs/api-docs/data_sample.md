@@ -1,48 +1,54 @@
 <!-- markdownlint-disable -->
 
-<a href="../../mm/data_sample.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `data_sample`
+Module focused on ``DataSample`` implementation. 
 
-
-
+Contains the following classes:  ``DataSample`` 
 
 
 
 ---
 
-<a href="../../mm/data_sample.py#L10"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L14"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `DataSample`
+Standard output data type for Data Streams. 
 
 
 
+**Attributes:**
+ 
+ - <b>`dtype`</b> (str):  Typically the name of the parent DataStream. 
 
-<a href="../../mm/data_sample.py#L12"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+ - <b>`data`</b> (Any):  The data content of the sample. 
+
+
+ - <b>`time`</b> (pd.Timestamp):  the timestamp associated with the sample. 
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(dtype: str, time: Timestamp, pointer: int, data: DataStream)
+__init__(dtype: str, time: Timestamp, data) → None
 ```
 
+Constructor for ``DataSample``. 
 
 
 
+**Args:**
+ 
+ - <b>`dtype`</b> (str):  Typically the name of the parent DataStream. 
 
 
+ - <b>`data`</b> (Any):  The data content of the sample. 
 
 
----
-
-<a href="../../mm/data_sample.py#L18"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-### <kbd>method</kbd> `load_data`
-
-```python
-load_data()
-```
-
+ - <b>`time`</b> (pd.Timestamp):  the timestamp associated with the sample. 
 
 
 

@@ -1,4 +1,12 @@
-__package__ = 'logs'
+"""Module focused on Tabular Data Stream implementation.
+
+Contains the following classes:
+    ``OfflineTabularDataStream``
+
+"""
+
+# Subpackage Management
+__package__ = 'tabular'
 
 from typing import List
 import collections
@@ -10,20 +18,25 @@ from mm.data_stream import OfflineDataStream
 from mm.process import Process
 from mm.data_sample import DataSample
 
-class OfflineCSVDataStream(OfflineDataStream):
-    """Implementation of Offline DataStream focused on CSV data.
+class OfflineTabularDataStream(OfflineDataStream):
+    """Implementation of Offline DataStream focused on Tabular data.
 
     Args:
         name (str): The name of the data stream.
-        data (pd.DataFrame): The loaded CSV data in pd.DataFrame form
+
+        data (pd.DataFrame): The loaded Tabular data in pd.DataFrame form.
+
         time_column (str): The column within the data that has the 
-        time data
+        time data.
+
         data_columns (List[str]): A list of string containing the name
         of the data columns to select from.
 
     Attributes:
         name (str): The name of the data stream.
-        data (pd.DataFrame): The loaded CSV data in pd.DataFrame form
+
+        data (pd.DataFrame): The loaded Tabular data in pd.DataFrame form.
+
         data_columns (List[str]): A list of string containing the name
         of the data columns to select from.
     """
@@ -59,10 +72,10 @@ class OfflineCSVDataStream(OfflineDataStream):
 
         Args:
             process (Process): the applied process
-            in_ds (OfflineCSVDataStream): the incoming data stream to be processed
+            in_ds (OfflineTabularDataStream): the incoming data stream to be processed
 
         Returns:
-            self (OfflineCSVDataStream): the generated data stream
+            self (OfflineTabularDataStream): the generated data stream
 
         """
 
@@ -104,7 +117,7 @@ class OfflineCSVDataStream(OfflineDataStream):
         df = pd.DataFrame(data_store)
 
         # Returning the construct object
-        return cls(name=process.output, data=df, time_column='time', data_columns=list(data_columns))
+        return cls(name=str(process.output), data=df, time_column='time', data_columns=list(data_columns))
 
     def __getitem__(self, index) -> DataSample:
 

@@ -1,8 +1,15 @@
+"""Module focused on the ``Analyzer`` implementation.
+
+Contains the following classes:
+    ``Analyzer``
+
+"""
+
 # Package Management
 __package__ = 'mm'
 
 # Built-in Imports
-from typing import List, Optional, Union, Tuple, Iterator
+from typing import Sequence, Optional, Union, Tuple, Iterator, Iterable
 import collections
 
 # Third Party Imports
@@ -12,54 +19,64 @@ from networkx.drawing.nx_agraph import graphviz_layout
 # Internal Imports
 from .data_sample import DataSample
 from .process import Process
-from .collector import Collector
+from .collector import Collector, OfflineCollector
 from .process import Process
 from .session import Session
 
 class Analyzer:
-        """
-        Data Processing and Analysis coordinator. 
+    """Multimodal Data Processing and Analysis Coordinator. 
 
-        The Analyzer is the coordinator between the other modules. First,
-        the analyzer determines the flow of data from the data streams
-        stored in the collector and the given processes. Once the analyzer
-        constructs the data flow graph, the pipelines for the input 
-        data stream are determined and stored.
+    The Analyzer is the coordinator between the other modules. First,
+    the analyzer determines the flow of data from the data streams
+    stored in the collector and the given processes. Once the analyzer
+    constructs the data flow graph, the pipelines for the input 
+    data stream are determined and stored.
 
-        Then, when feeding new data samples, the analyzer send them to
-        the right pipeline and its processes. The original data sample and
-        its subsequent generated data sample in the pipeline are stored
-        in the Session as a means to keep track of the latest sample.
+    Then, when feeding new data samples, the analyzer send them to
+    the right pipeline and its processes. The original data sample and
+    its subsequent generated data sample in the pipeline are stored
+    in the Session as a means to keep track of the latest sample.
+
+    Attributes:
+        collector (mm.Collector): The collector used to match the 
+        timetracks of each individual data stream.
+        
+        processes (List[mm.Process]): A list of processes to be executed
+        depending on their inputs and triggers.
+        
+        session (mm.Session): The session that stores all of the latest
+        data samples from original and generated data streams.
+        
+        data_flow_graph (nx.DiGraph): The data flow constructed from
+        the data streams and the processes.
+        
+        pipeline_lookup (dict): A dictionary that stores the pipelines
+        for each type of input data stream.
+
+    Todo:
+        * Make the session have the option to save intermediate 
+        data sample during the analysis, if the user request this feature.
+    """
+
+    def __init__(
+            self, 
+            collector: Union[Collector, OfflineCollector],
+            processes: Sequence[Process],
+            session: Session
+        ) -> None:
+        """Construct the analyzer. 
 
         Args:
             collector (mm.Collector): The collector used to match the 
             timetracks of each individual data stream.
+            
             processes (List[mm.Process]): A list of processes to be executed
             depending on their inputs and triggers.
+            
             session (mm.Session): The session that stores all of the latest
             data samples from original and generated data streams.
 
-        Attributes:
-            collector (mm.Collector)
-            processes (List[mm.Process])
-            session (mm.Session)
-            data_flow_graph (nx.DiGraph): The data flow constructed from
-            the data streams and the processes.
-            pipeline_lookup (dict): A dictionary that stores the pipelines
-            for each type of input data stream.
-
-        Todo:
-            * Make the session have the option to save intermediate 
-            data sample during the analysis, if the user request this feature.
-
         """
-    def __init__(
-            self, 
-            collector: Collector,
-            processes: List[Process],
-            session: Session
-        ):
-
         # Store inputs parameters
         self.collector = collector
         self.processes = processes
@@ -105,30 +122,33 @@ class Analyzer:
         self.pipeline_lookup = {}
         for data_stream_type in collector.data_streams.keys():
             # Determine the processes that are dependent on the data_type
-            all_dependencies = sum(nx.dfs_successors(self.data_flow_graph, data_stream_type).values(), [])
+            all_dependencies: Iterable[Union[Process, str]] = sum(nx.dfs_successors(self.data_flow_graph, data_stream_type).values(), [])
             # The pipeline only consist of subsequent processes
             self.pipeline_lookup[data_stream_type] = [x for x in all_dependencies if isinstance(x, Process)]
 
-    def get_sample_pipeline(self, sample: DataSample) -> List[Process]:
+    def get_sample_pipeline(self, sample: DataSample) -> Sequence[Process]:
         """Get the processes that are dependent to this type of data sample.
 
         Args:
             sample (mm.DataSample): The data sample that contains the 
             data type used to select the data pipeline.
-
+        
         """
         return self.pipeline_lookup[sample.dtype] + self.trigger_lookup[sample.dtype]
 
-    def step(self, sample: DataSample):
-        """The main routine executed to process a data sample and update 
-        other subsequent data samples.
+    def step(self, sample: DataSample) -> None:
+        """Routine executed to process a data sample.
+
+        Given a ``DataSample`` from one of the ``DataStream``s in the 
+        ``Collector``, the ``Analyzer`` propagates the data sample
+        through its respective data pipeline and saves intermediate 
+        and final data samples into its ``Session`` attribute.
 
         Args:
             sample (mm.DataSample): The new input data sample to will be
             propagated though its corresponding pipeline and stored.
-
-        """
         
+        """
         # Add the sample to the analyzer's session data
         self.session.update(sample)
 
@@ -143,10 +163,14 @@ class Analyzer:
 
         return None
 
-    def close(self):
-        """The closing routine that executes the processes, collector,
-        session's closing routines as well."""
+    def close(self) -> None:
+        """Close routine that executes all other's closing routines.
 
+        The ``Analyzer``'s closing routine closes all the ``Process``,
+        ``Collector``, and ``DataStream`` by executing ``.close()`` 
+        methods in each respective component.
+
+        """
         # Close all the processes
         for process in self.processes:
             process.close()

@@ -1,23 +1,69 @@
-name: docs
+# name: docs
+# on:
+#   push:
+#     branches: 
+#       - master
+#       - main
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v2
+#       - uses: actions/setup-python@v2
+#         with:
+#           python-version: 3.x
+#       # Installing the needed dependencies to deploy Docs Page
+#       - run: pip install \
+#              mkdocs-material \
+#              mkdocs-awesome-pages-plugin \
+#              lazydocs
+#       # Generating the api-docs
+#       - run: lazydocs --output-path="./docs/api-docs" mm --overview-file="README.md" --src-base-url="https://edavalosanaya.github.io/PyMMDT" 
+#       # Deploying GitHub Pages
+#       - run: mkdocs gh-deploy --force # --force is necessary!
+
+name: build and deploy mkdocs to github pages
 on:
   push:
-    branches: 
+    branches:
       - master
-      - main
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
         with:
-          python-version: 3.x
-      # Installing the needed dependencies to deploy Docs Page
-      - run: pip install \
-             mkdocs-material \
-             mkdocs-awesome-pages-plugin \
-             lazydocs
-      # Generating the api-docs
-      - run: lazydocs --output-path="./docs/api-docs" mm --overview-file="README.md" --src-base-url="https://edavalosanaya.github.io/PyMMDT" 
-      # Deploying GitHub Pages
-      - run: mkdocs gh-deploy --force # --force is necessary!
+          submodules: "recursive" 
+          fetch-depth: 0       # Fetch all history for .GitInfo and .Lastmod
+
+      # Setting up Python Job
+      - name: Setup Python
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+          architecture: 'x64'
+
+      # Installing dependencies job
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip     # install pip
+          python3 -m pip install mkdocs            # install mkdocs 
+          python3 -m pip install mkdocs-material   # install material theme
+          python3 -m pip install mkdocs-awesome-pages-plugin # install plugin
+          python3 -m pip install lazydocs          # install lazydocs
+
+      # Building the API reference automatically with lazydocs
+      - name: Build api reference 
+        run : |
+          lazydocs --output-path="./docs/api-docs" --src-base-url="https://github.com/edavalosanaya/PyMMDT/blob/main/" mm/
+
+      # Building the site job
+      - name: Build site
+        run: mkdocs build
+
+      # Deploying the mkdocs website
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site

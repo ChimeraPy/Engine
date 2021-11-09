@@ -1,0 +1,42 @@
+@startuml
+skinparam componentStyle rectangle
+
+/' left to right direction '/
+
+' Creating instances
+component "Data Sources" as DS {
+    [File]
+    [Sensor]
+}
+
+node "Raw Data Streams" as RDSS
+database "Raw Data" as RD
+
+component "Pre-Fusion Processing" as PreFP {
+    [Independent Processes]
+}
+
+component Collector {
+    [Time alignment]
+}
+
+component Analyzer {
+    [Session]
+    frame "Post-Fusion Processing" as PostFP {
+        [Mixing Processes]
+    }
+}
+
+node "Multimodal Data Streams" as MDS
+database "Processed Data" as PD
+
+' Connections
+DS --> RDSS
+RDSS -> RD
+RDSS --> PreFP
+PreFP --> Collector
+Collector --> Analyzer
+Analyzer --> MDS
+MDS -> PD
+
+@enduml

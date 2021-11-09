@@ -8,7 +8,7 @@ from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 
 import mm
 import mm.video
-import mm.logs
+import mm.tabular
 
 TEST_DIR = pathlib.Path.cwd() / 'tests'
 DATA_DIR = TEST_DIR  / 'data'
@@ -28,7 +28,7 @@ class TestAnalyzer(unittest.TestCase):
         start_time = a1_data['time'][0]
      
         # Construct data streams
-        ds1 = mm.logs.OfflineCSVDataStream(
+        ds1 = mm.tabular.OfflineTabularDataStream(
             name='csv',
             data=a1_data,
             time_column='time',
@@ -41,19 +41,20 @@ class TestAnalyzer(unittest.TestCase):
         )
 
         # Create processes
-        draw_text = mm.video.ProcessDrawText(
-            name='draw_video',
-            inputs=['csv', 'video']
-        )
-        show_video = mm.video.ProcessShowVideo(
-            name='show_video',
-            inputs=['draw_video']
+        show_video = mm.video.ShowVideo(
+            inputs=['draw_video'],
+            ms_delay=10
         )
 
         # Initiate collector and analyzer
-        self.processes = [draw_text, show_video]
+        self.processes = [show_video]
         self.collector = mm.OfflineCollector([ds1, ds2])
-        self.analyzer = mm.Analyzer(self.collector, self.processes)
+        self.session = mm.Session()
+        self.analyzer = mm.Analyzer(
+            self.collector, 
+            self.processes,
+            self.session
+        )
 
     def test_process_graph(self):
         

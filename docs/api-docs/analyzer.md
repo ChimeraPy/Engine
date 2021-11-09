@@ -1,41 +1,124 @@
 <!-- markdownlint-disable -->
 
-<a href="../../mm/analyzer.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `analyzer`
+Module focused on the ``Analyzer`` implementation. 
+
+Contains the following classes:  ``Analyzer`` 
 
 
+
+---
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+## <kbd>class</kbd> `Analyzer`
+Data Processing and Analysis coordinator.  
+
+The Analyzer is the coordinator between the other modules. First, the analyzer determines the flow of data from the data streams stored in the collector and the given processes. Once the analyzer constructs the data flow graph, the pipelines for the input  data stream are determined and stored. 
+
+Then, when feeding new data samples, the analyzer send them to the right pipeline and its processes. The original data sample and its subsequent generated data sample in the pipeline are stored in the Session as a means to keep track of the latest sample. 
+
+
+
+**Attributes:**
+ 
+ - <b>`collector`</b> (mm.Collector):  The collector used to match the  timetracks of each individual data stream. 
+
+
+ - <b>`processes`</b> (List[mm.Process]):  A list of processes to be executed depending on their inputs and triggers. 
+
+
+ - <b>`session`</b> (mm.Session):  The session that stores all of the latest data samples from original and generated data streams. 
+
+
+ - <b>`data_flow_graph`</b> (nx.DiGraph):  The data flow constructed from the data streams and the processes. 
+
+
+ - <b>`pipeline_lookup`</b> (dict):  A dictionary that stores the pipelines for each type of input data stream. 
+
+
+
+**Todo:**
+ * Make the session have the option to save intermediate  data sample during the analysis, if the user request this feature. 
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L63"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `__init__`
+
+```python
+__init__(
+    collector: Union[Collector, OfflineCollector],
+    processes: List[Process],
+    session: Session
+)
+```
+
+Constructor for the analyzer.  
+
+
+
+**Args:**
+ 
+ - <b>`collector`</b> (mm.Collector):  The collector used to match the  timetracks of each individual data stream. 
+
+
+ - <b>`processes`</b> (List[mm.Process]):  A list of processes to be executed depending on their inputs and triggers. 
+
+
+ - <b>`session`</b> (mm.Session):  The session that stores all of the latest data samples from original and generated data streams. 
 
 
 
 
 ---
 
-<a href="../../mm/analyzer.py#L17"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L166"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
-## <kbd>class</kbd> `Analyzer`
-
-
-
-
-<a href="../../mm/analyzer.py#L19"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-### <kbd>method</kbd> `__init__`
+### <kbd>method</kbd> `close`
 
 ```python
-__init__(
-    collector: Collector,
-    processes: List[Process],
-    visualizations: Optional[List[Visualization]] = None
-)
+close()
 ```
 
+The closing routine that executes the processes, collector, session's closing routines as well. 
+
+---
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L132"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `get_sample_pipeline`
+
+```python
+get_sample_pipeline(sample: DataSample) → List[Process]
+```
+
+Get the processes that are dependent to this type of data sample. 
 
 
 
+**Args:**
+ 
+ - <b>`sample`</b> (mm.DataSample):  The data sample that contains the  data type used to select the data pipeline. 
+
+---
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L142"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `step`
+
+```python
+step(sample: DataSample)
+```
+
+The main routine executed to process a data sample and update  other subsequent data samples. 
 
 
 
+**Args:**
+ 
+ - <b>`sample`</b> (mm.DataSample):  The new input data sample to will be propagated though its corresponding pipeline and stored. 
 
 
 
