@@ -81,10 +81,10 @@ __init__(
     fps: int,
     size: Tuple[int, int],
     trigger: Optional[str] = None
-)
+) → None
 ```
 
-Constructor for SaveVideo. 
+Construct new ``SaveVideo`` instance. 
 
 
 
@@ -109,15 +109,15 @@ Constructor for SaveVideo.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L130"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L131"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
 ```python
-close()
+close() → None
 ```
 
-Closing the video writer and saving the video. 
+Close the video writer and save the video. 
 
 
 

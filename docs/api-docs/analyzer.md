@@ -14,7 +14,7 @@ Contains the following classes:  ``Analyzer``
 <a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `Analyzer`
-Data Processing and Analysis coordinator.  
+Multimodal Data Processing and Analysis Coordinator.  
 
 The Analyzer is the coordinator between the other modules. First, the analyzer determines the flow of data from the data streams stored in the collector and the given processes. Once the analyzer constructs the data flow graph, the pipelines for the input  data stream are determined and stored. 
 
@@ -43,19 +43,19 @@ Then, when feeding new data samples, the analyzer send them to the right pipelin
 **Todo:**
  * Make the session have the option to save intermediate  data sample during the analysis, if the user request this feature. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L63"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L61"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
 __init__(
     collector: Union[Collector, OfflineCollector],
-    processes: List[Process],
+    processes: Sequence[Process],
     session: Session
-)
+) → None
 ```
 
-Constructor for the analyzer.  
+Construct the analyzer.  
 
 
 
@@ -79,19 +79,21 @@ Constructor for the analyzer.
 ### <kbd>method</kbd> `close`
 
 ```python
-close()
+close() → None
 ```
 
-The closing routine that executes the processes, collector, session's closing routines as well. 
+Close routine that executes all other's closing routines. 
+
+The ``Analyzer``'s closing routine closes all the ``Process``, ``Collector``, and ``DataStream`` by executing ``.close()``  methods in each respective component. 
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L132"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L129"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `get_sample_pipeline`
 
 ```python
-get_sample_pipeline(sample: DataSample) → List[Process]
+get_sample_pipeline(sample: DataSample) → Sequence[Process]
 ```
 
 Get the processes that are dependent to this type of data sample. 
@@ -104,15 +106,17 @@ Get the processes that are dependent to this type of data sample.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L142"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/analyzer.py#L139"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `step`
 
 ```python
-step(sample: DataSample)
+step(sample: DataSample) → None
 ```
 
-The main routine executed to process a data sample and update  other subsequent data samples. 
+Routine executed to process a data sample. 
+
+Given a ``DataSample`` from one of the ``DataStream``s in the  ``Collector``, the ``Analyzer`` propagates the data sample through its respective data pipeline and saves intermediate  and final data samples into its ``Session`` attribute. 
 
 
 

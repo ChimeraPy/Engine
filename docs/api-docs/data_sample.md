@@ -36,7 +36,7 @@ Standard output data type for Data Streams.
 __init__(dtype: str, time: Timestamp, data) → None
 ```
 
-Constructor for ``DataSample``. 
+Construct the ``DataSample``. 
 
 
 

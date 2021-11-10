@@ -3,9 +3,11 @@
 <a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/__init__.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `tabular`
-Tabular Subpackage 
+Tabular Subpackage. 
 
-This subpackage contains special implementations of ``DataStream`` such as ``OfflineTabularDataStream`` that handles Tabular files. 
+This subpackage contains special implementations for the following: 
+- ``DataStream`` 
+    - ``OfflineTabularDataStream``  
 
 **Global Variables**
 ---------------

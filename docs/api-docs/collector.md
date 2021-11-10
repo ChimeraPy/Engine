@@ -27,10 +27,10 @@ Generic collector that stores a data streams.
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(data_streams: List[Union[DataStream, OfflineDataStream]]) → None
+__init__(data_streams: Sequence[DataStream]) → None
 ```
 
-Constructor for ``OfflineCollector``. 
+Construct the ``Collector``. 
 
 
 
@@ -65,10 +65,10 @@ The offline collector allows the use of both __getitem__ and __next__ to obtain 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(data_streams: List[OfflineDataStream]) → None
+__init__(data_streams: Sequence[OfflineDataStream]) → None
 ```
 
-Constructor for ``OfflineCollector``. 
+Construct the ``OfflineCollector``. 
 
 
 
@@ -82,7 +82,7 @@ Constructor for ``OfflineCollector``.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/collector.py#L138"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/collector.py#L164"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `OnlineCollector`
 TODO implementation. 
@@ -92,10 +92,10 @@ TODO implementation.
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(data_streams: List[Union[DataStream, OfflineDataStream]]) → None
+__init__(data_streams: Sequence[DataStream]) → None
 ```
 
-Constructor for ``OfflineCollector``. 
+Construct the ``Collector``. 
 
 
 

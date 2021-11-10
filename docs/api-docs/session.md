@@ -27,7 +27,7 @@ Data Storage that contains the latest version of all data types.
 **Todo:**
  * Allow the option to store the intermediate samples stored in the session. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L30"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L29"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
@@ -42,7 +42,7 @@ __init__() → None
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L45"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L43"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `apply`
 
@@ -50,7 +50,7 @@ __init__() → None
 apply(process: Process) → Optional[DataSample]
 ```
 
-Applies the process by obtaining the necessary inputs and stores the generated output in the records. 
+Apply the process by obtaining the necessary inputs and stores the generated output in the records. 
 
 
 
@@ -60,7 +60,7 @@ Applies the process by obtaining the necessary inputs and stores the generated o
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L75"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L71"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
@@ -68,7 +68,7 @@ Applies the process by obtaining the necessary inputs and stores the generated o
 close() → None
 ```
 
-Function executed at the end of the data processing. 
+Close session. 
 
 
 
@@ -77,7 +77,7 @@ Function executed at the end of the data processing.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L35"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `update`
 
@@ -85,7 +85,7 @@ Function executed at the end of the data processing.
 update(sample: DataSample) → None
 ```
 
-Function that stores the sample into the records. 
+Store the sample into the records. 
 
 
 

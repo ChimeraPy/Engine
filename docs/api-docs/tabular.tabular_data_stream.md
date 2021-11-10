@@ -18,6 +18,28 @@ Implementation of Offline DataStream focused on Tabular data.
 
 
 
+**Attributes:**
+ 
+ - <b>`name`</b> (str):  The name of the data stream. 
+
+
+ - <b>`data`</b> (pd.DataFrame):  The loaded Tabular data in pd.DataFrame form. 
+
+
+ - <b>`data_columns`</b> (List[str]):  A list of string containing the name of the data columns to select from. 
+
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L34"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+
+### <kbd>method</kbd> `__init__`
+
+```python
+__init__(name: str, data: DataFrame, time_column: str, data_columns: List[str])
+```
+
+Construct ``OffineTabularDataStream. 
+
+
+
 **Args:**
  
  - <b>`name`</b> (str):  The name of the data stream. 
@@ -33,34 +55,10 @@ Implementation of Offline DataStream focused on Tabular data.
 
 
 
-**Attributes:**
- 
- - <b>`name`</b> (str):  The name of the data stream. 
-
-
- - <b>`data`</b> (pd.DataFrame):  The loaded Tabular data in pd.DataFrame form. 
-
-
- - <b>`data_columns`</b> (List[str]):  A list of string containing the name of the data columns to select from. 
-
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L44"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
-
-### <kbd>method</kbd> `__init__`
-
-```python
-__init__(name: str, data: DataFrame, time_column: str, data_columns: List[str])
-```
-
-
-
-
-
-
-
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L64"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L67"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>classmethod</kbd> `from_process_and_ds`
 
@@ -78,14 +76,14 @@ Class method to construct data stream from an applied process to a data stream.
 
 **Args:**
  
- - <b>`process`</b> (Process):  the applied process 
- - <b>`in_ds`</b> (OfflineTabularDataStream):  the incoming data stream to be processed 
+ - <b>`process`</b> (Process):  the applied process. 
+ - <b>`in_ds`</b> (OfflineTabularDataStream):  the incoming data stream to be processed. 
 
 
 
 **Returns:**
  
- - <b>`self`</b> (OfflineTabularDataStream):  the generated data stream 
+ - <b>`self`</b> (OfflineTabularDataStream):  the generated data stream. 
 
 
 

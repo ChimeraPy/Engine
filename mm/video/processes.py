@@ -41,7 +41,7 @@ class ShowVideo(Process):
         super().__init__(inputs)
         self.ms_delay = ms_delay
 
-    def forward(self, frame_sample: DataSample)- > None:
+    def forward(self, frame_sample: DataSample) -> None:
         """Forward propagate frame_sample.
 
         Args:
