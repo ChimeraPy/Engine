@@ -36,13 +36,13 @@ class ShowVideo(Process):
             required to execute ``ShowVideo``. In this case, it needs a video frame.
 
             ms_delay (int): A millisecond delay between shown frame.
-        """
 
+        """
         super().__init__(inputs)
         self.ms_delay = ms_delay
 
-    def forward(self, frame_sample: DataSample):
-        """Forward function that shows the frame.
+    def forward(self, frame_sample: DataSample)- > None:
+        """Forward propagate frame_sample.
 
         Args:
             frame_sample (mm.DataSample): The data sample that contains
@@ -78,8 +78,8 @@ class SaveVideo(Process):
             fps: int,
             size: Tuple[int, int],
             trigger: Optional[str]=None
-        ):
-        """Constructor for SaveVideo.
+        ) -> None:
+        """Construct new ``SaveVideo`` instance.
 
         Args:
             inputs (List[str]): A list of strings containing the inputs 
@@ -94,6 +94,7 @@ class SaveVideo(Process):
 
             trigger (Optional[str]): The possible trigger to save the video,
             instead of relying on the inputs' update.
+
         """
         super().__init__(inputs, None, trigger)
         
@@ -114,8 +115,8 @@ class SaveVideo(Process):
             self.size
         )
 
-    def forward(self, frame_sample: DataSample):
-        """Forward function that save the frame.
+    def forward(self, frame_sample: DataSample) -> None:
+        """Forward propagate the frame sample.
 
         Args:
             frame_sample (mm.DataSample): The data sample that contains
@@ -127,7 +128,7 @@ class SaveVideo(Process):
         # Write the frame to the video
         self.writer.write(frame)
 
-    def close(self):
-        """Closing the video writer and saving the video."""
+    def close(self) -> None:
+        """Close the video writer and save the video."""
         # Close the video writer
         self.writer.release()

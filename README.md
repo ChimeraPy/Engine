@@ -1,12 +1,8 @@
 # PyMMDT
 
-[//]: # Add tags summarizing the state of the repo
-
-[//]: # First provide a summary of PyMMDT
 PyMMDT is a package that focus on multimodal data analytics and visualization.
 
-[//]: # Features about PyMMDT
-Main Features:
+PyMMDT Main Features:
  * Time alignment of multiple data streams
  * Modular and flexible data pipeline architecture 
  * Video, CSV, and other modality toolkits

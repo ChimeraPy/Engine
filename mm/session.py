@@ -24,16 +24,14 @@ class Session:
     Todo:
         * Allow the option to store the intermediate samples stored in
         the session.
-
     """
 
     def __init__(self) -> None:
         """``Session`` Constructor."""
-
         self.records: Dict[str, DataSample] = {}
 
     def update(self, sample: DataSample) -> None:
-        """Function that stores the sample into the records.
+        """Store the sample into the records.
 
         Args:
             sample (mm.DataSample): The sample to be stored in the records.
@@ -43,15 +41,13 @@ class Session:
         self.records[sample.dtype] = sample
         
     def apply(self, process: Process) -> Optional[DataSample]:
-        """Applies the process by obtaining the necessary inputs and stores
-        the generated output in the records.
+        """Apply the process by obtaining the necessary inputs and stores the generated output in the records.
 
         Args:
             process (mm.Proces): The process to be executed with the
             records.
 
         """
-
         # Before obtainin the needed inputs, determine first if there
         # is the needed inputs
         inputs_missing = [x not in self.records for x in process.inputs]
@@ -73,7 +69,7 @@ class Session:
         return output
 
     def close(self) -> None:
-        """Function executed at the end of the data processing.
+        """Close session.
 
         Todo:
             * Add an argument to session to allow the saving of the session

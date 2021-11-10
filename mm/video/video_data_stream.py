@@ -1,4 +1,4 @@
-"""Module focused on Video Data Streams
+"""Module focused on Video Data Streams.
 
 Contains the following classes:
     ``OfflineVideoDataStream``
@@ -13,21 +13,12 @@ import pathlib
 
 import cv2
 import pandas as pd
-import datetime
 
 from mm.data_stream import OfflineDataStream
 from mm.data_sample import DataSample
 
 class OfflineVideoDataStream(OfflineDataStream):
     """Implementation of Offline DataStream focused on Video data.
-
-    Args:
-        name (str): The name of the data stream.
-
-        video_path (Union[pathlib.Path, str]): The path to the video file
-
-        start_time (pd.Timestamp): The timestamp used to dictate the 
-        beginning of the video.
 
     Attributes:
         name (str): The name of the data stream.
@@ -36,13 +27,25 @@ class OfflineVideoDataStream(OfflineDataStream):
 
         start_time (pd.Timestamp): The timestamp used to dictate the 
         beginning of the video.
+
     """
+
     def __init__(self, 
             name: str, 
             video_path: Union[pathlib.Path, str], 
             start_time: pd.Timestamp
-        ):
+        ) -> None:
+        """Construct new ``OfflineVideoDataStream`` instance.
 
+        Args:
+            name (str): The name of the data stream.
+
+            video_path (Union[pathlib.Path, str]): The path to the video file
+
+            start_time (pd.Timestamp): The timestamp used to dictate the 
+            beginning of the video.
+
+        """
         # Ensure that the video is a str
         if isinstance(video_path, pathlib.Path):
             video_path = str(video_path)
@@ -79,12 +82,21 @@ class OfflineVideoDataStream(OfflineDataStream):
         return (frame_width, frame_height)
 
     def set_index(self, new_index):
-        """Set's the video's index by updating the pointer in OpenCV."""
+        """Set the video's index by updating the pointer in OpenCV."""
         if self.index != new_index:
             self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, new_index-1)
             self.index = new_index
 
     def __getitem__(self, index) -> DataSample:
+        """Get the indexed data sample from the ``OfflineVideoDataStream``.
+
+        Args:
+            index (int): The requested index.
+
+        Returns:
+            DataSample: The indexed data sample.
+
+        """
         # Only if the index does not match request index should we 
         # change the location of the buffer reader
         if self.index != index:
@@ -105,5 +117,6 @@ class OfflineVideoDataStream(OfflineDataStream):
         return data_sample
 
     def close(self):
+        """Close the ``OfflineVideoDataStream`` instance."""
         # Closing the video capture device
         self.video_cap.release()

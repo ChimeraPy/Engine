@@ -21,17 +21,6 @@ from mm.data_sample import DataSample
 class OfflineTabularDataStream(OfflineDataStream):
     """Implementation of Offline DataStream focused on Tabular data.
 
-    Args:
-        name (str): The name of the data stream.
-
-        data (pd.DataFrame): The loaded Tabular data in pd.DataFrame form.
-
-        time_column (str): The column within the data that has the 
-        time data.
-
-        data_columns (List[str]): A list of string containing the name
-        of the data columns to select from.
-
     Attributes:
         name (str): The name of the data stream.
 
@@ -39,6 +28,7 @@ class OfflineTabularDataStream(OfflineDataStream):
 
         data_columns (List[str]): A list of string containing the name
         of the data columns to select from.
+
     """
 
     def __init__(
@@ -48,7 +38,20 @@ class OfflineTabularDataStream(OfflineDataStream):
             time_column: str, 
             data_columns: List[str]
         ):
+        """Construct ``OffineTabularDataStream.
 
+        Args:
+            name (str): The name of the data stream.
+
+            data (pd.DataFrame): The loaded Tabular data in pd.DataFrame form.
+
+            time_column (str): The column within the data that has the 
+            time data.
+
+            data_columns (List[str]): A list of string containing the name
+            of the data columns to select from.
+
+        """
         # Storing the data and which columns to find it
         self.data = data
         self.data_columns = data_columns
@@ -71,14 +74,13 @@ class OfflineTabularDataStream(OfflineDataStream):
         """Class method to construct data stream from an applied process to a data stream.
 
         Args:
-            process (Process): the applied process
-            in_ds (OfflineTabularDataStream): the incoming data stream to be processed
+            process (Process): the applied process.
+            in_ds (OfflineTabularDataStream): the incoming data stream to be processed.
 
         Returns:
-            self (OfflineTabularDataStream): the generated data stream
+            self (OfflineTabularDataStream): the generated data stream.
 
         """
-
         # Testing conditions that cause problems
         if not hasattr(process, 'output'):
             raise AttributeError("classmethod: from_process_and_ds requires process to have 'output' parameter.")
@@ -119,8 +121,16 @@ class OfflineTabularDataStream(OfflineDataStream):
         # Returning the construct object
         return cls(name=str(process.output), data=df, time_column='time', data_columns=list(data_columns))
 
-    def __getitem__(self, index) -> DataSample:
+    def __getitem__(self, index: int) -> DataSample:
+        """Get indexed data sample from ``OfflineTabularDataStream``.
 
+        Args:
+            index (int): The index requested.
+
+        Returns:
+            DataSample: The indexed data sample from the data stream.
+
+        """
         # Have to return a DataSample
         data_sample = DataSample(
             dtype=self.name,
