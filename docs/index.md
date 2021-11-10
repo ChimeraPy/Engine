@@ -25,3 +25,8 @@ PyMMDT is still under-development, but we hope that with more effort, time and c
     - Online Data Stream
     - Sensor
 - Audio subpackage
+
+Code-Level TODOs:
+- Use isort for import handling
+- Use black for automatic reformat code
+- Create repo badges to track codebase quality

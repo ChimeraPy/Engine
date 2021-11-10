@@ -1,0 +1,21 @@
+[metadata]
+name = PyMMDT
+version = 0.0.1
+url = https://github.com/edavalosanaya/PyMMDT
+description = Python MultiModal Data Analytics and Visualization Toolkit
+long_description = file: README.md
+long_description_content_type = text/markdown
+license = GNU GENERAL Public License
+platform = any
+keywords = multimodal, data, analysis, time-series, visualization
+classifiers =
+    Programming Language :: Python :: 3
+    Programming Language :: Python :: 3.9
+
+[options]
+packages = find:
+scripts = 
+    scripts/convert_puml_to_png.py
+install_requires = 
+    numpy
+    pandas

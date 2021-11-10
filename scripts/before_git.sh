@@ -20,3 +20,6 @@ pydocstyle mm/
 echo $'\nLAZYDOCS GENERATION'
 rm docs/api-docs/*.md
 lazydocs --output-path="./docs/api-docs" --src-base-url="https://github.com/edavalosanaya/PyMMDT/blob/main/" mm/
+
+# You can also use twine instead
+# https://twine.readthedocs.io/en/latest/contributing.html
