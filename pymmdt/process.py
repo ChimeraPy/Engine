@@ -6,7 +6,7 @@ Contains the following classes:
 """
 
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import List, Optional
@@ -136,6 +136,7 @@ class Process(metaclass=MetaProcess):
 
         Raises:
             NotImplementedError: forward method needs to be overwritten.
+
         """
         raise NotImplementedError("forward method needs to be implemented.")
 

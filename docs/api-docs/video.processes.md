@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `video.processes`
 Module focused on video process implementations. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``ShowVideo``  ``SaveVideo``
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L20"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L20"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `ShowVideo`
 Basic process that shows the video in a CV window. 
@@ -20,26 +20,26 @@ Basic process that shows the video in a CV window.
 
 **Attributes:**
  
- - <b>`inputs`</b> (List[str]):  A list of strings containing the inputs requred to execute ``ShowVideo``. In this case, it needs a video frame. 
+ - <b>`inputs`</b> (Sequence[str]):  A list of strings containing the inputs requred to execute ``ShowVideo``. In this case, it needs a video frame. 
 
 
  - <b>`ms_delay`</b> (int):  A millisecond delay between shown frame. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L31"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L31"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(inputs: List[str], ms_delay: int = 1)
+__init__(inputs: Sequence[str], ms_delay: int = 1)
 ```
 
-Constructor for ShowVideo. 
+Construct new ``ShowVideo`` instance. 
 
 
 
 **Args:**
  
- - <b>`inputs`</b> (List[str]):  A list of strings containing the inputs required to execute ``ShowVideo``. In this case, it needs a video frame. 
+ - <b>`inputs`</b> (Sequence[str]):  A list of strings containing the inputs required to execute ``ShowVideo``. In this case, it needs a video frame. 
 
 
  - <b>`ms_delay`</b> (int):  A millisecond delay between shown frame. 
@@ -50,7 +50,7 @@ Constructor for ShowVideo.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L58"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `SaveVideo`
 Basic process that saves the video. 
@@ -59,7 +59,7 @@ Basic process that saves the video.
 
 **Attributes:**
  
- - <b>`inputs`</b> (List[str]):  A list of strings containing the inputs  required to execute ``SaveVideo``. In this case, it needs a video frame. 
+ - <b>`inputs`</b> (Sequence[str]):  A list of strings containing the inputs  required to execute ``SaveVideo``. In this case, it needs a video frame. 
 
 
  - <b>`fps`</b> (int):  The frames per second (FPS) used to save the video. 
@@ -70,13 +70,13 @@ Basic process that saves the video.
 
  - <b>`writer`</b> (cv2.VideoWriter):  The video writer from OpenCV used to write and save the video. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L74"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L74"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
 __init__(
-    inputs: List[str],
+    inputs: Sequence[str],
     filepath: Union[str, Path],
     fps: int,
     size: Tuple[int, int],
@@ -90,7 +90,7 @@ Construct new ``SaveVideo`` instance.
 
 **Args:**
  
- - <b>`inputs`</b> (List[str]):  A list of strings containing the inputs  required to execute ``SaveVideo``. In this case, it needs a video frame. 
+ - <b>`inputs`</b> (Sequence[str]):  A list of strings containing the inputs  required to execute ``SaveVideo``. In this case, it needs a video frame. 
 
 
  - <b>`filepath`</b> (Union[str, pathlib.Path]):  The filepath to save the  new video file. 
@@ -109,7 +109,7 @@ Construct new ``SaveVideo`` instance.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/processes.py#L131"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/processes.py#L131"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 

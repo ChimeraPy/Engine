@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/tabular/tabular_data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `tabular.tabular_data_stream`
 Module focused on Tabular Data Stream implementation. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``OfflineTabularDataStream``
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L21"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/tabular/tabular_data_stream.py#L21"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `OfflineTabularDataStream`
 Implementation of Offline DataStream focused on Tabular data. 
@@ -26,14 +26,19 @@ Implementation of Offline DataStream focused on Tabular data.
  - <b>`data`</b> (pd.DataFrame):  The loaded Tabular data in pd.DataFrame form. 
 
 
- - <b>`data_columns`</b> (List[str]):  A list of string containing the name of the data columns to select from. 
+ - <b>`data_columns`</b> (Sequence[str]):  A list of string containing the name of the data columns to select from. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L34"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/tabular/tabular_data_stream.py#L34"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
 ```python
-__init__(name: str, data: DataFrame, time_column: str, data_columns: List[str])
+__init__(
+    name: str,
+    data: DataFrame,
+    time_column: str,
+    data_columns: Sequence[str]
+)
 ```
 
 Construct ``OffineTabularDataStream. 
@@ -51,14 +56,14 @@ Construct ``OffineTabularDataStream.
  - <b>`time_column`</b> (str):  The column within the data that has the  time data. 
 
 
- - <b>`data_columns`</b> (List[str]):  A list of string containing the name of the data columns to select from. 
+ - <b>`data_columns`</b> (Sequence[str]):  A list of string containing the name of the data columns to select from. 
 
 
 
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/tabular/tabular_data_stream.py#L67"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/tabular/tabular_data_stream.py#L67"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>classmethod</kbd> `from_process_and_ds`
 

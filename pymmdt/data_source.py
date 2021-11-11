@@ -7,7 +7,7 @@ Contains the following classes:
 
 """
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 class DataSource:
     """TODO Implementation."""

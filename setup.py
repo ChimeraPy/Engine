@@ -2,7 +2,7 @@
 # from setuptools import find_packages
 
 # setup(
-#     name="PyMDDT",
+#     name="PyMMDT",
 #     version="0.0.1",
 #     description="Python MultiModal Data Toolkit",
 #     packages=["mm"],

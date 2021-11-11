@@ -9,30 +9,30 @@ Contains the following classes:
 # Subpackage management
 __package__ = 'video'
 
-from typing import List, Tuple, Union, Optional
+from typing import Sequence, Tuple, Union, Optional
 import pathlib
 
 import cv2
 
-from mm.process import Process
-from mm.data_sample import DataSample
+from pymmdt.process import Process
+from pymmdt.data_sample import DataSample
 
 class ShowVideo(Process):
     """Basic process that shows the video in a CV window.
 
     Attributes:
-        inputs (List[str]): A list of strings containing the inputs
+        inputs (Sequence[str]): A list of strings containing the inputs
         requred to execute ``ShowVideo``. In this case, it needs a video frame.
 
         ms_delay (int): A millisecond delay between shown frame.
 
     """
 
-    def __init__(self, inputs: List[str], ms_delay: int=1):
-        """Constructor for ShowVideo.
+    def __init__(self, inputs: Sequence[str], ms_delay: int=1):
+        """Construct new ``ShowVideo`` instance.
 
         Args:
-            inputs (List[str]): A list of strings containing the inputs
+            inputs (Sequence[str]): A list of strings containing the inputs
             required to execute ``ShowVideo``. In this case, it needs a video frame.
 
             ms_delay (int): A millisecond delay between shown frame.
@@ -45,7 +45,7 @@ class ShowVideo(Process):
         """Forward propagate frame_sample.
 
         Args:
-            frame_sample (mm.DataSample): The data sample that contains
+            frame_sample (pymmdt.DataSample): The data sample that contains
             the video frame.
 
         """
@@ -59,7 +59,7 @@ class SaveVideo(Process):
     """Basic process that saves the video.
 
     Attributes:
-        inputs (List[str]): A list of strings containing the inputs 
+        inputs (Sequence[str]): A list of strings containing the inputs 
         required to execute ``SaveVideo``. In this case, it needs a video frame.
 
         fps (int): The frames per second (FPS) used to save the video.
@@ -73,7 +73,7 @@ class SaveVideo(Process):
 
     def __init__(
             self, 
-            inputs: List[str], 
+            inputs: Sequence[str], 
             filepath: Union[str, pathlib.Path], 
             fps: int,
             size: Tuple[int, int],
@@ -82,7 +82,7 @@ class SaveVideo(Process):
         """Construct new ``SaveVideo`` instance.
 
         Args:
-            inputs (List[str]): A list of strings containing the inputs 
+            inputs (Sequence[str]): A list of strings containing the inputs 
             required to execute ``SaveVideo``. In this case, it needs a video frame.
 
             filepath (Union[str, pathlib.Path]): The filepath to save the 
@@ -119,7 +119,7 @@ class SaveVideo(Process):
         """Forward propagate the frame sample.
 
         Args:
-            frame_sample (mm.DataSample): The data sample that contains
+            frame_sample (pymmdt.DataSample): The data sample that contains
             the video frame.
 
         """

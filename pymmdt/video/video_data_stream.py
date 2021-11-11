@@ -14,8 +14,8 @@ import pathlib
 import cv2
 import pandas as pd
 
-from mm.data_stream import OfflineDataStream
-from mm.data_sample import DataSample
+from pymmdt.data_stream import OfflineDataStream
+from pymmdt.data_sample import DataSample
 
 class OfflineVideoDataStream(OfflineDataStream):
     """Implementation of Offline DataStream focused on Video data.

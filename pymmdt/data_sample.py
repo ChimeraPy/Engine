@@ -6,7 +6,7 @@ Contains the following classes:
 """
 
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 # Built-in Imports
 import pandas as pd

@@ -5,7 +5,7 @@ Contains the following classes:
 """
 
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Optional, Dict
@@ -24,6 +24,7 @@ class Session:
     Todo:
         * Allow the option to store the intermediate samples stored in
         the session.
+
     """
 
     def __init__(self) -> None:
@@ -34,7 +35,7 @@ class Session:
         """Store the sample into the records.
 
         Args:
-            sample (mm.DataSample): The sample to be stored in the records.
+            sample (pymddt.DataSample): The sample to be stored in the records.
 
         """
         # Add the sample to the session data
@@ -44,7 +45,7 @@ class Session:
         """Apply the process by obtaining the necessary inputs and stores the generated output in the records.
 
         Args:
-            process (mm.Proces): The process to be executed with the
+            process (pymddt.Process): The process to be executed with the
             records.
 
         """

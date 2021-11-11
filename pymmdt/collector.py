@@ -8,7 +8,7 @@ Contains the following classes:
 """
 
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Sequence, Iterator, Type, Dict, Union
@@ -28,15 +28,17 @@ class Collector:
     """Generic collector that stores a data streams.
 
     Attributes:
-        data_streams (Dict[str, mm.DataStream]): A dictionary of the 
+        data_streams (Dict[str, pymddt.DataStream]): A dictionary of the 
         data streams that its keys are the name of the data streams.
+
     """
 
     def __init__(self, data_streams: Sequence[DataStream]) -> None:
         """Construct the ``Collector``.
 
         Args:
-            data_streams (List[mm.DataStream]): A list of data streams.
+            data_streams (List[pymddt.DataStream]): A list of data streams.
+
         """
         # Constructing the data stream dictionary
         self.data_streams: Dict[str, DataStream] = {x.name:x for x in data_streams}
@@ -48,7 +50,7 @@ class OfflineCollector(Collector):
     to obtain the data pointer to a data stream to fetch the actual data.
 
     Attributes:
-        data_streams (Dict[str, mm.OfflineDataStream]): A dictionary of the 
+        data_streams (Dict[str, pymddt.OfflineDataStream]): A dictionary of the 
         data streams that its keys are the name of the data streams.
 
         global_timetrack (pd.DataFrame): A data frame that stores the time,
@@ -61,7 +63,8 @@ class OfflineCollector(Collector):
         """Construct the ``OfflineCollector``.
 
         Args:
-            data_streams (List[mm.OfflineDataStream]): A list of offline data streams.
+            data_streams (List[pymddt.OfflineDataStream]): A list of offline data streams.
+
         """
         super().__init__(data_streams)
 

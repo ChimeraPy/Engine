@@ -6,7 +6,7 @@ Contains the following classes:
 """
 
 # Package Management
-__package__ = 'mm'
+__package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Sequence, Optional, Union, Tuple, Iterator, Iterable
@@ -38,19 +38,19 @@ class Analyzer:
     in the Session as a means to keep track of the latest sample.
 
     Attributes:
-        collector (mm.Collector): The collector used to match the 
+        collector (pymddt.Collector): The collector used to match the 
         timetracks of each individual data stream.
         
-        processes (List[mm.Process]): A list of processes to be executed
+        processes (Sequence[pymddt.Process]): A list of processes to be executed
         depending on their inputs and triggers.
         
-        session (mm.Session): The session that stores all of the latest
+        session (pymddt.Session): The session that stores all of the latest
         data samples from original and generated data streams.
         
         data_flow_graph (nx.DiGraph): The data flow constructed from
         the data streams and the processes.
         
-        pipeline_lookup (dict): A dictionary that stores the pipelines
+        pipeline_lookup (Dict): A dictionary that stores the pipelines
         for each type of input data stream.
 
     Todo:
@@ -67,13 +67,13 @@ class Analyzer:
         """Construct the analyzer. 
 
         Args:
-            collector (mm.Collector): The collector used to match the 
+            collector (pymddt.Collector): The collector used to match the 
             timetracks of each individual data stream.
             
-            processes (List[mm.Process]): A list of processes to be executed
+            processes (Sequence[pymddt.Process]): A list of processes to be executed
             depending on their inputs and triggers.
             
-            session (mm.Session): The session that stores all of the latest
+            session (pymddt.Session): The session that stores all of the latest
             data samples from original and generated data streams.
 
         """
@@ -130,7 +130,7 @@ class Analyzer:
         """Get the processes that are dependent to this type of data sample.
 
         Args:
-            sample (mm.DataSample): The data sample that contains the 
+            sample (pymddt.DataSample): The data sample that contains the 
             data type used to select the data pipeline.
         
         """
@@ -145,7 +145,7 @@ class Analyzer:
         and final data samples into its ``Session`` attribute.
 
         Args:
-            sample (mm.DataSample): The new input data sample to will be
+            sample (pymddt.DataSample): The new input data sample to will be
             propagated though its corresponding pipeline and stored.
         
         """

@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `data_stream`
 Module focus on DataStream and its various implementations. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``DataStream``  ``OfflineDataStream``  ``Online
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `DataStream`
 Generic data sample for both offline and online streaming. 
@@ -24,7 +24,7 @@ The DataStream class is a generic class that needs to be inherented and have its
  
  - <b>`NotImplementedError`</b>:  The __iter__ and __next__ functions need to be implemented before calling an instance of this class. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L45"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L45"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
@@ -45,7 +45,7 @@ Construct the ``DataStream``.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
@@ -58,7 +58,7 @@ Close routine for ``DataStream``.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L97"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L97"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `OfflineDataStream`
 Generic data stream for offline processing. Mostly loading data files. 
@@ -77,7 +77,7 @@ OfflineDataStream is intended to be inherented and its __getitem__  method to be
  
  - <b>`NotImplementedError`</b>:  __getitem__ function needs to be implemented  before calling. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L112"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L112"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
@@ -101,7 +101,7 @@ Construct the OfflineDataStream.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L93"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
@@ -113,7 +113,7 @@ Close routine for ``DataStream``.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L203"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L203"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `set_index`
 
@@ -131,7 +131,7 @@ Set the index used for the __next__ method.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L187"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L187"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `trim_after`
 
@@ -149,7 +149,7 @@ Remove data points after the trim_time timestamp.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_stream.py#L171"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_stream.py#L171"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `trim_before`
 

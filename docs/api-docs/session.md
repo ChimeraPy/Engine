@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `session`
 Module focused on the ``Session`` implementation. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``Session``
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L17"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L17"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `Session`
 Data Storage that contains the latest version of all data types. 
@@ -27,7 +27,7 @@ Data Storage that contains the latest version of all data types.
 **Todo:**
  * Allow the option to store the intermediate samples stored in the session. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L29"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L30"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
@@ -42,7 +42,7 @@ __init__() → None
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L43"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L44"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `apply`
 
@@ -56,11 +56,11 @@ Apply the process by obtaining the necessary inputs and stores the generated out
 
 **Args:**
  
- - <b>`process`</b> (mm.Proces):  The process to be executed with the records. 
+ - <b>`process`</b> (pymddt.Process):  The process to be executed with the records. 
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L71"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L72"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
@@ -77,7 +77,7 @@ Close session.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/session.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/session.py#L34"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `update`
 
@@ -91,7 +91,7 @@ Store the sample into the records.
 
 **Args:**
  
- - <b>`sample`</b> (mm.DataSample):  The sample to be stored in the records. 
+ - <b>`sample`</b> (pymddt.DataSample):  The sample to be stored in the records. 
 
 
 

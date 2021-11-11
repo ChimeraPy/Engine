@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_sample.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `data_sample`
 Module focused on ``DataSample`` implementation. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``DataSample``
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L14"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_sample.py#L14"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `DataSample`
 Standard output data type for Data Streams. 
@@ -28,7 +28,7 @@ Standard output data type for Data Streams.
 
  - <b>`time`</b> (pd.Timestamp):  the timestamp associated with the sample. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/data_sample.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/data_sample.py#L26"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 

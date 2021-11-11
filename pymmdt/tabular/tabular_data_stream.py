@@ -8,15 +8,15 @@ Contains the following classes:
 # Subpackage Management
 __package__ = 'tabular'
 
-from typing import List
+from typing import Sequence
 import collections
 import tqdm
 
 import pandas as pd
 
-from mm.data_stream import OfflineDataStream
-from mm.process import Process
-from mm.data_sample import DataSample
+from pymmdt.data_stream import OfflineDataStream
+from pymmdt.process import Process
+from pymmdt.data_sample import DataSample
 
 class OfflineTabularDataStream(OfflineDataStream):
     """Implementation of Offline DataStream focused on Tabular data.
@@ -26,7 +26,7 @@ class OfflineTabularDataStream(OfflineDataStream):
 
         data (pd.DataFrame): The loaded Tabular data in pd.DataFrame form.
 
-        data_columns (List[str]): A list of string containing the name
+        data_columns (Sequence[str]): A list of string containing the name
         of the data columns to select from.
 
     """
@@ -36,7 +36,7 @@ class OfflineTabularDataStream(OfflineDataStream):
             name: str, 
             data: pd.DataFrame, 
             time_column: str, 
-            data_columns: List[str]
+            data_columns: Sequence[str]
         ):
         """Construct ``OffineTabularDataStream.
 
@@ -48,7 +48,7 @@ class OfflineTabularDataStream(OfflineDataStream):
             time_column (str): The column within the data that has the 
             time data.
 
-            data_columns (List[str]): A list of string containing the name
+            data_columns (Sequence[str]): A list of string containing the name
             of the data columns to select from.
 
         """

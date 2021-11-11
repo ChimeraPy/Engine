@@ -1,6 +1,6 @@
 <!-- markdownlint-disable -->
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L0"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 # <kbd>module</kbd> `video.video_data_stream`
 Module focused on Video Data Streams. 
@@ -11,7 +11,7 @@ Contains the following classes:  ``OfflineVideoDataStream``
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L20"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L20"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ## <kbd>class</kbd> `OfflineVideoDataStream`
 Implementation of Offline DataStream focused on Video data. 
@@ -28,7 +28,7 @@ Implementation of Offline DataStream focused on Video data.
 
  - <b>`start_time`</b> (pd.Timestamp):  The timestamp used to dictate the  beginning of the video. 
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L33"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `__init__`
 
@@ -55,7 +55,7 @@ Construct new ``OfflineVideoDataStream`` instance.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L119"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L119"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `close`
 
@@ -67,7 +67,7 @@ Close the ``OfflineVideoDataStream`` instance.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L73"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L73"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `get_size`
 
@@ -85,7 +85,7 @@ Get the video frame's width and height.
 
 ---
 
-<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/mm/video/video_data_stream.py#L84"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
+<a href="https://github.com/edavalosanaya/PyMMDT/blob/main/pymmdt/video/video_data_stream.py#L84"><img align="right" style="float:right;" src="https://img.shields.io/badge/-source-cccccc?style=flat-square"></a>
 
 ### <kbd>method</kbd> `set_index`
 
