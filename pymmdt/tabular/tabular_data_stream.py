@@ -131,10 +131,14 @@ class OfflineTabularDataStream(OfflineDataStream):
             DataSample: The indexed data sample from the data stream.
 
         """
+        # First use the table index to find the data index
+        time = self.timetrack.iloc[index].time
+        data_index = self.timetrack.iloc[index]['ds_index']
+
         # Have to return a DataSample
         data_sample = DataSample(
             dtype=self.name,
-            time=self.timetrack.iloc[index]['time'],
-            data=self.data.iloc[index]
+            time=time,
+            data=self.data.iloc[data_index]
         )
         return data_sample 

@@ -132,3 +132,68 @@ class SaveVideo(Process):
         """Close the video writer and save the video."""
         # Close the video writer
         self.writer.release()
+
+class TimestampVideo(Process):
+    """Basic process that saves the video.
+
+    Attributes:
+        inputs (Sequence[str]): A list of strings containing the inputs 
+        required to execute ``SaveVideo``. In this case, it needs a video frame.
+
+        fps (int): The frames per second (FPS) used to save the video.
+
+        size (Tuple[int, int]): The width and height of the video.
+
+        writer (cv2.VideoWriter): The video writer from OpenCV used to
+        write and save the video.
+
+    """
+
+    def __init__(
+            self, 
+            inputs: Sequence[str], 
+            output: str,
+            trigger: Optional[str]=None
+        ) -> None:
+        """Construct new ``TimestampVideo`` instance.
+
+        Args:
+            inputs (Sequence[str]): A list of strings containing the inputs 
+            required to execute ``TimestampVideo``. In this case, it needs a video frame.
+
+            output (str): The output to the ``TimestampVideo`` process.
+
+            trigger (Optional[str]): The possible trigger to save the video,
+            instead of relying on the inputs' update.
+
+        """
+        super().__init__(inputs, output, trigger)
+        
+
+    def forward(self, frame_sample: DataSample) -> None:
+        """Forward propagate the frame sample.
+
+        Args:
+            frame_sample (pymmdt.DataSample): The data sample that contains
+            the video frame.
+
+        """
+        # Extract the frame
+        frame = frame_sample.data
+        timestamp = frame_sample.time
+
+        # Copy frame 
+        drawn_video = frame.copy()
+
+        if len(frame.shape) == 3: # RGB Image 
+            h, w, c = frame.shape
+        elif len(frame.shape) == 2: # Grey Image
+            h, w = frame.shape
+        else:
+            raise RuntimeError(f"Invalid video frame type: {len(frame.shape)} should be 2 or 3")
+        
+        # Drawing the text
+        text_timestamp = timestamp.strftime("%H:%M:%S")
+        cv2.putText(drawn_video, text_timestamp, (w-len(text_timestamp)*18, h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+
+        return drawn_video

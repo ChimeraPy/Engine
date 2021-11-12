@@ -1,0 +1,94 @@
+name: Testing the package in various scenarios
+
+# on: [push]
+
+jobs:
+
+  # Goal is to test the package with various version of python
+  test_py_version:
+
+    # Run on latest ubuntu for various version of python
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        # python-version: [3.6, 3.7, 3.8, 3.9]
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    # The process
+    steps:
+      # Create environment
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install pymmdt locally
+      - name: Install dependencies locally
+        run: |
+          sudo apt-get update
+          # sudo apt-get install -y python3-opencv
+          sudo apt-get install ffmpeg libsm6 libxext6 -y
+          python3 -m pip install --upgrade pip
+          python3 -m pip install .
+
+      # Test the build
+      - name: Test with unittest
+        run: |
+          python -m unittest discover tests/
+  
+  # Deploy the package to test pypi
+  test_deploy:
+
+    # Runs on latest ubuntu
+    runs-on: ubuntu-20.04 # ubuntu-latest
+
+    # The process
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: "recursive"
+          fetch-depth: 0
+
+      # Setting up Python
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+          architecture: 'x64'
+
+      # Upload the package into PyPI
+      - name: Publish distribution 📦 to Test PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository_url: https://test.pypi.org/legacy/
+
+  # Goal is to test the deployed build from test pypi
+  test_deployed_test_build:
+
+    # Run on latest ubuntu for various version of python
+    runs-on: ubuntu-20.04 # ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+
+    # The process
+    steps:
+      # Create environment
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install pymmdt
+      - name: Install dependencies from test PyPI
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install -i https://test.pypi.org/simple/ PyMMDT
+
+      # Test the build
+      - name: Test with unittest
+        run: |
+          python -m unittest discover tests/

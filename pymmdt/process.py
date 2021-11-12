@@ -9,7 +9,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import List, Optional
+from typing import Sequence, Optional
 
 # Internal Imports
 from .data_sample import DataSample
@@ -64,7 +64,7 @@ class Process(metaclass=MetaProcess):
     """Generic class that compartmentalizes computational steps for a datastream.
 
     Attributes:
-            inputs (List[str]): A list of strings that specific what type of 
+            inputs (Sequence[str]): A list of strings that specific what type of 
             data stream inputs are needed to compute. The order in which they
             are provided imply the order in the arguments of the ``forward`` method.
             Whenever a new data sample is obtain for the input, this process
@@ -83,14 +83,14 @@ class Process(metaclass=MetaProcess):
 
     def __init__(
             self, 
-            inputs: List[str], 
+            inputs: Sequence[str], 
             output: Optional[str]=None,
             trigger: Optional[str]=None,
         ):
         """Construct the ``Process``.
 
         Args:
-            inputs (List[str]): A list of strings that specific what type of 
+            inputs (Sequence[str]): A list of strings that specific what type of 
             data stream inputs are needed to compute. The order in which they
             are provided imply the order in the arguments of the ``forward`` method.
             Whenever a new data sample is obtain for the input, this process

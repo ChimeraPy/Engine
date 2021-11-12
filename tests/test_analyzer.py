@@ -1,10 +1,8 @@
 import unittest
 import pathlib
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import networkx as nx
-from networkx.drawing.nx_agraph import write_dot, graphviz_layout 
 
 import pymmdt as mm
 import pymmdt.video
@@ -56,13 +54,13 @@ class TestAnalyzer(unittest.TestCase):
             self.session
         )
 
-    def test_process_graph(self):
+    # def test_process_graph(self):
         
-        path = TEST_OUTPUT / 'nx_test.png'
+    #     path = TEST_OUTPUT / 'nx_test.png'
         
-        # nx.nx_agraph.write_dot(self.analyzer.data_flow_graph, path)
-        p=nx.drawing.nx_pydot.to_pydot(self.analyzer.data_flow_graph)
-        p.write_png(path)
+    #     # nx.nx_agraph.write_dot(self.analyzer.data_flow_graph, path)
+    #     p=nx.drawing.nx_pydot.to_pydot(self.analyzer.data_flow_graph)
+    #     p.write_png(path)
 
     def test_getting_pipeline(self):
     

@@ -11,7 +11,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Iterator, Type, Dict, Union
+from typing import Sequence, Iterator, Dict
 
 # Third-party Imports
 import pandas as pd
@@ -76,8 +76,10 @@ class OfflineCollector(Collector):
             # Obtaining each ds's timetrack and adding an ds_type 
             # identifier to know which data stream
             time_series = ds.timetrack.copy()
+            stream_table_index = [x for x in range(len(ds))]
             stream_name_stamp = [ds.name for x in range(len(ds))]
             time_series['ds_type'] = stream_name_stamp
+            time_series['ds_index'] = stream_table_index
 
             # Storing the dataframe with all the other streams
             dss_times.append(time_series)
@@ -87,7 +89,7 @@ class OfflineCollector(Collector):
 
         # Sort by the time - only if there are more than 1 data stream
         if len(self.data_streams) > 1:
-            self.global_timetrack.sort_values(by='time', )
+            self.global_timetrack.sort_values(by='time', inplace=True)
 
         # For debugging purposes
         # self.global_timetrack.to_excel('test.xlsx', index=False)

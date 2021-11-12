@@ -62,13 +62,14 @@ class OfflineVideoDataStream(OfflineDataStream):
         timetrack.columns = ['time']
         timetrack['ds_index'] = [x for x in range(self.nb_frames)]
         timetrack.reset_index(inplace=True)
-        timetrack = timetrack.drop(columns=['index'])
+        timetrack.drop(columns=['index'], inplace=True)
 
         # Apply the super constructor
         super().__init__(name, timetrack)
 
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
+        self.data_index = 0
 
     def get_size(self) -> Tuple[int, int]:
         """Get the video frame's width and height.
@@ -83,9 +84,9 @@ class OfflineVideoDataStream(OfflineDataStream):
 
     def set_index(self, new_index):
         """Set the video's index by updating the pointer in OpenCV."""
-        if self.index != new_index:
+        if self.data_index != new_index:
             self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, new_index-1)
-            self.index = new_index
+            self.data_index = new_index
 
     def __getitem__(self, index) -> DataSample:
         """Get the indexed data sample from the ``OfflineVideoDataStream``.
@@ -99,12 +100,15 @@ class OfflineVideoDataStream(OfflineDataStream):
         """
         # Only if the index does not match request index should we 
         # change the location of the buffer reader
-        if self.index != index:
-            self.video_cap.set(cv2.CAP_PROP_POS_FRAMES, index-1)
-            self.index = index
+        # Convert table index to data index
+        data_index = self.timetrack.iloc[index]['ds_index']
+
+        # Ensure that the video index is correct
+        self.set_index(data_index)
 
         # Load data
         res, frame = self.video_cap.read()
+        self.data_index += 1
 
         # Creating a DataSample
         data_sample = DataSample(

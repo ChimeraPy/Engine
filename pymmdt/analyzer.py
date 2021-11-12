@@ -9,12 +9,11 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Optional, Union, Tuple, Iterator, Iterable
+from typing import Sequence, Union, Iterable
 import collections
 
 # Third Party Imports
 import networkx as nx
-from networkx.drawing.nx_agraph import graphviz_layout
 
 # Internal Imports
 from .data_sample import DataSample

@@ -1,10 +1,8 @@
 import unittest
 import pathlib
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import networkx as nx
-from networkx.drawing.nx_agraph import write_dot, graphviz_layout 
 
 import pymmdt
 import pymmdt.video
@@ -73,9 +71,9 @@ class TestProcess(unittest.TestCase):
         # self.assertTrue(isinstance(output2, pymmdt.DataSample))
 
 if __name__ == "__main__":
-    # unittest.main()
+    unittest.main()
 
     # Have to manually write this to allow the debugger access
-    test = TestProcess()
-    test.setUp()
-    test.test_process_output_data_sample()
+    # test = TestProcess()
+    # test.setUp()
+    # test.test_process_output_data_sample()
