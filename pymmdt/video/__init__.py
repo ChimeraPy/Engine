@@ -10,4 +10,4 @@ This subpackage contains special implementations for the following:
 
 # Imports
 from .video_data_stream import OfflineVideoDataStream
-from .processes import ShowVideo, SaveVideo, TimestampVideo
+from .processes import CopyVideo, ShowVideo, SaveVideo, TimestampVideo

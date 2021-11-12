@@ -1,6 +1,7 @@
 """Module focused on video process implementations.
 
 Contains the following classes:
+    ``CopyVideo``
     ``ShowVideo``
     ``SaveVideo``
 
@@ -196,4 +197,40 @@ class TimestampVideo(Process):
         text_timestamp = timestamp.strftime("%H:%M:%S")
         cv2.putText(drawn_video, text_timestamp, (w-len(text_timestamp)*18, h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
+        return drawn_video
+
+
+class CopyVideo(Process):
+    """Basic process that makes a copy of the video frame. 
+
+    Attributes:
+        inputs (Sequence[str]): A list of strings containing the inputs
+        requred to execute ``CopyVideo``. In this case, it needs a video frame.
+
+        output (Optional[str]): The name used to store the output of
+        the ``forward`` method.
+
+        trigger (Optional[str]): An optional parameter that overwrites
+        the inputs as the trigger. Instead of executing this process
+        everytime there is a new data sample for the input, it now only
+        executes this process when a new sample with the ``data_type`` of 
+        the trigger is obtain.
+
+    """
+
+    def forward(self, video_frame_sample: DataSample) -> None:
+        """Forward propagate the frame sample.
+
+        Args:
+            frame_sample (pymmdt.DataSample): The data sample that contains
+            the video frame.
+
+        """
+        # Extract the data from the samples
+        video_frame = video_frame_sample.data
+
+        # Making a copy of the video
+        drawn_video = video_frame.copy()
+
+        # Returning the copied video
         return drawn_video
