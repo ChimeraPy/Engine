@@ -4,6 +4,9 @@
 name: Deploy the package and documentation 
 
 # on: [push]
+on:
+  repository_dispatch:
+    types: [triggger-deploy-workflow]
 
 jobs:
   

@@ -50,7 +50,7 @@ class DataStream():
             str: The representation of ``DataStream``.
 
         """
-        return f"{self.__class__.__name__}: <name={self.name}"
+        return f"{self.__class__.__name__}: <name={self.name}>"
 
     def __str__(self) -> str:
         """Get String form of ``DataStream``.
