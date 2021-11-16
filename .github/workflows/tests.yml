@@ -63,13 +63,18 @@ jobs:
           python3 -m pip install --upgrade build
           python3 -m build
 
-      # Upload the package into PyPI
-      - name: Publish distribution 📦 to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      # Check the build with twine
+      - name: Check Build
+        run: |
+          pip install --upgrade twine
+          twine check dist/*
+
+      # Upload to Test PyPI
+      - name: Publish Test PYPI
+        uses: pypa/gh-action-pypi-publish@master
         with:
-          user: __token__
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-          repository_url: https://test.pypi.org/legacy/
+            password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+            repository_url: https://test.pypi.org/legacy/
 
   # Goal is to test the deployed build from test pypi
   test_deployed_test_build:
@@ -93,18 +98,18 @@ jobs:
       - name: Install dependencies from test PyPI
         run: |
           python3 -m pip install --upgrade pip
-          pip install -i https://test.pypi.org/simple/ PyMMDT
+          pip install -i https://test.pypi.org/simple/ pymmdt
 
       # Test the build
       - name: Test with unittest
         run: |
           python -m unittest discover tests/
 
-      - name: Trigger next workflow
-        if: success()
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.REPO_GHA_PAT }}
-          repository: ${{ github.repository }}
-          event-type: trigger-build-workflow
-          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+      # - name: Trigger next workflow
+      #   if: success()
+      #   uses: peter-evans/repository-dispatch@v1
+      #   with:
+      #     token: ${{ secrets.REPO_GHA_PAT }}
+      #     repository: ${{ github.repository }}
+      #     event-type: trigger-build-workflow
+      #     client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

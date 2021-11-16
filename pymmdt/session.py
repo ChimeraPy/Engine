@@ -8,10 +8,11 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Optional, Dict
+from typing import Optional, Dict, Type
 
 # Internal Imports
 from .data_sample import DataSample
+from .data_stream import DataStream
 from .process import Process
 
 class Session:
@@ -27,9 +28,26 @@ class Session:
 
     """
 
-    def __init__(self) -> None:
-        """``Session`` Constructor."""
+    def __init__(self, save_streams: Optional[Dict[str, Type[DataStream]]]=None) -> None:
+        """``Session`` Constructor.
+
+        Args:
+            save_streams (Dict[str, Type[DataStream]]): A dictionary of data streams
+            to save into DataStream objects. The dictionary keys are 
+            the names of the data streams and the value is the type of 
+            data stream by passing a cls type.
+
+        """
+        # Create a record to the data
         self.records: Dict[str, DataSample] = {}
+
+        # Create the data stream instances 
+        if save_streams:
+            self.save_streams: Dict[str, DataStream] = {}
+            for ds_type, ds_cls in save_streams.items():
+                self.save_streams[ds_type] = ds_cls.empty(name=ds_type)
+        else:
+            self.save_streams = {}
 
     def update(self, sample: DataSample) -> None:
         """Store the sample into the records.
@@ -40,6 +58,11 @@ class Session:
         """
         # Add the sample to the session data
         self.records[sample.dtype] = sample
+
+        # Also, not only keep track of the latest sample but store the
+        # sample if it is a data stream we are interested in saving
+        if sample.dtype in self.save_streams.keys():
+            self.save_streams[sample.dtype].append(sample)
         
     def apply(self, process: Process) -> Optional[DataSample]:
         """Apply the process by obtaining the necessary inputs and stores the generated output in the records.

@@ -2,8 +2,6 @@
 
 Contains the following classes:
     ``Collector``
-    ``OfflineCollector``
-    ``OnlineCollector``
 
 """
 
@@ -18,39 +16,20 @@ import pandas as pd
 
 # Internal Imports
 from .data_sample import DataSample
-from .data_stream import DataStream, OfflineDataStream
+from .data_stream import DataStream
 
 ########################################################################
 # Classes
 ########################################################################
 
 class Collector:
-    """Generic collector that stores a data streams.
-
-    Attributes:
-        data_streams (Dict[str, pymddt.DataStream]): A dictionary of the 
-        data streams that its keys are the name of the data streams.
-
-    """
-
-    def __init__(self, data_streams: Sequence[DataStream]) -> None:
-        """Construct the ``Collector``.
-
-        Args:
-            data_streams (List[pymddt.DataStream]): A list of data streams.
-
-        """
-        # Constructing the data stream dictionary
-        self.data_streams: Dict[str, DataStream] = {x.name:x for x in data_streams}
-
-class OfflineCollector(Collector):
-    """Generic collector that stores only offline data streams.
+    """Generic collector that stores only data streams.
 
     The offline collector allows the use of both __getitem__ and __next__
     to obtain the data pointer to a data stream to fetch the actual data.
 
     Attributes:
-        data_streams (Dict[str, pymddt.OfflineDataStream]): A dictionary of the 
+        data_streams (Dict[str, pymddt.DataStream]): A dictionary of the 
         data streams that its keys are the name of the data streams.
 
         global_timetrack (pd.DataFrame): A data frame that stores the time,
@@ -59,14 +38,15 @@ class OfflineCollector(Collector):
 
     """
 
-    def __init__(self, data_streams: Sequence[OfflineDataStream]) -> None:
+    def __init__(self, data_streams: Sequence[DataStream]) -> None:
         """Construct the ``OfflineCollector``.
 
         Args:
-            data_streams (List[pymddt.OfflineDataStream]): A list of offline data streams.
+            data_streams (List[pymddt.DataStream]): A list of offline data streams.
 
         """
-        super().__init__(data_streams)
+        # Constructing the data stream dictionary
+        self.data_streams: Dict[str, DataStream] = {x.name:x for x in data_streams}
 
         # Data Streams (DSS) times, just extracting all the time stamps
         # and then tagging them as the name of the stream
@@ -134,7 +114,7 @@ class OfflineCollector(Collector):
             return data_sample
 
     def __getitem__(self, index: int) -> DataSample:
-        """Index certain data point of the ``OfflineDataStream``.
+        """Index certain data point of the ``DataStream``.
 
         Args:
             index (int): The requested index.
@@ -158,15 +138,10 @@ class OfflineCollector(Collector):
             return data_sample
 
     def __len__(self) -> int:
-        """Get size of ``OfflineDataStream``.
+        """Get size of ``DataStream``.
 
         Returns:
             int: The size of the data stream.
 
         """
         return len(self.global_timetrack)
-
-class OnlineCollector(Collector):
-    """TODO implementation."""
-
-    ...

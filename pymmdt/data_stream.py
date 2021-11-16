@@ -2,8 +2,7 @@
 
 Contains the following classes:
     ``DataStream``
-    ``OfflineDataStream``
-    ``OnlineDataStream``
+
 """
 
 # Package Management
@@ -22,27 +21,44 @@ from .data_sample import DataSample
 # Generic Classes
 ########################################################################
 
-class DataStream():
-    """Generic data sample for both offline and online streaming.
+class DataStream:
+    """Generic data stream for processing. 
 
-    The DataStream class is a generic class that needs to be inherented
-    and have its __iter__ and __next__ methods overwritten.
+    ``DataStream`` is intended to be inherented and its __getitem__ 
+    method to be overwritten to fit the modality of the actual data.
+
+    Attributes:
+        index (int): Keeping track of the current sample to load in __next__.
 
     Raises:
-        NotImplementedError: The __iter__ and __next__ functions need to
-        be implemented before calling an instance of this class.
+        NotImplementedError: __getitem__ function needs to be implemented 
+        before calling.
 
     """
-    
-    def __init__(self, name: str) -> None:
-        """Construct the ``DataStream``.
+
+    def __init__(
+            self, 
+            name: str, 
+            timeline: pd.TimedeltaIndex
+        ):
+        """Construct the DataStream.
 
         Args:
             name (str): the name of the data stream.
 
+            timetrack (pd.DataFrame): the time track of the data stream
+            where timestamps are provided for each data point.
+
         """
         self.name = name
+        self.index = 0
 
+        # Constructing the timetrack (including time and data pointer)
+        self.timetrack = pd.DataFrame({
+            'time': timeline,
+            'ds_index': [x for x in range(len(timeline))]
+        })
+    
     def __repr__(self) -> str:
         """Representation of ``DataStream``.
 
@@ -62,61 +78,7 @@ class DataStream():
         return self.__repr__()
 
     def __iter__(self) -> Iterator[DataSample]:
-        """Construct iterator for the ``DataStream``.
-
-        Raises:
-            NotImplementedError: __iter__ needs to be overwritten.
-
-        """
-        raise NotImplementedError
-
-    def __next__(self) -> DataSample:
-        """Get next data sample from ``DataStream``.
-
-        Returns:
-            DataSample: The next data sample.
-
-        Raises:
-            NotImplementedError: __next__ needs to be overwritten.
-
-        """
-        raise NotImplementedError
-
-    def close(self) -> None:
-        """Close routine for ``DataStream``."""
-        ...
-
-class OfflineDataStream(DataStream):
-    """Generic data stream for offline processing. Mostly loading data files.
-
-    OfflineDataStream is intended to be inherented and its __getitem__ 
-    method to be overwritten to fit the modality of the actual data.
-
-    Attributes:
-        index (int): Keeping track of the current sample to load in __next__.
-
-    Raises:
-        NotImplementedError: __getitem__ function needs to be implemented 
-        before calling.
-
-    """
-
-    def __init__(self, name: str, timetrack: pd.DataFrame):
-        """Construct the OfflineDataStream.
-
-        Args:
-            name (str): the name of the data stream.
-
-            timetrack (pd.DataFrame): the time track of the data stream
-            where timestamps are provided for each data point.
-
-        """
-        super().__init__(name)
-        self.timetrack: pd.DataFrame = timetrack
-        self.index = 0
-
-    def __iter__(self) -> Iterator[DataSample]:
-        """Construct iterator for ``OfflineDataStream``.
+        """Construct iterator for ``DataStream``.
 
         Returns:
             Iterator[DataSample]: The offline data stream's iterator.
@@ -126,7 +88,7 @@ class OfflineDataStream(DataStream):
         return self
 
     def __next__(self) -> DataSample:
-        """Get next data sample from ``OfflineDataStream``.
+        """Get next data sample from ``DataStream``.
 
         Returns:
             DataSample: the next data sample.
@@ -140,7 +102,7 @@ class OfflineDataStream(DataStream):
             return sample
     
     def __getitem__(self, index) -> DataSample:
-        """Get indexed data sample from ``OfflineDataStream``.
+        """Get indexed data sample from ``DataStream``.
 
         Returns:
             DataSample: The indexed data sample.
@@ -152,19 +114,19 @@ class OfflineDataStream(DataStream):
         raise NotImplementedError("__getitem__ needs to be implemented.")
     
     def __len__(self) -> int:
-        """Get size of ``OfflineDataStream``.
+        """Get size of ``DataStream``.
 
         Returns:
-            int: The size of the ``OfflineDataStream``.
+            int: The size of the ``DataStream``.
 
         """
         return len(self.timetrack)
 
-    def trim_before(self, trim_time: pd.Timestamp) -> None:
+    def trim_before(self, trim_time: pd.Timedelta) -> None:
         """Remove data points before the trim_time timestamp.
 
         Args:
-            trim_time (pd.Timestamp): The cut-off time. 
+            trim_time (pd.Timedelta): The cut-off time. 
 
         """
         # Obtain the mask 
@@ -176,11 +138,11 @@ class OfflineDataStream(DataStream):
         # Store the new timetrack
         self.timetrack = new_timetrack
 
-    def trim_after(self, trim_time: pd.Timestamp) -> None:
+    def trim_after(self, trim_time: pd.Timedelta) -> None:
         """Remove data points after the trim_time timestamp.
 
         Args:
-            trim_time (pd.Timestamp): The cut-off time.
+            trim_time (pd.Timedelta): The cut-off time.
 
         """
         # Obtain the mask 
@@ -200,16 +162,26 @@ class OfflineDataStream(DataStream):
         
         """
         self.index = new_index
-
-# class OnlineDataStream(DataStream):
-#     """TODO Implementation."""
     
-#     def __init__(self, name: str) -> None:
-#         self.name = name
+    @classmethod
+    def empty(cls):
+        """Create an empty data stream.
 
-#######################################################################
+        Raises:
+            NotImplementedError: empty needs to be overwritten.
 
-# Constructing useful TypeVar
-# DataStreamT: TypeAlias = Union['DataStreamT', DataStream, OfflineDataStream, OnlineDataStream]
+        """
+        raise NotImplementedError("``empty`` needs to be implemented.")
 
-#######################################################################
+    def append(self, sample: DataSample):
+        """Add a data sample to the data stream
+
+        Raises:
+            NotImplementedError: ``append`` needs to be overwritten.
+
+        """
+        raise NotImplementedError("``append`` needs to be implemented.")
+
+    def close(self) -> None:
+        """Close routine for ``DataStream``."""
+        ...

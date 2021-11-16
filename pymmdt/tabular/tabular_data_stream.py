@@ -1,25 +1,25 @@
 """Module focused on Tabular Data Stream implementation.
 
 Contains the following classes:
-    ``OfflineTabularDataStream``
+    ``TabularDataStream``
 
 """
 
 # Subpackage Management
 __package__ = 'tabular'
 
-from typing import Sequence
+from typing import Sequence, Optional
 import collections
 import tqdm
 
 import pandas as pd
 
-from pymmdt.data_stream import OfflineDataStream
+from pymmdt.data_stream import DataStream
 from pymmdt.process import Process
 from pymmdt.data_sample import DataSample
 
-class OfflineTabularDataStream(OfflineDataStream):
-    """Implementation of Offline DataStream focused on Tabular data.
+class TabularDataStream(DataStream):
+    """Implementation of DataStream focused on Tabular data.
 
     Attributes:
         name (str): The name of the data stream.
@@ -35,10 +35,10 @@ class OfflineTabularDataStream(OfflineDataStream):
             self, 
             name: str, 
             data: pd.DataFrame, 
-            time_column: str, 
-            data_columns: Sequence[str]
+            data_columns: Sequence[str]=None,
+            time_column: Optional[str]=None, 
         ):
-        """Construct ``OffineTabularDataStream.
+        """Construct ``TabularDataStream.
 
         Args:
             name (str): The name of the data stream.
@@ -54,12 +54,18 @@ class OfflineTabularDataStream(OfflineDataStream):
         """
         # Storing the data and which columns to find it
         self.data = data
-        self.data_columns = data_columns
+
+        # Handling if there is no known information about the Tabular data
+        if data_columns:
+            self.data_columns = data_columns
+        else:
+            self.data_columns = []
 
         # Need to construct the timetrack 
-        timetrack = self.data[time_column].to_frame()
-        timetrack.columns = ['time']
-        timetrack['ds_index'] = [x for x in range(len(self.data))]
+        if time_column:
+            timetrack = pd.TimedeltaIndex(self.data[time_column])
+        else:
+            timetrack = pd.TimedeltaIndex([]) 
 
         # Applying the super constructor with the timetrack
         super().__init__(name, timetrack)
@@ -68,17 +74,17 @@ class OfflineTabularDataStream(OfflineDataStream):
     def from_process_and_ds(
             cls, 
             process: Process, 
-            in_ds: OfflineDataStream,
+            in_ds: DataStream,
             verbose: bool = False
         ):
         """Class method to construct data stream from an applied process to a data stream.
 
         Args:
             process (Process): the applied process.
-            in_ds (OfflineTabularDataStream): the incoming data stream to be processed.
+            in_ds (DataStream): the incoming data stream to be processed.
 
         Returns:
-            self (OfflineTabularDataStream): the generated data stream.
+            self (TabularDataStream): the generated data stream.
 
         """
         # Testing conditions that cause problems
@@ -122,7 +128,7 @@ class OfflineTabularDataStream(OfflineDataStream):
         return cls(name=str(process.output), data=df, time_column='time', data_columns=list(data_columns))
 
     def __getitem__(self, index: int) -> DataSample:
-        """Get indexed data sample from ``OfflineTabularDataStream``.
+        """Get indexed data sample from ``TabularDataStream``.
 
         Args:
             index (int): The index requested.
@@ -139,6 +145,37 @@ class OfflineTabularDataStream(OfflineDataStream):
         data_sample = DataSample(
             dtype=self.name,
             time=time,
-            data=self.data.iloc[data_index]
+            data=self.data.iloc[data_index][self.data_columns]
         )
         return data_sample 
+
+    @classmethod
+    def empty(cls, name):
+        # Create empty items
+        empty_df = pd.DataFrame()
+        
+        # Returning the construct object
+        return cls(
+            name=name, 
+            data=empty_df
+        )
+
+    def append(self, sample: DataSample) -> None:
+        """Append a data sample to the end of the ``TabularDataStream``.
+
+        Args:
+            sample (pymmdt.DataSample): The appending data sample.
+
+        """
+
+        # Add to the timetrack (cannot be inplace)
+        self.timetrack = self.timetrack.append({
+            'time': sample.time, 
+            'ds_index': int(len(self.timetrack))
+        }, ignore_index=True)
+
+        # If this is the first sample added, set the data columns
+        self.data_columns = list(sample.data.keys())
+
+        # Then add it to the data body (cannot be inplace)
+        self.data = self.data.append(sample.data, ignore_index=True)

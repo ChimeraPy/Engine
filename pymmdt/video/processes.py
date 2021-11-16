@@ -12,6 +12,7 @@ __package__ = 'video'
 
 from typing import Sequence, Tuple, Union, Optional
 import pathlib
+import datetime
 
 import cv2
 
@@ -192,9 +193,16 @@ class TimestampVideo(Process):
             h, w = frame.shape
         else:
             raise RuntimeError(f"Invalid video frame type: {len(frame.shape)} should be 2 or 3")
+
+        # Constructing a timestamp from timedelta
+        total_seconds = timestamp.seconds
+        text_timestamp = str(datetime.timedelta(seconds=total_seconds))
+
+        # Account for it is negative
+        if str(timestamp)[0] == '-':
+            text_timestamp = '-' + text_timestamp
         
         # Drawing the text
-        text_timestamp = timestamp.strftime("%H:%M:%S")
         cv2.putText(drawn_video, text_timestamp, (w-len(text_timestamp)*18, h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
         return drawn_video

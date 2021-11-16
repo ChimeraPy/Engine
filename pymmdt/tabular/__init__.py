@@ -2,9 +2,9 @@
 
 This subpackage contains special implementations for the following:
 - ``DataStream``
-    - ``OfflineTabularDataStream`` 
+    - ``TabularDataStream`` 
 
 """
 
 # Imports
-from .tabular_data_stream import OfflineTabularDataStream
+from .tabular_data_stream import TabularDataStream

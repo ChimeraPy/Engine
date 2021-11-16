@@ -14,11 +14,12 @@ import collections
 
 # Third Party Imports
 import networkx as nx
+import tqdm
 
 # Internal Imports
 from .data_sample import DataSample
 from .process import Process
-from .collector import Collector, OfflineCollector
+from .collector import Collector 
 from .process import Process
 from .session import Session
 
@@ -37,13 +38,13 @@ class Analyzer:
     in the Session as a means to keep track of the latest sample.
 
     Attributes:
-        collector (pymddt.Collector): The collector used to match the 
+        collector (pymmdt.Collector): The collector used to match the 
         timetracks of each individual data stream.
         
-        processes (Sequence[pymddt.Process]): A list of processes to be executed
+        processes (Sequence[pymmdt.Process]): A list of processes to be executed
         depending on their inputs and triggers.
         
-        session (pymddt.Session): The session that stores all of the latest
+        session (pymmdt.Session): The session that stores all of the latest
         data samples from original and generated data streams.
         
         data_flow_graph (nx.DiGraph): The data flow constructed from
@@ -59,20 +60,20 @@ class Analyzer:
 
     def __init__(
             self, 
-            collector: Union[Collector, OfflineCollector],
+            collector: Collector,
             processes: Sequence[Process],
             session: Session
         ) -> None:
         """Construct the analyzer. 
 
         Args:
-            collector (pymddt.Collector): The collector used to match the 
+            collector (pymmdt.Collector): The collector used to match the 
             timetracks of each individual data stream.
             
-            processes (Sequence[pymddt.Process]): A list of processes to be executed
+            processes (Sequence[pymmdt.Process]): A list of processes to be executed
             depending on their inputs and triggers.
             
-            session (pymddt.Session): The session that stores all of the latest
+            session (pymmdt.Session): The session that stores all of the latest
             data samples from original and generated data streams.
 
         """
@@ -129,7 +130,7 @@ class Analyzer:
         """Get the processes that are dependent to this type of data sample.
 
         Args:
-            sample (pymddt.DataSample): The data sample that contains the 
+            sample (pymmdt.DataSample): The data sample that contains the 
             data type used to select the data pipeline.
         
         """
@@ -144,7 +145,7 @@ class Analyzer:
         and final data samples into its ``Session`` attribute.
 
         Args:
-            sample (pymddt.DataSample): The new input data sample to will be
+            sample (pymmdt.DataSample): The new input data sample to will be
             propagated though its corresponding pipeline and stored.
         
         """
@@ -180,3 +181,20 @@ class Analyzer:
 
         # Closing the session
         self.session.close()
+
+    def run(self, verbose=False) -> None:
+        """Run the data pipeline.
+
+        Once the analyzer has been initialized with the collector, 
+        processes, and the session, it can run the entire data pipeline.
+
+        Args:
+            verbose (bool): If to include logging and loading bar to
+            help visualize the wait time until completion.
+
+        """
+        # Iterate through the collector
+        for i, sample in tqdm.tqdm(enumerate(self.collector)):
+
+            # Then process the sample
+            self.step(sample)

@@ -37,6 +37,11 @@ def _data_sample_construction_decorator(func):
         # Only if there is a return item do we enclose it in a DataSample
         if type(rt) != type(None):
 
+            # Also, if the output is already a DataSample, then 
+            # do not wrap it again
+            if isinstance(rt, DataSample):
+                return rt
+
             # Construct a data sample around the results
             data_sample = DataSample(
                 args[0].output, # the class is the first argument

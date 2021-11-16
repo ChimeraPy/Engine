@@ -19,11 +19,11 @@ class DataSample:
 
         data (Any): The data content of the sample.
 
-        time (pd.Timestamp): the timestamp associated with the sample.
+        time (pd.Timedelta): the timestamp associated with the sample.
 
     """
  
-    def __init__(self, dtype:str, time:pd.Timestamp, data) -> None:
+    def __init__(self, dtype:str, time:pd.Timedelta, data) -> None:
         """Construct the ``DataSample``.
 
         Args:
@@ -31,7 +31,7 @@ class DataSample:
 
             data (Any): The data content of the sample.
 
-            time (pd.Timestamp): the timestamp associated with the sample.
+            time (pd.Timedelta): the timestamp associated with the sample.
 
         """
         self.dtype = dtype

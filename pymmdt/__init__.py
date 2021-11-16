@@ -12,10 +12,10 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from .data_stream import DataStream, OfflineDataStream 
+from .data_stream import DataStream
 from .data_sample import DataSample
 from .process import Process
-from .collector import Collector, OfflineCollector
+from .collector import Collector
 from .analyzer import Analyzer
 from .session import Session
 from .data_source import DataSource, Sensor, Api
