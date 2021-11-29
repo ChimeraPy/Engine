@@ -9,13 +9,12 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Iterator, Dict
+from typing import Sequence, Iterator, Dict, Any
 
 # Third-party Imports
 import pandas as pd
 
 # Internal Imports
-from .data_sample import DataSample
 from .data_stream import DataStream
 
 ########################################################################
@@ -51,7 +50,7 @@ class Collector:
         # Data Streams (DSS) times, just extracting all the time stamps
         # and then tagging them as the name of the stream
         dss_times= []
-        for ds_name, ds in self.data_streams.items():
+        for dtype, ds in self.data_streams.items():
 
             # Obtaining each ds's timetrack and adding an ds_type 
             # identifier to know which data stream
@@ -74,8 +73,8 @@ class Collector:
         # For debugging purposes
         # self.global_timetrack.to_excel('test.xlsx', index=False)
 
-    def __iter__(self) -> Iterator[DataSample]:
-        """Generate an iterator of ``DataSample`` from the ``DataStream``.
+    def __iter__(self) -> Iterator[Any]:
+        """Generate an iterator of ``DataSample`` from the ``Any``.
         
         Returns:
             Iterator[DataSample]: Iterator of data samples.
@@ -84,11 +83,11 @@ class Collector:
         self.index = 0
         return self
 
-    def __next__(self) -> DataSample:
+    def __next__(self) -> Any:
         """Obtain next data sample from the Iterator[DataSample] instance.
 
         Returns:
-            DataSample: The next upcoming data sample.
+            Anyt: The next upcoming data sample.
 
         """
         # Stop iterating when index has overcome the size of the data
@@ -96,31 +95,23 @@ class Collector:
             raise StopIteration
         else:
 
-            # Determine which datastream is next
-            next_ds_meta = self.global_timetrack.iloc[self.index]
-            next_ds_pointer = next_ds_meta['ds_index']
-            next_ds_name = next_ds_meta['ds_type']
-
-            # Checking if the pointer aligns with the data stream
-            if next_ds_pointer != self.data_streams[next_ds_name].index:
-               self.data_streams[next_ds_name].set_index(next_ds_pointer)
-
-            # Get the sample
-            data_sample = next(self.data_streams[next_ds_name])
+            # Use the __getitem__ function and obtain the 
+            # data sample and its time
+            timestamp, dtype, data_sample = self.__getitem__(self.index)
 
             # Change the index
             self.index += 1
 
-            return data_sample
+            return timestamp, dtype, data_sample
 
-    def __getitem__(self, index: int) -> DataSample:
+    def __getitem__(self, index: int) -> Any:
         """Index certain data point of the ``DataStream``.
 
         Args:
             index (int): The requested index.
 
         Returns:
-            DataSample: The requested data sample.
+            Any: The requested data sample.
 
         """
         if index >= len(self):
@@ -128,14 +119,19 @@ class Collector:
         else:
 
             # Determine which datastream is next
-            next_ds_meta = self.global_timetrack.iloc[index]
-            next_ds_pointer = next_ds_meta['ds_index']
-            next_ds_name = next_ds_meta['ds_type']
+            ds_meta = self.global_timetrack.iloc[index]
+            timestamp = ds_meta['time']
+            ds_pointer = ds_meta['ds_index']
+            dtype = ds_meta['ds_type']
+            
+            # Checking if the pointer aligns with the data stream
+            if ds_pointer != self.data_streams[dtype].index:
+               self.data_streams[dtype].set_index(ds_pointer)
 
             # Get the sample
-            data_sample = self.data_streams[next_ds_name][next_ds_pointer]
+            data_sample = self.data_streams[dtype][ds_pointer]
 
-            return data_sample
+            return timestamp, dtype, data_sample
 
     def __len__(self) -> int:
         """Get size of ``DataStream``.
@@ -145,3 +141,9 @@ class Collector:
 
         """
         return len(self.global_timetrack)
+
+    def get_data_stream(self, name:str):
+        if name in self.data_streams.keys():
+            return self.data_streams[name]
+        else:
+            raise IndexError(f"{name} not found in saved data streams.")

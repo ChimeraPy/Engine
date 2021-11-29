@@ -11,109 +11,52 @@ __package__ = 'pymmdt'
 # Built-in Imports
 from typing import Sequence, Optional
 
+# Third-party imports
+import pandas as pd
+
 # Internal Imports
-from .data_sample import DataSample
 
-def _data_sample_construction_decorator(func):
-    """Decorate to handle the convertion of process output to DataSample."""
+# def _data_sample_construction_decorator(func):
+#     """Decorate to handle the convertion of process output to DataSample."""
 
-    def wrapper(*args, **kwargs):
-        
-        # Detecting the input data sample latest's timestamp
-        timestamps = [x.time for x in args[1:]]
-        latest_timestamp = max(timestamps)
+#     def wrapper(*args, **kwargs):
 
-        # # Removing the DataSample wrapper
-        # for arg in args:
-        #     if isinstance(arg, DataSample):
-        #         arg = arg.data
-        # for k,v in kwargs.items():
-        #     if isinstance(v, DataSample):
-        #         kwargs[k] = v.data
+#         # Extract the first argument as the self
+#         self = args[0]
 
-        # Apply the forward function of the process
-        rt = func(*args, **kwargs)
+#         # If the session is not set, then just use ``step`` method
+#         if not self.session:
+#             return func(*args, **kwargs)
 
-        # Only if there is a return item do we enclose it in a DataSample
-        if type(rt) != type(None):
+#         # Since there is a session, check if the input data
+#         # has been seen before
 
-            # Also, if the output is already a DataSample, then 
-            # do not wrap it again
-            if isinstance(rt, DataSample):
-                return rt
+#         rt = func(*args, **kwargs)
 
-            # Construct a data sample around the results
-            data_sample = DataSample(
-                args[0].output, # the class is the first argument
-                latest_timestamp,
-                rt
-            )
+#     return wrapper
 
-            # Return the sample instead of the results
-            return data_sample
-    return wrapper
+# class MetaProcess(type):
+#     """A meta class to check if the process already has accepted this input. If the process has seen it 
+#     before, it provides the previously recorded output.
 
-class MetaProcess(type):
-    """A meta class to ensure that the output of the process is a DataSample.
+#     Information: https://stackoverflow.com/questions/57104276/python-subclass-method-to-inherit-decorator-from-superclass-method
+#     """
 
-    Information: https://stackoverflow.com/questions/57104276/python-subclass-method-to-inherit-decorator-from-superclass-method
-    """
+#     def __new__(cls, name, bases, attr):
+#         """Modify subclasses of Process to have ``step`` wrapper."""
+#         attr["step"] = _data_sample_construction_decorator(attr["step"])
 
-    def __new__(cls, name, bases, attr):
-        """Modify subclasses of Process to have ``forward`` wrapper."""
-        attr["forward"] = _data_sample_construction_decorator(attr["forward"])
+#         return super(MetaProcess, cls).__new__(cls, name, bases, attr)
 
-        return super(MetaProcess, cls).__new__(cls, name, bases, attr)
-
-class Process(metaclass=MetaProcess):
+class Process():
     """Generic class that compartmentalizes computational steps for a datastream.
 
-    Attributes:
-            inputs (Sequence[str]): A list of strings that specific what type of 
-            data stream inputs are needed to compute. The order in which they
-            are provided imply the order in the arguments of the ``forward`` method.
-            Whenever a new data sample is obtain for the input, this process
-            is executed.
-
-            output (Optional[str]): The name used to store the output of
-            the ``forward`` method.
-
-            trigger (Optional[str]): An optional parameter that overwrites
-            the inputs as the trigger. Instead of executing this process
-            everytime there is a new data sample for the input, it now only
-            executes this process when a new sample with the ``data_type`` of 
-            the trigger is obtain.
-
     """
+    session = None
+    time = pd.Timedelta(0)
 
-    def __init__(
-            self, 
-            inputs: Sequence[str], 
-            output: Optional[str]=None,
-            trigger: Optional[str]=None,
-        ):
-        """Construct the ``Process``.
-
-        Args:
-            inputs (Sequence[str]): A list of strings that specific what type of 
-            data stream inputs are needed to compute. The order in which they
-            are provided imply the order in the arguments of the ``forward`` method.
-            Whenever a new data sample is obtain for the input, this process
-            is executed.
-
-            output (Optional[str]): The name used to store the output of
-            the ``forward`` method.
-
-            trigger (Optional[str]): An optional parameter that overwrites
-            the inputs as the trigger. Instead of executing this process
-            everytime there is a new data sample for the input, it now only
-            executes this process when a new sample with the ``data_type`` of 
-            the trigger is obtain.
-
-        """
-        self.inputs = inputs
-        self.output = output
-        self.trigger = trigger
+    def __init__(self):
+        ...
 
     def __repr__(self):
         """Representation of ``Process``.
@@ -133,19 +76,34 @@ class Process(metaclass=MetaProcess):
         """
         return self.__repr__()
     
-    def forward(self, x: DataSample): 
+    def start(self): 
         """Apply process onto data sample.
 
-        Args:
-            x: a sample (of any type) in to the process.
-
         Raises:
-            NotImplementedError: forward method needs to be overwritten.
+            NotImplementedError: ``start`` method needs to be overwritten.
 
         """
-        raise NotImplementedError("forward method needs to be implemented.")
+        raise NotImplementedError("``start`` method needs to be implemented.")
+    
+    def step(self, *args, **kwargs): 
+        """Apply process onto data sample.
 
-    def close(self):
-        """Close function performed to close the process."""
-        ...
+        Raises:
+            NotImplementedError: ``step`` method needs to be overwritten.
 
+        """
+        raise NotImplementedError("``step`` method needs to be implemented.")
+    
+    def end(self): 
+        """Apply process onto data sample.
+
+        Raises:
+            NotImplementedError: ``end`` method needs to be overwritten.
+
+        """
+        raise NotImplementedError("``end`` method needs to be implemented.")
+
+    # def attach_session(self, session):
+
+    #     # Grab the session and store it
+    #     self.session = session

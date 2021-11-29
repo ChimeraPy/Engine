@@ -11,13 +11,14 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        # python-version: [3.6, 3.7, 3.8, 3.9]
         python-version: [3.6, 3.7, 3.8, 3.9]
+        # python-version: 3.9
 
     # The process
     steps:
       # Create environment
       - uses: actions/checkout@v2
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -37,6 +38,38 @@ jobs:
         run: |
           python -m unittest discover tests/
   
+  # Test the build dist
+  test_build_dist:
+
+    # Runs on latest ubuntu
+    runs-on: ubuntu-20.04 # ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+        # python-version: 3.9
+
+    # The process
+    steps:
+      - uses: actions/checkout@v2
+
+      # Setting up Python
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Build to upload
+      - name: Build Package
+        run: |
+          sudo apt-get update
+          python3 -m pip install --upgrade build
+          python3 -m build
+
+      # Install the build wheel
+      - name: Install the Wheel
+        run: |
+          python3 -m pip install dist/*.whl
+  
   # Deploy the package to test pypi
   test_deploy:
 
@@ -46,20 +79,17 @@ jobs:
     # The process
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: "recursive"
-          fetch-depth: 0
 
       # Setting up Python
-      - name: Set up Python
+      - name: Set up Python 3.9 
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
-          architecture: 'x64'
+          python-version: "3.9"
 
       # Build to upload
       - name: Build Package
         run: |
+          sudo apt-get update
           python3 -m pip install --upgrade build
           python3 -m build
 
@@ -84,11 +114,13 @@ jobs:
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8, 3.9]
+        # python-version: 3.9
 
     # The process
     steps:
       # Create environment
       - uses: actions/checkout@v2
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v2
         with:
@@ -97,19 +129,22 @@ jobs:
       # Install pymmdt
       - name: Install dependencies from test PyPI
         run: |
+          sudo apt-get update
+          # sudo apt-get install -y python3-opencv
+          sudo apt-get install ffmpeg libsm6 libxext6 -y
           python3 -m pip install --upgrade pip
-          pip install -i https://test.pypi.org/simple/ pymmdt
+          pip install --extra-index-url https://test.pypi.org/simple/ pymmdt
 
       # Test the build
       - name: Test with unittest
         run: |
           python -m unittest discover tests/
 
-      # - name: Trigger next workflow
-      #   if: success()
-      #   uses: peter-evans/repository-dispatch@v1
-      #   with:
-      #     token: ${{ secrets.REPO_GHA_PAT }}
-      #     repository: ${{ github.repository }}
-      #     event-type: trigger-build-workflow
-      #     client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
+      - name: Trigger next workflow
+        if: success()
+        uses: peter-evans/repository-dispatch@v1
+        with:
+          token: ${{ secrets.REPO_GHA_PAT }}
+          repository: ${{ github.repository }}
+          event-type: trigger-deploy-workflow
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'

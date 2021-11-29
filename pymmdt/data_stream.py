@@ -9,13 +9,12 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Iterator
+from typing import Iterator, Any
 
 # Third Party Imports
 import pandas as pd
 
 # Internal Imports
-from .data_sample import DataSample
 
 ########################################################################
 # Generic Classes
@@ -77,7 +76,7 @@ class DataStream:
         """
         return self.__repr__()
 
-    def __iter__(self) -> Iterator[DataSample]:
+    def __iter__(self) -> Iterator[Any]:
         """Construct iterator for ``DataStream``.
 
         Returns:
@@ -87,7 +86,7 @@ class DataStream:
         self.index = 0
         return self
 
-    def __next__(self) -> DataSample:
+    def __next__(self) -> Any:
         """Get next data sample from ``DataStream``.
 
         Returns:
@@ -101,8 +100,8 @@ class DataStream:
             self.index += 1
             return sample
     
-    def __getitem__(self, index) -> DataSample:
-        """Get indexed data sample from ``DataStream``.
+    def __getitem__(self, index) -> Any:
+        """Get indexed data sample from ``Any``.
 
         Returns:
             DataSample: The indexed data sample.
@@ -173,7 +172,7 @@ class DataStream:
         """
         raise NotImplementedError("``empty`` needs to be implemented.")
 
-    def append(self, sample: DataSample):
+    def append(self, sample: Any):
         """Add a data sample to the data stream
 
         Raises:

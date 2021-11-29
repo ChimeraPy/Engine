@@ -2,7 +2,6 @@ import unittest
 import pathlib
 
 import pandas as pd
-import networkx as nx
 
 import pymmdt as mm
 import pymmdt.video
@@ -20,19 +19,19 @@ class TestAnalyzer(unittest.TestCase):
         a1_data = pd.read_csv(DATA_DIR / 'test.csv')
 
         # Converting the UNIX timestamps to pd.DatetimeIndex to improve consistency and reability
-        a1_data['time'] = pd.to_datetime(a1_data['time'], unit='ms')
+        a1_data['time'] = pd.to_timedelta(a1_data['time'], unit='s')
 
         # Get start time
         start_time = a1_data['time'][0]
      
         # Construct data streams
-        ds1 = pymmdt.tabular.OfflineTabularDataStream(
+        ds1 = pymmdt.tabular.TabularDataStream(
             name='csv',
             data=a1_data,
             time_column='time',
             data_columns=['data']
         )
-        ds2 = pymmdt.video.OfflineVideoDataStream(
+        ds2 = pymmdt.video.VideoDataStream(
             name='video', 
             video_path=DATA_DIR / 'test_video1.mp4', 
             start_time=start_time
@@ -46,9 +45,9 @@ class TestAnalyzer(unittest.TestCase):
 
         # Initiate collector and analyzer
         self.processes = [show_video]
-        self.collector = pymmdt.OfflineCollector([ds1, ds2])
-        self.session = pymmdt.Session()
-        self.analyzer = pymmdt.Analyzer(
+        self.collector = mm.Collector([ds1, ds2])
+        self.session = mm.Session()
+        self.analyzer = mm.Analyzer(
             self.collector, 
             self.processes,
             self.session
