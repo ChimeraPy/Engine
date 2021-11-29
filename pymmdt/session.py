@@ -39,7 +39,7 @@ class Session:
             self, 
             log_dir: Union[pathlib.Path, str],
             experiment_name: str,
-            clear_dir: bool = False
+            # clear_dir: bool = False
         ) -> None:
         """``Session`` Constructor.
 
@@ -58,27 +58,27 @@ class Session:
 
         # Create the filepath of the experiment
         self.session_dir = log_dir / experiment_name
-        self.clear_dir = clear_dir
+        # self.clear_dir = clear_dir
 
         # Create the folder if it doesn't exist 
         if not log_dir.exists():
             os.mkdir(log_dir)
 
-        # Delete if clear_dir is True
-        if self.clear_dir and self.session_dir.exists():
-            # Determine the number of files and folders to delete
-            num_of_files = sum([len(files) for r, d, files in os.walk(self.session_dir)])
-            num_of_dir = sum([len(d) for r, d, files in os.walk(self.session_dir)])
+        # # Delete if clear_dir is True
+        # if self.clear_dir and self.session_dir.exists():
+        #     # Determine the number of files and folders to delete
+        #     num_of_files = sum([len(files) for r, d, files in os.walk(self.session_dir)])
+        #     num_of_dir = sum([len(d) for r, d, files in os.walk(self.session_dir)])
 
-            # If there are files to delete, ask first!
-            if num_of_files != 0 or num_of_dir != 0:
-                print(f"Deleting {num_of_files} files and {num_of_dir} folders from {self.session_dir}.")
-                if input("Is this okay (y/n)? ").lower() == "y":
-                # if True:
-                    shutil.rmtree(self.session_dir)
-                    print("Deleted directory")
-                else:
-                    print("Didn't delete directory")
+        #     # If there are files to delete, ask first!
+        #     if num_of_files != 0 or num_of_dir != 0:
+        #         print(f"Deleting {num_of_files} files and {num_of_dir} folders from {self.session_dir}.")
+        #         if input("Is this okay (y/n)? ").lower() == "y":
+        #         # if True:
+        #             shutil.rmtree(self.session_dir)
+        #             print("Deleted directory")
+        #         else:
+        #             print("Didn't delete directory")
 
         # Create the experiment dir
         if not self.session_dir.exists():
@@ -165,7 +165,7 @@ class Session:
         subsession = self.__class__(
             log_dir,
             experiment_name,
-            self.clear_dir
+            # self.clear_dir
         )
 
         # Store the subsession to this session
