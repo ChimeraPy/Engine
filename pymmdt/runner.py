@@ -103,7 +103,7 @@ class Runner:
             self.pipe.set_time(time)
 
             # Then process the sample
-            self.pipe.step(all_samples)
+            self.pipe.step(all_samples, dtype)
 
             # After the data has propagated the entire pipe, flush the 
             # session logging.

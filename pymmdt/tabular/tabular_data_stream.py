@@ -84,10 +84,6 @@ class TabularDataStream(DataStream):
             self (TabularDataStream): the generated data stream.
 
         """
-        # Testing conditions that cause problems
-        if not hasattr(process, 'output'):
-            raise AttributeError("classmethod: from_process_and_ds requires process to have 'output' parameter.")
-
         # Create data variable that will later be converted to a DataFrame
         data_store = collections.defaultdict(list)
         data_columns = set()
@@ -99,7 +95,7 @@ class TabularDataStream(DataStream):
             y = process.step(x) 
 
             # If the output is None or an empty element, skip this time entry
-            if not y:
+            if type(y) == type(None):
                 continue
 
             # Decompose the Data Sample
@@ -107,15 +103,15 @@ class TabularDataStream(DataStream):
 
             # If there is multiple outputs (dict), we need to store them in 
             # separate columns.
-            if isinstance(y.data, dict):
+            if isinstance(y, dict):
 
                 # Storing the output data
-                for y_key in y.data.keys():
-                    data_store[y_key].append(y.data[y_key])
+                for y_key in y.keys():
+                    data_store[y_key].append(y[y_key])
                     data_columns.add(y_key)
 
             else: # Else, just store the value in the generic 'data' column
-                data_store['data'].append(y.data)
+                data_store['data'].append(y)
                 data_columns.add('data')
 
         # Convert the data to a pd.DataFrame
@@ -123,6 +119,17 @@ class TabularDataStream(DataStream):
 
         # Returning the construct object
         return cls(name=name, data=df, time_column='time') 
+    
+    @classmethod
+    def empty(cls, name):
+        # Create empty items
+        empty_df = pd.DataFrame()
+        
+        # Returning the construct object
+        return cls(
+            name=name, 
+            data=empty_df
+        )
 
     def __getitem__(self, index: int) -> pd.Series:
         """Get indexed data sample from ``TabularDataStream``.
@@ -139,17 +146,6 @@ class TabularDataStream(DataStream):
 
         # Have to return the data sample
         return self.data.iloc[data_index]
-
-    @classmethod
-    def empty(cls, name):
-        # Create empty items
-        empty_df = pd.DataFrame()
-        
-        # Returning the construct object
-        return cls(
-            name=name, 
-            data=empty_df
-        )
 
     def append(self, timestamp: pd.Timedelta, sample: Union[pd.DataFrame, pd.Series]) -> None:
         """Append a data sample to the end of the ``TabularDataStream``.

@@ -55,7 +55,7 @@ class Collector:
             # Obtaining each ds's timetrack and adding an ds_type 
             # identifier to know which data stream
             time_series = ds.timetrack.copy()
-            stream_table_index = [x for x in range(len(ds))]
+            stream_table_index = [int(x) for x in range(len(ds))]
             stream_name_stamp = [ds.name for x in range(len(ds))]
             time_series['ds_type'] = stream_name_stamp
             time_series['ds_index'] = stream_table_index
@@ -65,6 +65,9 @@ class Collector:
 
         # Converging the data streams tags to a global timetrack
         self.global_timetrack: pd.DataFrame = pd.concat(dss_times, axis=0)
+
+        # Ensuring that the ds_index column is an integer
+        self.global_timetrack['ds_index'] = self.global_timetrack['ds_index'].astype(int)
 
         # Sort by the time - only if there are more than 1 data stream
         if len(self.data_streams) > 1:

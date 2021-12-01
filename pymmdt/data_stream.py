@@ -172,7 +172,7 @@ class DataStream:
         """
         raise NotImplementedError("``empty`` needs to be implemented.")
 
-    def append(self, sample: Any):
+    def append(self, timestamp: pd.Timedelta, sample: Any):
         """Add a data sample to the data stream
 
         Raises:

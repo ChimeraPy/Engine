@@ -15,45 +15,37 @@ import pathlib
 import datetime
 
 import cv2
+import numpy as np
+import pandas as pd
 
 from pymmdt.process import Process
-from pymmdt.data_sample import DataSample
 
 class ShowVideo(Process):
     """Basic process that shows the video in a CV window.
 
     Attributes:
-        inputs (Sequence[str]): A list of strings containing the inputs
-        requred to execute ``ShowVideo``. In this case, it needs a video frame.
-
         ms_delay (int): A millisecond delay between shown frame.
 
     """
 
-    def __init__(self, inputs: Sequence[str], ms_delay: int=1):
+    def __init__(self, ms_delay: int=1):
         """Construct new ``ShowVideo`` instance.
 
         Args:
-            inputs (Sequence[str]): A list of strings containing the inputs
-            required to execute ``ShowVideo``. In this case, it needs a video frame.
-
             ms_delay (int): A millisecond delay between shown frame.
 
         """
-        super().__init__(inputs)
+        super().__init__()
         self.ms_delay = ms_delay
 
-    def forward(self, frame_sample: DataSample) -> None:
-        """Forward propagate frame_sample.
+    def step(self, frame: np.ndarray) -> None:
+        """step propagate frame_sample.
 
         Args:
-            frame_sample (pymmdt.DataSample): The data sample that contains
+            frame_sample (mm.DataSample): The data sample that contains
             the video frame.
 
         """
-        # Extract the frame
-        frame = frame_sample.data
-
         cv2.imshow("Video", frame)
         cv2.waitKey(self.ms_delay)
 
@@ -61,9 +53,6 @@ class SaveVideo(Process):
     """Basic process that saves the video.
 
     Attributes:
-        inputs (Sequence[str]): A list of strings containing the inputs 
-        required to execute ``SaveVideo``. In this case, it needs a video frame.
-
         fps (int): The frames per second (FPS) used to save the video.
 
         size (Tuple[int, int]): The width and height of the video.
@@ -75,18 +64,13 @@ class SaveVideo(Process):
 
     def __init__(
             self, 
-            inputs: Sequence[str], 
             filepath: Union[str, pathlib.Path], 
             fps: int,
             size: Tuple[int, int],
-            trigger: Optional[str]=None
         ) -> None:
         """Construct new ``SaveVideo`` instance.
 
         Args:
-            inputs (Sequence[str]): A list of strings containing the inputs 
-            required to execute ``SaveVideo``. In this case, it needs a video frame.
-
             filepath (Union[str, pathlib.Path]): The filepath to save the 
             new video file.
 
@@ -94,11 +78,8 @@ class SaveVideo(Process):
 
             size (Tuple[int, int]): The width and height of the video.
 
-            trigger (Optional[str]): The possible trigger to save the video,
-            instead of relying on the inputs' update.
-
         """
-        super().__init__(inputs, None, trigger)
+        super().__init__()
         
         # Storing variables
         self.fps = fps
@@ -117,16 +98,14 @@ class SaveVideo(Process):
             self.size
         )
 
-    def forward(self, frame_sample: DataSample) -> None:
-        """Forward propagate the frame sample.
+    def step(self, frame: np.ndarray) -> None:
+        """step propagate the frame sample.
 
         Args:
-            frame_sample (pymmdt.DataSample): The data sample that contains
+            frame_sample (mm.DataSample): The data sample that contains
             the video frame.
 
         """
-        # Extract the frame
-        frame = frame_sample.data
         # Write the frame to the video
         self.writer.write(frame)
 
@@ -136,56 +115,18 @@ class SaveVideo(Process):
         self.writer.release()
 
 class TimestampVideo(Process):
-    """Basic process that saves the video.
+    """Basic process that writes the timestamp to the video."""
 
-    Attributes:
-        inputs (Sequence[str]): A list of strings containing the inputs 
-        required to execute ``SaveVideo``. In this case, it needs a video frame.
-
-        fps (int): The frames per second (FPS) used to save the video.
-
-        size (Tuple[int, int]): The width and height of the video.
-
-        writer (cv2.VideoWriter): The video writer from OpenCV used to
-        write and save the video.
-
-    """
-
-    def __init__(
-            self, 
-            inputs: Sequence[str], 
-            output: str,
-            trigger: Optional[str]=None
-        ) -> None:
-        """Construct new ``TimestampVideo`` instance.
+    def step(self, frame: np.ndarray, timestamp: pd.Timedelta) -> np.ndarray:
+        """step propagate the frame sample.
 
         Args:
-            inputs (Sequence[str]): A list of strings containing the inputs 
-            required to execute ``TimestampVideo``. In this case, it needs a video frame.
-
-            output (str): The output to the ``TimestampVideo`` process.
-
-            trigger (Optional[str]): The possible trigger to save the video,
-            instead of relying on the inputs' update.
-
-        """
-        super().__init__(inputs, output, trigger)
-        
-
-    def forward(self, frame_sample: DataSample) -> None:
-        """Forward propagate the frame sample.
-
-        Args:
-            frame_sample (pymmdt.DataSample): The data sample that contains
+            frame (np.ndarray): The data sample that contains
             the video frame.
 
-        """
-        # Extract the frame
-        frame = frame_sample.data
-        timestamp = frame_sample.time
+            timestamp (pd.Timedelta): The timestamp to place on frame.
 
-        # Copy frame 
-        drawn_video = frame.copy()
+        """
 
         if len(frame.shape) == 3: # RGB Image 
             h, w, c = frame.shape
@@ -203,42 +144,23 @@ class TimestampVideo(Process):
             text_timestamp = '-' + text_timestamp
         
         # Drawing the text
-        cv2.putText(drawn_video, text_timestamp, (w-len(text_timestamp)*18, h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+        cv2.putText(frame, text_timestamp, (w-len(text_timestamp)*18, h), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
-        return drawn_video
-
+        return frame
 
 class CopyVideo(Process):
-    """Basic process that makes a copy of the video frame. 
+    """Basic process that makes a copy of the video frame."""
 
-    Attributes:
-        inputs (Sequence[str]): A list of strings containing the inputs
-        requred to execute ``CopyVideo``. In this case, it needs a video frame.
-
-        output (Optional[str]): The name used to store the output of
-        the ``forward`` method.
-
-        trigger (Optional[str]): An optional parameter that overwrites
-        the inputs as the trigger. Instead of executing this process
-        everytime there is a new data sample for the input, it now only
-        executes this process when a new sample with the ``data_type`` of 
-        the trigger is obtain.
-
-    """
-
-    def forward(self, video_frame_sample: DataSample) -> None:
-        """Forward propagate the frame sample.
+    def step(self, frame: np.ndarray) -> np.ndarray:
+        """step propagate the frame sample.
 
         Args:
-            frame_sample (pymmdt.DataSample): The data sample that contains
+            frame (np.ndarray): The data sample that contains
             the video frame.
 
         """
-        # Extract the data from the samples
-        video_frame = video_frame_sample.data
-
         # Making a copy of the video
-        drawn_video = video_frame.copy()
+        drawn_video = frame.copy()
 
         # Returning the copied video
         return drawn_video

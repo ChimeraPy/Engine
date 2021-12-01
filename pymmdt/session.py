@@ -21,6 +21,9 @@ import cv2
 
 # Internal Imports
 from .data_stream import DataStream
+from .video import VideoDataStream
+from .tabular import TabularDataStream
+from .entry import StreamEntry, PointEntry
 
 class Session:
     """Data Storage that contains the latest version of all data types.
@@ -58,27 +61,10 @@ class Session:
 
         # Create the filepath of the experiment
         self.session_dir = log_dir / experiment_name
-        # self.clear_dir = clear_dir
 
         # Create the folder if it doesn't exist 
         if not log_dir.exists():
             os.mkdir(log_dir)
-
-        # # Delete if clear_dir is True
-        # if self.clear_dir and self.session_dir.exists():
-        #     # Determine the number of files and folders to delete
-        #     num_of_files = sum([len(files) for r, d, files in os.walk(self.session_dir)])
-        #     num_of_dir = sum([len(d) for r, d, files in os.walk(self.session_dir)])
-
-        #     # If there are files to delete, ask first!
-        #     if num_of_files != 0 or num_of_dir != 0:
-        #         print(f"Deleting {num_of_files} files and {num_of_dir} folders from {self.session_dir}.")
-        #         if input("Is this okay (y/n)? ").lower() == "y":
-        #         # if True:
-        #             shutil.rmtree(self.session_dir)
-        #             print("Deleted directory")
-        #         else:
-        #             print("Didn't delete directory")
 
         # Create the experiment dir
         if not self.session_dir.exists():
@@ -86,22 +72,33 @@ class Session:
 
         # Create a record to the data
         self.records = {}
-        self.num_of_changes = collections.defaultdict(int)
-        self.variables = {}
-        self.streams = [] 
        
         # Keeping record of subsessions and elements changed
         self.subsessions = []
-        self.changed = []
 
     def __getitem__(self, item:str):
         assert isinstance(item, str), f"{item} should be ``str``."
-        return self.records[item]
+
+        # extract the entry
+        entry = self.records[item]
+
+        # Then ask the entry for the latest sample
+        last_sample = entry.get_last_sample()
+        return last_sample
     
     def create_stream(self, data_stream:DataStream):
         assert isinstance(data_stream, DataStream)
-        self.records[data_stream.name] = data_stream
-        self.streams.append(data_stream.name)
+        assert data_stream.name not in self.records.keys()
+
+        # Create an entry
+        entry = StreamEntry(
+            dir=self.session_dir,
+            name=data_stream.name,
+            stream=data_stream,
+        )
+       
+        # Append the stream
+        self.records[entry.name] = entry
         
     def add_image(
             self, 
@@ -110,18 +107,29 @@ class Session:
             timestamp:Optional[pd.Timedelta]=None,
         ):
         # Detecting if this is the first time
-        if name not in self.variables:
-            self.variables[name] = 'image'
+        if name not in self.records.keys():
 
-        assert self.variables[name] == 'image'
+            # Create an entry
+            entry = PointEntry(
+                dir=self.session_dir,
+                name=name,
+                dtype='image',
+                data=data,
+                start_time=timestamp
+            )
 
-        # Storing the data
-        self.records[name] = data
-        
-        # Keeping track of the changed elements
-        self.changed.append(
-            {'dtype': 'image', 'name': name, 'data': data, 'time': timestamp}
-        )
+        # Not the first time
+        else:
+            # Extract the entry from the records
+            entry = self.records[name]
+            assert isinstance(entry.stream, VideoDataStream) or entry.dtype == 'image'
+
+            # If everything is good, add the change to the track history
+            # of the entry
+            entry.append(
+                data=data,
+                timestamp=timestamp
+            )
 
     def add_tabular(
             self, 
@@ -129,30 +137,39 @@ class Session:
             data:Union[pd.Series, pd.DataFrame, Dict],
             timestamp:Optional[pd.Timedelta]=None,
         ):
-        # Detecting if this is the first time
-        if name not in self.variables:
-            self.variables[name] = 'tabular'
 
-        assert self.variables[name] == 'tabular'
-
-        # Convert the data into a pd.Series
-        if isinstance(data, dict):
-            data = pd.Series(data)
-
-        if isinstance(data, pd.Series):
-            df = data.to_frame().T
-        elif isinstance(data, pd.DataFrame):
-            df = data
+        # Ensure that the data is a dict
+        if isinstance(data, (pd.Series, pd.DataFrame)):
+            data_dict = data.to_dict()
+        elif isinstance(data, dict):
+            data_dict = data
         else:
-            raise RuntimeError(f"{data} should be pd.Series, pd.DataFrame or dict")
+            raise RuntimeError(f"{data} should be a dict, pd.DataFrame, or pd.Series")
 
-        # Storing the data frame
-        self.records[name].append(timestamp, df)
+        # Detecting if this is the first time
+        if name not in self.records.keys():
 
-        # Keeping track of the changed elements
-        self.changed.append(
-            {'dtype': 'tabular', 'name': name, 'data': df, 'time': timestamp}
-        )
+            # Create an entry
+            entry = PointEntry(
+                dir=self.session_dir,
+                name=name,
+                dtype='tabular',
+                data=data_dict,
+                start_time=timestamp
+            )
+
+        # Not the first time
+        else:
+            # Extract the entry from the records
+            entry = self.records[name]
+            assert isinstance(entry.stream, TabularDataStream) or entry.dtype == 'tabular'
+
+            # If everything is good, add the change to the track history
+            # of the entry
+            entry.append(
+                data=data_dict,
+                timestamp=timestamp
+            )
  
     def create_subsession(self, name):
 
@@ -175,33 +192,11 @@ class Session:
         return self.subsessions[-1]
 
     def flush(self) -> None:
+
+        # For all the entries, simply flush out each entry
+        for entry in self.records.values():
+            entry.flush()
      
-        # For each change, process the change according to its type
-        for change in self.changed:
-
-            # For images, save the image to a simple .jpg
-            if change['dtype'] == 'image':
-                # Save the image
-                filepath = self.session_dir / (change['name'] + '.jpg')
-                cv2.imwrite(str(filepath), change['data'])
-
-            # For tabular, append it to the .csv file
-            elif change['dtype'] == 'tabular':
-                # Extend the tabular file
-                filepath = self.session_dir / (change['name'] + '.csv')
-
-                # If this is the first time, we want the headers
-                if self.num_of_changes[change['name']] == 0:
-                    change['data'].to_csv(filepath, mode='a', index=False, header=True)
-                else:
-                    change['data'].to_csv(filepath, mode='a', index=False, header=False)
-
-            # Tracking the number of changes
-            self.num_of_changes[change['name']] += 1
-
-        # After processing everything, clear out the tracked changes 
-        self.changed.clear()
-
     def close(self) -> None:
         """Close session.
 

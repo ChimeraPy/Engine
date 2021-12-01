@@ -111,7 +111,7 @@ class Pipe:
     def start(self):
         ...
 
-    def step(self, data_samples: Dict[str, Any]):
+    def step(self, data_samples: Dict[str, Any], which_new: str):
         ...
 
     def end(self):
