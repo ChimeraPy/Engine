@@ -204,6 +204,12 @@ class Session:
         # Flush out the session data
         self.flush()
 
+        print("AFTER FLUSHING")
+        
+        # Then close all the entries
+        for entry in self.records.values():
+            entry.close()
+
         # Close all the subsessions
         for session in self.subsessions:
             session.close()

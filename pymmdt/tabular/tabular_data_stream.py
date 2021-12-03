@@ -8,7 +8,7 @@ Contains the following classes:
 # Subpackage Management
 __package__ = 'tabular'
 
-from typing import Union, Optional
+from typing import Union, Optional, Tuple
 import collections
 import tqdm
 import pathlib
@@ -72,7 +72,8 @@ class TabularDataStream(DataStream):
             name: str,
             process: Process, 
             in_ds: DataStream,
-            verbose: bool = False
+            verbose: bool = False,
+            cache: Optional[pathlib.Path]=None
         ):
         """Class method to construct data stream from an applied process to a data stream.
 
@@ -84,12 +85,24 @@ class TabularDataStream(DataStream):
             self (TabularDataStream): the generated data stream.
 
         """
+        # Before running this long operation, determine if there is a 
+        # saved version of the data
+        if cache and cache.exists():
+            # Load the data and construct the TabularDataStream
+            data = pd.read_csv(cache)
+            ds = cls(
+                name=name,
+                data=data,
+                time_column='time'
+            )
+            return ds
+
         # Create data variable that will later be converted to a DataFrame
         data_store = collections.defaultdict(list)
         data_columns = set()
 
         # Iterate over all samples within the data stream
-        for x in tqdm.tqdm(in_ds, total=len(in_ds), disable=verbose):
+        for x, t in tqdm.tqdm(in_ds, total=len(in_ds), disable=verbose):
 
             # Process the sample and obtain the output
             y = process.step(x) 
@@ -99,7 +112,7 @@ class TabularDataStream(DataStream):
                 continue
 
             # Decompose the Data Sample
-            data_store['time'].append(x.time)
+            data_store['time'].append(t)
 
             # If there is multiple outputs (dict), we need to store them in 
             # separate columns.
@@ -117,6 +130,10 @@ class TabularDataStream(DataStream):
         # Convert the data to a pd.DataFrame
         df = pd.DataFrame(data_store)
 
+        # If there is a cache request, save the data to the specific path
+        if cache and not cache.exists():
+            df.to_csv(str(cache), index=False)
+
         # Returning the construct object
         return cls(name=name, data=df, time_column='time') 
     
@@ -131,7 +148,7 @@ class TabularDataStream(DataStream):
             data=empty_df
         )
 
-    def __getitem__(self, index: int) -> pd.Series:
+    def __getitem__(self, index: int) -> Tuple[pd.Series, pd.Timedelta]:
         """Get indexed data sample from ``TabularDataStream``.
 
         Args:
@@ -142,10 +159,10 @@ class TabularDataStream(DataStream):
 
         """
         # First use the table index to find the data index
-        data_index = self.timetrack.iloc[index]['ds_index']
+        data_meta = self.timetrack.iloc[index]
 
         # Have to return the data sample
-        return self.data.iloc[data_index]
+        return self.data.iloc[data_meta.ds_index], data_meta.time
 
     def append(self, timestamp: pd.Timedelta, sample: Union[pd.DataFrame, pd.Series]) -> None:
         """Append a data sample to the end of the ``TabularDataStream``.
@@ -160,6 +177,7 @@ class TabularDataStream(DataStream):
             'time': timestamp, 
             'ds_index': int(len(self.timetrack))
         }, ignore_index=True)
+        self.timetrack['ds_index'] = self.timetrack['ds_index'].astype(int)
 
         # Then add it to the data body (cannot be inplace)
         self.data = self.data.append(sample, ignore_index=True)

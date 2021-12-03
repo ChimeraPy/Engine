@@ -84,7 +84,7 @@ class Runner:
         # Create data sample slots in the session
         all_samples = {}
         for dtype in self.all_dtypes:
-            all_samples[dtype] = None
+            all_samples[dtype] = None, None # sample, time
 
         # Attach the session to the pipe
         self.pipe.attach_session(self.session)
@@ -114,3 +114,6 @@ class Runner:
 
         # Closing the session
         self.session.close()
+
+        # Then close all the streams in the collector
+        self.collector.close()

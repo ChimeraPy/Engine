@@ -150,3 +150,12 @@ class Collector:
             return self.data_streams[name]
         else:
             raise IndexError(f"{name} not found in saved data streams.")
+
+    def close(self):
+
+        print("CLOSING COLLECTOR")
+        
+        # For all data streams, apply their closing routines
+        for dtype, ds in self.data_streams.items():
+            ds.close()
+

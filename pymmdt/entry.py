@@ -70,7 +70,12 @@ class StreamEntry(Entry):
             if len(self.stream) == 0:
                 return None
             else:
-                return self.stream[len(self.stream)-1]
+                if isinstance(self.stream, TabularDataStream):
+                    sample, time = self.stream[len(self.stream)-1]
+                    return sample.to_dict()
+                elif isinstance(self.stream, VideoDataStream):
+                    sample, time = self.stream[len(self.stream)-1]
+                    return sample
 
     def flush(self):
 
@@ -85,6 +90,10 @@ class StreamEntry(Entry):
         # Update the counter and clear out the unsaved items
         self.num_of_total_changes += len(self.unsaved_changes)
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
+
+    def close(self):
+        # Close the data stream
+        self.stream.close()
 
 class PointEntry(Entry):
 
@@ -164,3 +173,6 @@ class PointEntry(Entry):
         # Update the counter and clear out the unsaved items
         self.num_of_total_changes += len(self.unsaved_changes)
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
+
+    def close(self):
+        ...
