@@ -94,10 +94,10 @@ class Runner:
         self.pipe.start()
 
         # Iterate through the collector
-        for time, dtype, sample in tqdm.tqdm(self.collector, disable=not verbose):
+        for time, dtype, sample_with_time in tqdm.tqdm(self.collector, disable=not verbose):
 
             # Store the sample to the session
-            all_samples[dtype] = sample
+            all_samples[dtype] = sample_with_time
 
             # Set the time for the current pipe
             self.pipe.set_time(time)

@@ -52,7 +52,7 @@ class VideoDataStream(DataStream):
             video_path: Optional[Union[pathlib.Path, str]]=None, 
             fps: Optional[int]=None,
             size: Optional[Tuple[int, int]]=None,
-            max_queue_size: int=1000,
+            max_queue_size: int=30,
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -129,9 +129,8 @@ class VideoDataStream(DataStream):
         self.queue = queue.Queue(maxsize=max_queue_size)
 
         # After the queue is set, start running the thread
+        self._thread_video_lock = threading.Lock()
         self._thread_exit = threading.Event()
-        self._thread_continue = threading.Event()
-        self._thread_continue.set() # Set as True in the beginning
         self._thread_exit.clear() # Set as False in the beginning
         self.thread.start()
 
@@ -177,11 +176,10 @@ class VideoDataStream(DataStream):
             if self._thread_exit.is_set():
                 break
 
-            # Check if the thread has been pause
-            self._thread_continue.wait()
-
-            # Once it is not paused, load the frames into the queue
-            res, frame = self.video.read()
+            # Acquire the lock to read the video frame
+            with self._thread_video_lock:
+                print(self.video.get(cv2.CAP_PROP_POS_FRAMES))
+                res, frame = self.video.read()
 
             # Check if end of file
             if type(frame) == type(None):
@@ -193,8 +191,12 @@ class VideoDataStream(DataStream):
                 # If not, keep trying to put the frame into the queue
                 if self._thread_exit.is_set():
                     break
+                
                 elif self.queue.maxsize != self.queue.qsize():
+                    # Once the frame is placed, exit to get the new frame
                     self.queue.put(frame.copy(), block=True)
+                    break
+                
                 else:
                     continue
 
@@ -216,7 +218,6 @@ class VideoDataStream(DataStream):
 
         # Only read the frames from the Queue, not anyway else,
         # since reading from the video is not thread safe!
-        # print(f"{self} GET __getitem__")
         frame = self.queue.get(block=True)
 
         # Get the time of the sample
@@ -241,23 +242,21 @@ class VideoDataStream(DataStream):
             print("Video miss - reassigning index")
             if self.mode == "reading":
 
-                # and then clear queue safely
-                self._thread_continue.clear()
-                
                 sample_meta = self.timetrack.iloc[new_index]
                 ds_index = sample_meta['ds_index']
                 
-                # Clear out the queue
-                with self.queue.mutex:
-                    self.queue.queue.clear()
-                
-                # Then set the correct location
-                self.video.set(cv2.CAP_PROP_POS_FRAMES, new_index-1)
-                self.data_index = ds_index
-                self.index = new_index
+                # Acquire the lock to ensure that the video is not read from
+                # from the thread
+                with self._thread_video_lock:
 
-                # Continue the thread again
-                self._thread_continue.set()
+                    # Set the new location for the video
+                    self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
+                    self.data_index = ds_index
+                    self.index = new_index
+
+                    # Clear out the queue
+                    with self.queue.mutex:
+                        self.queue.queue.clear()
 
             return True
         else:
@@ -289,7 +288,6 @@ class VideoDataStream(DataStream):
                     break
 
             # Get the lastest frame 
-            # print(f"{self} GET queue_to_save_video")
             try:
                 frame = self.queue.get(block=True, timeout=2)
                 assert frame.shape[:2] == self.size, f"frame mismatch - actual: {frame.shape[:2]}, expected: {self.size}"
@@ -313,9 +311,7 @@ class VideoDataStream(DataStream):
     def close(self):
         """Close the ``VideoDataStream`` instance."""
         # Stop the threading
-        print(f"{self} - CLOSING")
         self._thread_exit.set()
-        print(f"{self} CLOSING: ", self._thread_exit.is_set())
         self.thread.join()
 
         # Closing the video capture device
