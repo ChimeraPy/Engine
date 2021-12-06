@@ -7,7 +7,7 @@ PyMMDT Main Features:
  * Modular and flexible data pipeline architecture 
  * Video, CSV, and other modality toolkits
 
-Here is [PyMMDT Documentation](https://edavalosanaya.github.io/PyMMDT).
+Here is [PyMMDT Documentation](https://oele-isis-vanderbilt.github.io/PyMMDT/).
 
 ## Installation 
 
