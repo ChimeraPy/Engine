@@ -20,14 +20,27 @@ from .video import VideoDataStream
 from .tabular import TabularDataStream
 
 class Entry:
-    """Entry to be saved in the session and tracking changes overtime."""
+    """Abstract Entry to be saved in the session and tracking changes."""
 
     def append(
         self,
         data:Any,
         timestamp:Optional[pd.Timedelta]=None
         ):
+        """Add a new point of data to the ``Entry``.
 
+        Any data points added are staged and not fully committed yet. 
+        To write the data to memory, use the ``flush`` method. The 
+        ``flush`` method is also called at the end of each ``start``, 
+        ``step``, and ``end`` method of ``mm.Pipe``.
+
+        Args:
+            data (Any): The data point to append.
+
+            timestamp (Optional[pd.Timedelta]): The timestamp associated
+            to the data point.
+
+        """
         # Create an entry to the unsaved_changes
         self.unsaved_changes = self.unsaved_changes.append({
             'time': timestamp,
@@ -35,10 +48,27 @@ class Entry:
         }, ignore_index=True)
 
     def flush(self):
-        """Write/Save changes and mark them as processed."""
+        """Write/Save changes and mark them as processed.
+
+        Raises:
+            NotImplementedError: ``Entry`` is an abstract class. The 
+            ``flush`` needs to be implemented in concrete classes.
+
+        """
         raise NotImplementedError("``flush`` needs to be implemented.")        
 
 class StreamEntry(Entry):
+    """Concrete ``Entry`` that focuses on data streams.
+
+    Attributes:
+        dir (pathlib.Path): The directory/path to store the generated 
+        file.
+
+        name (str): The name of the entry and its data.
+
+        stream (DataStream): The DataSteam object to write the data.
+
+    """
 
     def __init__(
         self, 
@@ -46,6 +76,16 @@ class StreamEntry(Entry):
         name:str,
         stream:DataStream,
         ):
+        """Construct new ``StreamEntry``.
+
+        Args:
+            dir (pathlib.Path): The directory/filepath to store the 
+            generated data file.
+
+            name (str): The name of ``Entry``.
+
+            stream (DataStream): The stream instance to store the data.
+        """
 
         # Saving the Entry attributes
         self.dir = dir
@@ -60,7 +100,18 @@ class StreamEntry(Entry):
             self.filepath = self.dir / f"{self.name}.avi"
             self.stream.open_writer(self.filepath)
 
-    def get_last_sample(self):
+    def get_last_sample(self) -> Any:
+        """Extract the last sample added to the ``Entry``.
+        
+        This function is important as it retrieves the last data sample.
+        Given that sometimes the changes haven't been commited to memory,
+        this function checks for unsaved changes and extract that first.
+        Else, it obtains the last saved change.
+
+        Returns:
+            Any: Depending on the type of stream, the sample is returned.
+
+        """
         # If there are unsaved changes, these are the last sample
         if len(self.unsaved_changes.index) != 0:
             return self.unsaved_changes.iloc[len(self.unsaved_changes)-1].data
@@ -78,6 +129,13 @@ class StreamEntry(Entry):
                     return sample
 
     def flush(self):
+        """Commit the unsaved changes to memory.
+
+        TODO:
+            - Might want to create a separate thread for this, as I/O
+            processes can be very slow. Or maybe we can add the new 
+            thread in the DataStream class ``save`` method.
+        """
 
         # If no new changes, end
         if len(self.unsaved_changes.index) == 0:
@@ -92,10 +150,24 @@ class StreamEntry(Entry):
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
 
     def close(self):
+        """Close the data stream stored in the ``Entry``.
+        """
         # Close the data stream
         self.stream.close()
 
 class PointEntry(Entry):
+    """PointEntry.
+
+    Attributes:
+        dir (pathlib.Path): The directory/path to store the generated 
+        file.
+
+        name (str): The name of the entry and its data.
+
+        stream (DataFrame): A DataFrame object that organizes the 
+        temporal data.
+    """
+
 
     def __init__(
         self, 
@@ -105,6 +177,20 @@ class PointEntry(Entry):
         data:Any,
         start_time:Optional[pd.Timedelta]=None
         ):
+        """__init__.
+
+        Args:
+            dir (pathlib.Path): The directory to store the snap shots 
+            of data.
+
+            name (str): The name of the ``Entry``.
+
+            dtype (str): The type of data (image, tabular, json).
+
+            data (Any): The data to store as the initial value.
+
+            start_time (Optional[pd.Timedelta]): The original timestamp.
+        """
 
         # Saving the Entry attributes
         self.dir = dir
@@ -139,6 +225,17 @@ class PointEntry(Entry):
         self.flush()
 
     def get_last_sample(self):
+        """Extract the last sample added to the ``Entry``.
+        
+        This function is important as it retrieves the last data sample.
+        Given that sometimes the changes haven't been commited to memory,
+        this function checks for unsaved changes and extract that first.
+        Else, it obtains the last saved change.
+
+        Returns:
+            Any: Depending on the type of stream, the sample is returned.
+
+        """
         # If there are unsaved changes, these are the last sample
         if len(self.unsaved_changes.index) != 0:
             return self.unsaved_changes.iloc[len(self.unsaved_changes)-1].data
@@ -147,6 +244,13 @@ class PointEntry(Entry):
             return self.stream.iloc[len(self.stream)-1].data
 
     def flush(self):
+        """Commit the unsaved changes to memory.
+
+        TODO:
+            - Might want to create a separate thread for this, as I/O
+            processes can be very slow. Or maybe we can add the new 
+            thread in the DataStream class ``save`` method.
+        """
 
         # If no new changes, end
         if len(self.unsaved_changes.index) == 0:
@@ -175,4 +279,6 @@ class PointEntry(Entry):
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
 
     def close(self):
+        """Close the data stream stored in the ``Entry``.
+        """
         ...

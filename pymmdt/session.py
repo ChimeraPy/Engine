@@ -76,7 +76,16 @@ class Session:
         # Keeping record of subsessions and elements changed
         self.subsessions = []
 
-    def __getitem__(self, item:str):
+    def __getitem__(self, item:str) -> Any:
+        """Get the item given the name of the ``Entry``.
+
+        Args:
+            item (str): The name of the requested name.
+
+        Returns:
+            Any: The last sample from that specified entry. To obtain
+            the entire data stream, use ``session.records[item]``.
+        """
         assert isinstance(item, str), f"{item} should be ``str``."
 
         # extract the entry
@@ -86,7 +95,14 @@ class Session:
         last_sample = entry.get_last_sample()
         return last_sample
     
-    def create_stream(self, data_stream:DataStream):
+    def create_stream(self, data_stream:DataStream) -> None:
+        """create_stream.
+
+        Args:
+            data_stream (DataStream): The data stream to save in the 
+            session.
+
+        """
         assert isinstance(data_stream, DataStream)
         assert data_stream.name not in self.records.keys()
 
@@ -105,7 +121,19 @@ class Session:
             name:str, 
             data:np.ndarray, 
             timestamp:Optional[pd.Timedelta]=None,
-        ):
+        ) -> None:
+        """Log an image to an specified entry at an optional timestamp.
+
+        Args:
+            name (str): The name of the ``Entry`` to store it.
+
+            data (np.ndarray): The image to store.
+
+            timestamp (Optional[pd.Timedelta]): The optional timestamp
+            to tag the image with.
+
+        """
+
         # Detecting if this is the first time
         if name not in self.records.keys():
 
@@ -136,7 +164,17 @@ class Session:
             name:str,
             data:Union[pd.Series, pd.DataFrame, Dict],
             timestamp:Optional[pd.Timedelta]=None,
-        ):
+        ) -> None:
+        """add_tabular.
+
+        Args:
+            name (str): name
+            data (Union[pd.Series, pd.DataFrame, Dict]): data
+            timestamp (Optional[pd.Timedelta]): timestamp
+
+        Returns:
+            None:
+        """
 
         # Ensure that the data is a dict
         if isinstance(data, (pd.Series, pd.DataFrame)):
@@ -171,7 +209,15 @@ class Session:
                 timestamp=timestamp
             )
  
-    def create_subsession(self, name):
+    def create_subsession(self, name: str) -> 'Session':
+        """create_subsession.
+
+        Args:
+            name (str): name
+
+        Returns:
+            'Session':
+        """
 
         # Construct the subsession log_dir
         # and experiment_name
@@ -192,19 +238,29 @@ class Session:
         return self.subsessions[-1]
 
     def flush(self) -> None:
+        """flush.
+
+        Args:
+
+        Returns:
+            None:
+        """
 
         # For all the entries, simply flush out each entry
         for entry in self.records.values():
             entry.flush()
      
     def close(self) -> None:
-        """Close session.
+        """close.
 
+        Args:
+
+        Returns:
+            None:
         """
+
         # Flush out the session data
         self.flush()
-
-        print("AFTER FLUSHING")
         
         # Then close all the entries
         for entry in self.records.values():

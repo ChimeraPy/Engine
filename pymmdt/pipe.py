@@ -88,30 +88,15 @@ class Pipe:
         # First make the session an attribute
         self.session = session
 
-        # Then store the session into each process
-        # for process in self._processes:
-        #     process.attach_session(session)
-
     def attach_collector(self, collector: Collector):
 
         # First make the collector an attribute
         self.collector = collector
 
-    def set_time(self, timestamp: pd.Timedelta):
-
-        # Set its own time
-        self.time = timestamp
-
-        # Set the time for all processes
-        for process in self._processes.values():
-            setattr(process, 'time', copy.deepcopy(timestamp))
-
-        return None
-
     def start(self):
         ...
 
-    def step(self, data_samples: Dict[str, Any], which_new: str):
+    def step(self, data_samples: Dict[str, Any]):
         ...
 
     def end(self):

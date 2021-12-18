@@ -51,11 +51,11 @@ class TabularDataStream(DataStream):
 
         # Need to construct the timetrack 
         if time_column:
-            # Convert the time column to standard to column name of ``time``
-            data = data.rename(columns={time_column: 'time'})
+            # Convert the time column to standard to column name of ``_time_``
+            data['_time_'] = pd.TimedeltaIndex(data[time_column])
             
             # Store the timetrack
-            timetrack = pd.TimedeltaIndex(data['time'])
+            timetrack = data['_time_']
 
         else:
             timetrack = pd.TimedeltaIndex([]) 
@@ -148,21 +148,18 @@ class TabularDataStream(DataStream):
             data=empty_df
         )
 
-    def __getitem__(self, index: int) -> Tuple[pd.Series, pd.Timedelta]:
-        """Get indexed data sample from ``TabularDataStream``.
+    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta):
+        
+        # Generate mask for the window data
+        after_start_time = self.data['time'] > start_time
+        before_end_time = self.data['time'] < end_time
+        time_window_mask = after_start_time and before_end_time
 
-        Args:
-            index (int): The index requested.
+        # Extract the data
+        data = self.data[time_window_mask]
 
-        Returns:
-            DataSample: The indexed data sample from the data stream.
-
-        """
-        # First use the table index to find the data index
-        data_meta = self.timetrack.iloc[index]
-
-        # Have to return the data sample
-        return self.data.iloc[data_meta.ds_index], data_meta.time
+        # Return the data sample
+        return data
 
     def append(self, timestamp: pd.Timedelta, sample: Union[pd.DataFrame, pd.Series]) -> None:
         """Append a data sample to the end of the ``TabularDataStream``.

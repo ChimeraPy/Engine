@@ -9,11 +9,12 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Union, Iterable
+from typing import Sequence, Optional, Dict, Any
 import collections
 
 # Third Party Imports
 import tqdm
+import pandas as pd
 
 # Internal Imports
 from .data_stream import DataStream
@@ -25,17 +26,6 @@ from .session import Session
 
 class Runner:
     """Multimodal Data Processing and Analysis Coordinator. 
-
-    The Runner is the coordinator between the other modules. First,
-    the analyzer determines the flow of data from the data streams
-    stored in the collector and the given processes. Once the analyzer
-    constructs the data flow graph, the pipelines for the input 
-    data stream are determined and stored.
-
-    Then, when feeding new data samples, the analyzer send them to
-    the right pipeline and its processes. The original data sample and
-    its subsequent generated data sample in the pipeline are stored
-    in the Session as a means to keep track of the latest sample.
 
     Attributes:
         collector (pymmdt.Collector): The collector used to match the 
@@ -51,9 +41,13 @@ class Runner:
 
     def __init__(
             self, 
+            name: str,
             data_streams: Sequence[DataStream],
             pipe: Pipe,
-            session: Session
+            session: Session,
+            time_window_size: pd.Timedelta,
+            start_at: Optional[pd.Timedelta] = None,
+            end_at: Optional[pd.Timedelta] = None,
         ) -> None:
         """Construct the analyzer. 
 
@@ -62,29 +56,26 @@ class Runner:
             pipe (Pipe): The pipeline to send forward the data samples from the data streams toward.
 
         """
-
         # Create a collector that organizes the chronological of data from 
         # the data streams
-        self.collector = Collector(data_streams)
+        self.name = name
+        self.collector = Collector(data_streams, time_window_size)
         self.pipe = pipe
         self.session = session
         self.all_dtypes = [ds.name for ds in data_streams]
 
-    def run(self, verbose=False) -> None:
-        """Run the data pipeline.
+        # Apply triming if start_at or end_at has been selected
+        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
+            self.collector.trim_before(start_at)
+        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
+            self.collector.trim_after(end_at)
 
-        Once the analyzer has been initialized with the collector, 
-        processes, and the session, it can run the entire data pipeline.
-
-        Args:
-            verbose (bool): If to include logging and loading bar to
-            help visualize the wait time until completion.
-
-        """
+    def start(self) -> None:
+        
         # Create data sample slots in the session
-        all_samples = {}
+        self.all_samples = {}
         for dtype in self.all_dtypes:
-            all_samples[dtype] = None, None # sample, time
+            self.all_samples[dtype] = None, None # sample, time
 
         # Attach the session to the pipe
         self.pipe.attach_session(self.session)
@@ -93,21 +84,16 @@ class Runner:
         # First, execute the ``start`` routine of the pipe
         self.pipe.start()
 
-        # Iterate through the collector
-        for time, dtype, sample_with_time in tqdm.tqdm(self.collector, disable=not verbose):
+    def step(self, data_samples: Dict[str, Any]) -> None:
 
-            # Store the sample to the session
-            all_samples[dtype] = sample_with_time
+        # Then process the sample
+        self.pipe.step(data_samples)
 
-            # Set the time for the current pipe
-            self.pipe.set_time(time)
+        # After the data has propagated the entire pipe, flush the 
+        # session logging.
+        self.session.flush()
 
-            # Then process the sample
-            self.pipe.step(all_samples, dtype)
-
-            # After the data has propagated the entire pipe, flush the 
-            # session logging.
-            self.session.flush()
+    def end(self) -> None:
 
         # Then execute the ``end`` routine of the pipe
         self.pipe.end()
@@ -117,3 +103,22 @@ class Runner:
 
         # Then close all the streams in the collector
         self.collector.close()
+
+    def run(self, verbose=False) -> None:
+        """Run the data pipeline.
+
+        Args:
+            verbose (bool): If to include logging and loading bar to
+            help visualize the wait time until completion.
+
+        """
+        # Start 
+        self.start()
+
+        # Iterate through the collector
+        for data_samples in tqdm.tqdm(self.collector, disable=not verbose):
+            self.step(data_samples)
+
+        # End 
+        self.end()
+

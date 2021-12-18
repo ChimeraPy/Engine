@@ -9,7 +9,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Iterator, Dict, Any
+from typing import Sequence, Iterator, Dict, Any, Union
 
 # Third-party Imports
 import pandas as pd
@@ -28,7 +28,7 @@ class Collector:
     to obtain the data pointer to a data stream to fetch the actual data.
 
     Attributes:
-        data_streams (Dict[str, pymddt.DataStream]): A dictionary of the 
+        data_streams (Dict[str, mm.DataStream]): A dictionary of the 
         data streams that its keys are the name of the data streams.
 
         global_timetrack (pd.DataFrame): A data frame that stores the time,
@@ -37,15 +37,34 @@ class Collector:
 
     """
 
-    def __init__(self, data_streams: Sequence[DataStream]) -> None:
+    def __init__(
+            self, 
+            data_streams: Sequence[DataStream],
+            time_window_size: pd.Timedelta,
+        ) -> None:
         """Construct the ``OfflineCollector``.
 
+        In the constructor, the global timeline/timetrack is generated
+        that connects all the data streams. This universal timetrack
+        only contains the pointers to the individual data stream values.
+        By using only the pointers, the global timetrack is concise, 
+        small, and cheap to generate on the fly.
+
+        Once the timetrack is generated, the timetrack can be iterated
+        from the beginning to end. The data stream pointers help
+        retrieve the correct data in an orderly fashion.
+
         Args:
-            data_streams (List[pymddt.DataStream]): A list of offline data streams.
+            data_streams (Sequene[mm.DataStream]): A list of offline 
+            data streams.
+
+            time_window_size (pd.Timedelta): The size of the time window
+            from where samples are collected and process together.
 
         """
         # Constructing the data stream dictionary
         self.data_streams: Dict[str, DataStream] = {x.name:x for x in data_streams}
+        self.time_window_size: pd.Timdelta = time_window_size
 
         # Data Streams (DSS) times, just extracting all the time stamps
         # and then tagging them as the name of the stream
@@ -72,12 +91,14 @@ class Collector:
         # Sort by the time - only if there are more than 1 data stream
         if len(self.data_streams) > 1:
             self.global_timetrack.sort_values(by='time', inplace=True)
-
-        # For debugging purposes
-        # self.global_timetrack.to_excel('test.xlsx', index=False)
+        
+        # Split samples based on the time window size
+        self.start = self.global_timetrack['time'][0]
+        self.end = self.global_timetrack['time'][len(self.global_timetrack)]
+        self.size = (self.end - self.start) / self.time_window_size
 
     def __iter__(self) -> Iterator[Any]:
-        """Generate an iterator of ``DataSample`` from the ``Any``.
+        """Generate an iterator of the entire timetrack and its pointers.
         
         Returns:
             Iterator[DataSample]: Iterator of data samples.
@@ -87,10 +108,16 @@ class Collector:
         return self
 
     def __next__(self) -> Any:
-        """Obtain next data sample from the Iterator[DataSample] instance.
+        """Obtain next data sample from the Iterator[Any] instance.
+
+        The global timetrack/timeline is keep as a record. Then the 
+        collector has an index that is updated throughout the iterator.
+        This index is used to obtain the next upcoming data sample. 
+        Each data stream has their own index, but the collector's index
+        focuses on the current location in the global timetrack.
 
         Returns:
-            Anyt: The next upcoming data sample.
+            Any: The next upcoming data sample.
 
         """
         # Stop iterating when index has overcome the size of the data
@@ -121,40 +148,61 @@ class Collector:
             raise IndexError
         else:
 
-            # Determine which datastream is next
-            ds_meta = self.global_timetrack.iloc[index]
-            timestamp = ds_meta['time']
-            ds_pointer = ds_meta['ds_index']
-            dtype = ds_meta['ds_type']
-            
-            # Checking if the pointer aligns with the data stream
-            if ds_pointer != self.data_streams[dtype].index:
-               self.data_streams[dtype].set_index(ds_pointer)
+            # Given the index, find the start_time and end_time of the 
+            # window
+            window_start = self.start + self.time_window_size * self.index
+            window_end = self.start + self.time_window_size * (self.index + 1)
 
-            # Get the sample
-            data_sample = self.data_streams[dtype][ds_pointer]
+            # Obtain the data samples from all data streams given the 
+            # window start and end time
+            data_samples = {}
+            for dtype, data_stream in self.data_streams.items():
+                data_samples[dtype] = data_stream.get(window_start, window_end)
 
-            return timestamp, dtype, data_sample
+            return data_samples
 
     def __len__(self) -> int:
-        """Get size of ``DataStream``.
+        """Get size of ``Collector``. Size of the global timetrack.
 
         Returns:
-            int: The size of the data stream.
-
+            int: The number of slices of the global timetrack given the 
+            size of the time window
         """
-        return len(self.global_timetrack)
+        return self.size
+
+    def trim_before(self, trim_time: pd.Timedelta) -> None:
+        self.start = trim_time
+
+    def trim_after(self, trim_time: pd.Timedelta) -> None:
+        self.end = trim_time
 
     def get_data_stream(self, name:str):
+        """Extracts the data stream requested from all data streams.
+
+        Args:
+            name (str): The name of the data stream.
+
+        Returns:
+            DataStream: The requested data stream
+
+        Raises:
+            IndexError: If the requested data stream is not found, this 
+            error is raised.
+        
+        """
         if name in self.data_streams.keys():
             return self.data_streams[name]
         else:
             raise IndexError(f"{name} not found in saved data streams.")
 
     def close(self):
+        """Propagate the closing routine to the stored data streams.
 
-        print("CLOSING COLLECTOR")
-        
+        This routine is important to tell the collector's data streams 
+        to close - such as the VideoDataStream to release the video 
+        capture and video writer.
+
+        """
         # For all data streams, apply their closing routines
         for dtype, ds in self.data_streams.items():
             ds.close()

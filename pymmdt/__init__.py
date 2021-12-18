@@ -12,6 +12,7 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+from .director import Director
 from .data_stream import DataStream
 from .process import Process
 from .collector import Collector

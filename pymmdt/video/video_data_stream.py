@@ -52,7 +52,7 @@ class VideoDataStream(DataStream):
             video_path: Optional[Union[pathlib.Path, str]]=None, 
             fps: Optional[int]=None,
             size: Optional[Tuple[int, int]]=None,
-            max_queue_size: int=30,
+            max_queue_size: int=1000,
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -85,7 +85,7 @@ class VideoDataStream(DataStream):
             
             # Constructing timetrack
             # timetrack = pd.date_range(start=start_time, periods=self.nb_frames, freq=f"{int(1e9/self.fps)}N").to_frame()
-            timeline = pd.TimedeltaIndex(
+            self.timeline = pd.TimedeltaIndex(
                 pd.timedelta_range(
                     start=start_time, 
                     periods=self.nb_frames, 
@@ -109,13 +109,13 @@ class VideoDataStream(DataStream):
             self.video = cv2.VideoWriter()
 
             # Create an empty timeline
-            timeline = pd.TimedeltaIndex([])
+            self.timeline = pd.TimedeltaIndex([])
 
             # Get the correct thread
             self.thread = self.queue_to_save_video()
 
         # Apply the super constructor
-        super().__init__(name, timeline)
+        super().__init__(name, self.timeline)
 
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
@@ -178,7 +178,6 @@ class VideoDataStream(DataStream):
 
             # Acquire the lock to read the video frame
             with self._thread_video_lock:
-                print(self.video.get(cv2.CAP_PROP_POS_FRAMES))
                 res, frame = self.video.read()
 
             # Check if end of file

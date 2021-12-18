@@ -1,6 +1,9 @@
 # Ignore debugging configurations
 .vimspector.json
 
+# Ignore the test data - sensitivie
+tests/data/
+
 # Ignoring the documentation site
 site/
 
