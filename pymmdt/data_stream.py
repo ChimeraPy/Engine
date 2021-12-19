@@ -121,6 +121,9 @@ class DataStream:
         """
         return len(self.timetrack)
 
+    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+        raise NotImplementedError
+
     def trim_before(self, trim_time: pd.Timedelta) -> None:
         """Remove data points before the trim_time timestamp.
 

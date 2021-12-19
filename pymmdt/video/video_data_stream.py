@@ -52,7 +52,7 @@ class VideoDataStream(DataStream):
             video_path: Optional[Union[pathlib.Path, str]]=None, 
             fps: Optional[int]=None,
             size: Optional[Tuple[int, int]]=None,
-            max_queue_size: int=1000,
+            max_queue_size: int=30,
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -199,35 +199,49 @@ class VideoDataStream(DataStream):
                 else:
                     continue
 
-    def __getitem__(self, index) -> Tuple[np.ndarray, pd.Timedelta]:
-        """Get the indexed data sample from the ``VideoDataStream``.
+    # def __getitem__(self, index) -> Tuple[np.ndarray, pd.Timedelta]:
+    #     """Get the indexed data sample from the ``VideoDataStream``.
 
-        Args:
-            index (int): The requested index.
+    #     Args:
+    #         index (int): The requested index.
 
-        Returns:
-            DataSample: The indexed data sample.
+    #     Returns:
+    #         DataSample: The indexed data sample.
 
-        """
-        # Only reading is allowed to access frames
-        assert self.mode == "reading"
+    #     """
+    #     # Only reading is allowed to access frames
+    #     assert self.mode == "reading"
 
-        # Ensure that the video index is correct
-        self.set_index(index)
+    #     # Ensure that the video index is correct
+    #     self.set_index(index)
 
-        # Only read the frames from the Queue, not anyway else,
-        # since reading from the video is not thread safe!
-        frame = self.queue.get(block=True)
+    #     # Only read the frames from the Queue, not anyway else,
+    #     # since reading from the video is not thread safe!
+    #     frame = self.queue.get(block=True)
 
-        # Get the time of the sample
-        timestamp = self.timetrack.iloc[self.index].time
+    #     # Get the time of the sample
+    #     timestamp = self.timetrack.iloc[self.index].time
        
-        # Increase the pointer counter for the video
-        self.data_index += 1
-        self.index += 1
+    #     # Increase the pointer counter for the video
+    #     self.data_index += 1
+    #     self.index += 1
 
-        # Return frame
-        return frame, timestamp
+    #     # Return frame
+    #     return frame, timestamp
+
+    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+        
+        # Generate mask for the window data
+        after_start_time = self.timetrack['time'] > start_time
+        before_end_time = self.timetrack['time'] < end_time
+        time_window_mask = after_start_time and before_end_time
+
+        # Obtain the data indicies
+        data_idx = self.timetrack[time_window_mask].ds_index
+
+        empty_df = pd.DataFrame({})
+
+        return empty_df
 
     def set_index(self, new_index):
         """Set the video's index by updating the pointer in OpenCV."""

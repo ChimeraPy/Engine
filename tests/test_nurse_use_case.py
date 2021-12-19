@@ -27,38 +27,38 @@ class NurseTestCase(unittest.TestCase):
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
+        # Then for each participant, we need to setup their own session,
+        # pipeline, and runner
+        workers = []
+        for p_id, p_elements in ps.items():
+            
+            # Construct the individual participant pipeline object
+            individual_pipeline = mm.Pipe()
+
+            worker = mm.SingleWorker(
+                name=p_id,
+                data_streams=p_elements['data'],
+                pipe=individual_pipeline,
+            )
+
+            # Store the individual's runner to a list 
+            workers.append(worker)
+        
         # Create an overall session and pipeline
         total_session = mm.Session(
             log_dir = OUTPUT_DIR,
             experiment_name = "pymmdt"
         )
-        data_pipeline = mm.Pipe()
-
-        # Then for each participant, we need to setup their own session,
-        # pipeline, and runner
-        runners = []
-        for p_id, p_elements in ps.items():
-
-            # Create user pipe and session
-            participant_pipe = data_pipeline.copy()
-            participant_session = total_session.create_subsession(
-                name=p_id
-            )
-
-            # Create the Runner
-            runner = mm.Runner(
-                name=p_id,
-                data_streams=p_elements['data'],
-                pipe=participant_pipe,
-                session=participant_session,
-                time_window_size=pd.Timdelta(seconds=10)
-            )
-
-            # Store the individual's runner to a list 
-            runners.append(runner)
+        overall_pipeline = mm.Pipe()
 
         # Pass all the runners to the Director
-        director = mm.Director(runners, total_session)
+        director = mm.GroupWorker(
+            name="Nurse Teamwork Example #1",
+            pipe=overall_pipeline,
+            workers=workers, 
+            session=total_session,
+            time_window_size=pd.Timedelta(seconds=5)
+        )
 
         # Then execute run for the entire session director
         director.run()
