@@ -26,10 +26,10 @@ class Pipe:
     session = None
     _processes = {}
 
-    def __init__(self):
+    def __init__(self) -> None:
         ...
 
-    def __repr__(self):
+    def __repr__(self) -> str:
 
         # Construct a string that includes all the processes
         self_string = 'Pipe\n'
@@ -40,10 +40,10 @@ class Pipe:
 
         return self_string
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
-    def __setattr__(self, name:str, value:Any):
+    def __setattr__(self, name:str, value:Any) -> None:
         """Unique ``__setattr__`` that catching Process instances.
 
         Args:
@@ -79,25 +79,25 @@ class Pipe:
         else:
             super(Pipe, self).__getattribute__(name)
 
-    def copy(self):
+    def copy(self) -> 'Pipe':
         """Create a deep copy of the pipe."""
         return copy.deepcopy(self)
 
-    def attach_session(self, session: Session):
+    def attach_session(self, session: Session) -> None:
 
         # First make the session an attribute
         self.session = session
 
-    def attach_collector(self, collector: Collector):
+    def attach_collector(self, collector: Collector) -> None:
 
         # First make the collector an attribute
         self.collector = collector
 
-    def start(self):
+    def start(self) -> None:
         ...
 
-    def step(self, data_samples: Dict[str, Any]):
+    def step(self, data_samples: Dict[str, Any]) -> Any:
         ...
 
-    def end(self):
+    def end(self) -> None:
         ...

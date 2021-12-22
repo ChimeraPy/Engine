@@ -1,9 +1,8 @@
 name: Building the package and documentation
 
-on: [push]
-# on:
-#   repository_dispatch:
-#     types: [trigger-deploy-workflow]
+on:
+  repository_dispatch:
+    types: trigger-deploy-workflow
 
 jobs:
 

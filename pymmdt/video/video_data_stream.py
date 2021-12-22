@@ -52,7 +52,7 @@ class VideoDataStream(DataStream):
             video_path: Optional[Union[pathlib.Path, str]]=None, 
             fps: Optional[int]=None,
             size: Optional[Tuple[int, int]]=None,
-            max_queue_size: int=30,
+            max_queue_size: int=1000,
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -199,81 +199,61 @@ class VideoDataStream(DataStream):
                 else:
                     continue
 
-    # def __getitem__(self, index) -> Tuple[np.ndarray, pd.Timedelta]:
-    #     """Get the indexed data sample from the ``VideoDataStream``.
-
-    #     Args:
-    #         index (int): The requested index.
-
-    #     Returns:
-    #         DataSample: The indexed data sample.
-
-    #     """
-    #     # Only reading is allowed to access frames
-    #     assert self.mode == "reading"
-
-    #     # Ensure that the video index is correct
-    #     self.set_index(index)
-
-    #     # Only read the frames from the Queue, not anyway else,
-    #     # since reading from the video is not thread safe!
-    #     frame = self.queue.get(block=True)
-
-    #     # Get the time of the sample
-    #     timestamp = self.timetrack.iloc[self.index].time
-       
-    #     # Increase the pointer counter for the video
-    #     self.data_index += 1
-    #     self.index += 1
-
-    #     # Return frame
-    #     return frame, timestamp
-
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         
         # Generate mask for the window data
-        after_start_time = self.timetrack['time'] > start_time
+        after_start_time = self.timetrack['time'] >= start_time
         before_end_time = self.timetrack['time'] < end_time
-        time_window_mask = after_start_time and before_end_time
+        time_window_mask = after_start_time & before_end_time
 
         # Obtain the data indicies
-        data_idx = self.timetrack[time_window_mask].ds_index
+        data_idx = self.timetrack[time_window_mask]
+        start_data_index = min(data_idx.ds_index)
+        end_data_index = max(data_idx.ds_index)
 
-        empty_df = pd.DataFrame({})
+        # Ensure that the video is in the right location
+        self.set_index(start_data_index)
 
-        return empty_df
+        # Get all the samples
+        times = []
+        frames = []
+        for idx, data in data_idx.iterrows():
+            timestamp = data['time']
+            frame = self.queue.get(block=True)
 
-    def set_index(self, new_index):
+            times.append(timestamp)
+            frames.append(frame)
+
+        # Update the data index record
+        # very important to update - as this keeps track of the video's 
+        # location
+        self.data_index = end_data_index + 1
+
+        # Construct data frame
+        df = pd.DataFrame({'time': times, 'frames': frames})
+
+        return df
+
+    def set_index(self, new_data_index):
         """Set the video's index by updating the pointer in OpenCV."""
-        # Not only is the index, but the also the data index
-        new_data_index = self.timetrack.iloc[new_index].ds_index
-
         # If the data index does not match the requested index,
         # it means that some jump or cut has happend.
         # We need to clear our the reading queue and set the video.
-        if self.index != new_index or self.data_index != new_data_index:
-            print("Video miss - reassigning index")
+        if self.data_index != new_data_index:
+            print(f"Video miss - reassigning index: {self.data_index}-{new_data_index}")
             if self.mode == "reading":
 
-                sample_meta = self.timetrack.iloc[new_index]
-                ds_index = sample_meta['ds_index']
-                
                 # Acquire the lock to ensure that the video is not read from
                 # from the thread
                 with self._thread_video_lock:
 
                     # Set the new location for the video
                     self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
-                    self.data_index = ds_index
-                    self.index = new_index
+                    self.data_index = new_data_index
 
                     # Clear out the queue
                     with self.queue.mutex:
                         self.queue.queue.clear()
-
-            return True
-        else:
-            return False
 
     @threaded
     def queue_to_save_video(self):

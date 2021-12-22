@@ -42,7 +42,7 @@ class Collector:
             self, 
             data_streams_groups: Dict[str, Sequence[DataStream]]
         ) -> None:
-        """Construct the ``OfflineCollector``.
+        """Construct the ``Collector``.
 
         In the constructor, the global timeline/timetrack is generated
         that connects all the data streams. This universal timetrack
@@ -53,8 +53,6 @@ class Collector:
         Once the timetrack is generated, the timetrack can be iterated
         from the beginning to end. The data stream pointers help
         retrieve the correct data in an orderly fashion.
-
-        Args:
 
         """
         # Constructing the data stream dictionary
@@ -80,12 +78,14 @@ class Collector:
         # Ensuring that the ds_index column is an integer
         self.global_timetrack['ds_index'] = self.global_timetrack['ds_index'].astype(int)
         self.global_timetrack.sort_values(by='time', inplace=True)
+        self.global_timetrack.reset_index(inplace=True)
+        self.global_timetrack = self.global_timetrack.drop(columns=['index'])
         
         # Split samples based on the time window size
         self.start = self.global_timetrack['time'][0]
-        self.end = self.global_timetrack['time'][len(self.global_timetrack)]
+        self.end = self.global_timetrack['time'][len(self.global_timetrack)-1]
 
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta):
+    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 
         # window start and end time
         all_samples = collections.defaultdict(dict)

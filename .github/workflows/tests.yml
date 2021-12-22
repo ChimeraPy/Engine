@@ -1,6 +1,9 @@
 name: Testing the package in various scenarios
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
 

@@ -151,9 +151,9 @@ class TabularDataStream(DataStream):
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         
         # Generate mask for the window data
-        after_start_time = self.timetrack['time'] > start_time
+        after_start_time = self.timetrack['time'] >= start_time
         before_end_time = self.timetrack['time'] < end_time
-        time_window_mask = after_start_time and before_end_time
+        time_window_mask = after_start_time & before_end_time
 
         # Extract the data
         data = self.data[time_window_mask]
