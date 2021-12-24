@@ -9,18 +9,20 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Dict, Any
+from typing import Sequence, Dict, Optional, Any
+import threading
+import math
 import collections
+import time
+import queue
 
 # Third-party Imports
+import tqdm
 import pandas as pd
 
 # Internal Imports
 from .data_stream import DataStream
-
-########################################################################
-# Classes
-########################################################################
+from .tools import threaded
 
 class Collector:
     """Generic collector that stores only data streams.
@@ -40,7 +42,10 @@ class Collector:
 
     def __init__(
             self, 
-            data_streams_groups: Dict[str, Sequence[DataStream]]
+            data_streams_groups:Dict[str, Sequence[DataStream]],
+            time_window_size:pd.Timedelta,
+            max_queue_size:Optional[int]=3,
+            verbose:Optional[bool]=False
         ) -> None:
         """Construct the ``Collector``.
 
@@ -57,6 +62,8 @@ class Collector:
         """
         # Constructing the data stream dictionary
         self.data_streams_groups = data_streams_groups
+        self.time_window_size = time_window_size
+        self.verbose = verbose
 
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
@@ -82,8 +89,85 @@ class Collector:
         self.global_timetrack = self.global_timetrack.drop(columns=['index'])
         
         # Split samples based on the time window size
-        self.start = self.global_timetrack['time'][0]
-        self.end = self.global_timetrack['time'][len(self.global_timetrack)-1]
+        self.start_time = self.global_timetrack['time'][0]
+        self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
+        
+        # Create a queue used by the process to stored loaded data
+        self.loading_queue = queue.Queue(maxsize=max_queue_size)
+        
+        # Create a process for loading data and storing in a Queue
+        self.loading_thread = self.load_data_to_queue()
+        self._thread_exit = threading.Event()
+        self._thread_exit.clear() # Set as False in the beginning
+
+    def set_start_time(self, time:pd.Timedelta):
+        self.start_time = time
+
+    def set_end_time(self, time:pd.Timedelta):
+        self.end_time = time
+
+    def start(self):
+
+        # Determine how many time windows given the total time and size
+        total_time = (self.end_time - self.start_time)
+        num_of_windows = math.ceil(total_time / self.time_window_size)
+
+        # Create unique namedtuple and storage for the Windows
+        Window = collections.namedtuple("Window", ['start', 'end'])
+        self.windows = []
+
+        # For all the possible windows, calculate their start and end
+        for x in range(num_of_windows):
+            start = self.start_time + x * self.time_window_size 
+            end = self.start_time + (x+1) * self.time_window_size
+            capped_end = min(self.end_time, end)
+            window = Window(start, capped_end)
+            self.windows.append(window)
+
+        # Start the loading data process
+        self.loading_thread.start()
+
+    def close(self):
+        # Stop the loading process!
+        self._thread_exit.set()
+        self.loading_thread.join()
+
+    @threaded
+    def load_data_to_queue(self):
+       
+        # Continuously load data
+        for window in tqdm.tqdm(self.windows, disable=not self.verbose, desc="Loading data"):
+
+            # If exit requested, end process
+            if self._thread_exit.is_set():
+                break
+
+            # Extract the start and end time from window
+            start, end = window.start, window.end 
+
+            # Get the data
+            data = self.get(start, end)
+
+            # Place the data in the queue
+            while True:
+                # Instead of just getting stuck, we need to check
+                # if the process is supposed to stop.
+                # If not, keep trying to put the data into the queue
+                if self._thread_exit.is_set():
+                    break
+                
+                elif self.loading_queue.maxsize != self.loading_queue.qsize():
+                    # Once the frame is placed, exit to get the new frame
+                    self.loading_queue.put(data.copy(), block=True)
+                    break
+                
+                else:
+                    time.sleep(0.1)
+                    continue
+
+        # Once all the data is over, send the message that the work is 
+        # complete
+        self.loading_queue.put("END", block=False)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 

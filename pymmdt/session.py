@@ -9,17 +9,18 @@ __package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Union, Dict, Optional, Any
-import collections
 import pathlib
 import os
-import shutil
+import threading
+import queue
+import time
 
 # Third-party Imports
 import pandas as pd
 import numpy as np
-import cv2
 
 # Internal Imports
+from .tools import threaded
 from .data_stream import DataStream
 from .video import VideoDataStream
 from .tabular import TabularDataStream
@@ -40,9 +41,9 @@ class Session:
 
     def __init__(
             self, 
-            log_dir: Union[pathlib.Path, str],
-            experiment_name: str,
-            # clear_dir: bool = False
+            log_dir:Union[pathlib.Path, str],
+            experiment_name:str,
+            queue_max_size:Optional[int]=100
         ) -> None:
         """``Session`` Constructor.
 
@@ -51,8 +52,6 @@ class Session:
 
             experiment_name (str): The name of the experiment, typically just using the name of the 
             participant/user.
-
-            clear_dir (bool): To clear the sessions' directory.
 
         """
         # Converting the str to pathlib.Path
@@ -75,6 +74,12 @@ class Session:
        
         # Keeping record of subsessions and elements changed
         self.subsessions = []
+
+        # Create a queue and thread for I/O logging in separate thread
+        self.logging_queue = queue.Queue(maxsize=queue_max_size)
+        self.logging_thread = self.load_data_to_log()
+        self._thread_exit = threading.Event()
+        self._thread_exit.clear() # Set as False in the beginning
 
     def __getitem__(self, item:str) -> Any:
         """Get the item given the name of the ``Entry``.
@@ -134,30 +139,14 @@ class Session:
 
         """
 
-        # Detecting if this is the first time
-        if name not in self.records.keys():
-
-            # Create an entry
-            entry = PointEntry(
-                dir=self.session_dir,
-                name=name,
-                dtype='image',
-                data=data,
-                start_time=timestamp
-            )
-
-        # Not the first time
-        else:
-            # Extract the entry from the records
-            entry = self.records[name]
-            assert isinstance(entry.stream, VideoDataStream) or entry.dtype == 'image'
-
-            # If everything is good, add the change to the track history
-            # of the entry
-            entry.append(
-                data=data,
-                timestamp=timestamp
-            )
+        # Put data in the logging queue
+        data_chunk = {
+            'name': name,
+            'data': data,
+            'timestamp': timestamp,
+            'dtype': 'image'
+        }
+        self.logging_queue.put(data_chunk)
 
     def add_tabular(
             self, 
@@ -184,30 +173,14 @@ class Session:
         else:
             raise RuntimeError(f"{data} should be a dict, pd.DataFrame, or pd.Series")
 
-        # Detecting if this is the first time
-        if name not in self.records.keys():
-
-            # Create an entry
-            entry = PointEntry(
-                dir=self.session_dir,
-                name=name,
-                dtype='tabular',
-                data=data_dict,
-                start_time=timestamp
-            )
-
-        # Not the first time
-        else:
-            # Extract the entry from the records
-            entry = self.records[name]
-            assert isinstance(entry.stream, TabularDataStream) or entry.dtype == 'tabular'
-
-            # If everything is good, add the change to the track history
-            # of the entry
-            entry.append(
-                data=data_dict,
-                timestamp=timestamp
-            )
+        # Put data in the logging queue
+        data_chunk = {
+            'name': name,
+            'data': data_dict,
+            'timestamp': timestamp,
+            'dtype': 'tabular'
+        }
+        self.logging_queue.put(data_chunk)
  
     def create_subsession(self, name: str) -> 'Session':
         """create_subsession.
@@ -228,7 +201,6 @@ class Session:
         subsession = self.__class__(
             log_dir,
             experiment_name,
-            # self.clear_dir
         )
 
         # Store the subsession to this session
@@ -237,19 +209,69 @@ class Session:
         # Return the new session instance
         return self.subsessions[-1]
 
-    def flush(self) -> None:
-        """flush.
+    def flush(self, data: Dict):
 
-        Args:
+        # Tabular
+        # Detecting if this is the first time
+        if data['name'] not in self.records.keys():
 
-        Returns:
-            None:
-        """
+            # Create an entry
+            entry = PointEntry(dir=self.session_dir, **data)
 
-        # For all the entries, simply flush out each entry
-        for entry in self.records.values():
-            entry.flush()
-     
+            # Store the entry to the records
+            self.records[entry.name] = entry
+
+        # Not the first time
+        else:
+
+            # Extended the entry with the same name
+            entry = self.records[data['name']]
+
+            # Test that the new data entry is valid to the type of entry
+            assert entry.dtype == data['dtype'], "Entry dtype should match the input data type"
+
+            # If everything is good, add the change to the track history
+            # of the entry
+            entry.append(
+                data=data['data'],
+                timestamp=data['timestamp']
+            )
+
+    @threaded
+    def load_data_to_log(self):
+
+        # Continuously check if there are data to log and save
+        while True:
+
+            # If exit event, exit the thread
+            if self._thread_exit.is_set():
+                break
+
+            # Getting data from queue
+            while True:
+                # Instead of just getting stuck, we need to check
+                # if the process is supposed to stop.
+                # If not, keep trying to get the data into the queue
+                if self._thread_exit.is_set():
+                    data = 'END'
+                    break
+                
+                elif self.logging_queue.qsize() != 0:
+                    # Get the data frome the queue
+                    data = self.logging_queue.get()
+                    break
+                
+                else:
+                    time.sleep(0.1)
+                    continue
+
+            # If end message, end the thread
+            if data == 'END':
+                break
+
+            # Then process the data
+            self.flush(data)
+
     def close(self) -> None:
         """close.
 
@@ -259,8 +281,9 @@ class Session:
             None:
         """
 
-        # Flush out the session data
-        self.flush()
+        # Stop the thread and wait until complete
+        self._thread_exit.set()
+        self.logging_thread.join()
         
         # Then close all the entries
         for entry in self.records.values():

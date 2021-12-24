@@ -3,8 +3,8 @@ __package__ = "pymmdt"
 
 # Built-in Imports
 from typing import Sequence, Optional, Dict, Any
-import math
-import collections
+import time
+import threading
 
 # Third-Party Imports
 import pandas as pd
@@ -15,8 +15,9 @@ from .pipe import Pipe
 from .data_stream import DataStream
 from .session import Session
 from .collector import Collector
+from .tools import threaded
 
-class SingleWorker:
+class SingleRunner:
     
     def __init__(
             self,
@@ -26,6 +27,9 @@ class SingleWorker:
             run_solo:Optional[bool]=False,
             session:Optional[Session]=None,
             time_window_size:Optional[pd.Timedelta]=None,
+            start_at:Optional[pd.Timedelta]=None,
+            end_at:Optional[pd.Timedelta]=None,
+            verbose:Optional[bool]=False
         ):
 
         # Store the information
@@ -33,22 +37,45 @@ class SingleWorker:
         self.pipe = pipe
         self.data_streams = data_streams
         self.session = session
-        self.time_window_size = time_window_size
         self.run_solo = run_solo
+        self.verbose = verbose
 
         # If the worker is running by itself, it should be able to have 
         # its own collector.
         if self.run_solo:
-            self.collector = Collector({self.name: self.data_streams})
-            
             # The session is required for run solo
             assert isinstance(self.session, Session) and \
-                isinstance(self.time_window_size, pd.Timedelta), \
+                isinstance(time_window_size, pd.Timedelta), \
                 "When ``run_solo`` is set, ``session`` and ``time_window_size`` parameters are required."
 
+            self.collector = Collector(
+                {self.name: self.data_streams},
+                time_window_size,
+                verbose=verbose
+            )
+            
+            # Apply triming if start_at or end_at has been selected
+            if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
+                self.collector.set_start_time(start_at)
+            if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
+                self.collector.set_end_time(end_at)
+
+            # Setup the collector thread
+            self.setup_collector_thread()
+ 
+    def setup_collector_thread(self):
+        
+        # Tell the Collector to start creating its loading data thread
+        self.collector.start()
+
+        # Create a thread for ``run``.
+        self.processing_thread = self.process_data()
+        self._thread_exit = threading.Event()
+        self._thread_exit.clear() # Set as False in the beginning
+            
     def set_session(self, session: Session) -> None:
         if isinstance(self.session, Session):
-            raise RuntimeError(f"Worker <name={self.name}> has already as session")
+            raise RuntimeError(f"Runner <name={self.name}> has already as session")
         else:
             self.session = session
 
@@ -58,7 +85,7 @@ class SingleWorker:
     def start(self) -> None:
         assert isinstance(self.session, Session)
         assert isinstance(self.collector, Collector)
-        
+             
         # Attach the session to the pipe
         self.pipe.attach_session(self.session)
         self.pipe.attach_collector(self.collector)
@@ -71,10 +98,6 @@ class SingleWorker:
 
         # Then process the sample
         output = self.pipe.step(data_samples)
-
-        # After the data has propagated the entire pipe, flush the 
-        # session logging.
-        self.session.flush()
 
         # Return the pipe's output
         return output
@@ -89,8 +112,50 @@ class SingleWorker:
         # Closing components
         self.pipe.end()
         self.session.close()
+
+    def get_and_step(self):
+
+        # Get data from the loading data queue from the Collector
+        # Forward propagate the window's data
+        while True:
+            # If the thread is supposed to exit, we should end it
+            if self._thread_exit.is_set():
+                all_data_samples = 'END'
+                break
+           
+            # Check the queue before getting the item
+            elif self.collector.loading_queue.qsize() != 0:
+                # Get the data from the loading queue
+                all_data_samples = self.collector.loading_queue.get(block=True)
+                break
+           
+            # else, there is no safe sample, wait 
+            else:
+                time.sleep(0.1)
+                continue
+
+        # Check for end condition
+        if all_data_samples == 'END':
+            return True
+
+        # Then propagate the sample throughout the pipe
+        self.step(all_data_samples)
+
+        # Continue
+        return False
+
+    @threaded
+    def process_data(self):
+
+        # Continue iterating
+        while True:
+            # Process and sample - determine if it should be ended
+            should_end = self.get_and_step()
+            # If so, break and end the thread
+            if should_end:
+                break
         
-    def run(self, verbose=False) -> None:
+    def run(self) -> None:
         """Run the data pipeline.
 
         Args:
@@ -104,36 +169,14 @@ class SingleWorker:
         # Start 
         self.start()
 
-        # Determine how many time windows given the total time and 
-        # size
-        total_time = (self.collector.end - self.collector.start)
-        num_of_windows = math.ceil(total_time / self.time_window_size)
-
-        # Create unique namedtuple and storage for the Windows
-        Window = collections.namedtuple("Window", ['start', 'end'])
-        windows = []
-
-        # For all the possible windows, calculate their start and end
-        for x in range(num_of_windows):
-            start = self.collector.start + x * self.time_window_size 
-            end = self.collector.start + (x+1) * self.time_window_size
-            capped_end = min(self.collector.end, end)
-            window = Window(start, capped_end)
-            windows.append(window)
-
-        # Now that we have a list of window start and end times, iterate
-        # over these values
-        for window in tqdm.tqdm(windows, disable=not verbose):
-            # Get the samples from the collector within the window
-            all_data_samples = self.collector.get(window.start, window.end)
-
-            # Forward propagate the window's data
-            self.step(all_data_samples)
+        # Start the thread and wait until its complete
+        self.processing_thread.start()
+        self.processing_thread.join()
 
         # End 
         self.end()
 
-class GroupWorker(SingleWorker):
+class GroupRunner(SingleRunner):
     """Multimodal Data Processing Group Director.
 
     """
@@ -143,11 +186,12 @@ class GroupWorker(SingleWorker):
             name: str,
             pipe: Pipe,
             session: Session,
-            workers: Sequence[SingleWorker],
+            workers: Sequence[SingleRunner],
             time_window_size: pd.Timedelta,
             data_streams: Optional[Sequence[DataStream]] = None,
             start_at: Optional[pd.Timedelta] = None,
             end_at: Optional[pd.Timedelta] = None,
+            verbose:Optional[bool]=False
         ) -> None:
         """Construct the analyzer. 
 
@@ -161,8 +205,8 @@ class GroupWorker(SingleWorker):
         self.workers = workers
         self.pipe = pipe
         self.session = session
-        self.time_window_size = time_window_size
         self.data_streams = data_streams
+        self.verbose = verbose
 
         # Extract all the data streams from each worker and the entire group
         if data_streams:
@@ -174,20 +218,21 @@ class GroupWorker(SingleWorker):
             all_data_streams[worker.name] = worker.data_streams 
         
         # Construct a collector based on the worker's datastreams
-        self.collector = Collector(all_data_streams)
+        self.collector = Collector(all_data_streams, time_window_size, verbose=verbose)
         
+        # Apply triming if start_at or end_at has been selected
+        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
+            self.collector.set_start_time(start_at)
+        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
+            self.collector.set_end_time(end_at)
+
+        # Setup the collector thread
+        self.setup_collector_thread()
+
         # Providing each worker with a subsession
         for worker in self.workers:
             worker.set_session(self.session.create_subsession(worker.name))
             worker.set_collector(self.collector)
-
-        # Apply triming if start_at or end_at has been selected
-        self.start_time = pd.Timedelta(0)
-        self.end_time = self.collector.end
-        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
-            self.start_time = start_at
-        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
-            self.end_time = end_at
 
     def start(self) -> None:
         
@@ -207,10 +252,6 @@ class GroupWorker(SingleWorker):
 
         # Then process the sample
         self.pipe.step(all_data_samples)
-
-        # After the data has propagated the entire pipe, flush the 
-        # session logging.
-        self.session.flush()
 
     def end(self) -> None:
 

@@ -175,7 +175,7 @@ class PointEntry(Entry):
         name:str,
         dtype:str,
         data:Any,
-        start_time:Optional[pd.Timedelta]=None
+        timestamp:Optional[pd.Timedelta]=None
         ):
         """__init__.
 
@@ -200,7 +200,7 @@ class PointEntry(Entry):
         # Setting initial values
         self.unsaved_changes = pd.DataFrame(columns=['time', 'data'])
         self.num_of_total_changes = 0
-        self.start_time = start_time
+        self.start_time = timestamp
 
         # Data types that need a folder with multiple files
         if self.dtype in ['image']: 
@@ -214,7 +214,7 @@ class PointEntry(Entry):
         # Adding the data sample
         self.unsaved_changes = self.unsaved_changes.append(
             {
-                "time": start_time,
+                "time": timestamp,
                 'data': data
             }
         )

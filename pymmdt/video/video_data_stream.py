@@ -11,27 +11,14 @@ __package__ = 'video'
 # Built-in Imports
 from typing import Union, Tuple, Optional
 import pathlib
-import threading
-import queue
-import time
 
 # Third-party Imports
 import cv2
 import pandas as pd
 import numpy as np
-import tqdm
 
 # Internal imports
 from pymmdt.data_stream import DataStream
-
-# From: https://stackoverflow.com/a/19846691/13231446 
-def threaded(fn):
-    def wrapper(*args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        # thread.start()
-        thread.deamon = True
-        return thread
-    return wrapper
 
 class VideoDataStream(DataStream):
     """Implementation of DataStream focused on Video data.
@@ -93,9 +80,6 @@ class VideoDataStream(DataStream):
                 )
             )
             
-            # Get the correct thread
-            self.thread = self.load_video_to_queue()
-
         # Else, this is an empty video data stream
         else:
 
@@ -111,28 +95,12 @@ class VideoDataStream(DataStream):
             # Create an empty timeline
             self.timeline = pd.TimedeltaIndex([])
 
-            # Get the correct thread
-            self.thread = self.queue_to_save_video()
-
         # Apply the super constructor
         super().__init__(name, self.timeline)
 
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
         self.data_index = 0
-
-        # For either reading or writing - we can use a queue to allow the
-        # pipeline move faster.
-
-        # Create a frame queue and a thread for loading frames quickly
-        self.max_queue_size = max_queue_size
-        self.queue = queue.Queue(maxsize=max_queue_size)
-
-        # After the queue is set, start running the thread
-        self._thread_video_lock = threading.Lock()
-        self._thread_exit = threading.Event()
-        self._thread_exit.clear() # Set as False in the beginning
-        self.thread.start()
 
     @classmethod
     def empty(
@@ -167,38 +135,6 @@ class VideoDataStream(DataStream):
         frame_height = int(self.video.get(4))
         return (frame_width, frame_height)
 
-    @threaded
-    def load_video_to_queue(self):
-       
-        while True:
-
-            # If requested to end, exit now
-            if self._thread_exit.is_set():
-                break
-
-            # Acquire the lock to read the video frame
-            with self._thread_video_lock:
-                res, frame = self.video.read()
-
-            # Check if end of file
-            if type(frame) == type(None):
-                break
-
-            while True:
-                # Instead of just getting stuck, we need to check
-                # if the thread is supposed to stop.
-                # If not, keep trying to put the frame into the queue
-                if self._thread_exit.is_set():
-                    break
-                
-                elif self.queue.maxsize != self.queue.qsize():
-                    # Once the frame is placed, exit to get the new frame
-                    self.queue.put(frame.copy(), block=True)
-                    break
-                
-                else:
-                    continue
-
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         
         # Generate mask for the window data
@@ -219,7 +155,7 @@ class VideoDataStream(DataStream):
         frames = []
         for idx, data in data_idx.iterrows():
             timestamp = data['time']
-            frame = self.queue.get(block=True)
+            frame = self.video.read()
 
             times.append(timestamp)
             frames.append(frame)
@@ -243,50 +179,9 @@ class VideoDataStream(DataStream):
             print(f"Video miss - reassigning index: {self.data_index}-{new_data_index}")
             if self.mode == "reading":
 
-                # Acquire the lock to ensure that the video is not read from
-                # from the thread
-                with self._thread_video_lock:
-
-                    # Set the new location for the video
-                    self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
-                    self.data_index = new_data_index
-
-                    # Clear out the queue
-                    with self.queue.mutex:
-                        self.queue.queue.clear()
-
-    @threaded
-    def queue_to_save_video(self):
-
-        # Keeping track of the previous queue size after the exit event
-        previous_qsize = None
-        
-        while True:
-
-            # If requested ended, continue until the queue is empty
-            # print("queue_to_save_video: ", self._thread_exit.is_set())
-            if self._thread_exit.is_set():
-
-                # If the first after thread exit event
-                if not previous_qsize:
-                    bar = tqdm.tqdm(total=self.queue.qsize())
-                    previous_qsize = self.queue.qsize()
-                else:
-                    update = self.queue.qsize() - previous_qsize 
-                    bar.update(update)
-                    previous_qsize = self.queue.qsize()
-
-                # If queue empty, exit
-                if self.queue.qsize() == 0:
-                    break
-
-            # Get the lastest frame 
-            try:
-                frame = self.queue.get(block=True, timeout=2)
-                assert frame.shape[:2] == self.size, f"frame mismatch - actual: {frame.shape[:2]}, expected: {self.size}"
-                self.video.write(frame.copy())
-            except queue.Empty:
-                continue
+                # Set the new location for the video
+                self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
+                self.data_index = new_data_index
 
     def append(self, timestamp: pd.Timedelta, frame: np.ndarray):
         assert self.mode == "writing"
@@ -298,14 +193,10 @@ class VideoDataStream(DataStream):
         }, ignore_index=True)
 
         # Appending the file to the video writer
-        self.queue.put(frame.copy())
+        self.video.write(frame.copy())
         self.nb_frames += 1
 
     def close(self):
         """Close the ``VideoDataStream`` instance."""
-        # Stop the threading
-        self._thread_exit.set()
-        self.thread.join()
-
         # Closing the video capture device
         self.video.release()
