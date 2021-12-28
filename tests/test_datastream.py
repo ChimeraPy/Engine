@@ -61,6 +61,19 @@ class DataStreamTestCase(unittest.TestCase):
 
         return None
 
+    def test_getting_data_once(self):
+
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=0.1)
+
+        video_data = self.video_ds.get(start_time, end_time)
+        tabular_data = self.tabular_ds.get(start_time, end_time)
+
+        print(video_data)
+        print(video_data.iloc[0]['frames'].shape)
+
+        return None
+
     def test_getting_windowed_data(self):
 
         # Get the latest timetrack value

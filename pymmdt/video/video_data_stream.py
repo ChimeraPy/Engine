@@ -14,6 +14,7 @@ import pathlib
 
 # Third-party Imports
 import cv2
+import decord
 import pandas as pd
 import numpy as np
 
@@ -62,12 +63,18 @@ class VideoDataStream(DataStream):
             assert video_path.is_file() and video_path.exists(), "Video file must exists."
 
             # constructing video capture object
-            self.video = cv2.VideoCapture(str(video_path))
+            # self.video = cv2.VideoCapture(str(video_path))
+            # Switching to decord because it can read a batch of frames
+            self.video = decord.VideoReader(
+                uri=str(video_path), 
+                ctx=decord.cpu(0),
+                num_threads=1
+            )
             self.mode = 'reading'
 
             # Obtaining FPS and total number of frames
-            self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
-            self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.fps = int(self.video.get_avg_fps())
+            self.nb_frames = int(len(self.video))
             
             # Constructing timetrack
             # timetrack = pd.date_range(start=start_time, periods=self.nb_frames, freq=f"{int(1e9/self.fps)}N").to_frame()
@@ -89,6 +96,8 @@ class VideoDataStream(DataStream):
             self.mode = "writing"
             
             # Ensure that the file extension is .mp4
+            # Keep this, the writier needs a filepath, but this is 
+            # set later by the session!
             self.video = cv2.VideoWriter()
 
             # Create an empty timeline
@@ -129,9 +138,16 @@ class VideoDataStream(DataStream):
             size (Tuple[int, int]): The frame's width and height.
 
         """
-        frame_width = int(self.video.get(3))
-        frame_height = int(self.video.get(4))
-        return (frame_width, frame_height)
+        if self.mode == "reading": # decord.VideoReader
+            size = self.video[0].shape
+            w, h = size[1], size[0]
+        elif self.mode == "writing": # cv2.VideoCapture
+            w = int(self.video.get(3))
+            h = int(self.video.get(4))
+        else:
+            raise RuntimeError("Invalid video mode!")
+
+        return (w, h)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         assert end_time > start_time, "``end_time`` should be greater than ``start_time``."
@@ -152,19 +168,18 @@ class VideoDataStream(DataStream):
         # Getting the start and end indx to get the frames
         start_data_index = min(data_idx.ds_index)
         end_data_index = max(data_idx.ds_index)
+        list_of_frames = list(range(start_data_index, end_data_index+1))
 
         # Ensure that the video is in the right location
-        self.set_index(start_data_index)
+        # self.set_index(start_data_index)
 
         # Get all the samples
-        times = []
-        frames = []
-        for idx, data in data_idx.iterrows():
-            timestamp = data['time']
-            res, frame = self.video.read()
+        times = data_idx['time'].tolist()
+        stacked_frames = self.video.get_batch(list_of_frames).asnumpy()
 
-            times.append(timestamp)
-            frames.append(frame)
+        # Split the stacked frames to a list of frames
+        extract_dim_frames = np.split(stacked_frames, len(list_of_frames), axis=0)
+        frames = [np.squeeze(x, axis=0) for x in extract_dim_frames]
 
         # Update the data index record
         # very important to update - as this keeps track of the video's 

@@ -43,12 +43,12 @@ class CollectorTestCase(unittest.TestCase):
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
-            fps=30
         )
+        dss = [self.tabular_ds, self.video_ds]
 
         # Create a collector 
         self.collector = mm.Collector(
-            {'P01': [self.tabular_ds, self.video_ds]},
+            {'P01': dss},
             time_window_size=pd.Timedelta(seconds=2),
             verbose=True
         )
