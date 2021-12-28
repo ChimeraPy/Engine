@@ -37,9 +37,8 @@ class VideoDataStream(DataStream):
             name: str, 
             start_time: pd.Timedelta,
             video_path: Optional[Union[pathlib.Path, str]]=None, 
-            fps: Optional[int]=None,
-            size: Optional[Tuple[int, int]]=None,
-            max_queue_size: int=1000,
+            fps: Optional[int]=30,
+            size: Optional[Tuple[int, int]]=(1920,1080),
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -109,10 +108,9 @@ class VideoDataStream(DataStream):
             start_time:pd.Timedelta, 
             fps:int, 
             size:Tuple[int, int],
-            max_queue_size:int=1000
         ):
 
-        return cls(name, start_time, None, fps, size, max_queue_size)
+        return cls(name, start_time, None, fps, size)
 
     def open_writer(self, filepath: pathlib.Path) -> None:
         """Set the video writer by opening with the filepath."""
@@ -136,14 +134,22 @@ class VideoDataStream(DataStream):
         return (frame_width, frame_height)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+        assert end_time > start_time, "``end_time`` should be greater than ``start_time``."
+        assert self.mode == "reading", "``get`` currently works in ``reading`` mode."
         
         # Generate mask for the window data
         after_start_time = self.timetrack['time'] >= start_time
-        before_end_time = self.timetrack['time'] < end_time
+        before_end_time = self.timetrack['time'] <= end_time
         time_window_mask = after_start_time & before_end_time
 
         # Obtain the data indicies
         data_idx = self.timetrack[time_window_mask]
+
+        # Check if the data_idx is empty, if so return an empty data frame
+        if len(data_idx) == 0:
+            return pd.DataFrame()
+       
+        # Getting the start and end indx to get the frames
         start_data_index = min(data_idx.ds_index)
         end_data_index = max(data_idx.ds_index)
 
@@ -155,7 +161,7 @@ class VideoDataStream(DataStream):
         frames = []
         for idx, data in data_idx.iterrows():
             timestamp = data['time']
-            frame = self.video.read()
+            res, frame = self.video.read()
 
             times.append(timestamp)
             frames.append(frame)
@@ -166,7 +172,7 @@ class VideoDataStream(DataStream):
         self.data_index = end_data_index + 1
 
         # Construct data frame
-        df = pd.DataFrame({'time': times, 'frames': frames})
+        df = pd.DataFrame({'_time_': times, 'frames': frames})
 
         return df
 
@@ -183,18 +189,41 @@ class VideoDataStream(DataStream):
                 self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
                 self.data_index = new_data_index
 
-    def append(self, timestamp: pd.Timedelta, frame: np.ndarray):
+    def append(
+            self, 
+            append_data:Union[pd.DataFrame, pd.Series], 
+            time_column:str='_time_',
+            data_column:str='frames'
+        ):
+        # The append_data needs to have timedelta_index column
+        assert time_column in append_data.columns
+        time_column_data = append_data[time_column]
+        assert isinstance(time_column_data.iloc[0], pd.Timedelta), "time column should be ``pd.Timedelta`` objects."
+
+        # Check that the data in the frames is indeed np.arrays
+        assert isinstance(append_data[data_column].iloc[0], np.ndarray), "appending data needs to be store in column ``frames`` as a np.array."
+
+        # This operation can only be done in the writing mode
         assert self.mode == "writing"
 
+        # Create data frame for the timeline
+        append_timetrack = pd.DataFrame(
+            {
+                'time': time_column_data, 
+                'ds_index': 
+                    [x for x in range(len(time_column_data))]
+            }
+        )
+
         # Add to the timetrack (cannot be inplace)
-        self.timetrack = self.timetrack.append({
-            'time': timestamp, 
-            'ds_index': int(len(self.timetrack))
-        }, ignore_index=True)
+        self.timetrack = self.timetrack.append(append_timetrack)
+        self.timetrack['ds_index'] = self.timetrack['ds_index'].astype(int)
 
         # Appending the file to the video writer
-        self.video.write(frame.copy())
-        self.nb_frames += 1
+        for index, row in append_data.iterrows():
+            frame = getattr(row, data_column)
+            self.video.write(frame.copy())
+            self.nb_frames += 1
 
     def close(self):
         """Close the ``VideoDataStream`` instance."""

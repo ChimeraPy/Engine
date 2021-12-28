@@ -5,6 +5,7 @@ __package__ = "pymmdt"
 from typing import Sequence, Optional, Dict, Any
 import time
 import threading
+import queue
 
 # Third-Party Imports
 import pandas as pd
@@ -29,6 +30,8 @@ class SingleRunner:
             time_window_size:Optional[pd.Timedelta]=None,
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
+            max_loading_queue_size:Optional[int]=100,
+            max_logging_queue_size:Optional[int]=1000,
             verbose:Optional[bool]=False
         ):
 
@@ -40,7 +43,7 @@ class SingleRunner:
         self.run_solo = run_solo
         self.verbose = verbose
 
-        # If the worker is running by itself, it should be able to have 
+        # If the runner is running by itself, it should be able to have 
         # its own collector.
         if self.run_solo:
             # The session is required for run solo
@@ -51,27 +54,52 @@ class SingleRunner:
             self.collector = Collector(
                 {self.name: self.data_streams},
                 time_window_size,
-                verbose=verbose
+                start_at=start_at,
+                end_at=end_at,
+                verbose=verbose,
             )
-            
-            # Apply triming if start_at or end_at has been selected
-            if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
-                self.collector.set_start_time(start_at)
-            if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
-                self.collector.set_end_time(end_at)
-
-            # Setup the collector thread
-            self.setup_collector_thread()
  
-    def setup_collector_thread(self):
-        
-        # Tell the Collector to start creating its loading data thread
-        self.collector.start()
+            # Setup all threads
+            self.setup_threads_and_queues(
+                max_loading_queue_size, 
+                max_logging_queue_size
+            )
 
-        # Create a thread for ``run``.
+    def setup_threads_and_queues(
+            self, 
+            max_loading_queue_size:int,
+            max_logging_queue_size:int
+        ) -> None:
+        assert isinstance(self.collector, Collector)
+        assert isinstance(self.session, Session)
+        
+        # Create a queue used by the process to stored loaded data
+        self.loading_queue = queue.Queue(maxsize=max_loading_queue_size)
+        
+        # Create a thread for loading data and storing in a Queue
+        self.loading_thread = self.collector.load_data_to_queue()
+        
+        # Create a thread for Runner's ``run``.
         self.processing_thread = self.process_data()
+
+        # Create a queue and thread for I/O logging in separate thread
+        self.logging_queues = [queue.Queue(maxsize=max_logging_queue_size) for session in [self.session] + self.session.subsessions]
+        self.logging_threads = [session.load_data_to_log() for session in [self.session] + self.session.subsessions]
+
+        # Provide the collector and session their respective queue
+        self.collector.set_loading_queue(self.loading_queue)
+        self.session.set_logging_queue(self.logging_queues[0])
+        for i, session in enumerate(self.session.subsessions):
+            session.set_logging_queue(self.logging_queues[i+1])
+
+        # Create a threading.Event to tell all threads to stop
         self._thread_exit = threading.Event()
         self._thread_exit.clear() # Set as False in the beginning
+
+        # Attach the exit event to the collector and the session
+        self.session.set_thread_exit(self._thread_exit)
+        for session in self.session.subsessions:
+            session.set_thread_exit(self._thread_exit)
             
     def set_session(self, session: Session) -> None:
         if isinstance(self.session, Session):
@@ -85,7 +113,7 @@ class SingleRunner:
     def start(self) -> None:
         assert isinstance(self.session, Session)
         assert isinstance(self.collector, Collector)
-             
+         
         # Attach the session to the pipe
         self.pipe.attach_session(self.session)
         self.pipe.attach_collector(self.collector)
@@ -113,48 +141,30 @@ class SingleRunner:
         self.pipe.end()
         self.session.close()
 
-    def get_and_step(self):
-
-        # Get data from the loading data queue from the Collector
-        # Forward propagate the window's data
-        while True:
-            # If the thread is supposed to exit, we should end it
-            if self._thread_exit.is_set():
-                all_data_samples = 'END'
-                break
-           
-            # Check the queue before getting the item
-            elif self.collector.loading_queue.qsize() != 0:
-                # Get the data from the loading queue
-                all_data_samples = self.collector.loading_queue.get(block=True)
-                break
-           
-            # else, there is no safe sample, wait 
-            else:
-                time.sleep(0.1)
-                continue
-
-        # Check for end condition
-        if all_data_samples == 'END':
-            return True
-
-        # Then propagate the sample throughout the pipe
-        self.step(all_data_samples)
-
-        # Continue
-        return False
-
     @threaded
     def process_data(self):
 
+        # Keep track of the number of processed data chunks
+        self.num_processed_data_chunks = 0
+
         # Continue iterating
         while True:
-            # Process and sample - determine if it should be ended
-            should_end = self.get_and_step()
-            # If so, break and end the thread
-            if should_end:
+            # Retrieveing sample from the loading queue
+            all_data_samples = self.loading_queue.get(block=True)
+           
+            # Check for end condition
+            if all_data_samples == 'END':
                 break
-        
+
+            # Then propagate the sample throughout the pipe
+            self.step(all_data_samples)
+
+            # Increase the counter
+            self.num_processed_data_chunks += 1
+
+        # If the thread ended, we should stop some processes
+        self._thread_exit.set()
+
     def run(self) -> None:
         """Run the data pipeline.
 
@@ -169,9 +179,17 @@ class SingleRunner:
         # Start 
         self.start()
 
-        # Start the thread and wait until its complete
+        # And start the threads
+        self.loading_thread.start()
         self.processing_thread.start()
+        for thread in self.logging_threads:
+            thread.start()
+
+        # Then wait until the threads is complete!
         self.processing_thread.join()
+        self.loading_thread.join()
+        for thread in self.logging_threads:
+            thread.join()
 
         # End 
         self.end()
@@ -186,11 +204,13 @@ class GroupRunner(SingleRunner):
             name: str,
             pipe: Pipe,
             session: Session,
-            workers: Sequence[SingleRunner],
+            runners: Sequence[SingleRunner],
             time_window_size: pd.Timedelta,
             data_streams: Optional[Sequence[DataStream]] = None,
             start_at: Optional[pd.Timedelta] = None,
             end_at: Optional[pd.Timedelta] = None,
+            max_loading_queue_size:Optional[int]=100,
+            max_logging_queue_size:Optional[int]=1000,
             verbose:Optional[bool]=False
         ) -> None:
         """Construct the analyzer. 
@@ -202,62 +222,65 @@ class GroupRunner(SingleRunner):
         """
         # Save hyperparameters
         self.name = name
-        self.workers = workers
+        self.runners = runners
         self.pipe = pipe
         self.session = session
         self.data_streams = data_streams
         self.verbose = verbose
 
-        # Extract all the data streams from each worker and the entire group
+        # Extract all the data streams from each runner and the entire group
         if data_streams:
             all_data_streams = {self.name: data_streams}
         else:
             all_data_streams = {}
 
-        for worker in self.workers:
-            all_data_streams[worker.name] = worker.data_streams 
+        for runner in self.runners:
+            all_data_streams[runner.name] = runner.data_streams 
         
-        # Construct a collector based on the worker's datastreams
-        self.collector = Collector(all_data_streams, time_window_size, verbose=verbose)
+        # Construct a collector based on the runner's datastreams
+        self.collector = Collector(
+            all_data_streams,
+            time_window_size,
+            start_at=start_at,
+            end_at=end_at,
+            verbose=verbose,
+        )
         
-        # Apply triming if start_at or end_at has been selected
-        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
-            self.collector.set_start_time(start_at)
-        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
-            self.collector.set_end_time(end_at)
-
-        # Setup the collector thread
-        self.setup_collector_thread()
-
-        # Providing each worker with a subsession
-        for worker in self.workers:
-            worker.set_session(self.session.create_subsession(worker.name))
-            worker.set_collector(self.collector)
+        # Setup all threads
+        self.setup_threads_and_queues(
+            max_loading_queue_size, 
+            max_logging_queue_size
+        )
+        
+        # Providing each runner with a subsession
+        for runner in self.runners:
+            runner.set_session(self.session.create_subsession(runner.name))
+            runner.set_collector(self.collector)
 
     def start(self) -> None:
         
-        # Execute the workers' ``start`` routine
-        for worker in self.workers:
-            worker.start()
+        # Execute the runners' ``start`` routine
+        for runner in self.runners:
+            runner.start()
 
         # Execute its own start
         super().start()
 
     def step(self, all_data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> None:
 
-        # Get samples for all the workers and propgate them
-        for worker in self.workers:
-            output = worker.step({worker.name: all_data_samples[worker.name]})
-            all_data_samples[worker.name]['_output_'] = output
+        # Get samples for all the runners and propgate them
+        for runner in self.runners:
+            output = runner.step({runner.name: all_data_samples[runner.name]})
+            all_data_samples[runner.name]['_output_'] = output
 
         # Then process the sample
         self.pipe.step(all_data_samples)
 
     def end(self) -> None:
 
-        # Execute the workers' ``end`` routine
-        for worker in self.workers:
-            worker.end()
+        # Execute the runners' ``end`` routine
+        for runner in self.runners:
+            runner.end()
 
         # Execute its own start
         super().end()

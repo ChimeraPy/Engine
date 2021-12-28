@@ -1,4 +1,3 @@
-
 # Built-in Imports
 import unittest
 import pathlib
@@ -7,6 +6,7 @@ import os
 import sys
 import time
 import collections
+import queue
 
 # Third-Party Imports
 import tqdm
@@ -14,7 +14,8 @@ import pandas as pd
 
 # Testing Library
 import pymmdt as mm
-import pymmdt.utils.tobii
+import pymmdt.tabular as mmt
+import pymmdt.video as mmv
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -28,50 +29,100 @@ class CollectorTestCase(unittest.TestCase):
     
     def setUp(self):
 
-        # Load the data for all participants (ps)
-        nursing_session_dir = RAW_DATA_DIR / 'nurse_use_case'
-        ps = pymmdt.utils.tobii.load_session_data(nursing_session_dir, verbose=True)
+        # Storing the data
+        self.csv_data = pd.read_csv(RAW_DATA_DIR/"example_use_case"/"test.csv")
+        self.csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
+
+        # Create each type of data stream
+        self.tabular_ds = mmt.TabularDataStream(
+            name="test_tabular",
+            data=self.csv_data,
+            time_column="_time_"
+        )
+        self.video_ds = mmv.VideoDataStream(
+            name="test_video",
+            start_time=pd.Timedelta(0),
+            video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
+            fps=30
+        )
 
         # Create a collector 
         self.collector = mm.Collector(
-            {'P01': ps['P01']['data']},
-            time_window_size=pd.Timedelta(seconds=3),
-            max_queue_size=10,
+            {'P01': [self.tabular_ds, self.video_ds]},
+            time_window_size=pd.Timedelta(seconds=2),
             verbose=True
         )
 
-    def test_start(self):
-        print("Starting collector")
-        self.collector.start()
+        return None
 
-        print("Waiting for two seconds")
-        for i in tqdm.tqdm(range(2)):
-            time.sleep(1)
+    def test_getting_data_from_all_data_streams(self):
 
-        print("Closing collector")
-        self.collector.close()
+        # NOTE! Slow test because video comparing!
 
-        # First, the queue size shouldn't be zero
-        assert self.collector.loading_queue.qsize() != 0
+        # Setting start and end time
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=1)
 
-        # Then check what is the generated data for the collector
-        while self.collector.loading_queue.qsize() != 0:
+        # Get data
+        data = self.collector.get(start_time, end_time)
 
-            # Get data
-            data = self.collector.loading_queue.get()
+        # Ensure that the data makes sense
+        assert isinstance(data, dict)
+        
+        # Comparing with the expected data
+        tabular_test_data = self.tabular_ds.get(start_time, end_time)
+        video_test_data = self.video_ds.get(start_time, end_time)
+        
+        assert data['P01']['test_tabular'].equals(tabular_test_data)
+        assert data['P01']['test_video'].equals(video_test_data)
 
-            # If last, we should get the message
-            if self.collector.loading_queue.qsize() == 0:
-                assert data == 'END'
-            # Else, we should get the standard defaultdict
-            else:
-                assert isinstance(data, collections.defaultdict)
+        return None
+
+    def test_loading_thread(self):
+        
+        # Need to add the queue externally
+        loading_queue = queue.Queue(maxsize=1000)
+        self.collector.set_loading_queue(loading_queue)
+        
+        # Starting the collector thread
+        thread = self.collector.load_data_to_queue()
+        thread.start()
+        thread.join()
+
+        # Now we need to ensure that the number of elements in the queue
+        # equals the number of windows
+        # The +1 is the closing "END" message
+        assert self.collector.loading_queue.qsize() == len(self.collector.windows) + 1
+
+    def test_shortening_start_and_end(self):
+        
+        # Setting start and end time
+        start_time = pd.Timedelta(seconds=2)
+        end_time = pd.Timedelta(seconds=10)
+
+        # Now testing if we shorten the windows!
+        self.collector.set_start_time(start_time)
+        self.collector.set_end_time(end_time)
+
+        # Need to add the queue externally
+        loading_queue = queue.Queue(maxsize=1000)
+        self.collector.set_loading_queue(loading_queue)
+        
+        # Starting the collector thread
+        thread = self.collector.load_data_to_queue()
+        thread.start()
+        thread.join()
+
+        # Now we need to ensure that the number of elements in the queue
+        # equals the number of windows
+        # The +1 is the closing "END" message
+        assert self.collector.loading_queue.qsize() == len(self.collector.windows) + 1
 
 if __name__ == '__main__':
     # Run when debugging is not needed
-    # unittest.main()
+    unittest.main()
 
     # Otherwise, we have to call the tests ourselves
-    test_case = CollectorTestCase()
-    test_case.setUp()
-    test_case.test_start()
+    # test_case = CollectorTestCase()
+    # test_case.setUp()
+    # test_case.test_get()

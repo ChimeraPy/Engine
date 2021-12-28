@@ -43,7 +43,6 @@ class Session:
             self, 
             log_dir:Union[pathlib.Path, str],
             experiment_name:str,
-            queue_max_size:Optional[int]=100
         ) -> None:
         """``Session`` Constructor.
 
@@ -75,12 +74,6 @@ class Session:
         # Keeping record of subsessions and elements changed
         self.subsessions = []
 
-        # Create a queue and thread for I/O logging in separate thread
-        self.logging_queue = queue.Queue(maxsize=queue_max_size)
-        self.logging_thread = self.load_data_to_log()
-        self._thread_exit = threading.Event()
-        self._thread_exit.clear() # Set as False in the beginning
-
     def __getitem__(self, item:str) -> Any:
         """Get the item given the name of the ``Entry``.
 
@@ -99,6 +92,12 @@ class Session:
         # Then ask the entry for the latest sample
         last_sample = entry.get_last_sample()
         return last_sample
+    
+    def set_thread_exit(self, thread_exit:threading.Event):
+        self._thread_exit = thread_exit
+    
+    def set_logging_queue(self, logging_queue:queue.Queue):
+        self.logging_queue = logging_queue
     
     def create_stream(self, data_stream:DataStream) -> None:
         """create_stream.
@@ -241,34 +240,11 @@ class Session:
     def load_data_to_log(self):
 
         # Continuously check if there are data to log and save
-        while True:
+        while not self._thread_exit.is_set() and self.logging_queue.qsize() != 0:
 
-            # If exit event, exit the thread
-            if self._thread_exit.is_set():
-                break
-
-            # Getting data from queue
-            while True:
-                # Instead of just getting stuck, we need to check
-                # if the process is supposed to stop.
-                # If not, keep trying to get the data into the queue
-                if self._thread_exit.is_set():
-                    data = 'END'
-                    break
-                
-                elif self.logging_queue.qsize() != 0:
-                    # Get the data frome the queue
-                    data = self.logging_queue.get()
-                    break
-                
-                else:
-                    time.sleep(0.1)
-                    continue
-
-            # If end message, end the thread
-            if data == 'END':
-                break
-
+            # Get the data frome the queue
+            data = self.logging_queue.get(block=True)
+            
             # Then process the data
             self.flush(data)
 
@@ -281,10 +257,6 @@ class Session:
             None:
         """
 
-        # Stop the thread and wait until complete
-        self._thread_exit.set()
-        self.logging_thread.join()
-        
         # Then close all the entries
         for entry in self.records.values():
             entry.close()

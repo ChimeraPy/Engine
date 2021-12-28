@@ -8,3 +8,4 @@ This subpackage contains special implementations for the following:
 
 # Imports
 from .tabular_data_stream import TabularDataStream
+from .processes import IdentityProcess

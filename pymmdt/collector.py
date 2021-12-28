@@ -22,7 +22,7 @@ import pandas as pd
 
 # Internal Imports
 from .data_stream import DataStream
-from .tools import threaded
+from .tools import threaded, get_windows
 
 class Collector:
     """Generic collector that stores only data streams.
@@ -44,7 +44,8 @@ class Collector:
             self, 
             data_streams_groups:Dict[str, Sequence[DataStream]],
             time_window_size:pd.Timedelta,
-            max_queue_size:Optional[int]=3,
+            start_at:Optional[pd.Timedelta]=None,
+            end_at:Optional[pd.Timedelta]=None,
             verbose:Optional[bool]=False
         ) -> None:
         """Construct the ``Collector``.
@@ -91,56 +92,33 @@ class Collector:
         # Split samples based on the time window size
         self.start_time = self.global_timetrack['time'][0]
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
+            
+        # Apply triming if start_at or end_at has been selected
+        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
+            self.set_start_time(start_at)
+        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
+            self.set_end_time(end_at)
         
-        # Create a queue used by the process to stored loaded data
-        self.loading_queue = queue.Queue(maxsize=max_queue_size)
-        
-        # Create a process for loading data and storing in a Queue
-        self.loading_thread = self.load_data_to_queue()
-        self._thread_exit = threading.Event()
-        self._thread_exit.clear() # Set as False in the beginning
-
     def set_start_time(self, time:pd.Timedelta):
+        assert time < self.end_time, "start_time cannot be greater than end_time."
         self.start_time = time
 
     def set_end_time(self, time:pd.Timedelta):
+        assert time > self.start_time, "end_time cannot be smaller than start_time."
         self.end_time = time
 
-    def start(self):
-
-        # Determine how many time windows given the total time and size
-        total_time = (self.end_time - self.start_time)
-        num_of_windows = math.ceil(total_time / self.time_window_size)
-
-        # Create unique namedtuple and storage for the Windows
-        Window = collections.namedtuple("Window", ['start', 'end'])
-        self.windows = []
-
-        # For all the possible windows, calculate their start and end
-        for x in range(num_of_windows):
-            start = self.start_time + x * self.time_window_size 
-            end = self.start_time + (x+1) * self.time_window_size
-            capped_end = min(self.end_time, end)
-            window = Window(start, capped_end)
-            self.windows.append(window)
-
-        # Start the loading data process
-        self.loading_thread.start()
-
-    def close(self):
-        # Stop the loading process!
-        self._thread_exit.set()
-        self.loading_thread.join()
+    def set_loading_queue(self, loading_queue:queue.Queue):
+        assert isinstance(loading_queue, queue.Queue), "loading_queue must be a queue.Queue."
+        self.loading_queue = loading_queue
 
     @threaded
     def load_data_to_queue(self):
        
+        # Calculating the windows only after the thread has been created
+        self.windows = get_windows(self.start_time, self.end_time, self.time_window_size)
+       
         # Continuously load data
         for window in tqdm.tqdm(self.windows, disable=not self.verbose, desc="Loading data"):
-
-            # If exit requested, end process
-            if self._thread_exit.is_set():
-                break
 
             # Extract the start and end time from window
             start, end = window.start, window.end 
@@ -148,22 +126,8 @@ class Collector:
             # Get the data
             data = self.get(start, end)
 
-            # Place the data in the queue
-            while True:
-                # Instead of just getting stuck, we need to check
-                # if the process is supposed to stop.
-                # If not, keep trying to put the data into the queue
-                if self._thread_exit.is_set():
-                    break
-                
-                elif self.loading_queue.maxsize != self.loading_queue.qsize():
-                    # Once the frame is placed, exit to get the new frame
-                    self.loading_queue.put(data.copy(), block=True)
-                    break
-                
-                else:
-                    time.sleep(0.1)
-                    continue
+            # Put the data into the queue
+            self.loading_queue.put(data.copy(), block=True)
 
         # Once all the data is over, send the message that the work is 
         # complete
@@ -172,6 +136,8 @@ class Collector:
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 
         # window start and end time
+        assert start_time < end_time, "start_time must be earlier than end_time."
+
         all_samples = collections.defaultdict(dict)
         for group_name, ds_list in self.data_streams_groups.items():
             for ds in ds_list:
