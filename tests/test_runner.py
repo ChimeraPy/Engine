@@ -14,6 +14,7 @@ import tqdm
 import pymmdt as mm
 import pymmdt.tabular as mmt
 import pymmdt.video as mmv
+import pymmdt.utils.tobii as mmut
 
 # Testing package
 from . import test_doubles
@@ -31,21 +32,23 @@ class SingleRunnerTestCase(unittest.TestCase):
     def setUp(self):
 
         # Storing the data
-        self.csv_data = pd.read_csv(RAW_DATA_DIR/"example_use_case"/"test.csv")
-        self.csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
+        csv_data = pd.read_csv(RAW_DATA_DIR/"example_use_case"/"test.csv")
+        csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        tabular_ds = mmt.TabularDataStream(
             name="test_tabular",
-            data=self.csv_data,
+            data=csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        video_ds = mmv.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
-            fps=30
         )
+        
+        # Create a list of the data streams
+        self.dss = [tabular_ds, video_ds]
         
         # Clear out the previous pymmdt run 
         # since pipeline is still underdevelopment
@@ -61,90 +64,67 @@ class SingleRunnerTestCase(unittest.TestCase):
         )
 
         # Use a test pipeline
-        individual_pipeline = test_doubles.TestPipe()
+        # self.individual_pipeline = test_doubles.TestPipe()
+        self.individual_pipeline = mm.Pipe()
 
+    def test_runner_to_run(self):
+        
         # Load construct the first runner
         self.runner = mm.SingleRunner(
             name='P01',
-            data_streams=[self.tabular_ds, self.video_ds],
-            pipe=individual_pipeline,
+            data_streams=self.dss,
+            pipe=self.individual_pipeline,
             session=self.session,
             time_window_size=pd.Timedelta(seconds=3),
             run_solo=True,
             verbose=True
         )
 
-    def test_single_runner_and_collector_together(self):
+        # Running should be working!
+        self.runner.run(verbose=True)
 
-        # Start 
-        self.runner.start()
+        return None
 
-        # And start the threads
-        self.runner.loading_thread.start()
-        self.runner.processing_thread.start()
+    def test_runner_run_with_shorter_sections(self):
 
-        # Creating a loading bar to show the step of processing data
-        pbar = tqdm.tqdm(total=len(self.runner.collector.windows), desc="Processing data")
-        last_value = 0
+        # Load construct the first runner
+        self.runner = mm.SingleRunner(
+            name='P01',
+            data_streams=self.dss,
+            pipe=self.individual_pipeline,
+            session=self.session,
+            time_window_size=pd.Timedelta(seconds=3),
+            start_at=pd.Timedelta(seconds=5),
+            end_at=pd.Timedelta(seconds=10),
+            run_solo=True,
+            verbose=True
+        )
 
-        # Update the loading bar is it continues
-        while True:
-            if last_value != self.runner.num_processed_data_chunks:
-                diff = self.runner.num_processed_data_chunks - last_value
-                last_value = self.runner.num_processed_data_chunks
-                pbar.update(diff)
-
-            if last_value == len(self.runner.collector.windows):
-                break
-
-        # And wait until the threads stop
-        self.runner.processing_thread.join()
-        self.runner.loading_thread.join()
-
-    def test_single_runner_and_session_together(self):
-        
-        # Start 
-        self.runner.start()
-        
-        # And start the threads
-        self.runner.processing_thread.start()
-        for thread in self.runner.logging_threads:
-            thread.start()
-
-        sample_data = {
-            self.runner.name: {
-                'test': pd.DataFrame({'a':[1], 'b': [1]})
-            }
-        }
-        end_sample_data = {
-            'END'
-        }
-
-        self.runner.logging_queues[0].put(sample_data)
-        self.runner.logging_queues[0].put(end_sample_data)
-        
-        # And wait until the threads stop
-        self.runner.processing_thread.join()
-        for thread in self.runner.logging_threads:
-            thread.join()
-
-        # Check the session indeed save the data
-        entry = self.session.records['test']
-        assert entry.file.exists()
-
-    def test_single_runner_collector_and_session_together(self):
-        ...
-
-    def test_single_runner_run(self):
-        ...
+        # Running should be working!
+        self.runner.run(verbose=True)
 
 class GroupRunnerTestCase(unittest.TestCase):
 
     def setUp(self):
+        
+        # Storing the data
+        csv_data = pd.read_csv(RAW_DATA_DIR/"example_use_case"/"test.csv")
+        csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
-        # Load the data for all participants (ps)
-        nursing_session_dir = RAW_DATA_DIR / 'nurse_use_case'
-        ps = pymmdt.utils.tobii.load_session_data(nursing_session_dir, verbose=True)
+        # Create each type of data stream
+        tabular_ds = mmt.TabularDataStream(
+            name="test_tabular",
+            data=csv_data,
+            time_column="_time_"
+        )
+        video_ds = mmv.VideoDataStream(
+            name="test_video",
+            start_time=pd.Timedelta(0),
+            video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
+        )
+
+        # Create a list of the data streams
+        dss = [tabular_ds, video_ds]
 
         # Clear out the previous pymmdt run 
         # since pipeline is still underdevelopment
@@ -155,14 +135,14 @@ class GroupRunnerTestCase(unittest.TestCase):
         # Then for each participant, we need to setup their own session,
         # pipeline, and runner
         self.runners = []
-        for p_id, p_elements in ps.items():
+        for x in range(1,2+1):
             
             # Construct the individual participant pipeline object
             individual_pipeline = mm.Pipe()
 
             runner = mm.SingleRunner(
-                name=p_id,
-                data_streams=p_elements['data'],
+                name=f"P0{x}",
+                data_streams=dss.copy(),
                 pipe=individual_pipeline,
             )
 
@@ -170,33 +150,54 @@ class GroupRunnerTestCase(unittest.TestCase):
             self.runners.append(runner)
         
         # Create an overall session and pipeline
-        total_session = mm.Session(
+        self.total_session = mm.Session(
             log_dir = OUTPUT_DIR,
             experiment_name = "pymmdt"
         )
-        overall_pipeline = mm.Pipe()
+        self.overall_pipeline = mm.Pipe()
 
+    def test_group_runner_run(self):
+        
         # Pass all the runners to the Director
-        self.director = mm.GroupRunner(
+        group_runner = mm.GroupRunner(
             name="Nurse Teamwork Example #1",
-            pipe=overall_pipeline,
+            pipe=self.overall_pipeline,
             runners=self.runners, 
-            session=total_session,
+            session=self.total_session,
             time_window_size=pd.Timedelta(seconds=5),
             verbose=True
         )
 
-    def test_group_runner_run(self):
+        # Run the director
+        group_runner.run(verbose=True)
+
+        return None
+
+    def test_group_runner_with_shorter_run(self):
+        
+        # Pass all the runners to the Director
+        group_runner = mm.GroupRunner(
+            name="Nurse Teamwork Example #1",
+            pipe=self.overall_pipeline,
+            runners=self.runners, 
+            session=self.total_session,
+            time_window_size=pd.Timedelta(seconds=5),
+            start_at=pd.Timedelta(seconds=5),
+            end_at=pd.Timedelta(seconds=15),
+            verbose=True
+        )
 
         # Run the director
-        self.director.run()
+        group_runner.run(verbose=True)
+
+        return None
 
 if __name__ == "__main__":
     # Run when debugging is not needed
-    # unittest.main()
+    unittest.main()
 
     # Otherwise, we have to call the test ourselves
     # test_case = GroupNurseTestCase()
-    single_test_case = SingleRunnerTestCase()
-    single_test_case.setUp()
-    single_test_case.test_runner_get_data_and_step_process()
+    # single_test_case = SingleRunnerTestCase()
+    # single_test_case.setUp()
+    # single_test_case.test_runner_get_data_and_step_process()

@@ -243,4 +243,9 @@ class VideoDataStream(DataStream):
     def close(self):
         """Close the ``VideoDataStream`` instance."""
         # Closing the video capture device
-        self.video.release()
+        if self.mode == "reading": # Decord
+            ...
+        elif self.mode == "writing": # OpenCV
+            self.video.release()
+        else:
+            raise RumtimeError("Invalid mode for video data stream.")

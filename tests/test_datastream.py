@@ -187,6 +187,15 @@ class DataStreamTestCase(unittest.TestCase):
 
         return None
 
+    def test_closing_data_streams(self):
+
+        # This should close the data stream without issues
+        for ds in self.dss:
+            ds.close()
+
+        for ds in [self.empty_tabular_ds, self.empty_video_ds]:
+            ds.close()
+
 if __name__ == "__main__":
     unittest.main()
 

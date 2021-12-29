@@ -46,7 +46,6 @@ class Collector:
             time_window_size:pd.Timedelta,
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
-            verbose:Optional[bool]=False
         ) -> None:
         """Construct the ``Collector``.
 
@@ -64,7 +63,9 @@ class Collector:
         # Constructing the data stream dictionary
         self.data_streams_groups = data_streams_groups
         self.time_window_size = time_window_size
-        self.verbose = verbose
+        
+        # Keeping counter for the number of windows loaded
+        self.windows_loaded = 0
 
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
@@ -116,9 +117,12 @@ class Collector:
        
         # Calculating the windows only after the thread has been created
         self.windows = get_windows(self.start_time, self.end_time, self.time_window_size)
+
+        # Keeping counter for the number of windows loaded
+        self.windows_loaded = 0
        
         # Continuously load data
-        for window in tqdm.tqdm(self.windows, disable=not self.verbose, desc="Loading data"):
+        for window in self.windows:
 
             # Extract the start and end time from window
             start, end = window.start, window.end 
@@ -128,6 +132,9 @@ class Collector:
 
             # Put the data into the queue
             self.loading_queue.put(data.copy(), block=True)
+
+            # Increasing the counter when done
+            self.windows_loaded += 1
 
         # Once all the data is over, send the message that the work is 
         # complete

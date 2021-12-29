@@ -3,6 +3,7 @@ __package__ = "pymmdt"
 
 # Built-in Imports
 from typing import Sequence, Optional, Dict, Any
+import curses
 import time
 import threading
 import queue
@@ -27,7 +28,7 @@ class SingleRunner:
             data_streams:Sequence[DataStream],
             run_solo:Optional[bool]=False,
             session:Optional[Session]=None,
-            time_window_size:Optional[pd.Timedelta]=None,
+            time_window_size:Optional[pd.Timedelta]=pd.Timedelta(seconds=5),
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
@@ -42,13 +43,15 @@ class SingleRunner:
         self.session = session
         self.run_solo = run_solo
         self.verbose = verbose
+        
+        # Keep track of the number of processed data chunks
+        self.num_processed_data_chunks = 0
 
         # If the runner is running by itself, it should be able to have 
         # its own collector.
         if self.run_solo:
             # The session is required for run solo
             assert isinstance(self.session, Session) and \
-                isinstance(time_window_size, pd.Timedelta), \
                 "When ``run_solo`` is set, ``session`` and ``time_window_size`` parameters are required."
 
             self.collector = Collector(
@@ -56,7 +59,6 @@ class SingleRunner:
                 time_window_size,
                 start_at=start_at,
                 end_at=end_at,
-                verbose=verbose,
             )
  
             # Setup all threads
@@ -103,7 +105,7 @@ class SingleRunner:
             
     def set_session(self, session: Session) -> None:
         if isinstance(self.session, Session):
-            raise RuntimeError(f"Runner <name={self.name}> has already as session")
+            raise RuntimeError(f"Runner <name={self.name}> has already a Session")
         else:
             self.session = session
 
@@ -149,6 +151,7 @@ class SingleRunner:
 
         # Continue iterating
         while True:
+
             # Retrieveing sample from the loading queue
             all_data_samples = self.loading_queue.get(block=True)
            
@@ -165,7 +168,38 @@ class SingleRunner:
         # If the thread ended, we should stop some processes
         self._thread_exit.set()
 
-    def run(self) -> None:
+    def tui_main(self, stdscr):
+        
+        # Assertions
+        assert isinstance(self.collector, Collector)
+        assert isinstance(self.session, Session)
+
+        # Continue the TUI until the other threads are complete.
+        while self.collector.windows_loaded != len(self.collector.windows) and \
+            self.num_processed_data_chunks != len(self.collector.windows) and \
+            self.logging_queues[0].qsize() == 0:
+
+            # Create information string
+            info_str = f"""\
+            Loaded Data: {self.collector.windows_loaded}/{len(self.collector.windows)}
+            Loading Queue Size: {self.loading_queue.qsize()}/{self.loading_queue.maxsize}
+            Processed Data: {self.num_processed_data_chunks}/{len(self.collector.windows)}
+            Session:
+                {self.session.experiment_name}
+                    Logging Queue: {self.logging_queues[0].qsize()}/{self.logging_queues[0].maxsize}
+                    Logged Data: {self.session.num_of_logged_data}
+            """
+
+            # Info about data loading
+            stdscr.addstr(0,0, info_str)
+
+            # Refresh the screen
+            stdscr.refresh()
+
+            # Sleep
+            time.sleep(0.1)
+
+    def run(self, verbose:bool=False) -> None:
         """Run the data pipeline.
 
         Args:
@@ -175,6 +209,7 @@ class SingleRunner:
         """
         # Assertions
         assert isinstance(self.collector, Collector)
+        assert isinstance(self.session, Session)
 
         # Start 
         self.start()
@@ -184,6 +219,11 @@ class SingleRunner:
         self.processing_thread.start()
         for thread in self.logging_threads:
             thread.start()
+
+        # If verbose, create a simple TUI showing the current state of 
+        # the whole process.
+        if self.verbose:
+            curses.wrapper(self.tui_main)
 
         # Then wait until the threads is complete!
         self.processing_thread.join()
@@ -201,14 +241,14 @@ class GroupRunner(SingleRunner):
 
     def __init__(
             self, 
-            name: str,
-            pipe: Pipe,
-            session: Session,
-            runners: Sequence[SingleRunner],
-            time_window_size: pd.Timedelta,
-            data_streams: Optional[Sequence[DataStream]] = None,
-            start_at: Optional[pd.Timedelta] = None,
-            end_at: Optional[pd.Timedelta] = None,
+            name:str,
+            pipe:Pipe,
+            session:Session,
+            runners:Sequence[SingleRunner],
+            time_window_size:pd.Timedelta,
+            data_streams:Optional[Sequence[DataStream]]=[],
+            start_at:Optional[pd.Timedelta]=None,
+            end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
             verbose:Optional[bool]=False
@@ -227,6 +267,9 @@ class GroupRunner(SingleRunner):
         self.session = session
         self.data_streams = data_streams
         self.verbose = verbose
+        
+        # Keep track of the number of processed data chunks
+        self.num_processed_data_chunks = 0
 
         # Extract all the data streams from each runner and the entire group
         if data_streams:
@@ -243,20 +286,19 @@ class GroupRunner(SingleRunner):
             time_window_size,
             start_at=start_at,
             end_at=end_at,
-            verbose=verbose,
-        )
-        
-        # Setup all threads
-        self.setup_threads_and_queues(
-            max_loading_queue_size, 
-            max_logging_queue_size
         )
         
         # Providing each runner with a subsession
         for runner in self.runners:
             runner.set_session(self.session.create_subsession(runner.name))
             runner.set_collector(self.collector)
-
+        
+        # Setup all threads
+        self.setup_threads_and_queues(
+            max_loading_queue_size, 
+            max_logging_queue_size
+        )
+  
     def start(self) -> None:
         
         # Execute the runners' ``start`` routine
@@ -270,6 +312,7 @@ class GroupRunner(SingleRunner):
 
         # Get samples for all the runners and propgate them
         for runner in self.runners:
+            # Get the output of the each runner
             output = runner.step({runner.name: all_data_samples[runner.name]})
             all_data_samples[runner.name]['_output_'] = output
 
@@ -284,3 +327,40 @@ class GroupRunner(SingleRunner):
 
         # Execute its own start
         super().end()
+
+    def tui_main(self, stdscr):
+        
+        # Assertions
+        assert isinstance(self.collector, Collector)
+        assert isinstance(self.session, Session)
+
+        # Continue the TUI until the other threads are complete.
+        while self.collector.windows_loaded != len(self.collector.windows) and \
+            self.num_processed_data_chunks != len(self.collector.windows) and \
+            self.logging_queues[0].qsize() == 0:
+
+            # Create information string
+            info_str = f"""\
+            Loaded Data: {self.collector.windows_loaded}/{len(self.collector.windows)}
+            Loading Queue Size: {self.loading_queue.qsize()}/{self.loading_queue.maxsize}
+            Processed Data: {self.num_processed_data_chunks}/{len(self.collector.windows)}
+            Session:
+            """
+
+            # Create each session's information and appending to it
+            for id, session in enumerate([self.session] + self.session.subsessions):
+                session_str = f"""
+                {session.experiment_name}
+                    Logging Queue: {self.logging_queues[id].qsize()}/{self.logging_queues[id].maxsize}
+                    Logged Data: {session.num_of_logged_data}
+                """
+                info_str += session_str
+
+            # Info about data loading
+            stdscr.addstr(0,0, info_str)
+
+            # Refresh the screen
+            stdscr.refresh()
+
+            # Sleep
+            time.sleep(0.1)

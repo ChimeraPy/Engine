@@ -58,6 +58,7 @@ class Session:
             log_dir = pathlib.Path(log_dir)
 
         # Create the filepath of the experiment
+        self.experiment_name = experiment_name
         self.session_dir = log_dir / experiment_name
 
         # Create the folder if it doesn't exist 
@@ -73,6 +74,9 @@ class Session:
        
         # Keeping record of subsessions and elements changed
         self.subsessions = []
+
+        # Keeping track of the number of logged information
+        self.num_of_logged_data = 0
 
     def __getitem__(self, item:str) -> Any:
         """Get the item given the name of the ``Entry``.
