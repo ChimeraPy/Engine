@@ -175,9 +175,7 @@ class SingleRunner:
         assert isinstance(self.session, Session)
 
         # Continue the TUI until the other threads are complete.
-        while self.collector.windows_loaded != len(self.collector.windows) and \
-            self.num_processed_data_chunks != len(self.collector.windows) and \
-            self.logging_queues[0].qsize() == 0:
+        while True:
 
             # Create information string
             info_str = f"""\
@@ -198,6 +196,12 @@ class SingleRunner:
 
             # Sleep
             time.sleep(0.1)
+
+            # Break Condition
+            if self.collector.windows_loaded == len(self.collector.windows) and \
+                self.num_processed_data_chunks == len(self.collector.windows) and \
+                self.logging_queues[0].qsize() == 0:
+                break
 
     def run(self, verbose:bool=False) -> None:
         """Run the data pipeline.
@@ -335,9 +339,7 @@ class GroupRunner(SingleRunner):
         assert isinstance(self.session, Session)
 
         # Continue the TUI until the other threads are complete.
-        while self.collector.windows_loaded != len(self.collector.windows) and \
-            self.num_processed_data_chunks != len(self.collector.windows) and \
-            self.logging_queues[0].qsize() == 0:
+        while True:
 
             # Create information string
             info_str = f"""\
@@ -364,3 +366,15 @@ class GroupRunner(SingleRunner):
 
             # Sleep
             time.sleep(0.1)
+
+            # Break Condition
+            if self.collector.windows_loaded == len(self.collector.windows) and \
+                self.num_processed_data_chunks == len(self.collector.windows):
+
+                # Check all the logging queues
+                ready_queues = [x.qsize() == 0 for x in self.logging_queues]
+
+                # If all ready, then end!
+                if all(ready_queues):
+                    break
+

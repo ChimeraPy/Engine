@@ -16,16 +16,11 @@ import pymmdt.tabular as mmt
 import pymmdt.video as mmv
 import pymmdt.utils.tobii as mmut
 
-# Testing package
-from . import test_doubles
-
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = CURRENT_DIR.parent
-RAW_DATA_DIR = CURRENT_DIR / 'data' 
-OUTPUT_DIR = CURRENT_DIR / 'test_output' 
-
-sys.path.append(str(ROOT_DIR))
+TEST_DIR = CURRENT_DIR.parent
+RAW_DATA_DIR = TEST_DIR / 'data' 
+OUTPUT_DIR = TEST_DIR / 'test_output' 
 
 class SingleRunnerTestCase(unittest.TestCase):
 
@@ -77,7 +72,7 @@ class SingleRunnerTestCase(unittest.TestCase):
             session=self.session,
             time_window_size=pd.Timedelta(seconds=3),
             run_solo=True,
-            verbose=True
+            # verbose=True
         )
 
         # Running should be working!
@@ -97,7 +92,7 @@ class SingleRunnerTestCase(unittest.TestCase):
             start_at=pd.Timedelta(seconds=5),
             end_at=pd.Timedelta(seconds=10),
             run_solo=True,
-            verbose=True
+            # verbose=True
         )
 
         # Running should be working!
@@ -165,7 +160,7 @@ class GroupRunnerTestCase(unittest.TestCase):
             runners=self.runners, 
             session=self.total_session,
             time_window_size=pd.Timedelta(seconds=5),
-            verbose=True
+            # verbose=True
         )
 
         # Run the director
@@ -184,7 +179,7 @@ class GroupRunnerTestCase(unittest.TestCase):
             time_window_size=pd.Timedelta(seconds=5),
             start_at=pd.Timedelta(seconds=5),
             end_at=pd.Timedelta(seconds=15),
-            verbose=True
+            # verbose=True
         )
 
         # Run the director

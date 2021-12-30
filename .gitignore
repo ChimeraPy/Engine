@@ -3,6 +3,7 @@
 
 # Ignore the test data - sensitivie
 tests/data/
+tests/test_output/
 
 # Ignoring the documentation site
 site/

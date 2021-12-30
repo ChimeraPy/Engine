@@ -20,11 +20,9 @@ import pymmdt.video as mmv
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = CURRENT_DIR.parent
-RAW_DATA_DIR = CURRENT_DIR / 'data' 
-OUTPUT_DIR = CURRENT_DIR / 'test_output' 
-
-sys.path.append(str(ROOT_DIR))
+TEST_DIR = CURRENT_DIR.parent
+RAW_DATA_DIR = TEST_DIR / 'data' 
+OUTPUT_DIR = TEST_DIR / 'test_output' 
 
 class DataStreamTestCase(unittest.TestCase):
 

@@ -22,9 +22,8 @@ import numpy as np
 # Internal Imports
 from .tools import threaded
 from .data_stream import DataStream
-from .video import VideoDataStream
-from .tabular import TabularDataStream
-from .entry import StreamEntry, PointEntry
+from .video import VideoDataStream, VideoEntry
+from .tabular import TabularDataStream, TabularEntry, ImageEntry
 
 class Session:
     """Data Storage that contains the latest version of all data types.
@@ -93,9 +92,8 @@ class Session:
         # extract the entry
         entry = self.records[item]
 
-        # Then ask the entry for the latest sample
-        last_sample = entry.get_last_sample()
-        return last_sample
+        # Return the entry
+        return entry
     
     def set_thread_exit(self, thread_exit:threading.Event):
         self._thread_exit = thread_exit
@@ -103,27 +101,6 @@ class Session:
     def set_logging_queue(self, logging_queue:queue.Queue):
         self.logging_queue = logging_queue
     
-    def create_stream(self, data_stream:DataStream) -> None:
-        """create_stream.
-
-        Args:
-            data_stream (DataStream): The data stream to save in the 
-            session.
-
-        """
-        assert isinstance(data_stream, DataStream)
-        assert data_stream.name not in self.records.keys()
-
-        # Create an entry
-        entry = StreamEntry(
-            dir=self.session_dir,
-            name=data_stream.name,
-            stream=data_stream,
-        )
-       
-        # Append the stream
-        self.records[entry.name] = entry
-        
     def add_image(
             self, 
             name:str, 
@@ -142,48 +119,72 @@ class Session:
 
         """
 
+        # Create a pd.DataFrame for the data
+        df = pd.DataFrame({'frames': [data], '_time_': [timestamp]})
+
         # Put data in the logging queue
         data_chunk = {
             'name': name,
-            'data': data,
-            'timestamp': timestamp,
+            'data': df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk)
+        self.logging_queue.put(data_chunk.copy())
+
+    def add_images(
+            self,
+            name:str,
+            df:pd.DataFrame,
+            time_column:str='_time_',
+            data_column:str='frames'
+        ) -> None:
+        
+        # Put data in the logging queue
+        data_chunk = {
+            'name': name,
+            'data': df.rename(columns={data_column: 'frames', time_column: '_time_'}),
+            'dtype': 'image'
+        }
+        self.logging_queue.put(data_chunk.copy())
+
+    def add_video_frames(
+            self,
+            name:str,
+            df:pd.DataFrame,
+            time_column:str='_time_',
+            data_column:str='frames'
+        ) -> None:
+        # Put data in the logging queue
+        data_chunk = {
+            'name': name,
+            'data': df.rename(columns={data_column: 'frames', time_column: '_time_'}),
+            'dtype': 'video'
+        }
+        self.logging_queue.put(data_chunk.copy())
 
     def add_tabular(
             self, 
             name:str,
             data:Union[pd.Series, pd.DataFrame, Dict],
-            timestamp:Optional[pd.Timedelta]=None,
+            time_column:str='_time_'
         ) -> None:
-        """add_tabular.
 
-        Args:
-            name (str): name
-            data (Union[pd.Series, pd.DataFrame, Dict]): data
-            timestamp (Optional[pd.Timedelta]): timestamp
-
-        Returns:
-            None:
-        """
-
-        # Ensure that the data is a dict
-        if isinstance(data, (pd.Series, pd.DataFrame)):
-            data_dict = data.to_dict()
+        # Convert the data to a DataFrame
+        if isinstance(data, pd.Series):
+            df = data.to_frame()
         elif isinstance(data, dict):
-            data_dict = data
+            df = pd.DataFrame(data)
+        elif isinstance(data, pd.DataFrame):
+            df = data
         else:
-            raise RuntimeError(f"{data} should be a dict, pd.DataFrame, or pd.Series")
+            raise TypeError(f"{type(data)} is an invalid type for ``add_tabular``.")
 
         # Put data in the logging queue
         data_chunk = {
             'name': name,
-            'data': data_dict,
-            'timestamp': timestamp,
+            'data': df.rename(columns={time_column: '_time_'}),
             'dtype': 'tabular'
         }
-        self.logging_queue.put(data_chunk)
+        self.logging_queue.put(data_chunk.copy())
  
     def create_subsession(self, name: str) -> 'Session':
         """create_subsession.
@@ -212,39 +213,44 @@ class Session:
         # Return the new session instance
         return self.subsessions[-1]
 
-    def flush(self, data: Dict):
+    def flush(self, data:Dict):
+            
+        dtype_to_class = {
+            'tabular': TabularEntry,
+            'image': ImageEntry,
+            'video': VideoEntry
+        }
 
-        # Tabular
         # Detecting if this is the first time
         if data['name'] not in self.records.keys():
 
-            # Create an entry
-            entry = PointEntry(dir=self.session_dir, **data)
+            # Selecting the class
+            entry_cls = dtype_to_class[data['dtype']]
 
-            # Store the entry to the records
-            self.records[entry.name] = entry
+            # Creating the entry
+            self.records[data['name']] = entry_cls(self.session_dir, data['name'])
+
+            # Append the data to the new entry
+            self.records[data['name']].append(data)
+            self.records[data['name']].flush()
 
         # Not the first time
         else:
 
-            # Extended the entry with the same name
-            entry = self.records[data['name']]
-
             # Test that the new data entry is valid to the type of entry
-            assert entry.dtype == data['dtype'], "Entry dtype should match the input data type"
+            assert isinstance(self.records[data['name']], dtype_to_class[data['dtype']]), \
+                f"Entry Type={self.records[data['name']]} should match input data dtype {data['dtype']}"
 
             # If everything is good, add the change to the track history
-            # of the entry
-            entry.append(
-                data=data['data'],
-                timestamp=data['timestamp']
-            )
+            # Append the data to the new entry
+            self.records[data['name']].append(data)
+            self.records[data['name']].flush()
 
     @threaded
     def load_data_to_log(self):
 
         # Continuously check if there are data to log and save
-        while not self._thread_exit.is_set() and self.logging_queue.qsize() != 0:
+        while True: 
 
             # Get the data frome the queue
             data = self.logging_queue.get(block=True)
@@ -252,14 +258,11 @@ class Session:
             # Then process the data
             self.flush(data)
 
+            # Break Condition
+            if self._thread_exit.is_set() and self.logging_queue.qsize() == 0:
+                break
+
     def close(self) -> None:
-        """close.
-
-        Args:
-
-        Returns:
-            None:
-        """
 
         # Then close all the entries
         for entry in self.records.values():

@@ -18,7 +18,7 @@ import pymmdt.utils.tobii
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = CURRENT_DIR.parent
+ROOT_DIR = CURRENT_DIR.parent.parent
 RAW_DATA_DIR = CURRENT_DIR / 'data' 
 OUTPUT_DIR = CURRENT_DIR / 'test_output' 
 

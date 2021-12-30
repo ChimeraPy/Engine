@@ -18,15 +18,11 @@ import pymmdt.video as mmv
 # Testing package
 from . import test_doubles
 
-# Constants
-CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
-ROOT_DIR = CURRENT_DIR.parent
-RAW_DATA_DIR = CURRENT_DIR / 'data' 
-OUTPUT_DIR = CURRENT_DIR / 'test_output' 
+# This class contains all the test we want to conduct
+# All the children class have different data for testing different 
+# scenarios
 
-sys.path.append(str(ROOT_DIR))
-
-class CollectorRunnerSession(object):
+class BackEndTestCase(object):
     
     def test_single_runner_and_collector_together(self):
 
@@ -92,7 +88,7 @@ class CollectorRunnerSession(object):
     def test_single_runner_run(self):
         ...
 
-class ExampleData_CRS(CollectorRunnerSession, unittest.TestCase):
+class ExampleDataTestCase(BackEndTestCase, unittest.TestCase):
     
     def setUp(self):
 
@@ -140,5 +136,5 @@ class ExampleData_CRS(CollectorRunnerSession, unittest.TestCase):
             verbose=True
         )
 
-class App2BackendIntegrationTestCase(unittest.TestCase):
-    ...
+if __name__ == "__main__":
+    unittest.main()

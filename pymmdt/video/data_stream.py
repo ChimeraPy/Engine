@@ -36,10 +36,10 @@ class VideoDataStream(DataStream):
 
     def __init__(self, 
             name: str, 
-            start_time: pd.Timedelta,
+            start_time: Optional[pd.Timedelta]=None,
             video_path: Optional[Union[pathlib.Path, str]]=None, 
-            fps: Optional[int]=30,
-            size: Optional[Tuple[int, int]]=(1920,1080),
+            fps: Optional[int]=None,
+            size: Optional[Tuple[int, int]]=None,
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -96,9 +96,11 @@ class VideoDataStream(DataStream):
             self.mode = "writing"
             
             # Ensure that the file extension is .mp4
-            # Keep this, the writier needs a filepath, but this is 
-            # set later by the session!
             self.video = cv2.VideoWriter()
+
+            # If path provided, then open the writer fully
+            if video_path:
+                self.open_writer(video_path)
 
             # Create an empty timeline
             self.timeline = pd.TimedeltaIndex([])
@@ -114,16 +116,32 @@ class VideoDataStream(DataStream):
     def empty(
             cls, 
             name:str, 
-            start_time:pd.Timedelta, 
-            fps:int, 
-            size:Tuple[int, int],
+            start_time:Optional[pd.Timedelta]=None, 
+            fps:Optional[int]=None, 
+            size:Optional[Tuple[int, int]]=None,
+            video_path:Optional[Union[pathlib.Path, str]]=None
         ):
 
-        return cls(name, start_time, None, fps, size)
+        return cls(name, start_time, video_path, fps, size)
 
-    def open_writer(self, filepath: pathlib.Path) -> None:
+    def open_writer(
+        self, 
+        filepath:Union[pathlib.Path, str],
+        fps:Optional[int]=None,
+        size:Optional[int]=None
+        ) -> None:
         """Set the video writer by opening with the filepath."""
         assert self.mode == 'writing' and self.nb_frames == 0
+
+        # Check if new fps and size is passed
+        if fps:
+            self.fps = fps
+        if size:
+            self.size = size
+
+        # Before opening, check that the neccesary video data is provided
+        assert isinstance(self.fps, int) and isinstance(self.size, tuple)
+
         self.video.open(
             str(filepath),
             cv2.VideoWriter_fourcc(*'DIVX'),
@@ -244,8 +262,8 @@ class VideoDataStream(DataStream):
         """Close the ``VideoDataStream`` instance."""
         # Closing the video capture device
         if self.mode == "reading": # Decord
-            ...
+            pass
         elif self.mode == "writing": # OpenCV
             self.video.release()
         else:
-            raise RumtimeError("Invalid mode for video data stream.")
+            raise RuntimeError("Invalid mode for video data stream.")

@@ -9,5 +9,6 @@ This subpackage contains special implementations for the following:
 """
 
 # Imports
-from .video_data_stream import VideoDataStream
-from .processes import CopyVideo, ShowVideo, SaveVideo, TimestampVideo
+from .data_stream import VideoDataStream
+from .entry import VideoEntry
+from .process import CopyVideo, ShowVideo, SaveVideo, TimestampVideo
