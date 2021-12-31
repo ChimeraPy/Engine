@@ -97,7 +97,7 @@ class SingleSessionTestCase(unittest.TestCase):
             data_column='frames',
             time_column='_time_'
         )
-        self.session.add_video_frames(
+        self.session.add_video(
             name='test_video',
             df=test_video_data,
         )
@@ -224,7 +224,7 @@ class MultipleSessionTestCase(unittest.TestCase):
             data_column='frames',
             time_column='_time_'
         )
-        session.add_video_frames(
+        session.add_video(
             name='test_video',
             df=test_video_data,
         )

@@ -79,15 +79,10 @@ class VideoEntry(Entry):
             w, h = first_frame.shape[0], first_frame.shape[1]
 
             # Determine the fps
-            time_column1 = self.unsaved_changes['_time_'].iloc[:-1].to_list()
-            time_column2 = self.unsaved_changes['_time_'].iloc[1:].to_list()
-
-            diff = 0
-            for i in range(len(time_column1)):
-                diff += (time_column2[i].microseconds - time_column1[i].microseconds) / 1000000
-
-            average_period = diff / len(time_column1)
-            average_fps = int(1 / average_period)
+            t1 = self.unsaved_changes['_time_'].iloc[0]
+            t2 = self.unsaved_changes['_time_'].iloc[1]
+            period = (t2.microseconds - t1.microseconds) / 1_000_000
+            average_fps = int(1 / period)
 
             # Opening the frame writer with the new data
             self.stream.open_writer(

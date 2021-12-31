@@ -18,88 +18,24 @@ import pymmdt.video as mmv
 # Testing package
 from . import test_doubles
 
-# This class contains all the test we want to conduct
-# All the children class have different data for testing different 
-# scenarios
+# Constants
+CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
+TEST_DIR = CURRENT_DIR.parent
+RAW_DATA_DIR = TEST_DIR / 'data' 
+OUTPUT_DIR = TEST_DIR / 'test_output' 
 
-class BackEndTestCase(object):
-    
-    def test_single_runner_and_collector_together(self):
-
-        # Start 
-        self.runner.start()
-
-        # And start the threads
-        self.runner.loading_thread.start()
-        self.runner.processing_thread.start()
-
-        # Creating a loading bar to show the step of processing data
-        pbar = tqdm.tqdm(total=len(self.runner.collector.windows), desc="Processing data")
-        last_value = 0
-
-        # Update the loading bar is it continues
-        while True:
-            if last_value != self.runner.num_processed_data_chunks:
-                diff = self.runner.num_processed_data_chunks - last_value
-                last_value = self.runner.num_processed_data_chunks
-                pbar.update(diff)
-
-            if last_value == len(self.runner.collector.windows):
-                break
-
-        # And wait until the threads stop
-        self.runner.processing_thread.join()
-        self.runner.loading_thread.join()
-
-    def test_single_runner_and_session_together(self):
-        
-        # Start 
-        self.runner.start()
-        
-        # And start the threads
-        self.runner.processing_thread.start()
-        for thread in self.runner.logging_threads:
-            thread.start()
-
-        sample_data = {
-            self.runner.name: {
-                'test': pd.DataFrame({'a':[1], 'b': [1]})
-            }
-        }
-        end_sample_data = {
-            'END'
-        }
-
-        self.runner.logging_queues[0].put(sample_data)
-        self.runner.logging_queues[0].put(end_sample_data)
-        
-        # And wait until the threads stop
-        self.runner.processing_thread.join()
-        for thread in self.runner.logging_threads:
-            thread.join()
-
-        # Check the session indeed save the data
-        entry = self.session.records['test']
-        assert entry.file.exists()
-
-    def test_single_runner_collector_and_session_together(self):
-        ...
-
-    def test_single_runner_run(self):
-        ...
-
-class ExampleDataTestCase(BackEndTestCase, unittest.TestCase):
+class SingleRunnerBackEndTestCase(unittest.TestCase):
     
     def setUp(self):
 
         # Storing the data
         csv_data = pd.read_csv(RAW_DATA_DIR/"example_use_case"/"test.csv")
-        csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
+        csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
         self.tabular_ds = mmt.TabularDataStream(
             name="test_tabular",
-            data=self.csv_data,
+            data=csv_data,
             time_column="_time_"
         )
         self.video_ds = mmv.VideoDataStream(
@@ -123,7 +59,7 @@ class ExampleDataTestCase(BackEndTestCase, unittest.TestCase):
         )
 
         # Use a test pipeline
-        individual_pipeline = test_doubles.TestPipe()
+        individual_pipeline = test_doubles.TestExamplePipe()
 
         # Load construct the first runner
         self.runner = mm.SingleRunner(
@@ -133,8 +69,25 @@ class ExampleDataTestCase(BackEndTestCase, unittest.TestCase):
             session=self.session,
             time_window_size=pd.Timedelta(seconds=3),
             run_solo=True,
-            verbose=True
         )
 
+    def test_single_runner_run(self):
+        
+        # Run the runner with everything set
+        self.runner.run(verbose=True)
+        # self.runner.run()
+        
+        # The estimated FPS should be close to the input FPS
+        estimated_fps = self.session.records['test_video'].stream.fps
+        actual_fps = self.video_ds.fps
+        assert estimated_fps == actual_fps, \
+            f"Estimate FPS: {estimated_fps} vs. Actual FPS: {actual_fps}"
+
+        # Then number of frames between the video should also match
+        expected_frames = len(self.video_ds)
+        actual_frames = len(self.session.records['test_video'].stream)
+        assert expected_frames == actual_frames, \
+            f"Expected num of frames: {expected_frames} vs. Actual {actual_frames}"
+        
 if __name__ == "__main__":
     unittest.main()

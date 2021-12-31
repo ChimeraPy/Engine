@@ -33,7 +33,6 @@ class SingleRunner:
             end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
-            verbose:Optional[bool]=False
         ):
 
         # Store the information
@@ -42,7 +41,6 @@ class SingleRunner:
         self.data_streams = data_streams
         self.session = session
         self.run_solo = run_solo
-        self.verbose = verbose
         
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
@@ -226,7 +224,7 @@ class SingleRunner:
 
         # If verbose, create a simple TUI showing the current state of 
         # the whole process.
-        if self.verbose:
+        if verbose:
             curses.wrapper(self.tui_main)
 
         # Then wait until the threads is complete!
@@ -255,7 +253,6 @@ class GroupRunner(SingleRunner):
             end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
-            verbose:Optional[bool]=False
         ) -> None:
         """Construct the analyzer. 
 
@@ -270,7 +267,6 @@ class GroupRunner(SingleRunner):
         self.pipe = pipe
         self.session = session
         self.data_streams = data_streams
-        self.verbose = verbose
         
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0

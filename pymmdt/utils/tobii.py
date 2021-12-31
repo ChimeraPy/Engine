@@ -18,8 +18,8 @@ import tqdm
 
 # Built-in Imports
 from pymmdt.data_stream import DataStream
-from pymmdt.video.video_data_stream import VideoDataStream
-from pymmdt.tabular.tabular_data_stream import TabularDataStream
+from pymmdt.video.data_stream import VideoDataStream
+from pymmdt.tabular.data_stream import TabularDataStream
 
 # Loading data from files
 def load_g3_file(gz_filepath:pathlib.Path) -> Dict:

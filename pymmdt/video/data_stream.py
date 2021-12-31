@@ -35,11 +35,12 @@ class VideoDataStream(DataStream):
     """
 
     def __init__(self, 
-            name: str, 
-            start_time: Optional[pd.Timedelta]=None,
-            video_path: Optional[Union[pathlib.Path, str]]=None, 
-            fps: Optional[int]=None,
-            size: Optional[Tuple[int, int]]=None,
+            name:str, 
+            start_time:Optional[pd.Timedelta]=None,
+            video_path:Optional[Union[pathlib.Path, str]]=None, 
+            fps:Optional[int]=None,
+            size:Optional[Tuple[int, int]]=None,
+            color_mode:Optional[str]="BGR"
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -52,6 +53,9 @@ class VideoDataStream(DataStream):
             beginning of the video.
 
         """
+        # Save parameters that don't matter what type of mode ("reading" vs "writing")
+        self.color_mode = color_mode
+
         # First determine if this video is a path or an empty stream
         if video_path:
 
@@ -62,8 +66,13 @@ class VideoDataStream(DataStream):
             # Ensure that the file exists
             assert video_path.is_file() and video_path.exists(), "Video file must exists."
 
-            # constructing video capture object
-            # self.video = cv2.VideoCapture(str(video_path))
+            # Even though we use decord for video loading, decord's 
+            # method for getting the FPS is faulty so we need to use 
+            # OpenCV for this, then we delete this
+            self.video = cv2.VideoCapture(str(video_path))
+            self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
+            self.video.release()
+
             # Switching to decord because it can read a batch of frames
             self.video = decord.VideoReader(
                 uri=str(video_path), 
@@ -72,8 +81,7 @@ class VideoDataStream(DataStream):
             )
             self.mode = 'reading'
 
-            # Obtaining FPS and total number of frames
-            self.fps = int(self.video.get_avg_fps())
+            # Get the total number of frames
             self.nb_frames = int(len(self.video))
             
             # Constructing timetrack
@@ -123,6 +131,9 @@ class VideoDataStream(DataStream):
         ):
 
         return cls(name, start_time, video_path, fps, size)
+
+    def __len__(self):
+        return self.nb_frames
 
     def open_writer(
         self, 
@@ -194,6 +205,12 @@ class VideoDataStream(DataStream):
         # Get all the samples
         times = data_idx['time'].tolist()
         stacked_frames = self.video.get_batch(list_of_frames).asnumpy()
+
+        # Convert the data depending on the RGB type
+        if self.color_mode == "BGR":
+            stacked_frames[...,[0,1,2]] = stacked_frames[...,[2,1,0]]
+        elif self.color_mode == "RGB":
+            pass
 
         # Split the stacked frames to a list of frames
         extract_dim_frames = np.split(stacked_frames, len(list_of_frames), axis=0)

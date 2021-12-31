@@ -72,7 +72,6 @@ class SingleRunnerTestCase(unittest.TestCase):
             session=self.session,
             time_window_size=pd.Timedelta(seconds=3),
             run_solo=True,
-            # verbose=True
         )
 
         # Running should be working!
@@ -92,11 +91,12 @@ class SingleRunnerTestCase(unittest.TestCase):
             start_at=pd.Timedelta(seconds=5),
             end_at=pd.Timedelta(seconds=10),
             run_solo=True,
-            # verbose=True
         )
 
         # Running should be working!
         self.runner.run(verbose=True)
+
+        return None
 
 class GroupRunnerTestCase(unittest.TestCase):
 
@@ -160,7 +160,6 @@ class GroupRunnerTestCase(unittest.TestCase):
             runners=self.runners, 
             session=self.total_session,
             time_window_size=pd.Timedelta(seconds=5),
-            # verbose=True
         )
 
         # Run the director
@@ -179,7 +178,6 @@ class GroupRunnerTestCase(unittest.TestCase):
             time_window_size=pd.Timedelta(seconds=5),
             start_at=pd.Timedelta(seconds=5),
             end_at=pd.Timedelta(seconds=15),
-            # verbose=True
         )
 
         # Run the director

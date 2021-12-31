@@ -73,6 +73,9 @@ class TabularDataStream(DataStream):
         else:
             return False
 
+    def __len__(self):
+        return len(self.data)
+
     @classmethod
     def from_process_and_ds(
             cls, 

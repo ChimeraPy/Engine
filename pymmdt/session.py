@@ -146,7 +146,7 @@ class Session:
         }
         self.logging_queue.put(data_chunk.copy())
 
-    def add_video_frames(
+    def add_video(
             self,
             name:str,
             df:pd.DataFrame,
@@ -252,11 +252,17 @@ class Session:
         # Continuously check if there are data to log and save
         while True: 
 
-            # Get the data frome the queue
-            data = self.logging_queue.get(block=True)
-            
-            # Then process the data
-            self.flush(data)
+            # First check if there is an item in the queue
+            if self.logging_queue.qsize() != 0:
+
+                # Get the data frome the queue
+                data = self.logging_queue.get(block=True)
+                
+                # Then process the data
+                self.flush(data)
+
+            else:
+                time.sleep(0.5)
 
             # Break Condition
             if self._thread_exit.is_set() and self.logging_queue.qsize() == 0:
