@@ -18,7 +18,7 @@ import pymmdt.utils.tobii
 # Creating test pipe class and instance
 class TestExamplePipe(mm.Pipe):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
-        data_streams_samples = data_samples['P01']
+        data_streams_samples = list(data_samples.values())[0]
         self.session.add_tabular('test_tabular', data_streams_samples['test_tabular'])
         self.session.add_video('test_video', data_streams_samples['test_video'])
         # self.session.add_images('test_images', data_streams_samples['test_video'])
