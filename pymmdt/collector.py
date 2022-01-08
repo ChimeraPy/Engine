@@ -10,14 +10,11 @@ __package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Sequence, Dict, Optional, Any
-import threading
-import math
-import collections
 import time
+import collections
 import queue
 
 # Third-party Imports
-import tqdm
 import pandas as pd
 
 # Internal Imports
@@ -46,6 +43,7 @@ class Collector:
             time_window_size:pd.Timedelta,
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
+            max_get_threads:Optional[int]=4
         ) -> None:
         """Construct the ``Collector``.
 
@@ -66,6 +64,7 @@ class Collector:
         
         # Keeping counter for the number of windows loaded
         self.windows_loaded = 0
+        self.max_get_threads = max_get_threads
 
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
@@ -139,6 +138,11 @@ class Collector:
         # Once all the data is over, send the message that the work is 
         # complete
         self.loading_queue.put("END", block=False)
+
+    @threaded
+    def _get_data_stream_data(self, group_name:str, ds_idx:int, start_time:pd.Timedelta, end_time:pd.Timedelta):
+        data = self.data_streams_groups[group_name][ds_idx].get(start_time, end_time)
+        return data
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 
