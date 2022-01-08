@@ -14,6 +14,8 @@ import os
 import threading
 import queue
 import time
+import json
+import collections
 
 # Third-party Imports
 import pandas as pd
@@ -68,6 +70,10 @@ class Session:
         if not self.session_dir.exists():
             os.mkdir(self.session_dir)
 
+        # Create a JSON file with the session's meta
+        self.meta_data = {'id': experiment_name, 'subsessions': [], 'records': collections.defaultdict(list)}
+        self._save_meta_data()
+
         # Create a record to the data
         self.records = {}
        
@@ -94,6 +100,10 @@ class Session:
 
         # Return the entry
         return entry
+
+    def _save_meta_data(self):
+        with open(self.session_dir / 'meta.json', "w") as json_file:
+            json.dump(self.meta_data, json_file)
     
     def set_thread_exit(self, thread_exit:threading.Event):
         self._thread_exit = thread_exit
@@ -105,7 +115,7 @@ class Session:
             self, 
             name:str, 
             data:np.ndarray, 
-            timestamp:Optional[pd.Timedelta]=None,
+            timestamp:pd.Timedelta=None,
         ) -> None:
         """Log an image to an specified entry at an optional timestamp.
 
@@ -114,7 +124,7 @@ class Session:
 
             data (np.ndarray): The image to store.
 
-            timestamp (Optional[pd.Timedelta]): The optional timestamp
+            timestamp (pd.Timedelta): The optional timestamp
             to tag the image with.
 
         """
@@ -209,6 +219,8 @@ class Session:
 
         # Store the subsession to this session
         self.subsessions.append(subsession)
+        self.meta_data['subsessions'].append(experiment_name)
+        self._save_meta_data()
 
         # Return the new session instance
         return self.subsessions[-1]
@@ -227,8 +239,10 @@ class Session:
             # Selecting the class
             entry_cls = dtype_to_class[data['dtype']]
 
-            # Creating the entry
+            # Creating the entry and recording in meta data
             self.records[data['name']] = entry_cls(self.session_dir, data['name'])
+            self.meta_data['records'][data['dtype']].append(data['name'])
+            self._save_meta_data()
 
             # Append the data to the new entry
             self.records[data['name']].append(data)

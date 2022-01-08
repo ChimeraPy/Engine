@@ -5,6 +5,7 @@ import pathlib
 import shutil
 import os
 import queue
+import json
 
 # Third-Party Imports
 import pandas as pd
@@ -139,6 +140,22 @@ class SingleSessionTestCase(unittest.TestCase):
         assert estimated_fps == actual_fps, \
             f"Estimate FPS: {estimated_fps} vs. Actual FPS: {actual_fps}"
 
+        # Check about the generated meta file
+        expected_meta = {
+            'id': 'pymmdt',
+            'records': {
+                'tabular': ['test_tabular'], 
+                'image': ['test_image_without_timestamp', 'test_image_with_timestamp', 'test_images'],
+                'video': ['test_video']
+                },
+            'subsessions': []
+        }
+        with open(self.session.session_dir / "meta.json", "r") as json_file:
+            actual_meta = json.load(json_file)
+
+        assert expected_meta == actual_meta, \
+            f"Generated meta file is not correct."
+
 class MultipleSessionTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -271,6 +288,22 @@ class MultipleSessionTestCase(unittest.TestCase):
             actual_fps = self.video_ds.fps
             assert estimated_fps == actual_fps, \
                 f"Estimate FPS: {estimated_fps} vs. Actual FPS: {actual_fps}"
+        
+        # Check about the generated meta file
+        expected_meta = {
+            'id': 'pymmdt',
+            'records': {
+                'tabular': ['test_tabular'], 
+                'image': ['test_image_without_timestamp', 'test_image_with_timestamp', 'test_images'],
+                'video': ['test_video']
+                },
+            'subsessions': ['P01', 'P02', 'P03']
+        }
+        with open(self.total_session.session_dir / "meta.json", "r") as json_file:
+            actual_meta = json.load(json_file)
+
+        assert expected_meta == actual_meta, \
+            f"Generated meta file is not correct."
 
 if __name__ == "__main__":
     unittest.main()
