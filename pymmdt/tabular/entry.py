@@ -104,8 +104,17 @@ class ImageEntry(Entry):
         # For images, we just need to save each image logged
         # Save the unsaved changes
         for i, row in self.unsaved_changes.iterrows():
+            # Storing the image
             filepath = self.save_loc / f"{self.num_of_total_changes+i}.jpg"
             cv2.imwrite(str(filepath), row.frames)
+            # Storing timestamp data for all images
+            meta_df = pd.DataFrame(
+                {'_time_': [row._time_], 'idx': [self.num_of_total_changes+i]}
+            )
+            if self.num_of_total_changes == 0 and i == 0:
+                meta_df.to_csv(self.save_loc / "timestamps.csv", mode='a', index=False, header=True)
+            else: 
+                meta_df.to_csv(self.save_loc / "timestamps.csv", mode='a', index=False, header=False)
 
         # Update the counter and clear out the unsaved items
         self.num_of_total_changes += len(self.unsaved_changes)

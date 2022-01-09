@@ -71,7 +71,7 @@ class Session:
             os.mkdir(self.session_dir)
 
         # Create a JSON file with the session's meta
-        self.meta_data = {'id': experiment_name, 'subsessions': [], 'records': collections.defaultdict(list)}
+        self.meta_data = {'id': experiment_name, 'subsessions': [], 'records': {}}
         self._save_meta_data()
 
         # Create a record to the data
@@ -241,7 +241,12 @@ class Session:
 
             # Creating the entry and recording in meta data
             self.records[data['name']] = entry_cls(self.session_dir, data['name'])
-            self.meta_data['records'][data['dtype']].append(data['name'])
+            entry_meta_data = {
+                'dtype': data['dtype'],
+                'start_time': str(data['data'].iloc[0]._time_),
+                'end_time': str(data['data'].iloc[-1]._time_),
+            }
+            self.meta_data['records'][data['name']] = entry_meta_data
             self._save_meta_data()
 
             # Append the data to the new entry
@@ -254,6 +259,11 @@ class Session:
             # Test that the new data entry is valid to the type of entry
             assert isinstance(self.records[data['name']], dtype_to_class[data['dtype']]), \
                 f"Entry Type={self.records[data['name']]} should match input data dtype {data['dtype']}"
+
+            # Need to update the end_time for meta_data
+            if len(data['data']) > 0:
+                end_time_stamp = str(data['data'].iloc[-1]._time_)
+                self.meta_data['records'][data['name']]['end_time'] = end_time_stamp 
 
             # If everything is good, add the change to the track history
             # Append the data to the new entry
