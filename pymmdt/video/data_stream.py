@@ -14,7 +14,6 @@ import pathlib
 
 # Third-party Imports
 import cv2
-import decord
 import pandas as pd
 import numpy as np
 
@@ -74,6 +73,7 @@ class VideoDataStream(DataStream):
             self.video.release()
 
             # Switching to decord because it can read a batch of frames
+            import decord # If placed with other imports, it can cause PyQt5 to crash!
             self.video = decord.VideoReader(
                 uri=str(video_path), 
                 ctx=decord.cpu(0),
