@@ -8,11 +8,11 @@ Item {
 
     Rectangle {
         id: rectangle
-        color: "#2d2d2d"
+        color: "#44475a"
         anchors.fill: parent
 
         ListView {
-            id: listView
+            id: dashboardView
             anchors.margins: 15
             anchors.fill: parent
             spacing: 50

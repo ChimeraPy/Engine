@@ -34,6 +34,7 @@ def main():
     # # Adding backend after applying the arguments
     manager = Manager(args)
     engine.rootContext().setContextProperty("Manager", manager)
+    engine.rootContext().setContextProperty("SlidingBar", manager.sliding_bar)
 
     # Adding custom data
     engine.load(os.path.join(os.path.dirname(__file__), "qml/main.qml"))
