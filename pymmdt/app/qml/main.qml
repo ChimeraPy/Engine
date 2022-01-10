@@ -3,12 +3,11 @@ import QtQuick.Window 2.12
 import QtQuick.Controls 2.12
 
 Window {
-    id: window
+    id: root
     width: 1000
     height: 580
     visible: true
     title: qsTr("PyMMDT Dashboard")
-    property QtObject backend
 
     Rectangle {
         id: appContainer

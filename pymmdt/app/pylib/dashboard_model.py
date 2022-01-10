@@ -5,47 +5,65 @@
 
 # Built-in Imports
 from typing import List
+import collections
+
+# Third-party Imports
+import pandas as pd
 
 # PyQt5 Imports
 from PyQt5.QtCore import QAbstractListModel, Qt
 
 # Internal Imports
-from .modality_model import ModalityModel
+from .group_model import GroupModel
 
 class DashboardModel(QAbstractListModel):
 
-    DTypeRole = Qt.UserRole + 1
-    DModalityRole = Qt.UserRole + 2
+    SortByRole = Qt.UserRole + 1
+    GroupRole = Qt.UserRole + 2
 
     _roles = {
-        DTypeRole: b"dtype",
-        DModalityRole: b"modality"
+        SortByRole: b"sort_by",
+        GroupRole: b"group"
     }
 
-    def __init__(self, modalities:List[ModalityModel]=None):
+    def __init__(self): #, entries:List[ModalityModel]=None):
         super().__init__()
 
-        # Store modalities
-        if modalities:
-            self._modalities = modalities
-        else:
-            self._modalities = []
+        self.entries = pd.DataFrame()
+        self.groups = []
+        self._sort_by = 'entry_name'
 
-        # Test Case
-        self._modalities = [
-            ModalityModel(dtype="video"),
-            ModalityModel(dtype="image")
-        ]
+    def sort_by(self, by):
+        assert by in self.entries.columns
+        # self.entries.sort_values(by=[by])
+
+    def update_data(self, entries):
+
+        # Storing the entries
+        self.entries = entries
+
+        # Split the dataframes based on the sort_by
+        self.unique_groups_tags = self.entries[self._sort_by].unique()
+        groups = [self.entries.loc[self.entries[self._sort_by] == x]\
+                  for x in self.unique_groups_tags]
+
+        # Reset index and drop columns
+        for i in range(len(groups)):
+            groups[i].reset_index(inplace=True)
+            groups[i] = groups[i].drop(columns=['index'])
+
+        # Now group the entries
+        self.groups = [GroupModel(group) for group in groups]
 
     def rowCount(self, parent):
-        return len(self._modalities)
+        return len(self.groups)
 
     def data(self, index, role=None):
         row = index.row()
-        if role == self.DTypeRole:
-            return self._modalities[row].dtype
-        if role == self.DModalityRole:
-            return self._modalities[row]
+        if role == self.SortByRole:
+            return self.unique_groups_tags[row]
+        if role == self.GroupRole:
+            return self.groups[row]
 
         return None
 

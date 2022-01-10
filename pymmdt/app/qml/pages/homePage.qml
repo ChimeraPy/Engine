@@ -1,10 +1,10 @@
 import QtQuick 2.0
 
 // Custom Imports Items
-import Dashboard 1.0
 import "../diagrams"
 
 Item {
+    id: pageRoot
 
     Rectangle {
         id: rectangle
@@ -17,13 +17,9 @@ Item {
             anchors.fill: parent
             spacing: 50
             orientation: ListView.Vertical
-            model: DashboardModel {}
+            model: Manager.dashboard_model
             delegate: BaseDiagramDelegate {}
         }
-    }
-
-    Connections{
-        target: backend
     }
 }
 

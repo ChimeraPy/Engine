@@ -2,9 +2,8 @@ import QtQuick 2.0
 
 Component {
 
-    // Entire dtype slot
     Rectangle {
-        id: dtype_slot
+        id: groupRectangle
         anchors.left: parent.left
         anchors.right: parent.right
         height: 200
@@ -16,7 +15,7 @@ Component {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            text: qsTr(dtype)
+            text: qsTr(sort_by)
             horizontalAlignment: Text.AlignLeft
         }
 
@@ -25,10 +24,10 @@ Component {
             spacing: 30
 
             Repeater {
-                model: modality
+                model: group
                 Rectangle {
                     width: height * (16/9)
-                    height: dtype_slot.height - 40
+                    height: groupRectangle.height - 40
                     color: "blue"
 
                     Loader {

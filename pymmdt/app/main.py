@@ -9,32 +9,34 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtQml import QQmlApplicationEngine, qmlRegisterType
 
 # Importing Model data
-from pymmdt.app.pylib import DashboardModel, Backend
+from pymmdt.app.pylib import DashboardModel, Manager
+# from pymmdt.app.pylib import Manager
 
 def main():
     # Create arguments for the application
-    parser = argparse.ArgumentParser(description="PyMMDT Dashboard CI Tool")
-    parser.add_argument("--logdir", dest="logdir", type=str, required=True, help="Path to pymmdt-generated data files.")
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description="PyMMDT Dashboard CI Tool")
+    # parser.add_argument("--logdir", dest="logdir", type=str, required=True, help="Path to pymmdt-generated data files.")
+    # args = parser.parse_args()
 
-    # Convert relative path to absolute paths
-    logdir_path = pathlib.Path(args.logdir)
-    if not logdir_path.is_absolute():
-        args.logdir = pathlib.Path.cwd() / args.logdir
+    # # Convert relative path to absolute paths
+    # logdir_path = pathlib.Path(args.logdir)
+    # if not logdir_path.is_absolute():
+    #     args.logdir = pathlib.Path.cwd() / args.logdir
+    class H:
+        logdir = pathlib.Path('/media/eduardo/WD_MyPassport/ACADEMIA/PHD/Research/Libraries/PyMMDT/tests/data/gui_input_data_case/pymmdt')
+
+    args = H()
 
     # Start the QApplication and Engine
     app = QApplication([sys.argv[0]])
-    # app = QApplication(sys.argv)
-    engine = QQmlApplicationEngine()
-
-    # Adding custom data
-    qmlRegisterType(DashboardModel, 'Dashboard', 1, 0, 'DashboardModel')
-    engine.load(os.path.join(os.path.dirname(__file__), "qml/main.qml"))
+    engine = QQmlApplicationEngine()    
 
     # # Adding backend after applying the arguments
-    backend = Backend(args)
-    engine.rootObjects()[0].setProperty('backend', backend)
-    backend.update()
+    manager = Manager(args)
+    engine.rootContext().setContextProperty("Manager", manager)
+
+    # Adding custom data
+    engine.load(os.path.join(os.path.dirname(__file__), "qml/main.qml"))
 
     # Running the app
     if not engine.rootObjects():
