@@ -17,6 +17,11 @@ from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
 from .pausable_timer import QPausableTimer
 
+# PyMMDT Library Imports
+import pymmdt as mm
+import pymmdt.video as mmv
+import pymmdt.tabular as mmt
+
 class Manager(QObject):
     modelChanged = pyqtSignal()
     buttonPressed = pyqtSignal()
@@ -27,14 +32,19 @@ class Manager(QObject):
         # Store the CI arguments
         self.args = args
         self.time_step = 10 # milliseconds
+        self.time_window = pd.Timedelta(seconds=1)
 
         # Keeping track of all the data in the logdir
-        self.logdir_records = {}
+        self.logdir_records = None
 
         # Creating the used dashboard model
         self._dashboard_model = DashboardModel()
         self._timetrack_model = TimetrackModel()
         self._sliding_bar = SlidingBarObject()
+        # TODO: Add loading bar with buffer data
+
+        # Create an empty Collector that later is filled with data streams
+        self.collector = mm.Collector(empty=True)
 
         # Keeping track of the pause/play state and the start, end time
         self._is_play = True
@@ -97,7 +107,6 @@ class Manager(QObject):
             # First, pause the app global timer
             self.app_global_timer.pause()
 
-
         # Update the button icon's and other changes based on is_play property
         self.buttonPressed.emit()
 
@@ -131,40 +140,93 @@ class Manager(QObject):
         # If the new is different and not None, we need to update!
         if new_logdir_records and new_logdir_records != self.logdir_records:
 
-            # TODO: Instead of just updating data without checking differences,
-            # determine the differences and call a different function call
-            # when its just a difference.
+            # If this is the first time loading data
+            if type(self.logdir_records) == type(None):
 
-            # We need to determine the earliest start_time and the latest
-            # end_time
-            self.app_start_time = pd.Timedelta(seconds=0)
-            self.app_end_time = pd.Timedelta(seconds=0)
+                # We need to determine the earliest start_time and the latest
+                # end_time
+                self.app_start_time = pd.Timedelta(seconds=0)
+                self.app_end_time = pd.Timedelta(seconds=0)
 
-            # Construct pd.DataFrame for the data
-            # For each session data, store entries by modality
-            entries = collections.defaultdict(list)
-            for session_name, session_data in new_logdir_records.items():
-                for entry_name, entry_data in session_data['records'].items():
+                # Construct pd.DataFrame for the data
+                # For each session data, store entries by modality
+                entries = collections.defaultdict(list)
+                for session_name, session_data in new_logdir_records.items():
+                    for entry_name, entry_data in session_data['records'].items():
 
-                    # For now, skip any tabular data since we don't have a way to visualize
-                    if entry_data['dtype'] == 'tabular':
-                        continue
+                        # For now, skip any tabular data since we don't have a way to visualize
+                        if entry_data['dtype'] == 'tabular':
+                            continue
 
-                    entries['user'].append(session_name)
-                    entries['entry_name'].append(entry_name)
-                    entries['dtype'].append(entry_data['dtype'])
-                    entries['start_time'].append(pd.to_timedelta(entry_data['start_time']))
-                    entries['end_time'].append(pd.to_timedelta(entry_data['end_time']))
+                        entries['user'].append(session_name)
+                        entries['entry_name'].append(entry_name)
+                        entries['dtype'].append(entry_data['dtype'])
+                        entries['start_time'].append(pd.to_timedelta(entry_data['start_time']))
+                        entries['end_time'].append(pd.to_timedelta(entry_data['end_time']))
+                        entries['is_subsession'].append(session_data['is_subsession'])
 
-                    if entries['end_time'][-1] > self.app_end_time:
-                        self.app_end_time = entries['end_time'][-1]
+                        if entries['end_time'][-1] > self.app_end_time:
+                            self.app_end_time = entries['end_time'][-1]
 
-            # Construct the dataframe
-            self.entries = pd.DataFrame(dict(entries))
+                # Construct the dataframe
+                self.entries = pd.DataFrame(dict(entries))
 
-            # Add the data to the dashboard
-            self._dashboard_model.update_data(self.entries)
-            self._timetrack_model.update_data(self.entries, self.app_start_time, self.app_end_time)
+                # Add the data to the dashboard
+                self._dashboard_model.update_data(self.entries)
+                self._timetrack_model.update_data(self.entries, self.app_start_time, self.app_end_time)
+
+                # Loading the data for the Collector
+                unique_users = self.entries['user'].unique()
+                users_meta = [self.entries.loc[self.entries['user'] == x] for x in unique_users]
+
+                # Reset index and drop columns
+                for i in range(len(users_meta)):
+                    users_meta[i].reset_index(inplace=True)
+                    users_meta[i] = users_meta[i].drop(columns=['index'])
+
+                # Loading data streams # TODO!
+                users_data_streams = collections.defaultdict(dict)
+                for user_name, user_meta in zip(unique_users, users_meta):
+                    for index, row in user_meta.iterrows():
+                        # Extract useful meta
+                        entry_name = row['entry_name']
+                        dtype = row['dtype']
+
+                        # Construct the directory the file/directory is found
+                        if row['is_subsession']:
+                            file_dir = self.args.logdir / row['user']
+                        else:
+                            file_dir = self.args.logdir
+                        
+                        # Load the data
+                        if dtype == 'video':
+                            ds = mmv.VideoDataStream(
+                                name=entry_name,
+                                start_time=row['start_time'],
+                                video_path=file_dir/row['user']
+                            )
+                        if dtype == 'image':
+                            data = None # TODO!
+                            ds = mmt.TabularDataStream(
+                                name=entry_name,
+                                data=data,
+                                time_column='_time_'
+                            )
+                        if dtype == 'tabular':
+                            raise NotImplementedError("Tabular visualization is still not implemented.")
+                        else:
+                            raise RuntimeError(f"{dtype} is not a valid option.")
+
+                        # Store the data in Dict
+                        users_data_streams[user_name][entry_name] = ds
+
+                # Adding data to the Collector
+                self.collector.set_data_streams(users_data_streams, self.time_window)
+
+            # If this is now updating already loaded data
+            else:
+                # TODO: add constant updating
+                ...
             
             # Then overwrite the records
             self.logdir_records = new_logdir_records

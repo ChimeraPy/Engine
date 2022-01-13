@@ -39,11 +39,12 @@ class Collector:
 
     def __init__(
             self, 
-            data_streams_groups:Dict[str, Sequence[DataStream]],
-            time_window_size:pd.Timedelta,
+            data_streams_groups:Optional[Dict[str, Sequence[DataStream]]]={},
+            time_window_size:Optional[pd.Timedelta]=pd.Timedelta(0),
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
-            max_get_threads:Optional[int]=4
+            max_get_threads:Optional[int]=4,
+            empty:bool=False
         ) -> None:
         """Construct the ``Collector``.
 
@@ -65,6 +66,32 @@ class Collector:
         # Keeping counter for the number of windows loaded
         self.windows_loaded = 0
         self.max_get_threads = max_get_threads
+
+        # Only when data streams provided should we start handling timetrack
+        if not empty:
+
+            # Construct a global timetrack
+            self.construct_global_timetrack()
+            
+            # Apply triming if start_at or end_at has been selected
+            if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
+                self.set_start_time(start_at)
+            if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
+                self.set_end_time(end_at)
+
+    def set_data_streams(
+            self, 
+            data_streams_groups:Optional[Dict[str, Sequence[DataStream]]]={},
+            time_window_size:Optional[pd.Timedelta]=pd.Timedelta(0),
+        ) -> None:
+        
+        # Once data streams are provided and time_window_size, we can 
+        # finally setup the global timetrack
+        self.data_streams_groups = data_streams_groups
+        self.time_window_size = time_window_size
+        self.construct_global_timetrack()
+
+    def construct_global_timetrack(self):
 
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
@@ -92,12 +119,6 @@ class Collector:
         # Split samples based on the time window size
         self.start_time = self.global_timetrack['time'][0]
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
-            
-        # Apply triming if start_at or end_at has been selected
-        if type(start_at) != type(None) and isinstance(start_at, pd.Timedelta):
-            self.set_start_time(start_at)
-        if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
-            self.set_end_time(end_at)
         
     def set_start_time(self, time:pd.Timedelta):
         assert time < self.end_time, "start_time cannot be greater than end_time."
