@@ -70,19 +70,21 @@ class VideoDataStream(DataStream):
             # OpenCV for this, then we delete this
             self.video = cv2.VideoCapture(str(video_path))
             self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
-            self.video.release()
+            self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+            # self.video.release()
 
             # Switching to decord because it can read a batch of frames
-            import decord # If placed with other imports, it can cause PyQt5 to crash!
-            self.video = decord.VideoReader(
-                uri=str(video_path), 
-                ctx=decord.cpu(0),
-                num_threads=1
-            )
+            # import decord # If placed with other imports, it can cause PyQt5 to crash!
+            # from decord import VideoReader, cpu
+            # self.video = VideoReader(
+            #     uri=str(video_path), 
+            #     ctx=cpu(0),
+            #     num_threads=1
+            # )
             self.mode = 'reading'
 
-            # Get the total number of frames
-            self.nb_frames = int(len(self.video))
+            # # Get the total number of frames
+            # self.nb_frames = int(len(self.video))
             
             # Constructing timetrack
             # timetrack = pd.date_range(start=start_time, periods=self.nb_frames, freq=f"{int(1e9/self.fps)}N").to_frame()
@@ -167,14 +169,14 @@ class VideoDataStream(DataStream):
             size (Tuple[int, int]): The frame's width and height.
 
         """
-        if self.mode == "reading": # decord.VideoReader
-            size = self.video[0].shape
-            w, h = size[1], size[0]
-        elif self.mode == "writing": # cv2.VideoCapture
+        # if isinstance(self.video, decord.VideoReader):
+        #     size = self.video[0].shape
+        #     w, h = size[1], size[0]
+        if isinstance(self.video, (cv2.VideoCapture, cv2.VideoWriter)):
             w = int(self.video.get(3))
             h = int(self.video.get(4))
         else:
-            raise RuntimeError("Invalid video mode!")
+            raise RuntimeError("Invalid self.video object")
 
         return (w, h)
 
@@ -200,11 +202,16 @@ class VideoDataStream(DataStream):
         list_of_frames = list(range(start_data_index, end_data_index+1))
 
         # Ensure that the video is in the right location
-        # self.set_index(start_data_index)
+        self.set_index(start_data_index)
 
         # Get all the samples
         times = data_idx['time'].tolist()
-        stacked_frames = self.video.get_batch(list_of_frames).asnumpy()
+        # stacked_frames = self.video.get_batch(list_of_frames).asnumpy() # decord does not play nice with PyQt5
+        frames = []
+        for i in range(start_data_index, end_data_index+1):
+            res, frame = self.video.read()
+            frames.append(frame)
+        stacked_frames = np.stack(frames)
 
         # Convert the data depending on the RGB type
         if self.color_mode == "BGR":

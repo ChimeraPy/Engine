@@ -7,6 +7,8 @@ import collections
 
 # Third-party Imports
 import pandas as pd
+from PIL import Image
+import tqdm
 
 # PyQt5 Imports
 from PyQt5.QtCore import QTimer, QObject, pyqtProperty, pyqtSignal, pyqtSlot
@@ -33,6 +35,7 @@ class Manager(QObject):
         self.args = args
         self.time_step = 10 # milliseconds
         self.time_window = pd.Timedelta(seconds=1)
+        self.meta_check_step = 5000 # milliseconds
 
         # Keeping track of all the data in the logdir
         self.logdir_records = None
@@ -57,13 +60,12 @@ class Manager(QObject):
 
         # Using a timer to periodically check for new data
         self.meta_check_timer = QTimer()
-        self.meta_check_timer.setInterval(1000) # 1000 milliseconds = 1 second
+        self.meta_check_timer.setInterval(self.meta_check_step) 
         self.meta_check_timer.timeout.connect(self.meta_update)
         self.meta_check_timer.start()
 
         # Using a timer to update all the content in the application
         self.app_global_timer = QPausableTimer()
-        # self.app_global_timer.setInterval(10) # 10 milliseconds
         self.app_global_timer.setInterval(self.time_step) 
         self.app_global_timer.timeout.connect(self.app_update)
         self.app_global_timer.start()
@@ -121,6 +123,7 @@ class Manager(QObject):
         # Else, get the initial and all other meta files
         with open(root_meta, 'r') as f:
             meta_data = json.load(f)
+            meta_data['is_subsession'] = False
 
         # Check if there is any subsessions and get their meta
         total_meta = {'root': meta_data}
@@ -132,7 +135,7 @@ class Manager(QObject):
         return total_meta
 
     def meta_update(self):
-
+        
         # In the update function, we need to check the data stored in 
         # the logdir.
         new_logdir_records = self.get_meta()
@@ -185,8 +188,9 @@ class Manager(QObject):
                     users_meta[i] = users_meta[i].drop(columns=['index'])
 
                 # Loading data streams # TODO!
-                users_data_streams = collections.defaultdict(dict)
-                for user_name, user_meta in zip(unique_users, users_meta):
+                users_data_streams = collections.defaultdict(list)
+                for user_name, user_meta in tqdm.tqdm(zip(unique_users, users_meta), \
+                        total=len(unique_users), disable=not self.args.verbose):
                     for index, row in user_meta.iterrows():
                         # Extract useful meta
                         entry_name = row['entry_name']
@@ -203,22 +207,33 @@ class Manager(QObject):
                             ds = mmv.VideoDataStream(
                                 name=entry_name,
                                 start_time=row['start_time'],
-                                video_path=file_dir/row['user']
+                                video_path=file_dir/f"{entry_name}.avi"
                             )
-                        if dtype == 'image':
-                            data = None # TODO!
+                        elif dtype == 'image':
+
+                            # Load the meta CSV
+                            df = pd.read_csv(file_dir/entry_name/'timestamps.csv')
+
+                            # Load all the images into a data frame
+                            imgs = []
+                            for index, row in df.iterrows():
+                                img_fp = file_dir / entry_name / f"{row['idx']}.jpg"
+                                imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
+                            df['images'] = imgs
+                            
+                            # Create ds
                             ds = mmt.TabularDataStream(
                                 name=entry_name,
-                                data=data,
+                                data=df,
                                 time_column='_time_'
                             )
-                        if dtype == 'tabular':
+                        elif dtype == 'tabular':
                             raise NotImplementedError("Tabular visualization is still not implemented.")
                         else:
                             raise RuntimeError(f"{dtype} is not a valid option.")
 
                         # Store the data in Dict
-                        users_data_streams[user_name][entry_name] = ds
+                        users_data_streams[user_name].append(ds)
 
                 # Adding data to the Collector
                 self.collector.set_data_streams(users_data_streams, self.time_window)
@@ -244,7 +259,7 @@ class Manager(QObject):
 
         # Update the sliding bar
         self._sliding_bar.state = self.app_current_time / (self.app_end_time) 
-        print(self.app_current_time)
+        # print(self.app_current_time)
 
         # Update the content in the homePage
 

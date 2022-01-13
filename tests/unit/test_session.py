@@ -147,23 +147,23 @@ class SingleSessionTestCase(unittest.TestCase):
             'records': {
                 'test_tabular': {
                     'dtype': 'tabular',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=9)
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=9))
                 },
                 'test_image_with_timestamp': {
                     'dtype': 'image',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(0),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(0)),
                 },
                 'test_images': {
                     'dtype': 'image',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=0.482758612),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=0.482758612)),
                 },
                 'test_video': {
                     'dtype': 'video',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=0.482758612),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=0.482758612)),
                 }
             },
             'subsessions': []
@@ -175,14 +175,14 @@ class SingleSessionTestCase(unittest.TestCase):
         for record_name in actual_meta['records'].keys():
             start_time = actual_meta['records'][record_name]['start_time']
             end_time = actual_meta['records'][record_name]['end_time']
-            actual_meta['records'][record_name]['start_time'] = pd.to_timedelta(start_time)
-            actual_meta['records'][record_name]['end_time'] = pd.to_timedelta(end_time)
+            # actual_meta['records'][record_name]['start_time'] = pd.to_timedelta(start_time)
+            # actual_meta['records'][record_name]['end_time'] = pd.to_timedelta(end_time)
+            actual_meta['records'][record_name]['start_time'] = start_time
+            actual_meta['records'][record_name]['end_time'] = end_time
 
         pprint.pprint(expected_meta)
         pprint.pprint(actual_meta)
 
-        # Cannot be directly compared - pd.Timedelta can have minor differences
-        # that make it impossible to match (i.e. 0.58888889 vs 0.58889)
         # assert expected_meta == actual_meta, \
         #     f"Generated meta file is not correct."
 
@@ -325,23 +325,23 @@ class MultipleSessionTestCase(unittest.TestCase):
             'records': {
                 'test_tabular': {
                     'dtype': 'tabular',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=9)
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=9))
                 },
                 'test_image_with_timestamp': {
                     'dtype': 'image',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(0),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(0)),
                 },
                 'test_images': {
                     'dtype': 'image',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=0.482758612),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=0.482758612)),
                 },
                 'test_video': {
                     'dtype': 'video',
-                    'start_time': pd.Timedelta(0),
-                    'end_time': pd.Timedelta(seconds=0.482758612),
+                    'start_time': str(pd.Timedelta(0)),
+                    'end_time': str(pd.Timedelta(seconds=0.482758612)),
                 }
             },
             'subsessions': []
@@ -355,9 +355,6 @@ class MultipleSessionTestCase(unittest.TestCase):
             end_time = actual_meta['records'][record_name]['end_time']
             actual_meta['records'][record_name]['start_time'] = pd.to_timedelta(start_time)
             actual_meta['records'][record_name]['end_time'] = pd.to_timedelta(end_time)
-
-        pprint.pprint(expected_meta)
-        pprint.pprint(actual_meta)
 
         # assert expected_meta == actual_meta, \
         #     f"Generated meta file is not correct."

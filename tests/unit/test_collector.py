@@ -42,15 +42,34 @@ class CollectorTestCase(unittest.TestCase):
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
         )
-        dss = [self.tabular_ds, self.video_ds]
+        self.dss = [self.tabular_ds, self.video_ds]
 
         # Create a collector 
         self.collector = mm.Collector(
-            {'P01': dss},
+            {'P01': self.dss},
             time_window_size=pd.Timedelta(seconds=2),
         )
 
         return None
+
+    def test_empty_collector(self):
+
+        # Test empty collector constructor
+        empty_collector = mm.Collector(empty=True)
+        empty_collector.set_data_streams({'P01': self.dss}, pd.Timedelta(seconds=2))
+        
+        # Setting start and end time
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=1)
+
+        # Then check that its the same
+        data1 = self.collector.get(start_time, end_time)
+        data2 = empty_collector.get(start_time, end_time)
+
+        # The output should be the same
+        for user in data1.keys():
+            for ds_name in data1[user].keys():
+                assert data1[user][ds_name].equals(data2[user][ds_name])
 
     def test_getting_data_from_all_data_streams(self):
 

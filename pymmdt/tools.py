@@ -1,10 +1,13 @@
 # Built-in Imports
+from typing import List
 import math
 import multiprocessing
 import threading
 import collections
 
 # Third-Party Imports
+from PIL import Image
+import numpy as np
 import pandas as pd
 
 # Helper Classes
@@ -27,7 +30,11 @@ def multiprocessed(fn):
         return process
     return wrapper
 
-def get_windows(start_time, end_time, time_window_size):
+def get_windows(
+        start_time:pd.Timedelta, 
+        end_time:pd.Timedelta, 
+        time_window_size:pd.Timedelta
+    ) -> List[Window]:
 
     # Determine how many time windows given the total time and size
     total_time = (end_time - start_time)
@@ -45,3 +52,28 @@ def get_windows(start_time, end_time, time_window_size):
         windows.append(window)
 
     return windows
+
+# Got this function from: https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/
+def to_numpy(im:Image):
+
+    # Load the image
+    im.load()
+
+    # unpack data
+    e = Image._getencoder(im.mode, 'raw', im.mode)
+    e.setimage(im.im)
+
+    # NumPy buffer for the result
+    shape, typestr = Image._conv_type_shape(im)
+    data = np.empty(shape, dtype=np.dtype(typestr))
+    mem = data.data.cast('B', (data.data.nbytes,))
+
+    bufsize, s, offset = 65536, 0, 0
+    while not s:
+        l, s, d = e.encode(bufsize)
+        mem[offset:offset + len(d)] = d
+        offset += len(d)
+    if s < 0:
+        raise RuntimeError("encoder error %d in tobytes" % s)
+
+    return data

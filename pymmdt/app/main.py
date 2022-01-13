@@ -6,16 +6,19 @@ import pathlib
 
 # PyQt5 Imports
 from PyQt5.QtWidgets import QApplication
-from PyQt5.QtQml import QQmlApplicationEngine, qmlRegisterType
+from PyQt5.QtQml import QQmlApplicationEngine
 
 # Importing Model data
-from pymmdt.app.pylib import DashboardModel, Manager
+from pymmdt.app.pylib import Manager
 # from pymmdt.app.pylib import Manager
 
 def main():
     # Create arguments for the application
     # parser = argparse.ArgumentParser(description="PyMMDT Dashboard CI Tool")
-    # parser.add_argument("--logdir", dest="logdir", type=str, required=True, help="Path to pymmdt-generated data files.")
+    # parser.add_argument(
+        # "--logdir", dest="logdir", type=str, required=True, help="Path to pymmdt-generated data files.",
+        # "--verbose", dest="verbose", type=bool, default=False, help="Verbose output for debugging."
+    # )
     # args = parser.parse_args()
 
     # # Convert relative path to absolute paths
@@ -24,6 +27,7 @@ def main():
     #     args.logdir = pathlib.Path.cwd() / args.logdir
     class H:
         logdir = pathlib.Path('/media/eduardo/WD_MyPassport/ACADEMIA/PHD/Research/Libraries/PyMMDT/tests/data/gui_input_data_case/pymmdt')
+        verbose = True
 
     args = H()
 
