@@ -11,14 +11,15 @@ Item {
         color: "#44475a"
         anchors.fill: parent
 
-        Text {
+        ListView {
+            id: dashboardView
+            anchors.margins: 15
             anchors.fill: parent
-            horizontalAlignment: Text.AlignHCenter
-            verticalAlignment: Text.AlignVCenter
-            color: "#f8f8f2"
-            text: qsTr("Home Page")
+            spacing: 15
+            orientation: ListView.Vertical
+            model: Manager.dashboard_model
+            delegate: BaseDiagramDelegate {}
         }
-
     }
 }
 

@@ -15,29 +15,19 @@ Window {
     Rectangle {
         id: appContainer
         color: "#282a36"
-        anchors.right: parent.right
-        anchors.rightMargin: 0
-        anchors.left: parent.left
-        anchors.leftMargin: 0
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 0
-        anchors.top: parent.top
-        anchors.topMargin: 0
+        anchors.fill: parent
 
         Rectangle {
             id: topBar
-            height: 52
+            height: 0.05*parent.height
             color: "#282a36"
             anchors.right: parent.right
-            anchors.rightMargin: 0
             anchors.left: parent.left
-            anchors.leftMargin: 0
             anchors.top: parent.top
-            anchors.topMargin: 0
 
             Button {
                 id: playPauseButton
-                x: 450
+                x: 0.5*parent.width
                 width: 50
                 icon.source: Manager.is_play ? "resources/icons8-play-30.png" : "resources/icons8-pause-30.png"
                 icon.color: "#f8f8f2"
@@ -50,20 +40,19 @@ Window {
                     color: "transparent"
                 }
                 onClicked: Manager.play_pause()
+                onDoubleClicked: Manager.play_pause() // Necessary for capturing fast clicks!
             }
 
             Button {
                 id: appButton
+                x: 0.1*parent.width
                 width: 100
                 display: AbstractButton.TextOnly
                 transformOrigin: Item.Center
                 font.pointSize: 13
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 0
                 anchors.left: parent.left
-                anchors.leftMargin: 0
                 anchors.top: parent.top
-                anchors.topMargin: 0
                 background: Rectangle {
                     color: "transparent"
                 }
@@ -78,16 +67,13 @@ Window {
 
             Button {
                 id: settingsButton
-                x: 910
-                width: 90
+                x: 0.9*parent.width
+                width: 100
                 icon.source: "resources/icons8-settings-50.png"
                 icon.color: "#f8f8f2"
                 anchors.right: parent.right
-                anchors.rightMargin: 0
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 0
                 anchors.top: parent.top
-                anchors.topMargin: 0
                 background: Rectangle {
                     color: "transparent"
                 }
@@ -96,12 +82,10 @@ Window {
 
             Button {
                 id: userButton
-                x: 148
+                x: 0.15 * parent.width
                 width: 100
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 0
                 anchors.top: parent.top
-                anchors.topMargin: 0
                 background: Rectangle {
                     color: "transparent"
                 }
@@ -116,12 +100,10 @@ Window {
 
             Button {
                 id: entryButton
-                x: 299
+                x: 0.35 * parent.width
                 width: 100
                 anchors.top: parent.top
-                anchors.topMargin: 0
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 0
                 background: Rectangle {
                     color: "transparent"
                 }
@@ -138,15 +120,13 @@ Window {
         // Timetrack (container for Timelines)
         Rectangle {
             id: timeTrack
-            height: timetrackView.contentHeight
-            color: "#44475a"
+            // height: timetrackView.contentHeight
+            height: 200
+            color: "#282a36"
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 0
             anchors.right: parent.right
-            anchors.rightMargin: 0
             anchors.left: parent.left
-            anchors.leftMargin: 0
-
+            
             ListView {
                 id: timetrackView
                 anchors.fill: timeTrack
@@ -158,9 +138,10 @@ Window {
 
             Rectangle {
                 y: 0
-                x: SlidingBar.state * (timeTrack.width-30-6) + 30
-                width: 6
+                x: SlidingBar.state * (timeTrack.width-30-width) + 30
+                width: 5
                 height: parent.height
+                visible: Manager.data_is_loaded
                 color: "orange"
             }
         }
@@ -169,23 +150,20 @@ Window {
             id: content
             color: "#44475a"
             anchors.top: topBar.bottom
-            anchors.topMargin: 0
             anchors.bottom: timeTrack.top
-            anchors.bottomMargin: 0
             anchors.right: parent.right
-            anchors.rightMargin: 0
             anchors.left: parent.left
-            anchors.leftMargin: 0
 
-            Loader {
-                id: pageLoader
+            ScrollView {
                 anchors.fill: parent
-                source: Qt.resolvedUrl("pages/homePage.qml")
+                clip: true
+
+                Loader {
+                    id: pageLoader
+                    anchors.fill: parent
+                    source: Qt.resolvedUrl("pages/" + Manager.page + ".qml")
+                }
             }
         }
     }
 }
-
-
-
-

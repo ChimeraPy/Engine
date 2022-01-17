@@ -160,11 +160,6 @@ class Collector:
         # complete
         self.loading_queue.put("END", block=False)
 
-    @threaded
-    def _get_data_stream_data(self, group_name:str, ds_idx:int, start_time:pd.Timedelta, end_time:pd.Timedelta):
-        data = self.data_streams_groups[group_name][ds_idx].get(start_time, end_time)
-        return data
-
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 
         # window start and end time

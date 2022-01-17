@@ -156,7 +156,6 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         
         # Run the runner with everything set
         self.runner.run(verbose=True)
-        # self.runner.run()
         
         for id, session in enumerate([self.total_session] + self.total_session.subsessions):
             # The estimated FPS should be close to the input FPS

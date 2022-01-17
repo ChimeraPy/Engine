@@ -35,7 +35,6 @@ class DashboardModel(QAbstractListModel):
 
     def sort_by(self, by):
         assert by in self.entries.columns
-        # self.entries.sort_values(by=[by])
 
     def update_data(self, entries):
 
@@ -43,7 +42,7 @@ class DashboardModel(QAbstractListModel):
         self.entries = entries
 
         # Split the dataframes based on the sort_by
-        self.unique_groups_tags = self.entries[self._sort_by].unique()
+        self.unique_groups_tags = self.entries[self._sort_by].unique().tolist()
         groups = [self.entries.loc[self.entries[self._sort_by] == x]\
                   for x in self.unique_groups_tags]
 
@@ -54,6 +53,19 @@ class DashboardModel(QAbstractListModel):
 
         # Now group the entries
         self.groups = [GroupModel(group) for group in groups]
+
+    def update_content(self, user, entry_name, content):
+       
+        # First, determine which group by the sort_by
+        if self._sort_by == 'entry_name':
+            group_idx = self.unique_groups_tags.index(entry_name)
+        elif self._sort_by == 'user_name':
+            group_idx = self.unique_groups_tags.index(user)
+        else:
+            raise RuntimeError("Invalid _sort_by type for DashboardModel.")
+
+        # Then update the content for that group
+        self.groups[group_idx].update_content(user, entry_name, content)
 
     def rowCount(self, parent):
         return len(self.groups)
