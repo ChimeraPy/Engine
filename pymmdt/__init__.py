@@ -19,3 +19,4 @@ from .collector import Collector
 from .pipe import Pipe
 from .session import Session
 from .data_source import DataSource, Sensor, Api
+from . import tools

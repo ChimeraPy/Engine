@@ -356,6 +356,9 @@ class MultipleSessionTestCase(unittest.TestCase):
             actual_meta['records'][record_name]['start_time'] = pd.to_timedelta(start_time)
             actual_meta['records'][record_name]['end_time'] = pd.to_timedelta(end_time)
 
+        pprint.pprint(expected_meta)
+        pprint.pprint(actual_meta)
+
         # assert expected_meta == actual_meta, \
         #     f"Generated meta file is not correct."
 

@@ -264,6 +264,7 @@ class Session:
             if len(data['data']) > 0:
                 end_time_stamp = str(data['data'].iloc[-1]._time_)
                 self.meta_data['records'][data['name']]['end_time'] = end_time_stamp 
+                self._save_meta_data()
 
             # If everything is good, add the change to the track history
             # Append the data to the new entry

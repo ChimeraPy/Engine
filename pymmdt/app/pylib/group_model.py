@@ -2,6 +2,7 @@
 from typing import Optional
 
 # Third-party Imports
+from PIL import Image
 import pandas as pd
 import numpy as np
 
@@ -10,6 +11,7 @@ from PyQt5.QtCore import QAbstractListModel, Qt, QObject
 from PyQt5 import QtGui
 
 # Internal Imports
+import pymmdt as mm
 from .content import ContentImage
 from .qtools import toQImage
 
@@ -54,9 +56,6 @@ class GroupModel(QAbstractListModel):
             self._entries: pd.DataFrame = entries
             self._entries['content'] = content
 
-            print("Initial entries")
-            print(self._entries)
-
         else:
             self._entries: pd.DataFrame = pd.DataFrame({})
             self.content = []
@@ -89,7 +88,8 @@ class GroupModel(QAbstractListModel):
         # print(entry_type) 
 
         if entry_type == 'image':
-            qcontent = toQImage(content['images'])
+            image = mm.tools.to_numpy(Image.open(content['img_filepaths']))
+            qcontent = toQImage(image)
         elif entry_type == 'video':
             qcontent = toQImage(content['frames'])
         else:

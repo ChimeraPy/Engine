@@ -32,8 +32,6 @@ class ContentImage(QtQuick.QQuickPaintedItem):
     # @image.setter
     def setImage(self, image):
 
-        print(f"HELLO - {self}")
-
         if self._image == image:
             return
 

@@ -4,6 +4,7 @@ import cv2
 
 # PyQt5 Imports
 from PyQt5 import QtGui
+from PyQt5.QtCore import QThread
 
 # Constants
 GRAY_COLOR_TABLE = [QtGui.qRgb(i, i, i) for i in range(256)]

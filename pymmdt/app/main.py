@@ -23,6 +23,7 @@ def application_setup(args:Dict):
 
     # Constructing the Application Manager
     manager = Manager(**args)
+    app.aboutToQuit.connect(manager.exit)
 
     # # Adding backend after applying the arguments
     engine.rootContext().setContextProperty("Manager", manager)

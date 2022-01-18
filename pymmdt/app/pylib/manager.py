@@ -7,11 +7,16 @@ import pathlib
 import json
 import collections
 import queue
+import threading
+import time
 
 # Third-party Imports
+import numpy as np
 import pandas as pd
-from PIL import Image
 import tqdm
+
+# Setting pandas to stop annoying warnings
+pd.options.mode.chained_assignment = None
 
 # PyQt5 Imports
 from PyQt5.QtCore import QTimer, QObject, pyqtProperty, pyqtSignal, pyqtSlot
@@ -39,7 +44,7 @@ class Manager(QObject):
             self,
             logdir:str,
             verbose:Optional[bool]=False,
-            time_step:Optional[int]=5,
+            time_step:Optional[int]=10,
             replay_speed:Optional[int]=1,
             time_window:Optional[pd.Timedelta]=pd.Timedelta(seconds=0.1),
             meta_check_step:Optional[int]=5000
@@ -68,9 +73,19 @@ class Manager(QObject):
         self.collector = mm.Collector(empty=True)
         self.load_data_queue = queue.Queue(maxsize=int(30*1e9/time_window.value))
         self.collector.set_loading_queue(self.load_data_queue)
+
+        # Parameters for tracking progression
         self.current_window = -1
         self.current_window_data = None
         self.entries_time_tracker = None
+
+        # Thread for uploading the content to the frontend
+        self.content_data_queue = queue.Queue(maxsize=100)
+        self.content_thread = self.update_content()
+
+        # Closing information
+        self.thread_exit = threading.Event()
+        self.thread_exit.clear()
 
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
@@ -191,6 +206,8 @@ class Manager(QObject):
                 if entry_data['dtype'] == 'tabular':
                     continue
 
+                print(entry_data)
+
                 entries['user'].append(session_name)
                 entries['entry_name'].append(entry_name)
                 entries['dtype'].append(entry_data['dtype'])
@@ -203,6 +220,8 @@ class Manager(QObject):
 
         # Construct the dataframe
         entries = pd.DataFrame(dict(entries))
+
+        print(entries)
 
         return entries
 
@@ -235,11 +254,12 @@ class Manager(QObject):
                     df = pd.read_csv(file_dir/entry_name/'timestamps.csv')
 
                     # Load all the images into a data frame
-                    imgs = []
+                    img_filepaths = []
                     for index, row in df.iterrows():
                         img_fp = file_dir / entry_name / f"{row['idx']}.jpg"
-                        imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
-                    df['images'] = imgs
+                        img_filepaths.append(img_fp)
+                        # imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
+                    df['img_filepaths'] = img_filepaths
                     
                     # Create ds
                     ds = mmt.TabularDataStream(
@@ -296,8 +316,11 @@ class Manager(QObject):
 
                 # Adding data to the Collector
                 self.collector.set_data_streams(users_data_streams, self.time_window)
-                self.loading_thread = self.collector.load_data_to_queue()
+                self.loading_thread = self.loading_content()
+                # self.loading_thread = self.collector.load_data_to_queue()
+                # self.loading_thread.start()
                 self.loading_thread.start()
+                self.content_thread.start()
                 
                 # Update the flag tracking if data is loaded
                 self._data_is_loaded = True
@@ -316,6 +339,93 @@ class Manager(QObject):
             
         # Then overwrite the records
         self.logdir_records = new_logdir_records
+
+    @mm.tools.threaded
+    def loading_content(self):
+
+        # Calculating the windows only after the thread has been created
+        self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
+        print(f"start_time: {self.start_time}, end_time: {self.end_time}, windows: {len(self.windows)}")
+        past_window = -1
+
+        # Get the data continously
+        while not self.thread_exit.is_set():
+
+            if self.current_window != past_window:
+
+                # Update the past window
+                past_window = self.current_window
+
+                # Get the current window information
+                window = self.windows[int(self.current_window)]
+
+                # Extract the start and end time from window
+                start, end = window.start, window.end 
+
+                # Get the data
+                data = self.collector.get(start, end)
+
+                # Put the data into the queue
+                self.load_data_queue.put(data.copy(), block=True)
+
+            else:
+                time.sleep(1)
+
+    @mm.tools.threaded
+    def update_content(self):
+        
+        while not self.thread_exit.is_set():
+            
+            # Get the data
+            try:
+                current_window_data = self.load_data_queue.get(timeout=1).copy()
+            except queue.Empty:
+                continue
+
+            # If 'END' message, continue
+            if isinstance(current_window_data, str):
+                continue
+
+            # Adding a column tracking which rows have been used
+            for user, entries in current_window_data.items():
+                for entry_name, entry_data in entries.items():
+                    used = [False for x in range(len(entry_data))]
+                    current_window_data[user][entry_name].loc[:,'used'] = used
+
+            print("NEW DATA")
+            print(current_window_data.keys())
+            for user, entries in current_window_data.items():
+                print(user, ': ', entries.keys())
+
+            # Now we check if we need to update content for entries in the 
+            # current window data
+            for user, entries in current_window_data.items():
+                for entry_name, entry_data in entries.items():
+
+                    print(f"manager - starting: {user} - {entry_name}")
+                    print(entry_data.keys())
+
+                    # # If not empty, continue
+                    if not entry_data.empty:
+
+                        print(f"manager - not_empty: {user} - {entry_name}")
+
+                        # Get the index for new samples
+                        new_samples_loc = (entry_data['used'] == False)
+
+                        # If there is any samples after the time window
+                        if new_samples_loc.any():
+                            
+                            print(f"manager - updating: {user} - {entry_name}")
+
+                            latest_sample_idx = np.where(new_samples_loc)[0][0]
+                            print(latest_sample_idx)
+                            entry_data.at[latest_sample_idx, 'used'] = True
+                            latest_sample = entry_data.iloc[latest_sample_idx]
+
+                            self._dashboard_model.update_content(user, entry_name, latest_sample)
+
+            print("LOOP")
 
     def app_update(self):
 
@@ -337,34 +447,29 @@ class Manager(QObject):
 
         # First, check if we enter a new time window 
         current_window = (self.current_time.value/1e9) // (self.time_window.value/1e9)
-        # print(current_window)
         if self.current_window != current_window:
+
             # Update the current_window
             self.current_window = current_window
 
-            # If change, get the data from the queue
-            if self.load_data_queue.qsize() != 0:
-                print("New data")
-                self.current_window_data = self.load_data_queue.get()
+        # # If change, get the data from the queue
+        # if self.load_data_queue.qsize() != 0:
+        #     current_window_data = self.load_data_queue.get()
+        #     self.content_data_queue.put(current_window_data)
 
-        # None -> empty, str -> 'END', dict -> data
-        if isinstance(self.current_window_data, dict):
+    @pyqtSlot()
+    def exit(self):
 
-            # Now we check if we need to update content for entries in the 
-            # current window data
-            for user, entries in self.current_window_data.items():
-                for entry_name, entry_data in entries.items():
+        print("Closing")
 
-                    # If not empty, continue
-                    if not entry_data.empty:
-                        new_samples_loc = entry_data['_time_'] >= self.past_time
+        # Inform all the threads to end
+        self.thread_exit.set()
+        print("Stopping threads!")
 
-                        # If there is any samples after the time window
-                        if new_samples_loc.any():
+        # Then wait for threads
+        self.content_thread.join()
+        print("Content thread join")
+        self.loading_thread.join()
+        print("Loading thread join")
 
-                            # Get the data sample
-                            latest_sample = entry_data.loc[new_samples_loc].iloc[-1]
-                            self._dashboard_model.update_content(user, entry_name, latest_sample)
-
-            # Update model
-            self.modelChanged.emit()
+        print("Finished closing")

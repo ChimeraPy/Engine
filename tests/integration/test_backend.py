@@ -1,4 +1,5 @@
 # Built-in Imports
+from typing import Dict
 import time
 import unittest
 import pathlib
@@ -16,13 +17,23 @@ import pymmdt.tabular as mmt
 import pymmdt.video as mmv
 
 # Testing package
-from . import test_doubles
+# from . import test_doubles
+# from .test_doubles import TestExamplePipe
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
 TEST_DIR = CURRENT_DIR.parent
 RAW_DATA_DIR = TEST_DIR / 'data' 
 OUTPUT_DIR = TEST_DIR / 'test_output' 
+
+# Creating test pipe class and instance
+class TestExamplePipe(mm.Pipe):
+    def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
+        data_streams_samples = list(data_samples.values())[0]
+        self.session.add_tabular('test_tabular', data_streams_samples['test_tabular'])
+        self.session.add_video('test_video', data_streams_samples['test_video'])
+        self.session.add_images('test_images', data_streams_samples['test_video'])
+        # self.session.add_image('test_image', data_streams_samples['test_video'].iloc[0].to_frame())
 
 class SingleRunnerBackEndTestCase(unittest.TestCase):
     
@@ -125,7 +136,8 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         for x in range(1,2+1):
             
             # Use a test pipeline
-            individual_pipeline = test_doubles.TestExamplePipe()
+            # individual_pipeline = test_doubles.TestExamplePipe()
+            individual_pipeline = TestExamplePipe()
 
             runner = mm.SingleRunner(
                 name=f"P0{x}",
@@ -156,6 +168,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         
         # Run the runner with everything set
         self.runner.run(verbose=True)
+        # self.runner.run()
         
         for id, session in enumerate([self.total_session] + self.total_session.subsessions):
             # The estimated FPS should be close to the input FPS
@@ -172,4 +185,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
                     f"Expected num of frames: {expected_frames} vs. Actual {actual_frames}"
         
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
+    test = GroupRunnerBackEndTestCase()
+    test.setUp()
+    test.test_group_runner_run()

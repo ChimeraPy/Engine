@@ -14,9 +14,6 @@ import time
 # Testing Library
 import pymmdt.app as mma
 
-# Relative Imports
-import tests.tools as ttools
-
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
 TEST_DIR = CURRENT_DIR.parent
