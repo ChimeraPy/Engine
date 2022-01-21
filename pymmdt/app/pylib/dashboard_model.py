@@ -4,8 +4,7 @@
 #https://stackoverflow.com/questions/4303561/pyqt-and-qml-how-can-i-create-a-custom-data-model
 
 # Built-in Imports
-from typing import List
-import collections
+import datetime
 
 # Third-party Imports
 import pandas as pd
@@ -54,8 +53,8 @@ class DashboardModel(QAbstractListModel):
         # Now group the entries
         self.groups = [GroupModel(group) for group in groups]
 
-    def update_content(self, user, entry_name, content):
-       
+    def update_content(self, index, user, entry_name, content):
+  
         # First, determine which group by the sort_by
         if self._sort_by == 'entry_name':
             group_idx = self.unique_groups_tags.index(entry_name)
@@ -65,6 +64,7 @@ class DashboardModel(QAbstractListModel):
             raise RuntimeError("Invalid _sort_by type for DashboardModel.")
 
         # Then update the content for that group
+        # print(f"Job ID: {index} - g{group_idx} - - {user} - {entry_name} - time: {datetime.datetime.now()}")
         self.groups[group_idx].update_content(user, entry_name, content)
 
     def rowCount(self, parent):

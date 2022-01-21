@@ -7,7 +7,7 @@ Item {
 
     Text {
         anchors.centerIn: parent
-        text: qsTr(user) + " " + qsTr(entry_name) + " " + qsTr(dtype)
+        text: "IMAGE: " + qsTr(user) + " " + qsTr(entry_name) + " " + qsTr(dtype)
     }
 
     ContentImage {

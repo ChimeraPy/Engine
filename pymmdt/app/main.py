@@ -28,6 +28,7 @@ def application_setup(args:Dict):
     # # Adding backend after applying the arguments
     engine.rootContext().setContextProperty("Manager", manager)
     engine.rootContext().setContextProperty("SlidingBar", manager.sliding_bar)
+    engine.rootContext().setContextProperty("LoadingBar", manager.loading_bar)
 
     # Adding custom data
     engine.load(os.path.join(os.path.dirname(__file__), "qml/main.qml"))

@@ -137,6 +137,14 @@ Window {
             }
 
             Rectangle {
+                x: 30
+                width: LoadingBar.state * (timeTrack.width - 30)
+                height: parent.height
+                visible: Manager.data_is_loaded
+                color: "purple"
+            }
+
+            Rectangle {
                 y: 0
                 x: SlidingBar.state * (timeTrack.width-30-width) + 30
                 width: 5

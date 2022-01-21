@@ -70,7 +70,8 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         )
 
         # Use a test pipeline
-        individual_pipeline = test_doubles.TestExamplePipe()
+        # individual_pipeline = test_doubles.TestExamplePipe()
+        individual_pipeline = TestExamplePipe()
 
         # Load construct the first runner
         self.runner = mm.SingleRunner(

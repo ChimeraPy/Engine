@@ -3,6 +3,7 @@
 
 # Built-in Imports
 from typing import Optional, List, Dict, Sequence
+import datetime
 import pathlib
 import json
 import collections
@@ -14,6 +15,8 @@ import time
 import numpy as np
 import pandas as pd
 import tqdm
+# import apscheduler.schedulers.qt
+import apscheduler.schedulers.background
 
 # Setting pandas to stop annoying warnings
 pd.options.mode.chained_assignment = None
@@ -25,7 +28,8 @@ from PyQt5.QtCore import QTimer, QObject, pyqtProperty, pyqtSignal, pyqtSlot
 from .dashboard_model import DashboardModel
 from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
-from .pausable_timer import QPausableTimer
+# from .pausable_timer import QPausableTimer
+from .loading_bar_object import LoadingBarObject
 
 # PyMMDT Library Imports
 import pymmdt as mm
@@ -37,6 +41,7 @@ class Manager(QObject):
     playPauseChanged = pyqtSignal()
     pageChanged = pyqtSignal()
     dataLoadedChanged = pyqtSignal()
+    slidingBarChanged = pyqtSignal()
 
     signals = [modelChanged, playPauseChanged, pageChanged, dataLoadedChanged]
 
@@ -46,7 +51,7 @@ class Manager(QObject):
             verbose:Optional[bool]=False,
             time_step:Optional[int]=10,
             replay_speed:Optional[int]=1,
-            time_window:Optional[pd.Timedelta]=pd.Timedelta(seconds=0.1),
+            time_window:Optional[pd.Timedelta]=pd.Timedelta(seconds=1),
             meta_check_step:Optional[int]=5000
         ):
         super().__init__()
@@ -67,25 +72,30 @@ class Manager(QObject):
         self._dashboard_model = DashboardModel()
         self._timetrack_model = TimetrackModel()
         self._sliding_bar = SlidingBarObject()
-        # TODO: Add loading bar with buffer data
+        self._loading_bar = LoadingBarObject()
+        
+        # Parameters for tracking progression
+        self.current_window = 0
+        self.current_window_data = None
+        self.entries_time_tracker = None
+        self.windows: List = []
+        self.loaded_windows: List = []
+        
+        # Closing information
+        self.thread_exit = threading.Event()
+        self.thread_exit.clear()
 
         # Create an empty Collector that later is filled with data streams
         self.collector = mm.Collector(empty=True)
         self.load_data_queue = queue.Queue(maxsize=int(30*1e9/time_window.value))
-        self.collector.set_loading_queue(self.load_data_queue)
+        self.loading_thread = self.loading_content()
 
-        # Parameters for tracking progression
-        self.current_window = -1
-        self.current_window_data = None
-        self.entries_time_tracker = None
+        # Thread for organizing the content to be updated to the frontend
+        self.sort_content_thread = self.sort_content()
+        self.sort_content_data_queue = queue.Queue(maxsize=int(60*30*1e9/time_window.value))
 
         # Thread for uploading the content to the frontend
-        self.content_data_queue = queue.Queue(maxsize=100)
-        self.content_thread = self.update_content()
-
-        # Closing information
-        self.thread_exit = threading.Event()
-        self.thread_exit.clear()
+        self.update_content_thread = self.update_content()
 
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
@@ -102,12 +112,11 @@ class Manager(QObject):
         self.meta_check_timer.setInterval(self.meta_check_step) 
         self.meta_check_timer.timeout.connect(self.meta_update)
         self.meta_check_timer.start()
-
-        # Using a timer to update all the content in the application
-        self.global_timer = QPausableTimer()
-        self.global_timer.setInterval(self.time_step) 
-        self.global_timer.timeout.connect(self.app_update)
-        # self.global_timer.start()
+        
+        # Start threads
+        self.loading_thread.start()
+        self.sort_content_thread.start()
+        self.update_content_thread.start()
 
     @pyqtProperty(str, notify=pageChanged)
     def page(self):
@@ -124,6 +133,10 @@ class Manager(QObject):
     @pyqtProperty(SlidingBarObject)
     def sliding_bar(self):
         return self._sliding_bar
+
+    @pyqtProperty(LoadingBarObject)
+    def loading_bar(self):
+        return self._loading_bar
 
     @pyqtProperty(bool, notify=playPauseChanged)
     def is_play(self):
@@ -151,15 +164,16 @@ class Manager(QObject):
             if self.session_complete:
                 self.session_complete = False
                 self.current_time = pd.Timedelta(seconds=0)
+                self.current_window = -1
                 self.app_update()
 
             # Then, restart the app global timer
-            self.global_timer.resume()
+            # self.global_timer.resume()
             
         # Stopping 
-        else:
-            # First, pause the app global timer
-            self.global_timer.pause()
+        # else:
+        #     # First, pause the app global timer
+        #     self.global_timer.pause()
         
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
@@ -206,8 +220,6 @@ class Manager(QObject):
                 if entry_data['dtype'] == 'tabular':
                     continue
 
-                print(entry_data)
-
                 entries['user'].append(session_name)
                 entries['entry_name'].append(entry_name)
                 entries['dtype'].append(entry_data['dtype'])
@@ -220,8 +232,6 @@ class Manager(QObject):
 
         # Construct the dataframe
         entries = pd.DataFrame(dict(entries))
-
-        print(entries)
 
         return entries
 
@@ -316,11 +326,7 @@ class Manager(QObject):
 
                 # Adding data to the Collector
                 self.collector.set_data_streams(users_data_streams, self.time_window)
-                self.loading_thread = self.loading_content()
-                # self.loading_thread = self.collector.load_data_to_queue()
-                # self.loading_thread.start()
-                self.loading_thread.start()
-                self.content_thread.start()
+                self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
                 
                 # Update the flag tracking if data is loaded
                 self._data_is_loaded = True
@@ -343,45 +349,76 @@ class Manager(QObject):
     @mm.tools.threaded
     def loading_content(self):
 
-        # Calculating the windows only after the thread has been created
-        self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
-        print(f"start_time: {self.start_time}, end_time: {self.end_time}, windows: {len(self.windows)}")
-        past_window = -1
+        # Setting the initial value of the loading window
+        self.loading_window = self.current_window
 
         # Get the data continously
         while not self.thread_exit.is_set():
 
-            if self.current_window != past_window:
+            # Only load windows if there are more to load
+            if self.loading_window < len(self.windows):
 
-                # Update the past window
-                past_window = self.current_window
-
-                # Get the current window information
-                window = self.windows[int(self.current_window)]
+                # Get the window information of the window to load to queue
+                window = self.windows[int(self.loading_window)]
 
                 # Extract the start and end time from window
                 start, end = window.start, window.end 
 
                 # Get the data
                 data = self.collector.get(start, end)
+                timetrack = self.collector.get_timetrack(start, end)
+
+                data_chunk = {
+                    # 'start': start,
+                    # 'end': end,
+                    'data': data,
+                    'timetrack': timetrack
+                }
 
                 # Put the data into the queue
-                self.load_data_queue.put(data.copy(), block=True)
+                while not self.thread_exit.is_set():
+                    try:
+                        self.load_data_queue.put(data_chunk.copy(), timeout=1)
+                        self.loaded_windows.append(self.loading_window)
+                        break
+                    except queue.Full:
+                        time.sleep(0.1)
+
+                # Updating the loading bar
+                self._loading_bar.state = (end / self.end_time)
+
+                # Update the loading window pointer
+                self.loading_window += 1
 
             else:
-                time.sleep(1)
+                time.sleep(0.5)
 
     @mm.tools.threaded
-    def update_content(self):
+    def sort_content(self):
         
+        # Continously update the content
         while not self.thread_exit.is_set():
-            
-            # Get the data
-            try:
-                current_window_data = self.load_data_queue.get(timeout=1).copy()
-            except queue.Empty:
+
+            # If not playing, just avoid updating
+            if self._is_play == False:
+                time.sleep(0.1)
                 continue
 
+            # Get the next window of information if done processing 
+            # the previous window data
+            try:
+                data_chunk = self.load_data_queue.get(timeout=1)
+            except queue.Empty:
+                time.sleep(0.1)
+                continue
+            
+            # Decomposing the window item
+            current_window_idx = self.loaded_windows.pop()
+            current_window_data = data_chunk['data']
+            current_window_timetrack = data_chunk['timetrack']
+            # current_window_start = data_chunk['start']
+            # current_window_end = data_chunk['end']
+            
             # If 'END' message, continue
             if isinstance(current_window_data, str):
                 continue
@@ -391,71 +428,90 @@ class Manager(QObject):
                 for entry_name, entry_data in entries.items():
                     used = [False for x in range(len(entry_data))]
                     current_window_data[user][entry_name].loc[:,'used'] = used
+           
+            for index, row in current_window_timetrack.iterrows():
 
-            print("NEW DATA")
-            print(current_window_data.keys())
-            for user, entries in current_window_data.items():
-                print(user, ': ', entries.keys())
+                # Extract row and entry information
+                user = row.group
+                entry_name = row.ds_type
+                entry_time = row.time
+                entry_data = current_window_data[user][entry_name]
 
-            # Now we check if we need to update content for entries in the 
-            # current window data
-            for user, entries in current_window_data.items():
-                for entry_name, entry_data in entries.items():
+                # if not 'video' in entry_name: # DEBUGGING!
+                #     continue
+                # if 'video' in entry_name:
+                #     continue
 
-                    print(f"manager - starting: {user} - {entry_name}")
-                    print(entry_data.keys())
+                # If the entry is not empty
+                if not entry_data.empty:
 
-                    # # If not empty, continue
-                    if not entry_data.empty:
+                    # Get the entries that have not been used
+                    new_samples_loc = (entry_data['used'] == False)
 
-                        print(f"manager - not_empty: {user} - {entry_name}")
+                    # If there are remaining entries, use them!
+                    if new_samples_loc.any():
 
-                        # Get the index for new samples
-                        new_samples_loc = (entry_data['used'] == False)
+                        # Get the entries idx
+                        lastest_content_idx = np.where(new_samples_loc)[0][0] 
+                        lastest_content = entry_data.iloc[lastest_content_idx]
 
-                        # If there is any samples after the time window
-                        if new_samples_loc.any():
-                            
-                            print(f"manager - updating: {user} - {entry_name}")
+                        # Creating the data chunk
+                        data_chunk = {
+                            'index': index,
+                            'user': user,
+                            'entry_time': entry_time,
+                            'entry_name': entry_name,
+                            'content': lastest_content
+                        }
 
-                            latest_sample_idx = np.where(new_samples_loc)[0][0]
-                            print(latest_sample_idx)
-                            entry_data.at[latest_sample_idx, 'used'] = True
-                            latest_sample = entry_data.iloc[latest_sample_idx]
+                        # But the entry into the queue
+                        while not self.thread_exit.is_set():
+                            try:
+                                self.sort_content_data_queue.put(data_chunk.copy(), timeout=1)
+                                entry_data.at[lastest_content_idx, 'used'] = True
+                                break
+                            except queue.Full:
+                                time.sleep(0.1)
 
-                            self._dashboard_model.update_content(user, entry_name, latest_sample)
+            print(f"LOOP")
 
-            print("LOOP")
+    @mm.tools.threaded
+    def update_content(self):
 
-    def app_update(self):
+        previous_time = None
+        
+        # Continously update the content
+        while not self.thread_exit.is_set():
 
-        # Update the current time based on the time step
-        self.past_time = self.current_time
-        self.current_time += self.replay_speed * pd.Timedelta(seconds=self.time_step/1000)
+            # If not playing, just avoid updating
+            if self._is_play == False:
+                time.sleep(0.1)
+                continue
 
-        # Check if we have finished the session
-        if self.current_time > self.end_time:
-            self.session_complete = True
-            self.current_time = min(self.current_time, self.end_time)
-            self.play_pause() # to pause!
+            # Get the next entry information!
+            try:
+                data_chunk = self.sort_content_data_queue.get(timeout=1)
+            except queue.Empty:
+                time.sleep(0.1)
+                continue
 
-        # Update the sliding bar
-        self._sliding_bar.state = self.current_time / (self.end_time) 
+            if previous_time:
+                diff = (data_chunk['entry_time'] - previous_time)
+                time.sleep(0.8*diff.value/1e9)
+                previous_time = data_chunk['entry_time']
+            else:
+                previous_time = data_chunk['entry_time']
 
-        # Update the content in the homePage
-        # Resource: https://stackoverflow.com/questions/52944567/unable-to-stream-frames-from-camera-to-qml/52954271#52954271  
+            # Updating sliding bar
+            self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
 
-        # First, check if we enter a new time window 
-        current_window = (self.current_time.value/1e9) // (self.time_window.value/1e9)
-        if self.current_window != current_window:
-
-            # Update the current_window
-            self.current_window = current_window
-
-        # # If change, get the data from the queue
-        # if self.load_data_queue.qsize() != 0:
-        #     current_window_data = self.load_data_queue.get()
-        #     self.content_data_queue.put(current_window_data)
+            # Update the content
+            self._dashboard_model.update_content(
+                data_chunk['index'],
+                data_chunk['user'],
+                data_chunk['entry_name'],
+                data_chunk['content']
+            )
 
     @pyqtSlot()
     def exit(self):
@@ -467,9 +523,11 @@ class Manager(QObject):
         print("Stopping threads!")
 
         # Then wait for threads
-        self.content_thread.join()
-        print("Content thread join")
         self.loading_thread.join()
         print("Loading thread join")
+        self.sort_content_thread.join()
+        print("Sort thread join")
+        self.update_content_thread.join()
+        print("Content thread join")
 
         print("Finished closing")
