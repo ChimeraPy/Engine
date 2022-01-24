@@ -3,6 +3,8 @@
 
 # Built-in Imports
 from typing import Optional, List, Dict, Sequence
+import os
+import sys
 import datetime
 import pathlib
 import json
@@ -10,6 +12,8 @@ import collections
 import queue
 import threading
 import time
+import multiprocessing as mp
+import multiprocessing.managers as mpm
 
 # Third-party Imports
 import numpy as np
@@ -30,6 +34,7 @@ from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
 # from .pausable_timer import QPausableTimer
 from .loading_bar_object import LoadingBarObject
+from .data_pipeline import DataPipelineProcess
 
 # PyMMDT Library Imports
 import pymmdt as mm
@@ -86,16 +91,16 @@ class Manager(QObject):
         self.thread_exit.clear()
 
         # Create an empty Collector that later is filled with data streams
-        self.collector = mm.Collector(empty=True)
-        self.load_data_queue = queue.Queue(maxsize=int(30*1e9/time_window.value))
-        self.loading_thread = self.loading_content()
+        # self.collector = mm.Collector(empty=True)
+        # self.load_data_queue = queue.Queue(maxsize=int(30*1e9/time_window.value))
+        # self.loading_thread = self.loading_content()
 
         # Thread for organizing the content to be updated to the frontend
-        self.sort_content_thread = self.sort_content()
-        self.sort_content_data_queue = queue.Queue(maxsize=int(60*30*1e9/time_window.value))
+        # self.sort_content_thread = self.sort_content()
+        # self.sort_content_data_queue = queue.Queue(maxsize=int(60*30*1e9/time_window.value))
 
         # Thread for uploading the content to the frontend
-        self.update_content_thread = self.update_content()
+        # self.update_content_thread = self.update_content()
 
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
@@ -114,9 +119,9 @@ class Manager(QObject):
         self.meta_check_timer.start()
         
         # Start threads
-        self.loading_thread.start()
-        self.sort_content_thread.start()
-        self.update_content_thread.start()
+        # self.loading_thread.start()
+        # self.sort_content_thread.start()
+        # self.update_content_thread.start()
 
     @pyqtProperty(str, notify=pageChanged)
     def page(self):
@@ -235,59 +240,6 @@ class Manager(QObject):
 
         return entries
 
-    def load_data_streams(self, unique_users:List, users_meta:Dict) -> Dict[str, Sequence[mm.DataStream]]:
-
-        # Loading data streams # TODO!
-        users_data_streams = collections.defaultdict(list)
-        for user_name, user_meta in tqdm.tqdm(zip(unique_users, users_meta), disable=not self.verbose):
-            for index, row in user_meta.iterrows():
-                # Extract useful meta
-                entry_name = row['entry_name']
-                dtype = row['dtype']
-
-                # Construct the directory the file/directory is found
-                if row['is_subsession']:
-                    file_dir = self.logdir / row['user']
-                else:
-                    file_dir = self.logdir
-                
-                # Load the data
-                if dtype == 'video':
-                    ds = mmv.VideoDataStream(
-                        name=entry_name,
-                        start_time=row['start_time'],
-                        video_path=file_dir/f"{entry_name}.avi"
-                    )
-                elif dtype == 'image':
-
-                    # Load the meta CSV
-                    df = pd.read_csv(file_dir/entry_name/'timestamps.csv')
-
-                    # Load all the images into a data frame
-                    img_filepaths = []
-                    for index, row in df.iterrows():
-                        img_fp = file_dir / entry_name / f"{row['idx']}.jpg"
-                        img_filepaths.append(img_fp)
-                        # imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
-                    df['img_filepaths'] = img_filepaths
-                    
-                    # Create ds
-                    ds = mmt.TabularDataStream(
-                        name=entry_name,
-                        data=df,
-                        time_column='_time_'
-                    )
-                elif dtype == 'tabular':
-                    raise NotImplementedError("Tabular visualization is still not implemented.")
-                else:
-                    raise RuntimeError(f"{dtype} is not a valid option.")
-
-                # Store the data in Dict
-                users_data_streams[user_name].append(ds)
-
-        # Return the Dict[str, List[DataStream]]
-        return users_data_streams
-
     def meta_update(self):
         
         # In the update function, we need to check the data stored in 
@@ -322,11 +274,10 @@ class Manager(QObject):
                     users_meta[i] = users_meta[i].drop(columns=['index'])
 
                 # Load the data from the entries into DataStreams
-                users_data_streams = self.load_data_streams(unique_users, users_meta)
+                # users_data_streams = self.load_data_streams(unique_users, users_meta)
 
-                # Adding data to the Collector
-                self.collector.set_data_streams(users_data_streams, self.time_window)
-                self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
+                # Setting up the data pipeline
+                self.init_data_pipeline(unique_users, users_meta)
                 
                 # Update the flag tracking if data is loaded
                 self._data_is_loaded = True
@@ -346,172 +297,201 @@ class Manager(QObject):
         # Then overwrite the records
         self.logdir_records = new_logdir_records
 
-    @mm.tools.threaded
-    def loading_content(self):
+    def init_data_pipeline(self, unique_users, users_meta):
+                
+        # Adding data to the Collector
+        # mpm.BaseManager.register('Collector', mm.Collector)
+        # manager = mpm.BaseManager()
+        # manager.start()
+        # self.collector = manager.Collector(empty=True)
+        # # self.collector.set_data_streams(users_data_streams, self.time_window)
+        self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
+       
+        self.loading_queue = mp.Queue(maxsize=10)
+        # self.loading_process = mp.Process(target=self.loading_content, args=(self.loading_queue, self.windows, self.collector,))
+        # self.loading_process = mp.Process(
+        #     target=self.loading_content, 
+        #     args=(self.loading_queue, self.windows, self.time_window)
+        # )
+        self.loading_process = DataPipelineProcess(
+            logdir=self.logdir,
+            queue=self.loading_queue,
+            windows=self.windows,
+            time_window=self.time_window,
+            unique_users=unique_users,
+            users_meta=users_meta,
+            verbose=True
+        )
+        self.loading_process.start()
+        # data = self.loading_queue.get()
+        # print(data.keys())
 
-        # Setting the initial value of the loading window
-        self.loading_window = self.current_window
+    # @mm.tools.threaded
+    # def loading_content(self):
 
-        # Get the data continously
-        while not self.thread_exit.is_set():
+    #     # Setting the initial value of the loading window
+    #     self.loading_window = self.current_window
 
-            # Only load windows if there are more to load
-            if self.loading_window < len(self.windows):
+    #     # Get the data continously
+    #     while not self.thread_exit.is_set():
 
-                # Get the window information of the window to load to queue
-                window = self.windows[int(self.loading_window)]
+    #         # Only load windows if there are more to load
+    #         if self.loading_window < len(self.windows):
 
-                # Extract the start and end time from window
-                start, end = window.start, window.end 
+    #             # Get the window information of the window to load to queue
+    #             window = self.windows[int(self.loading_window)]
 
-                # Get the data
-                data = self.collector.get(start, end)
-                timetrack = self.collector.get_timetrack(start, end)
+    #             # Extract the start and end time from window
+    #             start, end = window.start, window.end 
 
-                data_chunk = {
-                    # 'start': start,
-                    # 'end': end,
-                    'data': data,
-                    'timetrack': timetrack
-                }
+    #             # Get the data
+    #             data = self.collector.get(start, end)
+    #             timetrack = self.collector.get_timetrack(start, end)
 
-                # Put the data into the queue
-                while not self.thread_exit.is_set():
-                    try:
-                        self.load_data_queue.put(data_chunk.copy(), timeout=1)
-                        self.loaded_windows.append(self.loading_window)
-                        break
-                    except queue.Full:
-                        time.sleep(0.1)
+    #             data_chunk = {
+    #                 # 'start': start,
+    #                 # 'end': end,
+    #                 'data': data,
+    #                 'timetrack': timetrack
+    #             }
 
-                # Updating the loading bar
-                self._loading_bar.state = (end / self.end_time)
+    #             # Put the data into the queue
+    #             while not self.thread_exit.is_set():
+    #                 try:
+    #                     self.load_data_queue.put(data_chunk.copy(), timeout=1)
+    #                     self.loaded_windows.append(self.loading_window)
+    #                     break
+    #                 except queue.Full:
+    #                     time.sleep(0.1)
 
-                # Update the loading window pointer
-                self.loading_window += 1
+    #             # Updating the loading bar
+    #             self._loading_bar.state = (end / self.end_time)
 
-            else:
-                time.sleep(0.5)
+    #             # Update the loading window pointer
+    #             self.loading_window += 1
 
-    @mm.tools.threaded
-    def sort_content(self):
+    #         else:
+    #             time.sleep(0.5)
+
+    # @mm.tools.threaded
+    # def sort_content(self):
         
-        # Continously update the content
-        while not self.thread_exit.is_set():
+    #     # Continously update the content
+    #     while not self.thread_exit.is_set():
 
-            # If not playing, just avoid updating
-            if self._is_play == False:
-                time.sleep(0.1)
-                continue
+    #         # If not playing, just avoid updating
+    #         if self._is_play == False:
+    #             time.sleep(0.1)
+    #             continue
 
-            # Get the next window of information if done processing 
-            # the previous window data
-            try:
-                data_chunk = self.load_data_queue.get(timeout=1)
-            except queue.Empty:
-                time.sleep(0.1)
-                continue
+    #         # Get the next window of information if done processing 
+    #         # the previous window data
+    #         try:
+    #             data_chunk = self.load_data_queue.get(timeout=1)
+    #         except queue.Empty:
+    #             time.sleep(0.1)
+    #             continue
             
-            # Decomposing the window item
-            current_window_idx = self.loaded_windows.pop()
-            current_window_data = data_chunk['data']
-            current_window_timetrack = data_chunk['timetrack']
-            # current_window_start = data_chunk['start']
-            # current_window_end = data_chunk['end']
+    #         # Decomposing the window item
+    #         current_window_idx = self.loaded_windows.pop()
+    #         current_window_data = data_chunk['data']
+    #         current_window_timetrack = data_chunk['timetrack']
+    #         # current_window_start = data_chunk['start']
+    #         # current_window_end = data_chunk['end']
             
-            # If 'END' message, continue
-            if isinstance(current_window_data, str):
-                continue
+    #         # If 'END' message, continue
+    #         if isinstance(current_window_data, str):
+    #             continue
 
-            # Adding a column tracking which rows have been used
-            for user, entries in current_window_data.items():
-                for entry_name, entry_data in entries.items():
-                    used = [False for x in range(len(entry_data))]
-                    current_window_data[user][entry_name].loc[:,'used'] = used
+    #         # Adding a column tracking which rows have been used
+    #         for user, entries in current_window_data.items():
+    #             for entry_name, entry_data in entries.items():
+    #                 used = [False for x in range(len(entry_data))]
+    #                 current_window_data[user][entry_name].loc[:,'used'] = used
            
-            for index, row in current_window_timetrack.iterrows():
+    #         for index, row in current_window_timetrack.iterrows():
 
-                # Extract row and entry information
-                user = row.group
-                entry_name = row.ds_type
-                entry_time = row.time
-                entry_data = current_window_data[user][entry_name]
+    #             # Extract row and entry information
+    #             user = row.group
+    #             entry_name = row.ds_type
+    #             entry_time = row.time
+    #             entry_data = current_window_data[user][entry_name]
 
-                # if not 'video' in entry_name: # DEBUGGING!
-                #     continue
-                # if 'video' in entry_name:
-                #     continue
+    #             # if not 'video' in entry_name: # DEBUGGING!
+    #             #     continue
+    #             # if 'video' in entry_name:
+    #             #     continue
 
-                # If the entry is not empty
-                if not entry_data.empty:
+    #             # If the entry is not empty
+    #             if not entry_data.empty:
 
-                    # Get the entries that have not been used
-                    new_samples_loc = (entry_data['used'] == False)
+    #                 # Get the entries that have not been used
+    #                 new_samples_loc = (entry_data['used'] == False)
 
-                    # If there are remaining entries, use them!
-                    if new_samples_loc.any():
+    #                 # If there are remaining entries, use them!
+    #                 if new_samples_loc.any():
 
-                        # Get the entries idx
-                        lastest_content_idx = np.where(new_samples_loc)[0][0] 
-                        lastest_content = entry_data.iloc[lastest_content_idx]
+    #                     # Get the entries idx
+    #                     lastest_content_idx = np.where(new_samples_loc)[0][0] 
+    #                     lastest_content = entry_data.iloc[lastest_content_idx]
 
-                        # Creating the data chunk
-                        data_chunk = {
-                            'index': index,
-                            'user': user,
-                            'entry_time': entry_time,
-                            'entry_name': entry_name,
-                            'content': lastest_content
-                        }
+    #                     # Creating the data chunk
+    #                     data_chunk = {
+    #                         'index': index,
+    #                         'user': user,
+    #                         'entry_time': entry_time,
+    #                         'entry_name': entry_name,
+    #                         'content': lastest_content
+    #                     }
 
-                        # But the entry into the queue
-                        while not self.thread_exit.is_set():
-                            try:
-                                self.sort_content_data_queue.put(data_chunk.copy(), timeout=1)
-                                entry_data.at[lastest_content_idx, 'used'] = True
-                                break
-                            except queue.Full:
-                                time.sleep(0.1)
+    #                     # But the entry into the queue
+    #                     while not self.thread_exit.is_set():
+    #                         try:
+    #                             self.sort_content_data_queue.put(data_chunk.copy(), timeout=1)
+    #                             entry_data.at[lastest_content_idx, 'used'] = True
+    #                             break
+    #                         except queue.Full:
+    #                             time.sleep(0.1)
 
-            print(f"LOOP")
+    #         print(f"LOOP")
 
-    @mm.tools.threaded
-    def update_content(self):
+    # @mm.tools.threaded
+    # def update_content(self):
 
-        previous_time = None
+    #     previous_time = None
         
-        # Continously update the content
-        while not self.thread_exit.is_set():
+    #     # Continously update the content
+    #     while not self.thread_exit.is_set():
 
-            # If not playing, just avoid updating
-            if self._is_play == False:
-                time.sleep(0.1)
-                continue
+    #         # If not playing, just avoid updating
+    #         if self._is_play == False:
+    #             time.sleep(0.1)
+    #             continue
 
-            # Get the next entry information!
-            try:
-                data_chunk = self.sort_content_data_queue.get(timeout=1)
-            except queue.Empty:
-                time.sleep(0.1)
-                continue
+    #         # Get the next entry information!
+    #         try:
+    #             data_chunk = self.sort_content_data_queue.get(timeout=1)
+    #         except queue.Empty:
+    #             time.sleep(0.1)
+    #             continue
 
-            if previous_time:
-                diff = (data_chunk['entry_time'] - previous_time)
-                time.sleep(0.8*diff.value/1e9)
-                previous_time = data_chunk['entry_time']
-            else:
-                previous_time = data_chunk['entry_time']
+    #         if previous_time:
+    #             diff = (data_chunk['entry_time'] - previous_time)
+    #             time.sleep(0.8*diff.value/1e9)
+    #             previous_time = data_chunk['entry_time']
+    #         else:
+    #             previous_time = data_chunk['entry_time']
 
-            # Updating sliding bar
-            self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
+    #         # Updating sliding bar
+    #         self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
 
-            # Update the content
-            self._dashboard_model.update_content(
-                data_chunk['index'],
-                data_chunk['user'],
-                data_chunk['entry_name'],
-                data_chunk['content']
-            )
+    #         # Update the content
+    #         self._dashboard_model.update_content(
+    #             data_chunk['index'],
+    #             data_chunk['user'],
+    #             data_chunk['entry_name'],
+    #             data_chunk['content']
+    #         )
 
     @pyqtSlot()
     def exit(self):
@@ -523,11 +503,12 @@ class Manager(QObject):
         print("Stopping threads!")
 
         # Then wait for threads
-        self.loading_thread.join()
-        print("Loading thread join")
-        self.sort_content_thread.join()
-        print("Sort thread join")
-        self.update_content_thread.join()
-        print("Content thread join")
+        # self.loading_thread.join()
+        self.loading_process.join()
+        print("Loading process join")
+        # self.sort_content_thread.join()
+        # print("Sort thread join")
+        # self.update_content_thread.join()
+        # print("Content thread join")
 
         print("Finished closing")

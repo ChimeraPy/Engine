@@ -79,6 +79,10 @@ class Collector:
             if type(end_at) != type(None) and isinstance(end_at, pd.Timedelta):
                 self.set_end_time(end_at)
 
+    @classmethod
+    def empty(cls):
+        return cls(empty=True)
+
     def set_data_streams(
             self, 
             data_streams_groups:Optional[Dict[str, Sequence[DataStream]]]={},
