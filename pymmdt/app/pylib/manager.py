@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 # import apscheduler.schedulers.qt
-import apscheduler.schedulers.background
+# import apscheduler.schedulers.background
 
 # Setting pandas to stop annoying warnings
 pd.options.mode.chained_assignment = None
@@ -34,7 +34,7 @@ from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
 # from .pausable_timer import QPausableTimer
 from .loading_bar_object import LoadingBarObject
-from .data_pipeline import DataPipelineProcess
+from .data_pipeline import DataLoadingProcess, DataSortingProcess
 
 # PyMMDT Library Imports
 import pymmdt as mm
@@ -90,18 +90,6 @@ class Manager(QObject):
         self.thread_exit = threading.Event()
         self.thread_exit.clear()
 
-        # Create an empty Collector that later is filled with data streams
-        # self.collector = mm.Collector(empty=True)
-        # self.load_data_queue = queue.Queue(maxsize=int(30*1e9/time_window.value))
-        # self.loading_thread = self.loading_content()
-
-        # Thread for organizing the content to be updated to the frontend
-        # self.sort_content_thread = self.sort_content()
-        # self.sort_content_data_queue = queue.Queue(maxsize=int(60*30*1e9/time_window.value))
-
-        # Thread for uploading the content to the frontend
-        # self.update_content_thread = self.update_content()
-
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
         self._is_play = False
@@ -117,11 +105,6 @@ class Manager(QObject):
         self.meta_check_timer.setInterval(self.meta_check_step) 
         self.meta_check_timer.timeout.connect(self.meta_update)
         self.meta_check_timer.start()
-        
-        # Start threads
-        # self.loading_thread.start()
-        # self.sort_content_thread.start()
-        # self.update_content_thread.start()
 
     @pyqtProperty(str, notify=pageChanged)
     def page(self):
@@ -172,14 +155,6 @@ class Manager(QObject):
                 self.current_window = -1
                 self.app_update()
 
-            # Then, restart the app global timer
-            # self.global_timer.resume()
-            
-        # Stopping 
-        # else:
-        #     # First, pause the app global timer
-        #     self.global_timer.pause()
-        
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
 
@@ -296,202 +271,168 @@ class Manager(QObject):
             
         # Then overwrite the records
         self.logdir_records = new_logdir_records
+    
+    @mm.tools.threaded
+    def check_messages(self):
+
+        # Set the flag to check if new message
+        loading_message = None
+        loading_message_new = False
+        sorting_message = None
+        sorting_message_new = False
+        
+        # Constantly check for messages
+        while not self.thread_exit.is_set():
+            
+            # Prevent blocking, as we need to check if the thread_exist
+            # is set.
+            while not self.thread_exit.is_set():
+
+                # Checking the loading message queue
+                try:
+                    loading_message = self.message_from_loading_queue.get(timeout=0.1)
+                    loading_message_new = True
+                except queue.Empty:
+                    loading_message_new = False
+
+                # Ckecking the sorting message queue
+                try:
+                    sorting_message = self.message_from_sorting_queue.get(timeout=0.1)
+                    sorting_message_new = True
+                except queue.Empty:
+                    sorting_message_new = False
+
+                # If new message, process it right now
+                if loading_message_new or sorting_message_new:
+                    break
+
+                # else, placing a sleep timer
+                time.sleep(0.1)
+              
+            # Processing new loading messages
+            if loading_message_new:
+
+                # Handle the incoming message
+                print(f"NEW LOADING MESSAGE - {loading_message}")
+
+                # Handling UPDATE events
+                if loading_message['header'] == 'UPDATE':
+                    
+                    # Handling counter changes
+                    if loading_message['body']['type'] == 'COUNTER':
+                        new_state = loading_message['body']['content']['loading_window'] / len(self.windows)
+                        self.loading_bar.state = new_state
+
+                # Handling META events
+                elif loading_message['header'] == 'META':
+                    ...
+
+                    # Handling END type events
+                    if loading_message['body']['type'] == 'END':
+                        ...
+
+            # Processing new sorting messages
+            if sorting_message_new:
+
+                # Handle the incoming message
+                print(f"NEW SORTING MESSAGE - {sorting_message}")
+
+    @mm.tools.threaded
+    def update_content(self):
+
+        # previous_time = None
+        
+        # Continously update the content
+        while not self.thread_exit.is_set():
+
+            # If not playing, just avoid updating
+            if self._is_play == False:
+                time.sleep(0.1)
+                continue
+
+            # Get the next entry information!
+            try:
+                data_chunk = self.sorted_data_queue.get(timeout=1)
+            except queue.Empty:
+                time.sleep(0.1)
+                continue
+
+            # if previous_time:
+            #     diff = (data_chunk['entry_time'] - previous_time)
+            #     time.sleep(0.8*diff.value/1e9)
+            #     previous_time = data_chunk['entry_time']
+            # else:
+            #     previous_time = data_chunk['entry_time']
+
+            # Updating sliding bar
+            self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
+
+            # Update the content
+            self._dashboard_model.update_content(
+                data_chunk['index'],
+                data_chunk['user'],
+                data_chunk['entry_name'],
+                data_chunk['content']
+            )
 
     def init_data_pipeline(self, unique_users, users_meta):
                 
-        # Adding data to the Collector
-        # mpm.BaseManager.register('Collector', mm.Collector)
-        # manager = mpm.BaseManager()
-        # manager.start()
-        # self.collector = manager.Collector(empty=True)
-        # # self.collector.set_data_streams(users_data_streams, self.time_window)
+        # Get the necessary information to create the Collector 
         self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
-       
-        self.loading_queue = mp.Queue(maxsize=10)
-        # self.loading_process = mp.Process(target=self.loading_content, args=(self.loading_queue, self.windows, self.collector,))
-        # self.loading_process = mp.Process(
-        #     target=self.loading_content, 
-        #     args=(self.loading_queue, self.windows, self.time_window)
-        # )
-        self.loading_process = DataPipelineProcess(
+      
+        # Creating queues for the data
+        num_of_w_in_30_sec = int(30/(1e-9*self.time_window.value))
+        self.loading_data_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+        self.sorted_data_queue = mp.Queue(maxsize=num_of_w_in_30_sec*10)
+
+        # Creating queues for communication
+        self.message_to_loading_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+        self.message_from_loading_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+        self.message_to_sorting_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+        self.message_from_sorting_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+
+        # Storing all the queues
+        self.queues = [
+            self.loading_data_queue, self.sorted_data_queue,
+            self.message_to_loading_queue, self.message_from_loading_queue,
+            self.message_to_sorting_queue, self.message_from_sorting_queue,
+        ]
+
+        # Starting the Manager's messaging thread
+        self.check_messages_thread = self.check_messages()
+        self.check_messages_thread.start()
+
+        # Starting the content update thread
+        self.update_content_thread = self.update_content()
+        self.update_content_thread.start()
+
+        # Creating the loading process that uses the window loading 
+        # system to get the data.
+        self.loading_process = DataLoadingProcess(
             logdir=self.logdir,
-            queue=self.loading_queue,
+            loading_data_queue=self.loading_data_queue,
+            message_to_queue=self.message_to_loading_queue,
+            message_from_queue=self.message_from_loading_queue,
             windows=self.windows,
             time_window=self.time_window,
             unique_users=unique_users,
             users_meta=users_meta,
             verbose=True
         )
+        
+        # Creating a subprocess that takes the windowed data and loads
+        # it to a queue sorted in a time-chronological fashion.
+        self.sorting_process = DataSortingProcess(
+            loading_data_queue=self.loading_data_queue,
+            sorted_data_queue=self.sorted_data_queue,
+            message_to_queue=self.message_to_sorting_queue,
+            message_from_queue=self.message_from_sorting_queue,
+            verbose=True
+        )
+
+        # Start the processes
         self.loading_process.start()
-        # data = self.loading_queue.get()
-        # print(data.keys())
-
-    # @mm.tools.threaded
-    # def loading_content(self):
-
-    #     # Setting the initial value of the loading window
-    #     self.loading_window = self.current_window
-
-    #     # Get the data continously
-    #     while not self.thread_exit.is_set():
-
-    #         # Only load windows if there are more to load
-    #         if self.loading_window < len(self.windows):
-
-    #             # Get the window information of the window to load to queue
-    #             window = self.windows[int(self.loading_window)]
-
-    #             # Extract the start and end time from window
-    #             start, end = window.start, window.end 
-
-    #             # Get the data
-    #             data = self.collector.get(start, end)
-    #             timetrack = self.collector.get_timetrack(start, end)
-
-    #             data_chunk = {
-    #                 # 'start': start,
-    #                 # 'end': end,
-    #                 'data': data,
-    #                 'timetrack': timetrack
-    #             }
-
-    #             # Put the data into the queue
-    #             while not self.thread_exit.is_set():
-    #                 try:
-    #                     self.load_data_queue.put(data_chunk.copy(), timeout=1)
-    #                     self.loaded_windows.append(self.loading_window)
-    #                     break
-    #                 except queue.Full:
-    #                     time.sleep(0.1)
-
-    #             # Updating the loading bar
-    #             self._loading_bar.state = (end / self.end_time)
-
-    #             # Update the loading window pointer
-    #             self.loading_window += 1
-
-    #         else:
-    #             time.sleep(0.5)
-
-    # @mm.tools.threaded
-    # def sort_content(self):
-        
-    #     # Continously update the content
-    #     while not self.thread_exit.is_set():
-
-    #         # If not playing, just avoid updating
-    #         if self._is_play == False:
-    #             time.sleep(0.1)
-    #             continue
-
-    #         # Get the next window of information if done processing 
-    #         # the previous window data
-    #         try:
-    #             data_chunk = self.load_data_queue.get(timeout=1)
-    #         except queue.Empty:
-    #             time.sleep(0.1)
-    #             continue
-            
-    #         # Decomposing the window item
-    #         current_window_idx = self.loaded_windows.pop()
-    #         current_window_data = data_chunk['data']
-    #         current_window_timetrack = data_chunk['timetrack']
-    #         # current_window_start = data_chunk['start']
-    #         # current_window_end = data_chunk['end']
-            
-    #         # If 'END' message, continue
-    #         if isinstance(current_window_data, str):
-    #             continue
-
-    #         # Adding a column tracking which rows have been used
-    #         for user, entries in current_window_data.items():
-    #             for entry_name, entry_data in entries.items():
-    #                 used = [False for x in range(len(entry_data))]
-    #                 current_window_data[user][entry_name].loc[:,'used'] = used
-           
-    #         for index, row in current_window_timetrack.iterrows():
-
-    #             # Extract row and entry information
-    #             user = row.group
-    #             entry_name = row.ds_type
-    #             entry_time = row.time
-    #             entry_data = current_window_data[user][entry_name]
-
-    #             # if not 'video' in entry_name: # DEBUGGING!
-    #             #     continue
-    #             # if 'video' in entry_name:
-    #             #     continue
-
-    #             # If the entry is not empty
-    #             if not entry_data.empty:
-
-    #                 # Get the entries that have not been used
-    #                 new_samples_loc = (entry_data['used'] == False)
-
-    #                 # If there are remaining entries, use them!
-    #                 if new_samples_loc.any():
-
-    #                     # Get the entries idx
-    #                     lastest_content_idx = np.where(new_samples_loc)[0][0] 
-    #                     lastest_content = entry_data.iloc[lastest_content_idx]
-
-    #                     # Creating the data chunk
-    #                     data_chunk = {
-    #                         'index': index,
-    #                         'user': user,
-    #                         'entry_time': entry_time,
-    #                         'entry_name': entry_name,
-    #                         'content': lastest_content
-    #                     }
-
-    #                     # But the entry into the queue
-    #                     while not self.thread_exit.is_set():
-    #                         try:
-    #                             self.sort_content_data_queue.put(data_chunk.copy(), timeout=1)
-    #                             entry_data.at[lastest_content_idx, 'used'] = True
-    #                             break
-    #                         except queue.Full:
-    #                             time.sleep(0.1)
-
-    #         print(f"LOOP")
-
-    # @mm.tools.threaded
-    # def update_content(self):
-
-    #     previous_time = None
-        
-    #     # Continously update the content
-    #     while not self.thread_exit.is_set():
-
-    #         # If not playing, just avoid updating
-    #         if self._is_play == False:
-    #             time.sleep(0.1)
-    #             continue
-
-    #         # Get the next entry information!
-    #         try:
-    #             data_chunk = self.sort_content_data_queue.get(timeout=1)
-    #         except queue.Empty:
-    #             time.sleep(0.1)
-    #             continue
-
-    #         if previous_time:
-    #             diff = (data_chunk['entry_time'] - previous_time)
-    #             time.sleep(0.8*diff.value/1e9)
-    #             previous_time = data_chunk['entry_time']
-    #         else:
-    #             previous_time = data_chunk['entry_time']
-
-    #         # Updating sliding bar
-    #         self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
-
-    #         # Update the content
-    #         self._dashboard_model.update_content(
-    #             data_chunk['index'],
-    #             data_chunk['user'],
-    #             data_chunk['entry_name'],
-    #             data_chunk['content']
-    #         )
+        self.sorting_process.start()
 
     @pyqtSlot()
     def exit(self):
@@ -501,13 +442,56 @@ class Manager(QObject):
         # Inform all the threads to end
         self.thread_exit.set()
         print("Stopping threads!")
+        self.check_messages_thread.join()
+        print("Checking message thread join")
 
-        # Then wait for threads
-        # self.loading_thread.join()
+        # Informing all process to end
+        end_message = {
+            'header': 'META',
+            'body': {
+                'type': 'END',
+                'content': {},
+            }
+        }
+        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+            message_to_queue.put(end_message)
+
+        # Wait for process confirmation to end
+        # for message_from_queue in [self.message_from_sorting_queue, self.message_from_loading_queue]:
+        #     while True:
+        #         message = message_from_queue.get()
+
+        #         # Check if end message as well
+        #         if message == end_message:
+        #             break
+
+        # Clearing Queues to permit the processes to shutdown
+        for queue in self.queues:
+            print(queue.qsize())
+            mm.tools.clear_queue(queue)
+
+        # Then wait for threads and process
+        while self.loading_data_queue.qsize():
+            mm.tools.clear_queue(self.loading_data_queue)
+            time.sleep(0.2)
+
         self.loading_process.join()
         print("Loading process join")
-        # self.sort_content_thread.join()
-        # print("Sort thread join")
+
+        time.sleep(0.3)
+        
+        # Clearing Queues to permit the processes to shutdown
+        for queue in self.queues:
+            mm.tools.clear_queue(queue)
+
+        while self.sorted_data_queue.qsize():
+            print(self.sorted_data_queue.qsize())
+            mm.tools.clear_queue(self.sorted_data_queue)
+            time.sleep(0.2)
+
+        self.sorting_process.join()
+        print("Sorting process join")
+
         # self.update_content_thread.join()
         # print("Content thread join")
 

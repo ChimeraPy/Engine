@@ -1,7 +1,7 @@
 # Built-in Imports
 from typing import List
 import math
-import multiprocessing
+import multiprocessing as mp
 import threading
 import collections
 
@@ -29,6 +29,10 @@ def multiprocessed(fn):
         process.deamon = True
         return process
     return wrapper
+
+def clear_queue(queue: mp.Queue):
+    while queue.qsize():
+        queue.get()
 
 def get_windows(
         start_time:pd.Timedelta, 
