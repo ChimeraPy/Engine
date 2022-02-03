@@ -6,6 +6,7 @@ import queue
 import time
 
 # Third-party imports
+from PIL import Image
 import numpy as np
 import tqdm
 import pandas as pd
@@ -201,7 +202,6 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        print("SENDING MESSAGE")
         self.message_from_queue.put(collector_construction_message)
 
     def message_loading_window_counter(self):
@@ -218,7 +218,6 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        print("SENDING MESSAGE")
         self.message_from_queue.put(loading_window_message)
 
     def message_finished_loading(self):
@@ -233,8 +232,10 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Sending the message
-        print("SENDING MESSAGE")
         self.message_from_queue.put(finished_loading_message)
+
+        # Also tell the sorting process that the data is complete
+        self.loading_data_queue.put('END')
 
     def run(self):
 
@@ -295,7 +296,7 @@ class DataLoadingProcess(CommunicatingProcess):
             elif self.loading_window == len(self.windows):
 
                 # Sending message about finishing loading images
-                self.message_finished_loading() 
+                self.message_finished_loading()
 
                 # Setting the loading window to another value
                 self.loading_window = -1
@@ -310,6 +311,7 @@ class DataSortingProcess(CommunicatingProcess):
             sorted_data_queue,
             message_to_queue,
             message_from_queue,
+            entries,
             verbose=False
         ):
         
@@ -322,6 +324,42 @@ class DataSortingProcess(CommunicatingProcess):
         self.loading_data_queue = loading_data_queue
         self.sorted_data_queue = sorted_data_queue
         self.verbose = verbose
+
+        # Keeping track of the entries and their meta information
+        self.entries = entries.set_index(['user', 'entry_name'])
+        # self.entries_dict = self.entries.to_dict()
+        # print(self.entries_dict)
+        # print(self.entries)
+
+    def message_loading_sorted(self, entry_time):
+
+        # Create the message
+        loading_window_message = {
+            'header': 'UPDATE',
+            'body': {
+                'type': 'COUNTER',
+                'content': {
+                    'loaded_time': entry_time
+                }
+            }
+        }
+
+        # Send the message
+        self.message_from_queue.put(loading_window_message)
+
+    def message_finished_sorting(self):
+
+        # Create the message
+        finished_sorting_message = {
+            'header': 'UPDATE',
+            'body': {
+                'type': 'END',
+                'content': {}
+            }
+        }
+
+        # Send the message
+        self.message_from_queue.put(finished_sorting_message)
 
     def run(self):
 
@@ -339,16 +377,17 @@ class DataSortingProcess(CommunicatingProcess):
                 time.sleep(0.1)
                 continue
             
+            # If 'END' message, continue
+            if isinstance(data_chunk, str):
+                self.message_finished_sorting()
+                continue
+            
             # Decomposing the window item
             current_window_idx = data_chunk['window_idx']
             current_window_data = data_chunk['data']
             current_window_timetrack = data_chunk['timetrack']
             # current_window_start = data_chunk['start']
-            # current_window_end = data_chunk['end']
-            
-            # If 'END' message, continue
-            if isinstance(current_window_data, str):
-                continue
+            # current_window_end = data_chunk['end'] 
 
             # Adding a column tracking which rows have been used
             for user, entries in current_window_data.items():
@@ -367,11 +406,7 @@ class DataSortingProcess(CommunicatingProcess):
                 entry_name = row.ds_type
                 entry_time = row.time
                 entry_data = current_window_data[user][entry_name]
-
-                # if not 'video' in entry_name: # DEBUGGING!
-                #     continue
-                # if 'video' in entry_name:
-                #     continue
+                entry_dtype = self.entries.loc[user, entry_name]['dtype']
 
                 # If the entry is not empty
                 if not entry_data.empty:
@@ -383,8 +418,13 @@ class DataSortingProcess(CommunicatingProcess):
                     if new_samples_loc.any():
 
                         # Get the entries idx
-                        lastest_content_idx = np.where(new_samples_loc)[0][0] 
-                        lastest_content = entry_data.iloc[lastest_content_idx]
+                        latest_content_idx = np.where(new_samples_loc)[0][0] 
+                        latest_content = entry_data.iloc[latest_content_idx]
+
+                        # If image, load the image and then place it in
+                        # the queue.
+                        if entry_dtype == 'image':
+                            latest_content['images'] = mm.tools.to_numpy(Image.open(latest_content['img_filepaths']))
 
                         # Creating the data chunk
                         data_chunk = {
@@ -392,17 +432,25 @@ class DataSortingProcess(CommunicatingProcess):
                             'user': user,
                             'entry_time': entry_time,
                             'entry_name': entry_name,
-                            'content': lastest_content
+                            'content': latest_content
                         }
 
                         # But the entry into the queue
                         while not self.thread_exit.is_set():
                             try:
+                                # Putting the data
                                 self.sorted_data_queue.put(data_chunk.copy(), timeout=1)
-                                entry_data.at[lastest_content_idx, 'used'] = True
+
                                 break
                             except queue.Full:
                                 time.sleep(0.1)
+                                
+                        # If successful, then mark it
+                        entry_data.at[latest_content_idx, 'used'] = True
+
+                        # Only update sorting bar entry other 10 samples
+                        if index % 50 == 0:
+                            self.message_loading_sorted(entry_time)
 
         # Closing the process
         self.close()

@@ -143,6 +143,14 @@ Window {
                 visible: Manager.data_is_loaded
                 color: "purple"
             }
+            
+            Rectangle {
+                x: 30
+                width: SortingBar.state * (timeTrack.width - 30)
+                height: parent.height
+                visible: Manager.data_is_loaded
+                color: "red"
+            }
 
             Rectangle {
                 y: 0
@@ -152,6 +160,7 @@ Window {
                 visible: Manager.data_is_loaded
                 color: "orange"
             }
+
         }
 
         Rectangle {

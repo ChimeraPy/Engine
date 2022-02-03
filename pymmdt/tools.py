@@ -4,6 +4,7 @@ import math
 import multiprocessing as mp
 import threading
 import collections
+import queue
 
 # Third-Party Imports
 from PIL import Image
@@ -30,9 +31,18 @@ def multiprocessed(fn):
         return process
     return wrapper
 
-def clear_queue(queue: mp.Queue):
-    while queue.qsize():
-        queue.get()
+def clear_queue(input_queue: mp.Queue):
+    # print(input_queue.qsize())
+
+    while input_queue.qsize() != 0:
+        # print(input_queue.qsize())
+
+        # Make sure to account for possible automic modification of the
+        # queue
+        try:
+            input_queue.get(timeout=0.1)
+        except queue.Empty:
+            continue
 
 def get_windows(
         start_time:pd.Timedelta, 

@@ -80,16 +80,12 @@ class GroupModel(QAbstractListModel):
         specific_entry = (self._entries['user'] == user) & (self._entries['entry_name'] == entry_name)
         specific_entry_idx = np.where(specific_entry)[0][0]
 
-        # print(specific_entry_idx)
-
         # Ensure the content matches the required QObject requirements
         entry_type = self._entries['dtype'].iloc[specific_entry_idx]
 
-        # print(entry_type) 
-
         if entry_type == 'image':
-            image = mm.tools.to_numpy(Image.open(content['img_filepaths']))
-            # print('image: ', image, image.shape)
+            # image = mm.tools.to_numpy(Image.open(content['img_filepaths']))
+            image = content['images']
             qcontent = toQImage(image)
         elif entry_type == 'video':
             # print('frame: ', content['frames'], content['frames'].shape)
@@ -98,10 +94,8 @@ class GroupModel(QAbstractListModel):
             raise RuntimeError("Invalid dtype.")
 
         # Then update that one
-        print(f"Updating: {specific_entry_idx} - {user} - {entry_name} - with {qcontent}")
+        # print(f"Updating: {specific_entry_idx} - {user} - {entry_name} - with {qcontent}")
         self._entries.at[specific_entry_idx, 'content'] = qcontent
-
-        # print(self._entries)
 
         # Sending signal to update content
         index = self.index(specific_entry_idx, 0)

@@ -78,6 +78,7 @@ class Manager(QObject):
         self._timetrack_model = TimetrackModel()
         self._sliding_bar = SlidingBarObject()
         self._loading_bar = LoadingBarObject()
+        self._sorting_bar = LoadingBarObject()
         
         # Parameters for tracking progression
         self.current_window = 0
@@ -94,7 +95,7 @@ class Manager(QObject):
         self._data_is_loaded = False
         self._is_play = False
         self.end_time = pd.Timedelta(seconds=0)
-        self.current_time = pd.Timedelta(seconds=0)
+        # self.current_time = pd.Timedelta(seconds=0)
         self.session_complete = False
 
         # Apply the update to the meta data
@@ -126,6 +127,10 @@ class Manager(QObject):
     def loading_bar(self):
         return self._loading_bar
 
+    @pyqtProperty(LoadingBarObject)
+    def sorting_bar(self):
+        return self._sorting_bar
+
     @pyqtProperty(bool, notify=playPauseChanged)
     def is_play(self):
         return self._is_play
@@ -150,10 +155,16 @@ class Manager(QObject):
             # First, check if the session has been run complete, if so
             # restart it
             if self.session_complete:
-                self.session_complete = False
-                self.current_time = pd.Timedelta(seconds=0)
-                self.current_window = -1
-                self.app_update()
+
+                # Reset the variable
+                # self.session_complete = False
+
+                print("Restarted detected!")
+
+                # Communicate with the loader and and sorted to restart
+                # self.current_time = pd.Timedelta(seconds=0)
+                # self.current_window = -1
+                # self.app_update()
 
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
@@ -313,7 +324,7 @@ class Manager(QObject):
             if loading_message_new:
 
                 # Handle the incoming message
-                print(f"NEW LOADING MESSAGE - {loading_message}")
+                # print(f"NEW LOADING MESSAGE - {loading_message}")
 
                 # Handling UPDATE events
                 if loading_message['header'] == 'UPDATE':
@@ -325,7 +336,6 @@ class Manager(QObject):
 
                 # Handling META events
                 elif loading_message['header'] == 'META':
-                    ...
 
                     # Handling END type events
                     if loading_message['body']['type'] == 'END':
@@ -335,7 +345,19 @@ class Manager(QObject):
             if sorting_message_new:
 
                 # Handle the incoming message
-                print(f"NEW SORTING MESSAGE - {sorting_message}")
+                # print(f"NEW SORTING MESSAGE - {sorting_message}")
+
+                # Handling UPDATE events
+                if sorting_message['header'] == 'UPDATE':
+
+                    # Handling general counter updating
+                    if sorting_message['body']['type'] == 'COUNTER':
+                        new_state = sorting_message['body']['content']['loaded_time'] / self.end_time
+                        self.sorting_bar.state = new_state
+                    
+                    # Handling finishing sorting
+                    if sorting_message['body']['type'] == 'END':
+                        self.sorting_bar.state = 1
 
     @mm.tools.threaded
     def update_content(self):
@@ -357,13 +379,6 @@ class Manager(QObject):
                 time.sleep(0.1)
                 continue
 
-            # if previous_time:
-            #     diff = (data_chunk['entry_time'] - previous_time)
-            #     time.sleep(0.8*diff.value/1e9)
-            #     previous_time = data_chunk['entry_time']
-            # else:
-            #     previous_time = data_chunk['entry_time']
-
             # Updating sliding bar
             self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
 
@@ -375,21 +390,27 @@ class Manager(QObject):
                 data_chunk['content']
             )
 
+            # Check if the session is completed
+            if data_chunk['entry_time'] == self.end_time:
+                self.session_complete = True
+                self._is_play = False
+                self.playPauseChanged.emit()
+
     def init_data_pipeline(self, unique_users, users_meta):
                 
         # Get the necessary information to create the Collector 
         self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
       
         # Creating queues for the data
-        num_of_w_in_30_sec = int(30/(1e-9*self.time_window.value))
-        self.loading_data_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
-        self.sorted_data_queue = mp.Queue(maxsize=num_of_w_in_30_sec*10)
+        max_qsize_allowed= int(15/(1e-9*self.time_window.value))
+        self.loading_data_queue = mp.Queue(maxsize=max_qsize_allowed)
+        self.sorted_data_queue = mp.Queue(maxsize=max_qsize_allowed*50)
 
         # Creating queues for communication
-        self.message_to_loading_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
-        self.message_from_loading_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
-        self.message_to_sorting_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
-        self.message_from_sorting_queue = mp.Queue(maxsize=num_of_w_in_30_sec)
+        self.message_to_loading_queue = mp.Queue(maxsize=max_qsize_allowed)
+        self.message_from_loading_queue = mp.Queue(maxsize=max_qsize_allowed)
+        self.message_to_sorting_queue = mp.Queue(maxsize=max_qsize_allowed)
+        self.message_from_sorting_queue = mp.Queue(maxsize=max_qsize_allowed)
 
         # Storing all the queues
         self.queues = [
@@ -427,6 +448,7 @@ class Manager(QObject):
             sorted_data_queue=self.sorted_data_queue,
             message_to_queue=self.message_to_sorting_queue,
             message_from_queue=self.message_from_sorting_queue,
+            entries=self.entries,
             verbose=True
         )
 
@@ -439,60 +461,64 @@ class Manager(QObject):
 
         print("Closing")
 
-        # Inform all the threads to end
-        self.thread_exit.set()
-        print("Stopping threads!")
-        self.check_messages_thread.join()
-        print("Checking message thread join")
+        # Only execute the thread and process ending if data is loaded
+        if self._data_is_loaded:
 
-        # Informing all process to end
-        end_message = {
-            'header': 'META',
-            'body': {
-                'type': 'END',
-                'content': {},
+            # Inform all the threads to end
+            self.thread_exit.set()
+            print("Stopping threads!")
+
+            self.check_messages_thread.join()
+            print("Checking message thread join")
+            
+            self.update_content_thread.join()
+            print("Content thread join")
+
+            # Informing all process to end
+            end_message = {
+                'header': 'META',
+                'body': {
+                    'type': 'END',
+                    'content': {},
+                }
             }
-        }
-        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
-            message_to_queue.put(end_message)
+            for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+                message_to_queue.put(end_message)
 
-        # Wait for process confirmation to end
-        # for message_from_queue in [self.message_from_sorting_queue, self.message_from_loading_queue]:
-        #     while True:
-        #         message = message_from_queue.get()
+            # Wait for process confirmation to end
+            # for message_from_queue in [self.message_from_sorting_queue, self.message_from_loading_queue]:
+            #     while True:
+            #         message = message_from_queue.get()
 
-        #         # Check if end message as well
-        #         if message == end_message:
-        #             break
+            #         # Check if end message as well
+            #         if message == end_message:
+            #             break
 
-        # Clearing Queues to permit the processes to shutdown
-        for queue in self.queues:
-            print(queue.qsize())
-            mm.tools.clear_queue(queue)
+            # Clearing Queues to permit the processes to shutdown
+            for queue in self.queues:
+                # print(queue.qsize())
+                mm.tools.clear_queue(queue)
 
-        # Then wait for threads and process
-        while self.loading_data_queue.qsize():
-            mm.tools.clear_queue(self.loading_data_queue)
-            time.sleep(0.2)
+            # Then wait for threads and process
+            while self.loading_data_queue.qsize():
+                mm.tools.clear_queue(self.loading_data_queue)
+                time.sleep(0.2)
 
-        self.loading_process.join()
-        print("Loading process join")
+            self.loading_process.join()
+            print("Loading process join")
 
-        time.sleep(0.3)
-        
-        # Clearing Queues to permit the processes to shutdown
-        for queue in self.queues:
-            mm.tools.clear_queue(queue)
+            time.sleep(0.3)
+            
+            # Clearing Queues to permit the processes to shutdown
+            for queue in self.queues:
+                mm.tools.clear_queue(queue)
 
-        while self.sorted_data_queue.qsize():
-            print(self.sorted_data_queue.qsize())
-            mm.tools.clear_queue(self.sorted_data_queue)
-            time.sleep(0.2)
+            while self.sorted_data_queue.qsize():
+                print(self.sorted_data_queue.qsize())
+                mm.tools.clear_queue(self.sorted_data_queue)
+                time.sleep(0.2)
 
-        self.sorting_process.join()
-        print("Sorting process join")
-
-        # self.update_content_thread.join()
-        # print("Content thread join")
+            self.sorting_process.join()
+            print("Sorting process join")
 
         print("Finished closing")

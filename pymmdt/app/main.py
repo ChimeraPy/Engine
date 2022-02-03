@@ -29,6 +29,7 @@ def application_setup(args:Dict):
     engine.rootContext().setContextProperty("Manager", manager)
     engine.rootContext().setContextProperty("SlidingBar", manager.sliding_bar)
     engine.rootContext().setContextProperty("LoadingBar", manager.loading_bar)
+    engine.rootContext().setContextProperty("SortingBar", manager.sorting_bar)
 
     # Adding custom data
     engine.load(os.path.join(os.path.dirname(__file__), "qml/main.qml"))
