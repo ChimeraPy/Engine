@@ -73,7 +73,7 @@ class CommunicatingProcess(mp.Process):
             if new_message and message:
 
                 # Handle the incoming message
-                print(f"NEW MESSAGE - {message}")
+                # print(f"NEW MESSAGE - {message}")
 
                 # META --> General
                 if message['header'] == 'META':
@@ -394,7 +394,7 @@ class DataSortingProcess(CommunicatingProcess):
                 for entry_name, entry_data in entries.items():
                     used = [False for x in range(len(entry_data))]
                     current_window_data[user][entry_name].loc[:,'used'] = used
-           
+
             for index, row in current_window_timetrack.iterrows():
 
                 # Exit early if thread_exit is called!

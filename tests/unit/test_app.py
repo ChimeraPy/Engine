@@ -39,35 +39,35 @@ valid_complete_example_args = {
 
 # Test Classes
 
-class TestNullTestCase(unittest.TestCase):
+# class TestNullTestCase(unittest.TestCase):
 
-    def setUp(self):
-        # Setup the application
-        self.app, self.engine, self.manager = mma.application_setup(null_args)
+#     def setUp(self):
+#         # Setup the application
+#         self.app, self.engine, self.manager = mma.application_setup(null_args)
 
-    def test_correct_page(self):
-        assert self.manager._page == 'homePage'
+#     def test_correct_page(self):
+#         assert self.manager._page == 'homePage'
 
-class TestEmptyLogdirTestCase(unittest.TestCase):
+# class TestEmptyLogdirTestCase(unittest.TestCase):
 
-    def setUp(self):
-        # Setup the application
-        self.app, self.engine, self.manager = mma.application_setup(empty_dir_args)
+#     def setUp(self):
+#         # Setup the application
+#         self.app, self.engine, self.manager = mma.application_setup(empty_dir_args)
 
-    def test_correct_page(self):
-        assert self.manager._page == 'homePage'
+#     def test_correct_page(self):
+#         assert self.manager._page == 'homePage'
 
-class TestDashboardAppTestCase(unittest.TestCase):
+# class TestDashboardAppTestCase(unittest.TestCase):
     
-    def setUp(self):
-        # Setup the application
-        self.app, self.engine, self.manager = mma.application_setup(valid_complete_example_args)
+#     def setUp(self):
+#         # Setup the application
+#         self.app, self.engine, self.manager = mma.application_setup(valid_complete_example_args)
 
-    def test_correct_page(self):
-        assert self.manager._page == 'dashboardPage'
+#     def test_correct_page(self):
+#         assert self.manager._page == 'dashboardPage'
 
-    def test_correct_entries(self):
-        assert len(self.manager.entries) == 12
+#     def test_correct_entries(self):
+#         assert len(self.manager.entries) == 12
 
 if __name__ == '__main__':
     unittest.main()

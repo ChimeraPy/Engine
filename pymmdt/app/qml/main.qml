@@ -149,7 +149,7 @@ Window {
                 width: SortingBar.state * (timeTrack.width - 30)
                 height: parent.height
                 visible: Manager.data_is_loaded
-                color: "red"
+                color: "magenta"
             }
 
             Rectangle {

@@ -84,11 +84,8 @@ class GroupModel(QAbstractListModel):
         entry_type = self._entries['dtype'].iloc[specific_entry_idx]
 
         if entry_type == 'image':
-            # image = mm.tools.to_numpy(Image.open(content['img_filepaths']))
-            image = content['images']
-            qcontent = toQImage(image)
+            qcontent = toQImage(content['images'])
         elif entry_type == 'video':
-            # print('frame: ', content['frames'], content['frames'].shape)
             qcontent = toQImage(content['frames'])
         else:
             raise RuntimeError("Invalid dtype.")
