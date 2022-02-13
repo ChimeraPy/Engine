@@ -2,7 +2,7 @@
 __package__ = "pymmdt"
 
 # Built-in Imports
-from typing import Sequence, Optional, Dict, Any
+from typing import Sequence, Optional, Dict, Any, Union, List
 import curses
 import time
 import threading
@@ -49,7 +49,7 @@ class SingleRunner:
         # its own collector.
         if self.run_solo:
             # The session is required for run solo
-            assert isinstance(self.session, Session) and \
+            assert isinstance(self.session, Session) and isinstance(time_window_size, pd.Timedelta), \
                 "When ``run_solo`` is set, ``session`` and ``time_window_size`` parameters are required."
 
             self.collector = Collector(
@@ -121,7 +121,7 @@ class SingleRunner:
         # First, execute the ``start`` routine of the pipe
         self.pipe.start()
 
-    def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> Any:
+    def step(self, data_samples: Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]) -> Any:
         assert isinstance(self.session, Session)
 
         # Then process the sample
@@ -212,7 +212,7 @@ class SingleRunner:
         # Assertions
         assert isinstance(self.collector, Collector)
         assert isinstance(self.session, Session)
-
+        
         # Start 
         self.start()
 
@@ -221,20 +221,23 @@ class SingleRunner:
         self.processing_thread.start()
         for thread in self.logging_threads:
             thread.start()
-
+        
         # If verbose, create a simple TUI showing the current state of 
         # the whole process.
         if verbose:
             curses.wrapper(self.tui_main)
-
+        
         # Then wait until the threads is complete!
         self.processing_thread.join()
         self.loading_thread.join()
-        for thread in self.logging_threads:
-            thread.join()
 
         # End 
         self.end()
+
+        # Closing the logging threads after the end, just in case
+        # logging occurs in the end.
+        for thread in self.logging_threads:
+            thread.join()
 
 class GroupRunner(SingleRunner):
     """Multimodal Data Processing Group Director.
@@ -308,9 +311,9 @@ class GroupRunner(SingleRunner):
         # Execute its own start
         super().start()
 
-    def step(self, all_data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> None:
+    def step(self, all_data_samples: Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]) -> None:
 
-        # Get samples for all the runners and propgate them
+        # Get samples for all the runners and propagate them
         for runner in self.runners:
             # Get the output of the each runner
             output = runner.step({runner.name: all_data_samples[runner.name]})

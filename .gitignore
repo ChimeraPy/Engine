@@ -1,5 +1,6 @@
 # Ignore debugging configurations
 .vimspector.json
+/.vscode
 
 # Ignore the test data - sensitivie
 tests/data/

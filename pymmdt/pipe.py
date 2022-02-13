@@ -9,7 +9,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in imports
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union, List
 import copy
 
 # Third-party imports
@@ -96,7 +96,7 @@ class Pipe:
     def start(self) -> None:
         ...
 
-    def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> Optional[pd.DataFrame]:
+    def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> Optional[Union[pd.DataFrame, List[pd.DataFrame]]]:
         ...
 
     def end(self) -> None:

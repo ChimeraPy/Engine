@@ -64,7 +64,8 @@ class Collector:
         self.time_window_size = time_window_size
         
         # Keeping counter for the number of windows loaded
-        self.windows_loaded = 0
+        self.windows = []
+        self.windows_loaded = -1
         self.max_get_threads = max_get_threads
 
         # Only when data streams provided should we start handling timetrack
@@ -138,7 +139,7 @@ class Collector:
 
     @threaded
     def load_data_to_queue(self):
-       
+
         # Calculating the windows only after the thread has been created
         self.windows = get_windows(self.start_time, self.end_time, self.time_window_size)
 
@@ -146,7 +147,7 @@ class Collector:
         self.windows_loaded = 0
        
         # Continuously load data
-        for window in self.windows:
+        for win_idx, window in enumerate(self.windows):
 
             # Extract the start and end time from window
             start, end = window.start, window.end 

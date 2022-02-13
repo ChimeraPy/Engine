@@ -1,5 +1,6 @@
 # Built-in Imports
 from typing import Optional
+import datetime
 
 # Third-party Imports
 from PIL import Image
@@ -83,12 +84,8 @@ class GroupModel(QAbstractListModel):
         # Ensure the content matches the required QObject requirements
         entry_type = self._entries['dtype'].iloc[specific_entry_idx]
 
-        if entry_type == 'image':
-            qcontent = toQImage(content['images'])
-        elif entry_type == 'video':
-            qcontent = toQImage(content['frames'])
-        else:
-            raise RuntimeError("Invalid dtype.")
+        # Converting the content to a QImage
+        qcontent = toQImage(content)
 
         # Then update that one
         # print(f"Updating: {specific_entry_idx} - {user} - {entry_name} - with {qcontent}")

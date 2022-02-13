@@ -9,7 +9,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Union, List
 
 # Third-party imports
 import pandas as pd
@@ -51,7 +51,7 @@ class Process():
         """
         raise NotImplementedError("``start`` method needs to be implemented.")
     
-    def step(self, *args, **kwargs): 
+    def step(self, *args, **kwargs) -> Optional[Union[pd.DataFrame, List[pd.DataFrame]]]: 
         """Apply process onto data sample.
 
         Raises:

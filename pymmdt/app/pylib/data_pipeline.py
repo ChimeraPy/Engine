@@ -4,6 +4,7 @@ import threading
 import collections
 import queue
 import time
+import sys
 
 # Third-party imports
 from PIL import Image
@@ -169,9 +170,11 @@ class DataLoadingProcess(CommunicatingProcess):
                     img_filepaths = []
                     for index, row in df.iterrows():
                         img_fp = file_dir / entry_name / f"{row['idx']}.jpg"
+                        # print(img_fp)
                         img_filepaths.append(img_fp)
                         # imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
                     df['img_filepaths'] = img_filepaths
+                    # df.to_csv('images_test.csv')
                     
                     # Create ds
                     ds = mmt.TabularDataStream(
@@ -327,9 +330,6 @@ class DataSortingProcess(CommunicatingProcess):
 
         # Keeping track of the entries and their meta information
         self.entries = entries.set_index(['user', 'entry_name'])
-        # self.entries_dict = self.entries.to_dict()
-        # print(self.entries_dict)
-        # print(self.entries)
 
     def message_loading_sorted(self, entry_time):
 
@@ -361,6 +361,43 @@ class DataSortingProcess(CommunicatingProcess):
         # Send the message
         self.message_from_queue.put(finished_sorting_message)
 
+    def add_content_to_queue(self, entry):
+
+        # Obtaining the data type
+        # print(entry.group, entry.ds_type)
+        entry_dtype = self.entries.loc[entry.group, entry.ds_type]['dtype']
+
+        # Extract the content for each type of data stream
+        if entry_dtype == 'image':
+            # print(entry.img_filepaths)
+            content = mm.tools.to_numpy(Image.open(entry.img_filepaths))
+        elif entry_dtype == 'video':
+            content = entry.frames
+        else:
+            raise NotImplementedError(f"{entry_dtype} content is not implemented yet!")
+
+        # Creating the data chunk
+        data_chunk = {
+            'index': entry.name,
+            'user': entry.group,
+            'entry_time': entry._time_,
+            'entry_name': entry.ds_type,
+            'content': content
+        }
+
+        # But the entry into the queue
+        while not self.thread_exit.is_set():
+            try:
+                # Putting the data
+                self.sorted_data_queue.put(data_chunk.copy(), timeout=1)
+                break
+            except queue.Full:
+                time.sleep(0.1)
+            
+        # Only update sorting bar entry other 10 samples
+        if entry.name % 50 == 0:
+            self.message_loading_sorted(entry._time_)
+
     def run(self):
 
         # Run the setup for the process
@@ -386,71 +423,24 @@ class DataSortingProcess(CommunicatingProcess):
             current_window_idx = data_chunk['window_idx']
             current_window_data = data_chunk['data']
             current_window_timetrack = data_chunk['timetrack']
-            # current_window_start = data_chunk['start']
-            # current_window_end = data_chunk['end'] 
 
-            # Adding a column tracking which rows have been used
+            # Placing all the data frames within a list to later concat
+            all_dfs = []
             for user, entries in current_window_data.items():
                 for entry_name, entry_data in entries.items():
-                    used = [False for x in range(len(entry_data))]
-                    current_window_data[user][entry_name].loc[:,'used'] = used
+                    df = current_window_data[user][entry_name]
+                    df['group'] = user
+                    df['ds_type'] = entry_name
+                    all_dfs.append(current_window_data[user][entry_name])
 
-            for index, row in current_window_timetrack.iterrows():
+            # Combining and sorting data
+            total_df = pd.concat(all_dfs, axis=0, ignore_index=True)
+            total_df.sort_values(by="_time_", inplace=True)
+            total_df.reset_index(inplace=True)
+            total_df = total_df.drop(columns=['index'])
 
-                # Exit early if thread_exit is called!
-                if self.thread_exit.is_set():
-                    break
-
-                # Extract row and entry information
-                user = row.group
-                entry_name = row.ds_type
-                entry_time = row.time
-                entry_data = current_window_data[user][entry_name]
-                entry_dtype = self.entries.loc[user, entry_name]['dtype']
-
-                # If the entry is not empty
-                if not entry_data.empty:
-
-                    # Get the entries that have not been used
-                    new_samples_loc = (entry_data['used'] == False)
-
-                    # If there are remaining entries, use them!
-                    if new_samples_loc.any():
-
-                        # Get the entries idx
-                        latest_content_idx = np.where(new_samples_loc)[0][0] 
-                        latest_content = entry_data.iloc[latest_content_idx]
-
-                        # If image, load the image and then place it in
-                        # the queue.
-                        if entry_dtype == 'image':
-                            latest_content['images'] = mm.tools.to_numpy(Image.open(latest_content['img_filepaths']))
-
-                        # Creating the data chunk
-                        data_chunk = {
-                            'index': index,
-                            'user': user,
-                            'entry_time': entry_time,
-                            'entry_name': entry_name,
-                            'content': latest_content
-                        }
-
-                        # But the entry into the queue
-                        while not self.thread_exit.is_set():
-                            try:
-                                # Putting the data
-                                self.sorted_data_queue.put(data_chunk.copy(), timeout=1)
-
-                                break
-                            except queue.Full:
-                                time.sleep(0.1)
-                                
-                        # If successful, then mark it
-                        entry_data.at[latest_content_idx, 'used'] = True
-
-                        # Only update sorting bar entry other 10 samples
-                        if index % 50 == 0:
-                            self.message_loading_sorted(entry_time)
+            # Apply to the total_df
+            total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
 
         # Closing the process
         self.close()

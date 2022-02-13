@@ -362,8 +362,6 @@ class Manager(QObject):
     @mm.tools.threaded
     def update_content(self):
 
-        # previous_time = None
-        
         # Continously update the content
         while not self.thread_exit.is_set():
 
@@ -484,15 +482,6 @@ class Manager(QObject):
             }
             for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
                 message_to_queue.put(end_message)
-
-            # Wait for process confirmation to end
-            # for message_from_queue in [self.message_from_sorting_queue, self.message_from_loading_queue]:
-            #     while True:
-            #         message = message_from_queue.get()
-
-            #         # Check if end message as well
-            #         if message == end_message:
-            #             break
 
             # Clearing Queues to permit the processes to shutdown
             for queue in self.queues:
