@@ -40,7 +40,8 @@ def clear_queue(input_queue: mp.Queue):
         # Make sure to account for possible automic modification of the
         # queue
         try:
-            input_queue.get(timeout=0.1)
+            data = input_queue.get(timeout=0.1)
+            del data
         except queue.Empty:
             continue
 

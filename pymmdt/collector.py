@@ -179,3 +179,6 @@ class Collector:
 
     def get_timetrack(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         return self.global_timetrack[(self.global_timetrack['time'] >= start_time) & (self.global_timetrack['time'] < end_time)]
+
+    def __len__(self):
+        return len(self.global_timetrack)

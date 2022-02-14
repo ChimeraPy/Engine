@@ -32,7 +32,7 @@ from PyQt5.QtCore import QTimer, QObject, pyqtProperty, pyqtSignal, pyqtSlot
 from .dashboard_model import DashboardModel
 from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
-# from .pausable_timer import QPausableTimer
+from .pausable_timer import QPausableTimer
 from .loading_bar_object import LoadingBarObject
 from .data_pipeline import DataLoadingProcess, DataSortingProcess
 
@@ -54,7 +54,8 @@ class Manager(QObject):
             self,
             logdir:str,
             verbose:Optional[bool]=False,
-            time_step:Optional[int]=10,
+            loading_sec_limit:Optional[int]=5,
+            time_step:Optional[int]=100,
             replay_speed:Optional[int]=1,
             time_window:Optional[pd.Timedelta]=pd.Timedelta(seconds=1),
             meta_check_step:Optional[int]=5000
@@ -63,7 +64,8 @@ class Manager(QObject):
 
         # Store the CI arguments
         self.logdir = pathlib.Path(logdir)
-        self.time_step = time_step # milliseconds
+        self.loading_sec_limit = loading_sec_limit
+        self.time_step: int = time_step # milliseconds
         self.replay_speed = replay_speed
         self.time_window = time_window
         self.meta_check_step = meta_check_step # milliseconds
@@ -81,9 +83,8 @@ class Manager(QObject):
         self._sorting_bar = LoadingBarObject()
         
         # Parameters for tracking progression
+        self.current_time = pd.Timedelta(seconds=0)
         self.current_window = 0
-        self.current_window_data = None
-        self.entries_time_tracker = None
         self.windows: List = []
         self.loaded_windows: List = []
         
@@ -95,11 +96,16 @@ class Manager(QObject):
         self._data_is_loaded = False
         self._is_play = False
         self.end_time = pd.Timedelta(seconds=0)
-        # self.current_time = pd.Timedelta(seconds=0)
         self.session_complete = False
 
         # Apply the update to the meta data
         self.meta_update()
+
+        # Using a timer to periodically update content
+        self.current_time_update = QPausableTimer()
+        self.current_time_update.setInterval(self.time_step)
+        self.current_time_update.timeout.connect(self.update_content)
+        # self.current_time_update.start()
 
         # Using a timer to periodically check for new data
         self.meta_check_timer = QTimer()
@@ -149,9 +155,13 @@ class Manager(QObject):
 
         # Change the state
         self._is_play = not self._is_play
-        
-        # Restarting
+       
+        # If now we are playing,
         if self.is_play:
+
+            # Continue the update timer
+            self.current_time_update.resume()
+
             # First, check if the session has been run complete, if so
             # restart it
             if self.session_complete:
@@ -165,6 +175,12 @@ class Manager(QObject):
                 # self.current_time = pd.Timedelta(seconds=0)
                 # self.current_window = -1
                 # self.app_update()
+
+        # else, we are stopping!
+        else:
+
+            # Pause the update timer
+            self.current_time_update.pause()
 
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
@@ -258,9 +274,6 @@ class Manager(QObject):
                 for i in range(len(users_meta)):
                     users_meta[i].reset_index(inplace=True)
                     users_meta[i] = users_meta[i].drop(columns=['index'])
-
-                # Load the data from the entries into DataStreams
-                # users_data_streams = self.load_data_streams(unique_users, users_meta)
 
                 # Setting up the data pipeline
                 self.init_data_pipeline(unique_users, users_meta)
@@ -359,50 +372,88 @@ class Manager(QObject):
                     if sorting_message['body']['type'] == 'END':
                         self.sorting_bar.state = 1
 
-    @mm.tools.threaded
+    # @mm.tools.threaded
     def update_content(self):
 
-        # Continously update the content
-        while not self.thread_exit.is_set():
+        print("HELLO")
+        
+        # Calculating the t_{x+1} time
+        previous_time = self.current_time
+        next_time = self.current_time + pd.Timedelta(milliseconds=self.time_step)
+        self.current_time = next_time
 
-            # If not playing, just avoid updating
-            if self._is_play == False:
-                time.sleep(0.1)
-                continue
+        # Storing all the data chunks from t_x to t_{x+1}
+        data_chunks = []
+
+        # Get all the data chunks from t_x to t_{x+1}
+        while True:
 
             # Get the next entry information!
             try:
-                data_chunk = self.sorted_data_queue.get(timeout=1)
+                data_chunk = self.sorted_data_queue.get(timeout=2*self.time_step/1000)
             except queue.Empty:
-                time.sleep(0.1)
-                continue
+                # Check if all the data has been loaded, if so that means
+                # that all the data has been played
+                if self.sorting_bar.state == 1:
+                    print("Session end detected!")
+                    self.current_time_update.pause()
+                    self.session_complete = True
+                    self._is_play = False
+                    self.playPauseChanged.emit()
+                
+                # Regardless, break
+                break
+
+            # Storing data
+            data_chunks.append(data_chunk)
+            
+            # Once gotten the data, check if the chunk is within t_x to t_{x+1}
+            if data_chunk['entry_time'] >= next_time:
+                break
+        
+        # Update to the content
+        for data_chunk in data_chunks:
+
+            # Calculate the delta between the current time and the entry's time
+            if data_chunk['entry_time'] > previous_time:
+                time_delta = (data_chunk['entry_time'] - previous_time).value / 1e9
+                average_update_time = sum(self.update_content_times)/min(1,len(self.update_content_times))
+                print(time_delta, average_update_time)
+                time_delta = max(0, 0.9*self.replay_speed*time_delta-average_update_time*0.1)
+                time.sleep(time_delta)
 
             # Updating sliding bar
             self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
 
             # Update the content
+            tic = time.time()
             self._dashboard_model.update_content(
                 data_chunk['index'],
                 data_chunk['user'],
                 data_chunk['entry_name'],
                 data_chunk['content']
             )
+            toc = time.time()
+            delta = toc - tic
+            self.update_content_times.append(delta)
 
-            # Check if the session is completed
-            if data_chunk['entry_time'] == self.end_time:
-                self.session_complete = True
-                self._is_play = False
-                self.playPauseChanged.emit()
+            # Updating the previous time
+            previous_time = data_chunk['entry_time']
 
     def init_data_pipeline(self, unique_users, users_meta):
+        
+        # Changing the time_window_size based on the number of entries
+        div_factor = min(len(self.entries), 10)
+        self.time_window = pd.Timedelta(seconds=(self.time_window.value/1e9)/div_factor)
                 
         # Get the necessary information to create the Collector 
         self.windows = mm.tools.get_windows(self.start_time, self.end_time, self.time_window)
-      
+        self.update_content_times = collections.deque(maxlen=100)
+     
         # Creating queues for the data
-        max_qsize_allowed= int(15/(1e-9*self.time_window.value))
+        max_qsize_allowed= int(self.loading_sec_limit/(1e-9*self.time_window.value))
         self.loading_data_queue = mp.Queue(maxsize=max_qsize_allowed)
-        self.sorted_data_queue = mp.Queue(maxsize=max_qsize_allowed*50)
+        self.sorted_data_queue = mp.Queue(maxsize=max_qsize_allowed*15*len(self.entries))
 
         # Creating queues for communication
         self.message_to_loading_queue = mp.Queue(maxsize=max_qsize_allowed)
@@ -411,19 +462,22 @@ class Manager(QObject):
         self.message_from_sorting_queue = mp.Queue(maxsize=max_qsize_allowed)
 
         # Storing all the queues
-        self.queues = [
-            self.loading_data_queue, self.sorted_data_queue,
-            self.message_to_loading_queue, self.message_from_loading_queue,
-            self.message_to_sorting_queue, self.message_from_sorting_queue,
-        ]
+        self.queues = {
+            'loading': self.loading_data_queue,
+            'sorting': self.sorted_data_queue,
+            'm_to_loading': self.message_to_loading_queue, 
+            'm_from_loading': self.message_from_loading_queue,
+            'm_to_sorting': self.message_to_sorting_queue, 
+            'm_from_sorting': self.message_from_sorting_queue,
+        }
 
         # Starting the Manager's messaging thread
         self.check_messages_thread = self.check_messages()
         self.check_messages_thread.start()
 
         # Starting the content update thread
-        self.update_content_thread = self.update_content()
-        self.update_content_thread.start()
+        # self.update_content_thread = self.update_content()
+        # self.update_content_thread.start()
 
         # Creating the loading process that uses the window loading 
         # system to get the data.
@@ -469,8 +523,9 @@ class Manager(QObject):
             self.check_messages_thread.join()
             print("Checking message thread join")
             
-            self.update_content_thread.join()
-            print("Content thread join")
+            # self.update_content_thread.join()
+            self.current_time_update.stop()
+            print("Content timer stopped")
 
             # Informing all process to end
             end_message = {
@@ -484,11 +539,13 @@ class Manager(QObject):
                 message_to_queue.put(end_message)
 
             # Clearing Queues to permit the processes to shutdown
-            for queue in self.queues:
-                # print(queue.qsize())
+            print("Clearing queues")
+            for q_name, queue in self.queues.items():
+                print(f"Clearing {q_name} queue")
                 mm.tools.clear_queue(queue)
 
             # Then wait for threads and process
+            print("Clearing loading queue again")
             while self.loading_data_queue.qsize():
                 mm.tools.clear_queue(self.loading_data_queue)
                 time.sleep(0.2)
@@ -499,9 +556,12 @@ class Manager(QObject):
             time.sleep(0.3)
             
             # Clearing Queues to permit the processes to shutdown
-            for queue in self.queues:
+            print("Clearing all queues again")
+            for q_name, queue in self.queues.items():
+                print(f"clearing {q_name}.")
                 mm.tools.clear_queue(queue)
 
+            print("Clearing sorting queue again")
             while self.sorted_data_queue.qsize():
                 print(self.sorted_data_queue.qsize())
                 mm.tools.clear_queue(self.sorted_data_queue)

@@ -11,6 +11,7 @@ from PIL import Image
 import numpy as np
 import tqdm
 import pandas as pd
+import swifter
 
 # PyMMDT Library
 import pymmdt as mm
@@ -74,7 +75,7 @@ class CommunicatingProcess(mp.Process):
             if new_message and message:
 
                 # Handle the incoming message
-                # print(f"NEW MESSAGE - {message}")
+                print(f"NEW MESSAGE - {message}")
 
                 # META --> General
                 if message['header'] == 'META':
@@ -170,11 +171,9 @@ class DataLoadingProcess(CommunicatingProcess):
                     img_filepaths = []
                     for index, row in df.iterrows():
                         img_fp = file_dir / entry_name / f"{row['idx']}.jpg"
-                        # print(img_fp)
                         img_filepaths.append(img_fp)
-                        # imgs.append(mm.tools.to_numpy(Image.open(img_fp)))
+
                     df['img_filepaths'] = img_filepaths
-                    # df.to_csv('images_test.csv')
                     
                     # Create ds
                     ds = mmt.TabularDataStream(
@@ -205,7 +204,10 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        self.message_from_queue.put(collector_construction_message)
+        try:
+            self.message_from_queue.put(collector_construction_message, timeout=0.5)
+        except queue.Full:
+            print("Collector construction message failed to send!")
 
     def message_loading_window_counter(self):
 
@@ -221,7 +223,10 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        self.message_from_queue.put(loading_window_message)
+        try:
+            self.message_from_queue.put(loading_window_message, timeout=0.5)
+        except queue.Full:
+            print("Loading window counter message failed to send!")
 
     def message_finished_loading(self):
 
@@ -235,10 +240,16 @@ class DataLoadingProcess(CommunicatingProcess):
         }
 
         # Sending the message
-        self.message_from_queue.put(finished_loading_message)
+        try:
+            self.message_from_queue.put(finished_loading_message, timeout=0.5)
+        except queue.Full:
+            print("Finished loading messaged failed to send!")
 
         # Also tell the sorting process that the data is complete
-        self.loading_data_queue.put('END')
+        try:
+            self.loading_data_queue.put('END', timeout=0.5)
+        except queue.Full:
+            print("END message failed to send!")
 
     def run(self):
 
@@ -273,14 +284,14 @@ class DataLoadingProcess(CommunicatingProcess):
 
                 # Get the data
                 data = self.collector.get(start, end)
-                timetrack = self.collector.get_timetrack(start, end)
+                # timetrack = self.collector.get_timetrack(start, end)
 
                 data_chunk = {
-                    'window_idx': self.loading_window,
+                    # 'window_idx': self.loading_window,
                     # 'start': start,
                     # 'end': end,
                     'data': data,
-                    'timetrack': timetrack
+                    # 'timetrack': timetrack
                 }
 
                 # Put the data into the queue
@@ -326,6 +337,7 @@ class DataSortingProcess(CommunicatingProcess):
         # Saving the input variables
         self.loading_data_queue = loading_data_queue
         self.sorted_data_queue = sorted_data_queue
+        self.sorted_entries_processed = 0
         self.verbose = verbose
 
         # Keeping track of the entries and their meta information
@@ -345,7 +357,10 @@ class DataSortingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        self.message_from_queue.put(loading_window_message)
+        try:
+            self.message_from_queue.put(loading_window_message, timeout=0.5)
+        except queue.Full:
+            print("Error: loading sorted messaged failed to send!")
 
     def message_finished_sorting(self):
 
@@ -359,17 +374,18 @@ class DataSortingProcess(CommunicatingProcess):
         }
 
         # Send the message
-        self.message_from_queue.put(finished_sorting_message)
+        try:
+            self.message_from_queue.put(finished_sorting_message, timeout=0.5)
+        except queue.Full:
+            print("Error: finished sorting message failed to send!")
 
     def add_content_to_queue(self, entry):
 
         # Obtaining the data type
-        # print(entry.group, entry.ds_type)
         entry_dtype = self.entries.loc[entry.group, entry.ds_type]['dtype']
 
         # Extract the content for each type of data stream
         if entry_dtype == 'image':
-            # print(entry.img_filepaths)
             content = mm.tools.to_numpy(Image.open(entry.img_filepaths))
         elif entry_dtype == 'video':
             content = entry.frames
@@ -390,12 +406,13 @@ class DataSortingProcess(CommunicatingProcess):
             try:
                 # Putting the data
                 self.sorted_data_queue.put(data_chunk.copy(), timeout=1)
+                self.sorted_entries_processed += 1
                 break
             except queue.Full:
                 time.sleep(0.1)
             
         # Only update sorting bar entry other 10 samples
-        if entry.name % 50 == 0:
+        if self.sorted_entries_processed % 50 == 0:
             self.message_loading_sorted(entry._time_)
 
     def run(self):
@@ -420,9 +437,9 @@ class DataSortingProcess(CommunicatingProcess):
                 continue
             
             # Decomposing the window item
-            current_window_idx = data_chunk['window_idx']
+            # current_window_idx = data_chunk['window_idx']
             current_window_data = data_chunk['data']
-            current_window_timetrack = data_chunk['timetrack']
+            # current_window_timetrack = data_chunk['timetrack']
 
             # Placing all the data frames within a list to later concat
             all_dfs = []
@@ -440,7 +457,16 @@ class DataSortingProcess(CommunicatingProcess):
             total_df = total_df.drop(columns=['index'])
 
             # Apply to the total_df
-            total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
+            total_df.swifter.apply(lambda x: self.add_content_to_queue(x), axis=1)
+            # total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
+            # for index, row in total_df.iterrows():
+
+            #     # Check if we need to stop ASAP
+            #     if self.thread_exit.is_set():
+            #         break
+
+            #     # Update content
+            #     self.add_content_to_queue(row)
 
         # Closing the process
         self.close()
