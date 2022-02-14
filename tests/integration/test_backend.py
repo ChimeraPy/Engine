@@ -160,7 +160,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
 
         # Load construct the first runner
         self.runner = mm.GroupRunner(
-            name="Nurse Teamwork Example #1",
+            name="Teamwork Example #1",
             pipe=mm.Pipe(),
             runners=self.runners, 
             session=self.total_session,

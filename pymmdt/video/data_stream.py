@@ -211,17 +211,20 @@ class VideoDataStream(DataStream):
         for i in range(start_data_index, end_data_index+1):
             res, frame = self.video.read()
             frames.append(frame)
-        stacked_frames = np.stack(frames)
 
         # Convert the data depending on the RGB type
-        if self.color_mode == "BGR":
-            stacked_frames[...,[0,1,2]] = stacked_frames[...,[2,1,0]]
-        elif self.color_mode == "RGB":
-            pass
+        if self.color_mode == "RGB":
 
-        # Split the stacked frames to a list of frames
-        extract_dim_frames = np.split(stacked_frames, len(list_of_frames), axis=0)
-        frames = [np.squeeze(x, axis=0) for x in extract_dim_frames]
+            # Stack to easily change color channels
+            stacked_frames = np.stack(frames)
+            stacked_frames[...,[0,1,2]] = stacked_frames[...,[2,1,0]]
+
+            # Split the stacked frames to a list of frames
+            extract_dim_frames = np.split(stacked_frames, len(list_of_frames), axis=0)
+            frames = [np.squeeze(x, axis=0) for x in extract_dim_frames]
+
+        elif self.color_mode == "BGR":
+            pass
 
         # Update the data index record
         # very important to update - as this keeps track of the video's 
@@ -279,7 +282,7 @@ class VideoDataStream(DataStream):
         # Appending the file to the video writer
         for index, row in append_data.iterrows():
             frame = getattr(row, data_column)
-            self.video.write(frame.copy())
+            self.video.write(np.uint8(frame).copy())
             self.nb_frames += 1
 
     def close(self):

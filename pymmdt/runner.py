@@ -231,13 +231,13 @@ class SingleRunner:
         self.processing_thread.join()
         self.loading_thread.join()
 
-        # End 
-        self.end()
-
         # Closing the logging threads after the end, just in case
         # logging occurs in the end.
         for thread in self.logging_threads:
             thread.join()
+        
+        # End 
+        self.end()
 
 class GroupRunner(SingleRunner):
     """Multimodal Data Processing Group Director.

@@ -68,6 +68,11 @@ class VideoEntry(Entry):
         # input size
         if self.num_of_total_changes == 0:
 
+            # This operation requires at least two samples
+            assert len(self.unsaved_changes['frames']) >= 2, "Time window\
+                    size is too small, requires 2 frames per data sample\
+                    to infer the FPS."
+
             # Determine the size
             first_frame = self.unsaved_changes['frames'].iloc[0]
             w, h = first_frame.shape[0], first_frame.shape[1]
