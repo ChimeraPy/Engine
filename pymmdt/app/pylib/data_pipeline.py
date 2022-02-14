@@ -192,14 +192,16 @@ class DataLoadingProcess(CommunicatingProcess):
         # Return the Dict[str, List[DataStream]]
         return users_data_streams
 
-    def message_collector_construction(self):
+    def message_timetrack_update(self):
 
         # Create the message
         collector_construction_message = {
-            'header': 'META',
+            'header': 'UPDATE',
             'body': {
-                'type': 'INIT',
-                'content': {}
+                'type': 'TIMETRACK',
+                'content': {
+                    'timetrack': self.collector.global_timetrack.copy()
+                }
             }
         }
 
@@ -207,7 +209,7 @@ class DataLoadingProcess(CommunicatingProcess):
         try:
             self.message_from_queue.put(collector_construction_message, timeout=0.5)
         except queue.Full:
-            print("Collector construction message failed to send!")
+            print("Timetrack update message failed to send!")
 
     def message_loading_window_counter(self):
 
@@ -260,6 +262,9 @@ class DataLoadingProcess(CommunicatingProcess):
         users_data_streams = self.load_data_streams(self.unique_users, self.users_meta)
         self.collector = mm.Collector.empty()
         self.collector.set_data_streams(users_data_streams, self.time_window)
+
+        # Sending the global timetrack to the Manager
+        self.message_timetrack_update()
 
         # Set the initial value
         self.loading_window = 0 
@@ -394,14 +399,15 @@ class DataSortingProcess(CommunicatingProcess):
 
         # Creating the data chunk
         data_chunk = {
-            'index': entry.name,
+            'index': self.sorted_entries_processed,
             'user': entry.group,
             'entry_time': entry._time_,
             'entry_name': entry.ds_type,
             'content': content
         }
+        
 
-        # But the entry into the queue
+        # Put the entry into the queue
         while not self.thread_exit.is_set():
             try:
                 # Putting the data
@@ -457,8 +463,8 @@ class DataSortingProcess(CommunicatingProcess):
             total_df = total_df.drop(columns=['index'])
 
             # Apply to the total_df
-            total_df.swifter.apply(lambda x: self.add_content_to_queue(x), axis=1)
-            # total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
+            # total_df.swifter.apply(lambda x: self.add_content_to_queue(x), axis=1)
+            total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
             # for index, row in total_df.iterrows():
 
             #     # Check if we need to stop ASAP

@@ -83,6 +83,7 @@ class Manager(QObject):
         self._sorting_bar = LoadingBarObject()
         
         # Parameters for tracking progression
+        self.timetrack = None
         self.current_time = pd.Timedelta(seconds=0)
         self.current_window = 0
         self.windows: List = []
@@ -95,6 +96,7 @@ class Manager(QObject):
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
         self._is_play = False
+        # self._is_play = True
         self.end_time = pd.Timedelta(seconds=0)
         self.session_complete = False
 
@@ -102,9 +104,9 @@ class Manager(QObject):
         self.meta_update()
 
         # Using a timer to periodically update content
-        self.current_time_update = QPausableTimer()
-        self.current_time_update.setInterval(self.time_step)
-        self.current_time_update.timeout.connect(self.update_content)
+        # self.current_time_update = QPausableTimer()
+        # self.current_time_update.setInterval(self.time_step)
+        # self.current_time_update.timeout.connect(self.update_content)
         # self.current_time_update.start()
 
         # Using a timer to periodically check for new data
@@ -160,7 +162,7 @@ class Manager(QObject):
         if self.is_play:
 
             # Continue the update timer
-            self.current_time_update.resume()
+            # self.current_time_update.resume()
 
             # First, check if the session has been run complete, if so
             # restart it
@@ -178,9 +180,10 @@ class Manager(QObject):
 
         # else, we are stopping!
         else:
+            ...
 
-            # Pause the update timer
-            self.current_time_update.pause()
+            # # Pause the update timer
+            # self.current_time_update.pause()
 
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
@@ -342,6 +345,10 @@ class Manager(QObject):
                 # Handling UPDATE events
                 if loading_message['header'] == 'UPDATE':
                     
+                    # Timetrack Update
+                    if loading_message['body']['type'] == 'TIMETRACK':
+                        self.timetrack = loading_message['body']['content']['timetrack']
+ 
                     # Handling counter changes
                     if loading_message['body']['type'] == 'COUNTER':
                         new_state = loading_message['body']['content']['loading_window'] / len(self.windows)
@@ -349,7 +356,7 @@ class Manager(QObject):
 
                 # Handling META events
                 elif loading_message['header'] == 'META':
-
+                   
                     # Handling END type events
                     if loading_message['body']['type'] == 'END':
                         ...
@@ -372,73 +379,119 @@ class Manager(QObject):
                     if sorting_message['body']['type'] == 'END':
                         self.sorting_bar.state = 1
 
-    # @mm.tools.threaded
+    @mm.tools.threaded
     def update_content(self):
 
-        print("HELLO")
-        
-        # Calculating the t_{x+1} time
-        previous_time = self.current_time
-        next_time = self.current_time + pd.Timedelta(milliseconds=self.time_step)
-        self.current_time = next_time
+        tic = time.time()
 
-        # Storing all the data chunks from t_x to t_{x+1}
-        data_chunks = []
+        # Keep repeating until exiting the app
+        while not self.thread_exit.is_set():
 
-        # Get all the data chunks from t_x to t_{x+1}
-        while True:
+            # Only processing if we have the global timetrack
+            if type(self.timetrack) == type(None):
+                time.sleep(1)
+                continue
 
-            # Get the next entry information!
-            try:
-                data_chunk = self.sorted_data_queue.get(timeout=2*self.time_step/1000)
-            except queue.Empty:
-                # Check if all the data has been loaded, if so that means
-                # that all the data has been played
-                if self.sorting_bar.state == 1:
-                    print("Session end detected!")
-                    self.current_time_update.pause()
-                    self.session_complete = True
-                    self._is_play = False
-                    self.playPauseChanged.emit()
-                
-                # Regardless, break
-                break
+            # Also, not processing if not playing or the session is complete
+            if not self._is_play or self.session_complete:
+                time.sleep(0.05)
+                continue
 
-            # Storing data
-            data_chunks.append(data_chunk)
+            # Compute the average time it takes to update content, and its ratio 
+            # to the expect time, clipping at 1
+            average_update_delta = sum(self.update_content_times)/max(1, len(self.update_content_times))
+            update_delta_ratio = (self.time_step/1000) / max(self.time_step/1000,average_update_delta)
+            update_delta_ratio *= 0.98 # Applying a compensation factor
+            # print("AVERAGE: ", average_update_delta ," UPDATE DELTA RATIO: ", update_delta_ratio)
             
-            # Once gotten the data, check if the chunk is within t_x to t_{x+1}
-            if data_chunk['entry_time'] >= next_time:
-                break
-        
-        # Update to the content
-        for data_chunk in data_chunks:
-
-            # Calculate the delta between the current time and the entry's time
-            if data_chunk['entry_time'] > previous_time:
-                time_delta = (data_chunk['entry_time'] - previous_time).value / 1e9
-                average_update_time = sum(self.update_content_times)/min(1,len(self.update_content_times))
-                print(time_delta, average_update_time)
-                time_delta = max(0, 0.9*self.replay_speed*time_delta-average_update_time*0.1)
-                time.sleep(time_delta)
-
-            # Updating sliding bar
-            self._sliding_bar.state = data_chunk['entry_time'] / (self.end_time) 
-
-            # Update the content
+            # Start timing the process of uploading content
             tic = time.time()
-            self._dashboard_model.update_content(
-                data_chunk['index'],
-                data_chunk['user'],
-                data_chunk['entry_name'],
-                data_chunk['content']
-            )
-            toc = time.time()
-            delta = toc - tic
-            self.update_content_times.append(delta)
 
-            # Updating the previous time
-            previous_time = data_chunk['entry_time']
+            # Calculating the t_{x+1} time
+            next_time = self.current_time + pd.Timedelta(milliseconds=self.time_step)
+
+            # Determine the number of data chunks to process given the 
+            # time_step window
+            time_window_idx = ((self.timetrack['time'] >= self.current_time) & \
+                (self.timetrack['time'] < next_time))
+            to_process_data_chunks = self.timetrack[time_window_idx]
+
+            # If there is no data chunks to process, update and continue
+            if len(to_process_data_chunks) == 0:
+                self.current_time = next_time
+                self._sliding_bar.state =  self.current_time / (self.end_time)
+                continue
+            
+            # Storing all the data chunks from t_x to t_{x+1}
+            data_chunks = []
+
+            # Get all the data chunks from t_x to t_{x+1}
+            while True:
+
+                # Get the next entry information!
+                try:
+                    data_chunk = self.sorted_data_queue.get(timeout=2*self.time_step/1000)
+                    # print(data_chunk['index'], ' - GOT DATA CHUNK TIME: ', data_chunk['entry_time'])
+                except queue.Empty:
+                    # Check if all the data has been loaded, if so that means
+                    # that all the data has been played
+                    if self.sorting_bar.state == 1:
+                        print("Session end detected!")
+                        self.session_complete = True
+                        self._is_play = False
+                        self.playPauseChanged.emit()
+                    
+                    # Regardless, break
+                    break
+
+                # Storing data only if its during or after the time window
+                if (to_process_data_chunks['time'] >= data_chunk['entry_time']).sum():
+                    data_chunks.append(data_chunk)
+                
+                # Once gotten the data, check if we have collected all the needed
+                # data
+                if len(data_chunks) == len(to_process_data_chunks):
+                    break
+
+            # Update to the content
+            for data_chunk in data_chunks:
+
+                # Calculate the delta between the current time and the entry's time
+                if data_chunk['entry_time'] > self.current_time:
+                    time_delta = (data_chunk['entry_time'] - self.current_time).value / 1e9
+                    time_delta = max(0,time_delta-0.05) # Accounting for updating
+                    time.sleep(update_delta_ratio*time_delta)
+
+                # Updating sliding bar
+                self.current_time = data_chunk['entry_time']
+                self._sliding_bar.state = self.current_time / (self.end_time) 
+
+                # Update the content
+                self._dashboard_model.update_content(
+                    data_chunk['index'],
+                    data_chunk['user'],
+                    data_chunk['entry_name'],
+                    data_chunk['content']
+                )
+
+            # Computing the time difference of uploading content
+            tac = time.time()
+            delta = tac - tic
+            # print(f"UPDATING DELTA: {delta}")
+
+            # Sleeping the difference
+            time_delta = max(0, self.time_step/1000 - delta)
+            # print("LOOP END SLEEP: ", time_delta)
+            time.sleep(update_delta_ratio*time_delta)
+
+            # Finally update the sliding bar
+            toe = time.time()
+            final_delta = toe-tic
+            self.update_content_times.append(final_delta)
+            # print(f"FINAL DELTA: {final_delta}")
+            self.current_time = next_time
+            # print('LOOP END: ', self.current_time)
+            self._sliding_bar.state = self.current_time / (self.end_time) 
 
     def init_data_pipeline(self, unique_users, users_meta):
         
@@ -476,8 +529,8 @@ class Manager(QObject):
         self.check_messages_thread.start()
 
         # Starting the content update thread
-        # self.update_content_thread = self.update_content()
-        # self.update_content_thread.start()
+        self.update_content_thread = self.update_content()
+        self.update_content_thread.start()
 
         # Creating the loading process that uses the window loading 
         # system to get the data.
@@ -523,9 +576,10 @@ class Manager(QObject):
             self.check_messages_thread.join()
             print("Checking message thread join")
             
-            # self.update_content_thread.join()
-            self.current_time_update.stop()
-            print("Content timer stopped")
+            self.update_content_thread.join()
+            print("Content update thread join")
+            # self.current_time_update.stop()
+            # print("Content timer stopped")
 
             # Informing all process to end
             end_message = {
