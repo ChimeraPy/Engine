@@ -163,7 +163,7 @@ class Collector:
 
         # Once all the data is over, send the message that the work is 
         # complete
-        self.loading_queue.put("END", block=False)
+        self.loading_queue.put("END", block=True)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         # Obtain the data samples from all data streams given the 

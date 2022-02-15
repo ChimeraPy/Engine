@@ -125,7 +125,7 @@ class SingleRunner:
         assert isinstance(self.session, Session)
 
         # Then process the sample
-        output = self.pipe.step(data_samples)
+        output = self.pipe.step(data_samples[self.name])
 
         # Return the pipe's output
         return output

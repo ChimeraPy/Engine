@@ -27,8 +27,7 @@ sys.path.append(str(ROOT_DIR))
 
 class TestTobiiExamplePipe(mm.Pipe):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
-        data_streams_samples = list(data_samples.values())[0]
-        self.session.add_video('test_video', data_streams_samples['video'])
+        self.session.add_video('test_video', data_samples['video'])
 
 class TobiiTestCase(unittest.TestCase):
 
@@ -109,7 +108,7 @@ class TobiiTestCase(unittest.TestCase):
             # Store the individual's runner to a list 
             self.runners.append(runner)
 
-        # Load construct the first runner
+        # Construct the group runner
         self.runner = mm.GroupRunner(
             name="Teamwork Example #1",
             pipe=mm.Pipe(),
@@ -119,5 +118,6 @@ class TobiiTestCase(unittest.TestCase):
             time_window_size=pd.Timedelta(seconds=1),
         )
 
-        # Run the runner
-        self.runner.run(verbose=True)
+        # Run the group runner
+        self.runner.run()
+        # self.runner.run(verbose=True)

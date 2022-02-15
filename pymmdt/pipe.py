@@ -43,41 +43,41 @@ class Pipe:
     def __str__(self) -> str:
         return self.__repr__()
 
-    def __setattr__(self, name:str, value:Any) -> None:
-        """Unique ``__setattr__`` that catching Process instances.
+    # def __setattr__(self, name:str, value:Any) -> None:
+    #     """Unique ``__setattr__`` that catching Process instances.
 
-        Args:
-            name (str): The name of the variable.
+    #     Args:
+    #         name (str): The name of the variable.
 
-            value (Any): The value of the variable. 
+    #         value (Any): The value of the variable. 
 
-        Process instances added to the pipe are recorded for later use.
-        This includes time matching, and giving processes additional
-        useful attributes.
+    #     Process instances added to the pipe are recorded for later use.
+    #     This includes time matching, and giving processes additional
+    #     useful attributes.
         
-        """
-        # Whenever the pipe has a processes added to it,
-        # store in a list of processes.
-        if isinstance(value, Process):
-            self._processes[name] = value
+    #     """
+    #     # Whenever the pipe has a processes added to it,
+    #     # store in a list of processes.
+    #     if isinstance(value, Process):
+    #         self._processes[name] = value
 
-        # Else, it's not a ``Process``, so just add it as normal
-        else:
-            super(Pipe, self).__setattr__(name, value)
+    #     # Else, it's not a ``Process``, so just add it as normal
+    #     else:
+    #         super(Pipe, self).__setattr__(name, value)
 
-    def __getattr__(self, name: str) -> Any:
+    # def __getattr__(self, name: str) -> Any:
 
-        # To avoid recursion, use the super __getattr__
-        processes = super(Pipe, self).__getattribute__("_processes")
-        if name == "_processes":
-            return processes
+    #     # To avoid recursion, use the super __getattr__
+    #     processes = super(Pipe, self).__getattribute__("_processes")
+    #     if name == "_processes":
+    #         return processes
 
-        # If it is a process, obtain it from the ``_processes`` dict.
-        if name in processes.keys():
-            return processes[name]
-        # Else, obtain it as normally
-        else:
-            super(Pipe, self).__getattribute__(name)
+    #     # If it is a process, obtain it from the ``_processes`` dict.
+    #     if name in processes.keys():
+    #         return processes[name]
+    #     # Else, obtain it as normally
+    #     else:
+    #         super(Pipe, self).__getattribute__(name)
 
     def copy(self) -> 'Pipe':
         """Create a deep copy of the pipe."""
@@ -96,7 +96,7 @@ class Pipe:
     def start(self) -> None:
         ...
 
-    def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]) -> Optional[Union[pd.DataFrame, List[pd.DataFrame]]]:
+    def step(self, data_samples: Union[Dict[str, pd.DataFrame], Dict[str, Dict[str, pd.DataFrame]]]) -> Optional[Union[pd.DataFrame, List[pd.DataFrame]]]:
         ...
 
     def end(self) -> None:
