@@ -7,6 +7,8 @@ import curses
 import time
 import threading
 import queue
+import gc
+# gc.set_debug(gc.DEBUG_LEAK)
 
 # Third-Party Imports
 import pandas as pd
@@ -33,6 +35,7 @@ class SingleRunner:
             end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
+            memory_limit:Optional[float]=0.8,
         ):
 
         # Store the information
@@ -57,6 +60,7 @@ class SingleRunner:
                 time_window_size,
                 start_at=start_at,
                 end_at=end_at,
+                memory_limit=memory_limit
             )
  
             # Setup all threads
@@ -152,6 +156,7 @@ class SingleRunner:
 
             # Retrieveing sample from the loading queue
             all_data_samples = self.loading_queue.get(block=True)
+            self.loading_queue.task_done()
            
             # Check for end condition
             if all_data_samples == 'END':
@@ -171,7 +176,7 @@ class SingleRunner:
         # Assertions
         assert isinstance(self.collector, Collector)
         assert isinstance(self.session, Session)
-
+        
         # Continue the TUI until the other threads are complete.
         while True:
 
@@ -212,7 +217,7 @@ class SingleRunner:
         # Assertions
         assert isinstance(self.collector, Collector)
         assert isinstance(self.session, Session)
-        
+ 
         # Start 
         self.start()
 
@@ -226,7 +231,26 @@ class SingleRunner:
         # the whole process.
         if verbose:
             curses.wrapper(self.tui_main)
-        
+            
+        # tracker =  pympler.tracker.SummaryTracker()
+      
+        # while True:
+            
+        #     # Starting the memory tracker
+        #     # time.sleep(1)
+        #     # stats = gc.get_stats()
+        #     # print(stats)
+        #     # gc.collect()
+                
+        #     # Debugging memory leakage
+        #     # tracker.print_diff()
+                
+        #     # Break Condition
+        #     if self.collector.windows_loaded == len(self.collector.windows) and \
+        #         self.num_processed_data_chunks == len(self.collector.windows) and \
+        #         self.logging_queues[0].qsize() == 0:
+        #         break
+ 
         # Then wait until the threads is complete!
         self.processing_thread.join()
         self.loading_thread.join()
@@ -256,6 +280,7 @@ class GroupRunner(SingleRunner):
             end_at:Optional[pd.Timedelta]=None,
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
+            memory_limit:Optional[float]=0.8,
         ) -> None:
         """Construct the analyzer. 
 
@@ -289,6 +314,7 @@ class GroupRunner(SingleRunner):
             time_window_size,
             start_at=start_at,
             end_at=end_at,
+            memory_limit=memory_limit
         )
         
         # Providing each runner with a subsession

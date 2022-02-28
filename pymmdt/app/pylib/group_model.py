@@ -1,6 +1,7 @@
 # Built-in Imports
 from typing import Optional
-import datetime
+import os
+import pathlib
 
 # Third-party Imports
 from PIL import Image
@@ -15,6 +16,10 @@ from PyQt5 import QtGui
 import pymmdt as mm
 from .content import ContentImage
 from .qtools import toQImage
+
+# Constants
+FILE_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
+RESOURCE_DIR = FILE_DIR.parent / 'qml' / 'resources'
 
 class GroupModel(QAbstractListModel):
 
@@ -45,9 +50,9 @@ class GroupModel(QAbstractListModel):
                
                 # Setting the Empty default
                 if row['dtype'] == 'image':
-                    entry_content = QtGui.QImage()
+                    entry_content = QtGui.QImage(str(RESOURCE_DIR/'default_image.jpg'))
                 elif row['dtype'] == 'video':
-                    entry_content = QtGui.QImage()
+                    entry_content = QtGui.QImage(str(RESOURCE_DIR/'default_image.jpg'))
                 else:
                     raise RuntimeError("Invalid entry dtype.")
 

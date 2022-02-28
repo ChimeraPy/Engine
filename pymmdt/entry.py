@@ -21,15 +21,15 @@ class Entry:
         # Append the dataframe
         self.unsaved_changes = self.unsaved_changes.append(df)
     
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta):
+    # def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta):
 
-        # Ensure that any new changes have been dedicated to memory
-        self.flush()
+    #     # Ensure that any new changes have been dedicated to memory
+    #     self.flush()
 
-        # Then call the data stream, get their data, and return it
-        data = self.stream.get(start_time, end_time)
+    #     # Then call the data stream, get their data, and return it
+    #     data = self.stream.get(start_time, end_time)
 
-        return data
+    #     return data
 
     def flush(self):
         """Write/Save changes and mark them as processed.
@@ -44,6 +44,6 @@ class Entry:
     def close(self):
 
         self.flush()
-        self.stream.close()
+        # self.stream.close()
 
         return None

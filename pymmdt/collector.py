@@ -9,17 +9,21 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Dict, Optional, Any
+from typing import Sequence, Dict, Optional
+import os
 import time
+import psutil
 import collections
 import queue
+import gc
 
 # Third-party Imports
 import pandas as pd
 
 # Internal Imports
+from .exception import MemoryLimitError
 from .data_stream import DataStream
-from .tools import threaded, get_windows
+from .tools import threaded, get_windows, get_free_memory
 
 class Collector:
     """Generic collector that stores only data streams.
@@ -44,6 +48,7 @@ class Collector:
             start_at:Optional[pd.Timedelta]=None,
             end_at:Optional[pd.Timedelta]=None,
             max_get_threads:Optional[int]=4,
+            memory_limit:Optional[float]=0.8,
             empty:bool=False
         ) -> None:
         """Construct the ``Collector``.
@@ -67,6 +72,11 @@ class Collector:
         self.windows = []
         self.windows_loaded = -1
         self.max_get_threads = max_get_threads
+
+        # Storing the memory limit and creating variables used to track
+        # the average amount of memory used per window
+        self.memory_limit = memory_limit
+        self.memory_used_per_sample_group = collections.deque(maxlen=10)
 
         # Only when data streams provided should we start handling timetrack
         if not empty:
@@ -124,6 +134,9 @@ class Collector:
         # Split samples based on the time window size
         self.start_time = self.global_timetrack['time'][0]
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
+
+        # For debugging purposes, save the timetrack to csv to debug
+        self.global_timetrack.to_csv('global_timetrack.csv', index=False)
         
     def set_start_time(self, time:pd.Timedelta):
         assert time < self.end_time, "start_time cannot be greater than end_time."
@@ -152,11 +165,24 @@ class Collector:
             # Extract the start and end time from window
             start, end = window.start, window.end 
 
-            # Get the data
-            data = self.get(start, end)
+            # Get the data (safely and waiting until memory is opened up)
+            while True:
+                try:
+                    data = self.get(start, end)
+                    # print("Success")
+                    break
+                except MemoryLimitError:
+                    # print("Memory Limit reached!")
+                    gc.collect()
+                    time.sleep(0.1)
 
             # Put the data into the queue
-            self.loading_queue.put(data.copy(), block=True)
+            # self.loading_queue.put(data.copy(), block=True)
+            self.loading_queue.put(data, block=True)
+
+            # Deleting the data and collecting!
+            del data
+            gc.collect()
 
             # Increasing the counter when done
             self.windows_loaded += 1
@@ -166,14 +192,52 @@ class Collector:
         self.loading_queue.put("END", block=True)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
-        # Obtain the data samples from all data streams given the 
-        # window start and end time
+        """
+
+        Obtain the data samples from all data streams given the 
+        window start and end time. Additionally, we are tracking the 
+        average memory consumed per-group samples. To avoid overloading,
+        a memory limit is being placed. If the memory limit would be 
+        exceeded, we raise a MemoryLimitError.
+
+        Raises:
+            MemoryLimitError: Collector `get` is trying to loading past 
+            the memory limit.
+
+        """
+        # Checking input logic and type
         assert start_time < end_time, "start_time must be earlier than end_time."
 
+        # If memory limit is possible to be violated, raise alarm!
+        average_memory_usage = sum(self.memory_used_per_sample_group) /\
+            max(1, len(self.memory_used_per_sample_group))
+        free_virtual_memory = get_free_memory()
+        safe_available_memory = self.memory_limit * free_virtual_memory 
+
+        # Debugging
+        # print(f"AMU: {average_memory_usage} - FVM: {free_virtual_memory} - SAM: {safe_available_memory} R: {safe_available_memory/max(1,average_memory_usage)}")
+       
+        if average_memory_usage > safe_available_memory:
+            raise MemoryLimitError
+
+        # Creating containers for all sample's data and meta data.
+        all_samples_memory = 0
         all_samples = collections.defaultdict(dict)
+
+        # Iterating over all groups (like users) and their corresponding
+        # data streams.
         for group_name, ds_list in self.data_streams_groups.items():
             for ds in ds_list:
-                all_samples[group_name][ds.name] = ds.get(start_time, end_time)
+                
+                # Obtaining the sample and storing it
+                sample: pd.DataFrame = ds.get(start_time, end_time)
+                all_samples[group_name][ds.name] = sample
+
+                # Tracking the memory consumed
+                all_samples_memory += sample.memory_usage(deep=True).sum()
+
+        # Updating the running total of memory used per all_samples
+        self.memory_used_per_sample_group.append(all_samples_memory)
 
         return all_samples
 

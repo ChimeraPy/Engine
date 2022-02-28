@@ -55,17 +55,17 @@ class TabularDataStream(DataStream):
             # Convert the time column to standard to column name of ``_time_``
             data['_time_'] = pd.TimedeltaIndex(data[time_column])
             
-            # Store the timetrack
-            timetrack = data['_time_']
+            # Store the timeline
+            timeline = data['_time_']
 
         else:
-            timetrack = pd.TimedeltaIndex([]) 
+            timeline = pd.TimedeltaIndex([]) 
         
         # Storing the data and which columns to find it
         self.data = data
 
-        # Applying the super constructor with the timetrack
-        super().__init__(name, timetrack)
+        # Applying the super constructor with the timeline
+        super().__init__(name, timeline)
 
     def __eq__(self, other:'TabularDataStream') -> bool:
         if isinstance(other, TabularDataStream):
@@ -149,6 +149,15 @@ class TabularDataStream(DataStream):
             name=name, 
             data=empty_df
         )
+
+    def update_start_time(self, start_time:pd.Timedelta):
+        
+        # First, update the self.data['_time_']
+        self.data['_time_'] += start_time
+
+        # Extract the timeline and convert it to timetrack
+        timeline = self.data['_time_']
+        self.make_timetrack(timeline)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         assert end_time > start_time, "``end_time`` should be greater than ``start_time``."

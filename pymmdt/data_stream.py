@@ -51,12 +51,9 @@ class DataStream:
         """
         self.name = name
         self.index = 0
-
-        # Constructing the timetrack (including time and data pointer)
-        self.timetrack = pd.DataFrame({
-            'time': timeline,
-            'ds_index': [x for x in range(len(timeline))]
-        })
+        
+        # Creating timetrack from timeline
+        self.make_timetrack(timeline)
     
     def __repr__(self) -> str:
         """Representation of ``DataStream``.
@@ -120,6 +117,14 @@ class DataStream:
 
         """
         return len(self.timetrack)
+
+    def make_timetrack(self, timeline: pd.TimedeltaIndex):
+
+        # Constructing the timetrack (including time and data pointer)
+        self.timetrack = pd.DataFrame({
+            'time': timeline,
+            'ds_index': [x for x in range(len(timeline))]
+        })
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         raise NotImplementedError

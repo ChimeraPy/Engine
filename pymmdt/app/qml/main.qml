@@ -25,6 +25,24 @@ Window {
             anchors.top: parent.top
 
             Button {
+                id: rewindButton
+                x: 0.4*parent.width
+                width: 50
+                icon.source: "resources/icons8-rewind-50.png"
+                icon.color: "#f8f8f2"
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 6
+                anchors.top: parent.top
+                anchors.topMargin: 6
+                display: AbstractButton.IconOnly
+                background: Rectangle {
+                    color: "transparent"
+                }
+                onClicked: Manager.restart()
+                onDoubleClicked: Manager.restart() // Necessary for capturing fast clicks!
+            }
+
+            Button {
                 id: playPauseButton
                 x: 0.5*parent.width
                 width: 50
@@ -79,41 +97,41 @@ Window {
 
             }
 
-            Button {
-                id: userButton
-                x: 0.15 * parent.width
-                width: 100
-                anchors.bottom: parent.bottom
-                anchors.top: parent.top
-                background: Rectangle {
-                    color: "transparent"
-                }
-                Text {
-                    anchors.fill: parent
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    color: "#f8f8f2"
-                    text: qsTr("User-Sort")
-                }
-            }
+            // Button {
+            //     id: userButton
+            //     x: 0.15 * parent.width
+            //     width: 100
+            //     anchors.bottom: parent.bottom
+            //     anchors.top: parent.top
+            //     background: Rectangle {
+            //         color: "transparent"
+            //     }
+            //     Text {
+            //         anchors.fill: parent
+            //         horizontalAlignment: Text.AlignHCenter
+            //         verticalAlignment: Text.AlignVCenter
+            //         color: "#f8f8f2"
+            //         text: qsTr("User-Sort")
+            //     }
+            // }
 
-            Button {
-                id: entryButton
-                x: 0.35 * parent.width
-                width: 100
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                background: Rectangle {
-                    color: "transparent"
-                }
-                Text {
-                    anchors.fill: parent
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    color: "#f8f8f2"
-                    text: qsTr("Entry-Sort")
-                }
-            }
+            // Button {
+            //     id: entryButton
+            //     x: 0.35 * parent.width
+            //     width: 100
+            //     anchors.top: parent.top
+            //     anchors.bottom: parent.bottom
+            //     background: Rectangle {
+            //         color: "transparent"
+            //     }
+            //     Text {
+            //         anchors.fill: parent
+            //         horizontalAlignment: Text.AlignHCenter
+            //         verticalAlignment: Text.AlignVCenter
+            //         color: "#f8f8f2"
+            //         text: qsTr("Entry-Sort")
+            //     }
+            // }
         }
 
         // Timetrack (container for Timelines)

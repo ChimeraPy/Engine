@@ -22,7 +22,7 @@ import pandas as pd
 import numpy as np
 
 # Internal Imports
-from .tools import threaded
+from .tools import threaded, get_free_memory
 from .data_stream import DataStream
 from .video import VideoDataStream, VideoEntry
 from .tabular import TabularDataStream, TabularEntry, ImageEntry
@@ -83,23 +83,23 @@ class Session:
         # Keeping track of the number of logged information
         self.num_of_logged_data = 0
 
-    def __getitem__(self, item:str) -> Any:
-        """Get the item given the name of the ``Entry``.
+    # def __getitem__(self, item:str) -> Any:
+    #     """Get the item given the name of the ``Entry``.
 
-        Args:
-            item (str): The name of the requested name.
+    #     Args:
+    #         item (str): The name of the requested name.
 
-        Returns:
-            Any: The last sample from that specified entry. To obtain
-            the entire data stream, use ``session.records[item]``.
-        """
-        assert isinstance(item, str), f"{item} should be ``str``."
+    #     Returns:
+    #         Any: The last sample from that specified entry. To obtain
+    #         the entire data stream, use ``session.records[item]``.
+    #     """
+    #     assert isinstance(item, str), f"{item} should be ``str``."
 
-        # extract the entry
-        entry = self.records[item]
+    #     # extract the entry
+    #     entry = self.records[item]
 
-        # Return the entry
-        return entry
+    #     # Return the entry
+    #     return entry
 
     def _save_meta_data(self):
         with open(self.session_dir / 'meta.json', "w") as json_file:
@@ -129,6 +129,12 @@ class Session:
 
         """
 
+        # If the data is not a numpy array, raise error
+        if type(data) == type(None):
+            return None
+        elif not isinstance(data, np.ndarray):
+            raise TypeError(f"Image data is {type(data)}, not the expected np.ndarray.")
+
         # Create a pd.DataFrame for the data
         df = pd.DataFrame({'frames': [data], '_time_': [timestamp]})
 
@@ -147,11 +153,19 @@ class Session:
             time_column:str='_time_',
             data_column:str='frames'
         ) -> None:
+
+        # If the data is empty, skip it
+        if len(df) == 0:
+            return None
+
+        # Renaming and extracting only the content we want
+        images_df = df[[data_column, time_column]].copy()
+        images_df = images_df.rename(columns={data_column: 'frames', time_column: '_time_'})
         
         # Put data in the logging queue
         data_chunk = {
             'name': name,
-            'data': df.rename(columns={data_column: 'frames', time_column: '_time_'}),
+            'data': images_df,
             'dtype': 'image'
         }
         self.logging_queue.put(data_chunk.copy())
@@ -163,10 +177,19 @@ class Session:
             time_column:str='_time_',
             data_column:str='frames'
         ) -> None:
+        
+        # If the data is empty, skip it
+        if len(df) == 0:
+            return None
+
+        # Renaming and extracting only the video content
+        video_df = df[[data_column, time_column]].copy()
+        video_df = video_df.rename(columns={data_column: 'frames', time_column: '_time_'})
+
         # Put data in the logging queue
         data_chunk = {
             'name': name,
-            'data': df.rename(columns={data_column: 'frames', time_column: '_time_'}),
+            'data': video_df,
             'dtype': 'video'
         }
         self.logging_queue.put(data_chunk.copy())
@@ -177,6 +200,10 @@ class Session:
             data:Union[pd.Series, pd.DataFrame, Dict],
             time_column:str='_time_'
         ) -> None:
+
+        # If the data is empty, skip it
+        if len(data) == 0:
+            return None
 
         # Convert the data to a DataFrame
         if isinstance(data, pd.Series):
@@ -272,7 +299,10 @@ class Session:
             self.records[data['name']].flush()
 
     @threaded
-    def load_data_to_log(self):
+    def load_data_to_log(self, verbose=False):
+
+        # Keeping track of processed data
+        self.logged_data = 0
 
         # Continuously check if there are data to log and save
         while True: 
@@ -280,11 +310,17 @@ class Session:
             # First check if there is an item in the queue
             if self.logging_queue.qsize() != 0:
 
+                # Reporting
+                if verbose:
+                    print(f"TOT:{self.logged_data}, LEFT:{self.logging_queue.qsize()}, FREE:{get_free_memory()}")
+
                 # Get the data frome the queue
                 data = self.logging_queue.get(block=True)
+                self.logging_queue.task_done()
                 
-                # Then process the data
+                # Then process the data and tracking total
                 self.flush(data)
+                self.logged_data += 1
 
             else:
                 time.sleep(0.5)

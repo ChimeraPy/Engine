@@ -6,11 +6,14 @@ Item {
     anchors.fill: parent
 
     Text {
-        anchors.centerIn: parent
-        text: "IMAGE: " + qsTr(user) + " " + qsTr(entry_name) + " " + qsTr(dtype)
+        id: entryTitle
+        anchors.top: parent.top
+        text: qsTr(user)+"\\" + qsTr(entry_name)
+        color: "white"
     }
 
     ContentImage {
+        anchors.top: entryTitle.bottom
         height: _height
         width: _width
         image: content

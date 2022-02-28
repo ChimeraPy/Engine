@@ -6,7 +6,7 @@
 __package__ = 'utils'
 
 # Built-in Imports
-from typing import Dict, Sequence
+from typing import Dict, Sequence, Tuple, Any
 import ast
 import pathlib
 import gzip
@@ -48,6 +48,9 @@ def load_temporal_gz_file(gz_filepath:pathlib.Path, verbose:bool=False) -> pd.Da
 
     data_lines = data.split('\n')
 
+    if verbose:
+        print(f"[PyMMDT:Message] Converting {gz_filepath.stem} to .csv for future faster loading.")
+
     for line in tqdm.tqdm(data_lines, disable=not verbose):
 
         # Drop empty lines
@@ -74,7 +77,7 @@ def load_temporal_gz_file(gz_filepath:pathlib.Path, verbose:bool=False) -> pd.Da
     return df
 
 # Loading data for participants
-def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Sequence[DataStream]:
+def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Tuple[Sequence[DataStream], pd.DataFrame]:
 
     # Before trying to original data format, check if the faster csv 
     # version of the data is available
@@ -93,7 +96,8 @@ def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Sequence[Data
     else:
         imu_data_df = load_temporal_gz_file(dir / 'imudata.gz', verbose=verbose)
         imu_data_df.to_csv(imu_df_path, index=False)
-
+    
+    # Obtaining the recording specs data
     recording_specs_df = load_g3_file(dir / 'recording.g3')
 
     # Convert the time column to pd.TimedeltaIndex
@@ -115,10 +119,42 @@ def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Sequence[Data
     # Storing recording ID
     participant_data = [gaze_ds, video_ds]
 
-    return participant_data
+    return participant_data, recording_specs_df
 
+def synchronize_tobii_recordings(ps:Dict[str,Any]):
 
-def load_session_data(data_dir:pathlib.Path, verbose:bool=False) -> Dict[str, Dict]:
+    # Extract all the timestamps
+    timestamps = []
+    for p_id in ps.keys():
+        # Get the timestamp (in str form)
+        str_timestamp = ps[p_id]['rec_specs']['created']
+        # Convert the str form to datetime
+        timestamp = pd.to_datetime(str_timestamp)
+        timestamps.append(timestamp)
+
+    # Find the earliest timestamp
+    earliest_timestamp = min(timestamps)
+
+    # Update the tobii video and gaze datastreams
+    for p_id, timestamp in zip(ps.keys(), timestamps):
+
+        # If the same, skip it
+        if timestamp == earliest_timestamp:
+            continue
+
+        # Compute the difference
+        delta = timestamp - earliest_timestamp
+
+        # Shift the data streams by the difference
+        gaze_ds, video_ds = ps[p_id]['data']
+        gaze_ds.update_start_time(delta)
+        video_ds.update_start_time(delta)
+
+def load_session_data(
+        data_dir:pathlib.Path,
+        time_sync:bool=True,
+        verbose:bool=False
+    ) -> Dict[str, Dict]:
 
     # Load the participant IDs
     with open(data_dir / 'meta.json') as f:
@@ -133,10 +169,18 @@ def load_session_data(data_dir:pathlib.Path, verbose:bool=False) -> Dict[str, Di
         complete_p_dir = data_dir / p_dir
 
         # Loading each participant data
-        p_data = load_participant_data(complete_p_dir, verbose=verbose)
+        p_data, rec_specs = load_participant_data(complete_p_dir, verbose=verbose)
 
         # Store the participant data
-        ps[p_id] = {'data': p_data}
+        ps[p_id] = {
+            'data': p_data,
+            'rec_specs': rec_specs,
+        }
+
+    # If time_sync, then shift the data streams to start depending on the
+    # recordings' timestamps.
+    if time_sync:
+        synchronize_tobii_recordings(ps)
 
     # Return all the participants data
     return ps

@@ -82,13 +82,14 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
             session=self.session,
             time_window_size=pd.Timedelta(seconds=3),
             run_solo=True,
+            memory_limit=0.05
         )
 
     def test_single_runner_run(self):
         
         # Run the runner with everything set
-        self.runner.run(verbose=True)
-        # self.runner.run()
+        # self.runner.run(verbose=True)
+        self.runner.run()
         
         # The estimated FPS should be close to the input FPS
         estimated_fps = self.session.records['test_video'].stream.fps

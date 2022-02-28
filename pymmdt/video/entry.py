@@ -3,6 +3,7 @@ __package__ = 'tabular'
 
 # Built-in Imports
 import pathlib
+import gc
 
 # Third-party Imports
 import pandas as pd
@@ -96,3 +97,8 @@ class VideoEntry(Entry):
         # Update the counter and clear out the unsaved items
         self.num_of_total_changes += len(self.unsaved_changes)
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
+
+        # Ensure that the garbage is collected
+        del self.unsaved_changes
+        self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
+        gc.collect()

@@ -1,4 +1,5 @@
 # Built-in Imports
+import gc
 import unittest
 import threading
 import pathlib
@@ -9,6 +10,7 @@ import json
 import pprint
 
 # Third-Party Imports
+import numpy as np
 import pandas as pd
 import tqdm
 
@@ -59,6 +61,14 @@ class SingleSessionTestCase(unittest.TestCase):
             experiment_name = "pymmdt"
         )
 
+        # Create a collector 
+        self.memory_limit = 0.8
+        self.collector = mm.Collector(
+            {'P01': self.dss},
+            time_window_size=pd.Timedelta(seconds=2),
+            memory_limit=self.memory_limit
+        )
+
         # Create the logging queue and exiting event
         self.logging_queue = queue.Queue(maxsize=100)
         self.thread_exit = threading.Event()
@@ -84,10 +94,6 @@ class SingleSessionTestCase(unittest.TestCase):
             data=test_tabular_data,
             time_column='_time_'
         )
-        # self.session.add_image(
-        #     name='test_image_without_timestamp',
-        #     data=test_video_data['frames'].iloc[0]
-        # )
         self.session.add_image(
             name='test_image_with_timestamp',
             data=test_video_data['frames'].iloc[0],
@@ -110,6 +116,91 @@ class SingleSessionTestCase(unittest.TestCase):
         
         # Check the number of log data matches the queue
         assert self.logging_queue.qsize() == 4
+
+    def test_single_session_memory_management(self):
+
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=30)
+        self.collector.set_start_time(start_time)
+        self.collector.set_end_time(end_time)
+       
+        # Need to add the queue externally
+        loading_queue = queue.Queue(maxsize=1000)
+        self.collector.set_loading_queue(loading_queue)
+        
+        # Starting the collector thread
+        thread = self.collector.load_data_to_queue()
+        thread.start()
+        
+        # Take snapshot of memory before
+        pre_free = mm.tools.get_free_memory()
+
+        # Clearing out the loading data queue
+        while True:
+
+            if self.collector.loading_queue.qsize() != 0:
+                data = self.collector.loading_queue.get()
+
+                # If end, stop it
+                if data == 'END':
+                    break
+                else: # else, test logging
+
+                    # Extract data
+                    test_tabular_data = data['P01']['test_tabular']
+                    test_video_data = data['P01']['test_video']
+
+                    # Test all types of logging
+                    self.session.add_tabular(
+                        name='test_tabular',
+                        data=test_tabular_data,
+                        time_column='_time_'
+                    )
+                    # self.session.add_image(
+                    #     name='test_image_with_timestamp',
+                    #     data=test_video_data['frames'].iloc[0],
+                    #     timestamp=test_video_data['_time_'].iloc[0]
+                    # )
+                    # self.session.add_images(
+                    #     name='test_images',
+                    #     df=test_video_data,
+                    #     data_column='frames',
+                    #     time_column='_time_'
+                    # )
+                    self.session.add_video(
+                        name='test_video',
+                        df=test_video_data,
+                    )
+
+                    # Log information
+                    print(f"Used mem ratio from pre: {pre_free/mm.tools.get_free_memory()}")
+
+        # Joining thread later
+        thread.join()
+
+        # Noting how much as used
+        mid_free = pre_free - mm.tools.get_free_memory()
+
+        print(f"Total used memory for logging: {mid_free}")
+
+        # Then let the session save the log data
+        # Create the thread
+        thread = self.session.load_data_to_log(verbose=True)
+
+        # Start the thread and tell it to quit
+        thread.start()
+        self.thread_exit.set()
+        thread.join()
+
+        # Take snapshot of memory and ensure the available memory reflects
+        # the log data is removed.
+        post_free = mm.tools.get_free_memory()
+
+        # Calculate the diff of memory
+        diff = np.abs(post_free - pre_free) / pre_free
+
+        # This difference should be minimal
+        assert diff < 0.1, f"Memory Leak of {diff}!"
 
     def test_single_session_threading_saving_and_closing(self):
 

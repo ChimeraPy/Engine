@@ -96,7 +96,6 @@ class Manager(QObject):
         # Keeping track of the pause/play state and the start, end time
         self._data_is_loaded = False
         self._is_play = False
-        # self._is_play = True
         self.end_time = pd.Timedelta(seconds=0)
         self.session_complete = False
 
@@ -168,15 +167,8 @@ class Manager(QObject):
             # restart it
             if self.session_complete:
 
-                # Reset the variable
-                # self.session_complete = False
-
-                print("Restarted detected!")
-
-                # Communicate with the loader and and sorted to restart
-                # self.current_time = pd.Timedelta(seconds=0)
-                # self.current_window = -1
-                # self.app_update()
+                # print("Restarted detected!")
+                self.restart()
 
         # else, we are stopping!
         else:
@@ -186,6 +178,65 @@ class Manager(QObject):
             # self.current_time_update.pause()
 
         # Update the button icon's and other changes based on is_play property
+        self.playPauseChanged.emit()
+
+    @pyqtSlot()
+    def restart(self):
+
+        print("Restarting!")
+
+        # Send message to loading and sorting process to halt!
+        pause_message = {
+            'header': 'META',
+            'body': {
+                'type': 'PAUSE',
+                'content': {},
+            }
+        }
+        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+            message_to_queue.put(pause_message)
+
+        # Waiting until the processed halted
+        time.sleep(0.05)
+
+        # Clear the queues
+        while self.loading_data_queue.qsize():
+            mm.tools.clear_queue(self.loading_data_queue)
+        while self.sorted_data_queue.qsize():
+            mm.tools.clear_queue(self.sorted_data_queue)
+
+        # Set the time window to starting loading data
+        loading_window_message = {
+            'header': 'UPDATE',
+            'body': {
+                'type': 'LOADING_WINDOW',
+                'content': {
+                    'loading_window': 0
+                }
+            }
+        }
+        self.message_to_loading_queue.put(loading_window_message)
+
+        # Waiting until the loading window message is processed
+        time.sleep(0.05)
+
+        # Continue the processes
+        resume_message = {
+            'header': 'META',
+            'body': {
+                'type': 'RESUME',
+                'content': {}
+            }
+        }
+        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+            message_to_queue.put(resume_message)
+
+        # Set the time to the start_time
+        self.current_time = self.start_time
+        self._sliding_bar.state = self.current_time / (self.end_time) 
+
+        # Typically after rewind, the video is played
+        self._is_play = True
         self.playPauseChanged.emit()
 
     def get_meta(self):
@@ -571,13 +622,13 @@ class Manager(QObject):
 
             # Inform all the threads to end
             self.thread_exit.set()
-            print("Stopping threads!")
+            # print("Stopping threads!")
 
             self.check_messages_thread.join()
-            print("Checking message thread join")
+            # print("Checking message thread join")
             
             self.update_content_thread.join()
-            print("Content update thread join")
+            # print("Content update thread join")
             # self.current_time_update.stop()
             # print("Content timer stopped")
 
@@ -593,35 +644,35 @@ class Manager(QObject):
                 message_to_queue.put(end_message)
 
             # Clearing Queues to permit the processes to shutdown
-            print("Clearing queues")
+            # print("Clearing queues")
             for q_name, queue in self.queues.items():
-                print(f"Clearing {q_name} queue")
+                # print(f"Clearing {q_name} queue")
                 mm.tools.clear_queue(queue)
 
             # Then wait for threads and process
-            print("Clearing loading queue again")
+            # print("Clearing loading queue again")
             while self.loading_data_queue.qsize():
                 mm.tools.clear_queue(self.loading_data_queue)
                 time.sleep(0.2)
 
             self.loading_process.join()
-            print("Loading process join")
+            # print("Loading process join")
 
             time.sleep(0.3)
             
             # Clearing Queues to permit the processes to shutdown
-            print("Clearing all queues again")
+            # print("Clearing all queues again")
             for q_name, queue in self.queues.items():
-                print(f"clearing {q_name}.")
+                # print(f"clearing {q_name}.")
                 mm.tools.clear_queue(queue)
 
-            print("Clearing sorting queue again")
+            # print("Clearing sorting queue again")
             while self.sorted_data_queue.qsize():
-                print(self.sorted_data_queue.qsize())
+                # print(self.sorted_data_queue.qsize())
                 mm.tools.clear_queue(self.sorted_data_queue)
                 time.sleep(0.2)
 
             self.sorting_process.join()
-            print("Sorting process join")
+            # print("Sorting process join")
 
-        print("Finished closing")
+        # print("Finished closing")

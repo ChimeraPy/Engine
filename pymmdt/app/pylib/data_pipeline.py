@@ -11,7 +11,6 @@ from PIL import Image
 import numpy as np
 import tqdm
 import pandas as pd
-import swifter
 
 # PyMMDT Library
 import pymmdt as mm
@@ -36,11 +35,17 @@ class CommunicatingProcess(mp.Process):
 
         # Create a mapping to messages and their respective functions
         self.message_to_functions = {
-            'END': self.end
+            'END': self.end,
+            'PAUSE': self.pause,
+            'RESUME': self.resume
         }
         self.subclass_message_to_functions = {} # Overriden in subclass
 
     def setup(self):
+
+        # Pausing information
+        self.thread_pause = threading.Event()
+        self.thread_pause.clear()
 
         # Closing information
         self.thread_exit = threading.Event()
@@ -91,7 +96,17 @@ class CommunicatingProcess(mp.Process):
                     func = self.subclass_message_to_functions[message['body']['type']]
 
                 # After obtaining the function, execute it
-                func()
+                func(**message['body']['content'])
+
+    def pause(self):
+
+        # Setting the thread pause event
+        self.thread_pause.set()
+
+    def resume(self):
+
+        # Clearing the thread pause event
+        self.thread_pause.clear()
 
     def end(self):
 
@@ -137,6 +152,16 @@ class DataLoadingProcess(CommunicatingProcess):
         self.unique_users = unique_users
         self.users_meta = users_meta
         self.verbose = verbose
+
+        # Adding specific function class from the message
+        self.subclass_message_to_functions.update({
+            'LOADING_WINDOW': self.set_loading_window
+        })
+
+    def set_loading_window(self, loading_window:int):
+        
+        # Set the time window
+        self.loading_window = loading_window
          
     def load_data_streams(self, unique_users:List, users_meta:Dict) -> Dict[str, Sequence[mm.DataStream]]:
 
@@ -269,13 +294,11 @@ class DataLoadingProcess(CommunicatingProcess):
         # Set the initial value
         self.loading_window = 0 
 
-        print("Number of windows", len(self.windows))
-
         # Get the data continously
         while not self.thread_exit.is_set():
 
             # Check if the loading is halted
-            if self.loading_window == -1:
+            if self.loading_window == -1 or self.thread_pause.is_set():
                 time.sleep(0.5)
 
             # Only load windows if there are more to load
@@ -428,6 +451,10 @@ class DataSortingProcess(CommunicatingProcess):
  
         # Continously update the content
         while not self.thread_exit.is_set():
+
+            # If paused, just continue sleeping
+            if self.thread_pause.is_set():
+                time.sleep(0.1)
 
             # Get the next window of information if done processing 
             # the previous window data

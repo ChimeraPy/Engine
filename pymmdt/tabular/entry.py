@@ -3,10 +3,9 @@ __package__ = 'tabular'
 
 # Built-in Imports
 from typing import Union, Dict, Optional, Any
-import collections
 import pathlib
 import os
-import shutil
+import gc
 
 # Third-party Imports
 import pandas as pd
@@ -47,8 +46,8 @@ class TabularEntry(Entry):
         # Data types that only need one file that gets appended
         self.save_loc = self.dir / f"{self.name}.csv"
 
-        # Then add an empty container
-        self.stream = TabularDataStream.empty(name=name)
+        # # Then add an empty container
+        # self.stream = TabularDataStream.empty(name=name)
 
         # Write the initial component now
         self.flush()
@@ -76,6 +75,11 @@ class TabularEntry(Entry):
         self.num_of_total_changes += len(self.unsaved_changes)
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
 
+        # Collect the garbage
+        del self.unsaved_changes
+        self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
+        gc.collect()
+
 class ImageEntry(Entry):
 
     def __init__(
@@ -96,8 +100,8 @@ class ImageEntry(Entry):
         self.save_loc = self.dir / self.name
         os.mkdir(self.save_loc)
 
-        # Create a tabular data stream for the data
-        self.stream = TabularDataStream.empty(name=name)
+        # # Create a tabular data stream for the data
+        # self.stream = TabularDataStream.empty(name=name)
     
     def flush(self):
         # Depending on different type of inputs, we should save data differently
@@ -119,3 +123,8 @@ class ImageEntry(Entry):
         # Update the counter and clear out the unsaved items
         self.num_of_total_changes += len(self.unsaved_changes)
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
+
+        # Collect the garbage
+        del self.unsaved_changes
+        self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
+        gc.collect()

@@ -11,8 +11,10 @@ __package__ = 'video'
 # Built-in Imports
 from typing import Union, Tuple, Optional
 import pathlib
+import gc
 
 # Third-party Imports
+# import vidgear.gears
 import cv2
 import pandas as pd
 import numpy as np
@@ -71,30 +73,11 @@ class VideoDataStream(DataStream):
             self.video = cv2.VideoCapture(str(video_path))
             self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
             self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
-            # self.video.release()
-
-            # Switching to decord because it can read a batch of frames
-            # import decord # If placed with other imports, it can cause PyQt5 to crash!
-            # from decord import VideoReader, cpu
-            # self.video = VideoReader(
-            #     uri=str(video_path), 
-            #     ctx=cpu(0),
-            #     num_threads=1
-            # )
             self.mode = 'reading'
 
-            # # Get the total number of frames
-            # self.nb_frames = int(len(self.video))
-            
             # Constructing timetrack
             # timetrack = pd.date_range(start=start_time, periods=self.nb_frames, freq=f"{int(1e9/self.fps)}N").to_frame()
-            self.timeline = pd.TimedeltaIndex(
-                pd.timedelta_range(
-                    start=start_time, 
-                    periods=self.nb_frames, 
-                    freq=f"{int(1e9/self.fps)}N"
-                )
-            )
+            self.update_start_time(start_time)
             
         # Else, this is an empty video data stream
         else:
@@ -137,6 +120,20 @@ class VideoDataStream(DataStream):
     def __len__(self):
         return self.nb_frames
 
+    def update_start_time(self, start_time:pd.Timedelta):
+
+        # Creating new timeline
+        self.timeline = pd.TimedeltaIndex(
+            pd.timedelta_range(
+                start=start_time, 
+                periods=self.nb_frames, 
+                freq=f"{int(1e9/self.fps)}N"
+            )
+        )
+
+        # Converting timeline to timetrack
+        super().make_timetrack(self.timeline)
+
     def open_writer(
         self, 
         filepath:Union[pathlib.Path, str],
@@ -155,6 +152,7 @@ class VideoDataStream(DataStream):
         # Before opening, check that the neccesary video data is provided
         assert isinstance(self.fps, int) and isinstance(self.size, tuple)
 
+        # Opening the video writer given the desired parameters
         self.video.open(
             str(filepath),
             cv2.VideoWriter_fourcc(*'DIVX'),
@@ -169,9 +167,6 @@ class VideoDataStream(DataStream):
             size (Tuple[int, int]): The frame's width and height.
 
         """
-        # if isinstance(self.video, decord.VideoReader):
-        #     size = self.video[0].shape
-        #     w, h = size[1], size[0]
         if isinstance(self.video, (cv2.VideoCapture, cv2.VideoWriter)):
             w = int(self.video.get(3))
             h = int(self.video.get(4))
@@ -194,7 +189,10 @@ class VideoDataStream(DataStream):
 
         # Check if the data_idx is empty, if so return an empty data frame
         if len(data_idx) == 0:
-            return pd.DataFrame()
+            return pd.DataFrame({
+                '_time_':pd.TimedeltaIndex([]), 
+                'frames':[]}
+            )
        
         # Getting the start and end indx to get the frames
         start_data_index = min(data_idx.ds_index)
@@ -284,6 +282,10 @@ class VideoDataStream(DataStream):
             frame = getattr(row, data_column)
             self.video.write(np.uint8(frame).copy())
             self.nb_frames += 1
+
+        # Delete the append_data and collect memory
+        del append_data
+        gc.collect()
 
     def close(self):
         """Close the ``VideoDataStream`` instance."""

@@ -1,5 +1,6 @@
 # Built-in Imports
 from typing import List
+import os
 import math
 import multiprocessing as mp
 import threading
@@ -7,6 +8,7 @@ import collections
 import queue
 
 # Third-Party Imports
+import psutil
 from PIL import Image
 import numpy as np
 import pandas as pd
@@ -92,3 +94,10 @@ def to_numpy(im:Image):
         raise RuntimeError("encoder error %d in tobytes" % s)
 
     return data
+
+def get_free_memory():
+    # available = psutil.virtual_memory().available
+    process = psutil.Process(os.getpid())
+    # available = process.memory_info().rss
+    available = psutil.virtual_memory().available - process.memory_info().rss
+    return available

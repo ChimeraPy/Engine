@@ -1,5 +1,5 @@
 # Built-in Imports
-import pytest
+import gc
 import unittest
 import pathlib
 import shutil
@@ -10,6 +10,8 @@ import collections
 import queue
 
 # Third-Party Imports
+import cv2
+import numpy as np
 import tqdm
 import pandas as pd
 
@@ -67,10 +69,97 @@ class DataStreamTestCase(unittest.TestCase):
         video_data = self.video_ds.get(start_time, end_time)
         tabular_data = self.tabular_ds.get(start_time, end_time)
 
-        print(video_data)
-        print(video_data.iloc[0]['frames'].shape)
-
         return None
+
+    def test_tabular_data_leakage_from_get_method(self):
+
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=2)
+
+        # Before loading data
+        pre_free = mm.tools.get_free_memory()
+
+        # Testing tabular data
+        t_datas = []
+        for i in range(1000):
+            tabular_data = self.tabular_ds.get(start_time, end_time)
+            t_datas.append(tabular_data)
+
+        del t_datas
+        gc.collect()
+
+        post_free = mm.tools.get_free_memory()
+        
+        # Calculate the diff of memory
+        diff = np.abs(post_free - pre_free) / pre_free
+
+        # This difference should be minimal
+        assert diff < 0.01, f"Memory Leak of {diff}!"
+
+    def test_video_data_leakage_from_get_method(self):
+        
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=2)
+
+        # Before loading data
+        pre_free = mm.tools.get_free_memory()
+
+        # Testing video data
+        v_datas = []
+        for i in range(20):
+            video_data = self.video_ds.get(start_time, end_time)
+            v_datas.append(video_data)
+
+        del v_datas
+        gc.collect()
+        
+        # After loading data
+        post_free = mm.tools.get_free_memory()
+        
+        # Calculate the diff of memory
+        diff = np.abs(post_free - pre_free) / pre_free
+
+        # This difference should be minimal
+        assert diff < 0.1, f"Memory Leak of {diff}!"
+
+    def test_video_data_leakage_from_append_method(self):
+
+        # Loading the example 
+        start_time = pd.Timedelta(seconds=0)
+        end_time = pd.Timedelta(seconds=2)
+        video_data = self.video_ds.get(start_time, end_time)
+
+        # Creating an empty video dataset
+        output_dir = OUTPUT_DIR / 'append_test.avi'
+        fps = 60
+        h, w = self.video_ds.get_frame_size()
+        empty_video_ds = mmv.VideoDataStream.empty(
+            name='test_video_append',
+        )
+        empty_video_ds.open_writer(
+            filepath=output_dir,
+            fps=fps,
+            size=(w, h)
+        )
+
+        # Before loading data
+        pre_free = mm.tools.get_free_memory()
+
+        # Testing video data
+        for i in tqdm.tqdm(range(10)):
+            empty_video_ds.append(video_data)
+
+        # After loading data
+        post_free = mm.tools.get_free_memory()
+
+        # Then close the video datastream to save
+        empty_video_ds.close()
+        
+        # Calculate the diff of memory
+        diff = np.abs(post_free - pre_free) / pre_free
+
+        # This difference should be minimal
+        assert diff < 0.1, f"Memory Leak of {diff}!"
 
     def test_getting_windowed_data(self):
 

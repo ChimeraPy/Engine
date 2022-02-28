@@ -15,7 +15,7 @@ Item {
             id: dashboardView
             anchors.margins: 15
             anchors.fill: parent
-            spacing: 15
+            spacing: 30
             orientation: ListView.Vertical
             model: Manager.dashboard_model
             delegate: BaseDiagramDelegate {}

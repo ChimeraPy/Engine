@@ -20,3 +20,4 @@ from .pipe import Pipe
 from .session import Session
 from .data_source import DataSource, Sensor, Api
 from . import tools
+from .exception import MemoryLimitError
