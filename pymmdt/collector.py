@@ -49,7 +49,8 @@ class Collector:
             end_at:Optional[pd.Timedelta]=None,
             max_get_threads:Optional[int]=4,
             memory_limit:Optional[float]=0.8,
-            empty:bool=False
+            empty:Optional[bool]=False,
+            verbose:Optional[bool]=False
         ) -> None:
         """Construct the ``Collector``.
 
@@ -136,7 +137,7 @@ class Collector:
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
 
         # For debugging purposes, save the timetrack to csv to debug
-        self.global_timetrack.to_csv('global_timetrack.csv', index=False)
+        # self.global_timetrack.to_csv('global_timetrack.csv', index=False)
         
     def set_start_time(self, time:pd.Timedelta):
         assert time < self.end_time, "start_time cannot be greater than end_time."
@@ -149,47 +150,6 @@ class Collector:
     def set_loading_queue(self, loading_queue:queue.Queue):
         assert isinstance(loading_queue, queue.Queue), "loading_queue must be a queue.Queue."
         self.loading_queue = loading_queue
-
-    @threaded
-    def load_data_to_queue(self):
-
-        # Calculating the windows only after the thread has been created
-        self.windows = get_windows(self.start_time, self.end_time, self.time_window_size)
-
-        # Keeping counter for the number of windows loaded
-        self.windows_loaded = 0
-       
-        # Continuously load data
-        for win_idx, window in enumerate(self.windows):
-
-            # Extract the start and end time from window
-            start, end = window.start, window.end 
-
-            # Get the data (safely and waiting until memory is opened up)
-            while True:
-                try:
-                    data = self.get(start, end)
-                    # print("Success")
-                    break
-                except MemoryLimitError:
-                    # print("Memory Limit reached!")
-                    gc.collect()
-                    time.sleep(0.1)
-
-            # Put the data into the queue
-            # self.loading_queue.put(data.copy(), block=True)
-            self.loading_queue.put(data, block=True)
-
-            # Deleting the data and collecting!
-            del data
-            gc.collect()
-
-            # Increasing the counter when done
-            self.windows_loaded += 1
-
-        # Once all the data is over, send the message that the work is 
-        # complete
-        self.loading_queue.put("END", block=True)
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
         """
@@ -215,7 +175,7 @@ class Collector:
         safe_available_memory = self.memory_limit * free_virtual_memory 
 
         # Debugging
-        # print(f"AMU: {average_memory_usage} - FVM: {free_virtual_memory} - SAM: {safe_available_memory} R: {safe_available_memory/max(1,average_memory_usage)}")
+        print(f"AMU: {average_memory_usage} - FVM: {free_virtual_memory} - SAM: {safe_available_memory} R: {safe_available_memory/max(1,average_memory_usage)}")
        
         if average_memory_usage > safe_available_memory:
             raise MemoryLimitError
@@ -246,3 +206,44 @@ class Collector:
 
     def __len__(self):
         return len(self.global_timetrack)
+
+    @threaded
+    def load_data_to_queue(self):
+
+        # Calculating the windows only after the thread has been created
+        self.windows = get_windows(self.start_time, self.end_time, self.time_window_size)
+
+        # Keeping counter for the number of windows loaded
+        self.windows_loaded = 0
+       
+        # Continuously load data
+        for win_idx, window in enumerate(self.windows):
+
+            # Extract the start and end time from window
+            start, end = window.start, window.end 
+
+            # Get the data (safely and waiting until memory is opened up)
+            while True:
+                try:
+                    data = self.get(start, end)
+                    print("Success")
+                    break
+                except MemoryLimitError:
+                    print("Memory Limit reached!")
+                    gc.collect()
+                    time.sleep(0.1)
+
+            # Put the data into the queue
+            # self.loading_queue.put(data.copy(), block=True)
+            self.loading_queue.put(data, block=True)
+
+            # Deleting the data and collecting!
+            del data
+            gc.collect()
+
+            # Increasing the counter when done
+            self.windows_loaded += 1
+
+        # Once all the data is over, send the message that the work is 
+        # complete
+        self.loading_queue.put("END", block=True)

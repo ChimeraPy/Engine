@@ -68,7 +68,7 @@ class VideoEntry(Entry):
         # If this is the first time, set the video writer to match the 
         # input size
         if self.num_of_total_changes == 0:
-
+            
             # This operation requires at least two samples
             assert len(self.unsaved_changes['frames']) >= 2, "Time window\
                     size is too small, requires 2 frames per data sample\

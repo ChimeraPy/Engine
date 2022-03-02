@@ -19,7 +19,7 @@ from .pipe import Pipe
 from .data_stream import DataStream
 from .session import Session
 from .collector import Collector
-from .tools import threaded
+from .tools import threaded, get_free_memory
 
 class SingleRunner:
     
@@ -36,6 +36,7 @@ class SingleRunner:
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
             memory_limit:Optional[float]=0.8,
+            verbose=True,
         ):
 
         # Store the information
@@ -44,6 +45,7 @@ class SingleRunner:
         self.data_streams = data_streams
         self.session = session
         self.run_solo = run_solo
+        self.verbose = verbose
         
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
@@ -56,8 +58,8 @@ class SingleRunner:
                 "When ``run_solo`` is set, ``session`` and ``time_window_size`` parameters are required."
 
             self.collector = Collector(
-                {self.name: self.data_streams},
-                time_window_size,
+                data_streams_groups={self.name: self.data_streams},
+                time_window_size=time_window_size,
                 start_at=start_at,
                 end_at=end_at,
                 memory_limit=memory_limit
@@ -88,7 +90,7 @@ class SingleRunner:
 
         # Create a queue and thread for I/O logging in separate thread
         self.logging_queues = [queue.Queue(maxsize=max_logging_queue_size) for session in [self.session] + self.session.subsessions]
-        self.logging_threads = [session.load_data_to_log() for session in [self.session] + self.session.subsessions]
+        self.logging_threads = [session.load_data_to_log(self.verbose) for session in [self.session] + self.session.subsessions]
 
         # Provide the collector and session their respective queue
         self.collector.set_loading_queue(self.loading_queue)
@@ -150,6 +152,9 @@ class SingleRunner:
 
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
+        
+        # Take snapshot of memory before
+        pre_free = get_free_memory()
 
         # Continue iterating
         while True:
@@ -163,10 +168,20 @@ class SingleRunner:
                 break
 
             # Then propagate the sample throughout the pipe
-            self.step(all_data_samples)
+            self.step(all_data_samples.copy())
 
             # Increase the counter
             self.num_processed_data_chunks += 1
+            
+            # Log information
+            print(f"[1] Used mem ratio from pre: {pre_free/get_free_memory()}")
+
+            # Deleting the memory
+            del all_data_samples
+            gc.collect()
+            
+            # Log information
+            print(f"[2] Used mem ratio from pre: {pre_free/get_free_memory()}")
 
         # If the thread ended, we should stop some processes
         self._thread_exit.set()
@@ -232,25 +247,6 @@ class SingleRunner:
         if verbose:
             curses.wrapper(self.tui_main)
             
-        # tracker =  pympler.tracker.SummaryTracker()
-      
-        # while True:
-            
-        #     # Starting the memory tracker
-        #     # time.sleep(1)
-        #     # stats = gc.get_stats()
-        #     # print(stats)
-        #     # gc.collect()
-                
-        #     # Debugging memory leakage
-        #     # tracker.print_diff()
-                
-        #     # Break Condition
-        #     if self.collector.windows_loaded == len(self.collector.windows) and \
-        #         self.num_processed_data_chunks == len(self.collector.windows) and \
-        #         self.logging_queues[0].qsize() == 0:
-        #         break
- 
         # Then wait until the threads is complete!
         self.processing_thread.join()
         self.loading_thread.join()
@@ -281,6 +277,7 @@ class GroupRunner(SingleRunner):
             max_loading_queue_size:Optional[int]=100,
             max_logging_queue_size:Optional[int]=1000,
             memory_limit:Optional[float]=0.8,
+            verbose=True,
         ) -> None:
         """Construct the analyzer. 
 

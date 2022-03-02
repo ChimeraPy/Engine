@@ -9,6 +9,7 @@ __package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Union, Dict, Optional, Any
+import gc
 import pathlib
 import os
 import threading
@@ -144,7 +145,11 @@ class Session:
             'data': df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk.copy())
+        # self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
+        
+        del data_chunk, df, data
+        gc.collect()
 
     def add_images(
             self,
@@ -159,7 +164,8 @@ class Session:
             return None
 
         # Renaming and extracting only the content we want
-        images_df = df[[data_column, time_column]].copy()
+        # images_df = df[[data_column, time_column]].copy()
+        images_df = df[[data_column, time_column]]
         images_df = images_df.rename(columns={data_column: 'frames', time_column: '_time_'})
         
         # Put data in the logging queue
@@ -168,7 +174,11 @@ class Session:
             'data': images_df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk.copy())
+        # self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
+        
+        del data_chunk, images_df, df
+        gc.collect()
 
     def add_video(
             self,
@@ -183,7 +193,8 @@ class Session:
             return None
 
         # Renaming and extracting only the video content
-        video_df = df[[data_column, time_column]].copy()
+        # video_df = df[[data_column, time_column]].copy()
+        video_df = df[[data_column, time_column]]
         video_df = video_df.rename(columns={data_column: 'frames', time_column: '_time_'})
 
         # Put data in the logging queue
@@ -192,7 +203,11 @@ class Session:
             'data': video_df,
             'dtype': 'video'
         }
-        self.logging_queue.put(data_chunk.copy())
+        # self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
+        
+        del data_chunk, video_df, df
+        gc.collect()
 
     def add_tabular(
             self, 
@@ -221,7 +236,11 @@ class Session:
             'data': df.rename(columns={time_column: '_time_'}),
             'dtype': 'tabular'
         }
-        self.logging_queue.put(data_chunk.copy())
+        # self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
+
+        del data_chunk, df
+        gc.collect()
  
     def create_subsession(self, name: str) -> 'Session':
         """create_subsession.
