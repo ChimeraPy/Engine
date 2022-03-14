@@ -190,7 +190,6 @@ if __name__ == "__main__":
     unittest.main()
 
     # Otherwise, we have to call the test ourselves
-    # test_case = GroupNurseTestCase()
-    # single_test_case = SingleRunnerTestCase()
-    # single_test_case.setUp()
-    # single_test_case.test_runner_get_data_and_step_process()
+    # test_case = SingleRunnerTestCase()
+    # test_case.setUp()
+    # test_case.test_runner_to_run()

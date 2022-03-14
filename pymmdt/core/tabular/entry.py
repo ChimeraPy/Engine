@@ -13,8 +13,8 @@ import numpy as np
 import cv2
 
 # Internal Imports
-from pymmdt.entry import Entry
-from .data_stream import TabularDataStream
+from pymmdt.core.entry import Entry
+from pymmdt.core.tabular.data_stream import TabularDataStream
 
 class TabularEntry(Entry):
 
@@ -38,6 +38,10 @@ class TabularEntry(Entry):
         # Saving the Entry attributes
         self.dir = dir
         self.name = name
+        
+        # If the directory doesn't exists, create it 
+        if not self.dir.exists():
+            os.mkdir(self.dir)
 
         # Setting initial values
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
@@ -91,6 +95,10 @@ class ImageEntry(Entry):
         # Storing input parameters
         self.dir = dir
         self.name = name
+        
+        # If the directory doesn't exists, create it 
+        if not self.dir.exists():
+            os.mkdir(self.dir)
         
         # Setting initial values
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])

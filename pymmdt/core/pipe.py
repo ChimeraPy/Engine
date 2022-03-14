@@ -16,9 +16,9 @@ import copy
 import pandas as pd
 
 # Local Imports
-from .process import Process
-from .session import Session
-from .collector import Collector
+from pymmdt.core.process import Process
+from pymmdt.core.session import Session
+from pymmdt.core.collector import Collector
 
 class Pipe:
 
@@ -83,15 +83,10 @@ class Pipe:
         """Create a deep copy of the pipe."""
         return copy.deepcopy(self)
 
-    def attach_session(self, session: Session) -> None:
+    def set_session(self, session: Session) -> None:
 
         # First make the session an attribute
         self.session = session
-
-    def attach_collector(self, collector: Collector) -> None:
-
-        # First make the collector an attribute
-        self.collector = collector
 
     def start(self) -> None:
         ...

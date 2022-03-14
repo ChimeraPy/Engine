@@ -10,6 +10,7 @@ __package__ = 'video'
 
 # Built-in Imports
 from typing import Union, Tuple, Optional
+import multiprocessing as mp
 import pathlib
 import gc
 
@@ -20,7 +21,7 @@ import pandas as pd
 import numpy as np
 
 # Internal imports
-from pymmdt.data_stream import DataStream
+from pymmdt.core.data_stream import DataStream
 
 class VideoDataStream(DataStream):
     """Implementation of DataStream focused on Video data.
@@ -41,7 +42,8 @@ class VideoDataStream(DataStream):
             video_path:Optional[Union[pathlib.Path, str]]=None, 
             fps:Optional[int]=None,
             size:Optional[Tuple[int, int]]=None,
-            color_mode:Optional[str]="BGR"
+            color_mode:str="BGR",
+            startup_now:bool=False
         ) -> None:
         """Construct new ``VideoDataStream`` instance.
 
@@ -55,55 +57,46 @@ class VideoDataStream(DataStream):
 
         """
         # Save parameters that don't matter what type of mode ("reading" vs "writing")
+        self.name = name
+        self.start_time = start_time
+        self.video_path = video_path
+        self.fps = fps
+        self.size = size
         self.color_mode = color_mode
+        self.has_startup = False
+        self.compression_queue = mp.Queue(maxsize=5)
+        
+        # Setting the index is necessary for video, even before __iter__
+        self.index = 0
+        self.data_index = 0
 
         # First determine if this video is a path or an empty stream
-        if video_path:
+        if self.video_path:
+
+            # This is the "reading" mode
+            self.mode = "reading"
 
             # Ensure that the video is a str
-            if isinstance(video_path, str):
-                video_path = pathlib.Path(video_path)
+            if isinstance(self.video_path, str):
+                self.video_path = pathlib.Path(self.video_path)
             
             # Ensure that the file exists
-            assert video_path.is_file() and video_path.exists(), "Video file must exists."
+            assert self.video_path.is_file() and self.video_path.exists(), "Video file must exists."
 
-            # Even though we use decord for video loading, decord's 
-            # method for getting the FPS is faulty so we need to use 
-            # OpenCV for this, then we delete this
-            self.video = cv2.VideoCapture(str(video_path))
-            self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
-            self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.mode = 'reading'
-
-            # Constructing timetrack
-            # timetrack = pd.date_range(start=start_time, periods=self.nb_frames, freq=f"{int(1e9/self.fps)}N").to_frame()
-            self.update_start_time(start_time)
-            
-        # Else, this is an empty video data stream
         else:
 
-            # Store the video attributes
-            self.fps = fps
-            self.size = size
-            self.nb_frames = 0
+            # This is the "writing" mode
             self.mode = "writing"
-            
-            # Ensure that the file extension is .mp4
-            self.video = cv2.VideoWriter()
 
-            # If path provided, then open the writer fully
-            if video_path:
-                self.open_writer(video_path)
-
-            # Create an empty timeline
-            self.timeline = pd.TimedeltaIndex([])
+        # Create an empty timeline
+        self.timeline = pd.TimedeltaIndex([])
 
         # Apply the super constructor
         super().__init__(name, self.timeline)
 
-        # Setting the index is necessary for video, even before __iter__
-        self.index = 0
-        self.data_index = 0
+        # If starting now, then load the video
+        if startup_now:
+            self.startup()
 
     @classmethod
     def empty(
@@ -112,10 +105,44 @@ class VideoDataStream(DataStream):
             start_time:Optional[pd.Timedelta]=None, 
             fps:Optional[int]=None, 
             size:Optional[Tuple[int, int]]=None,
-            video_path:Optional[Union[pathlib.Path, str]]=None
+            video_path:Optional[Union[pathlib.Path, str]]=None,
+            startup_now:bool=False
         ):
 
-        return cls(name, start_time, video_path, fps, size)
+        return cls(
+            name=name, 
+            start_time=start_time, 
+            video_path=video_path, 
+            fps=fps, 
+            size=size, 
+            startup_now=startup_now
+        )
+
+    def startup(self):
+
+        # This is for the reading mode only!
+        if self.mode == "reading":
+
+            # Create the cv2 object now since it cannot be seralized and 
+            # therefore be passed to a process. We have to create it inside
+            # the ``run`` method of the process.
+            self.video = cv2.VideoCapture(str(self.video_path))
+            self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
+            self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+            self.has_startup = True
+                
+            # Constructing timetrack
+            self.update_start_time(self.start_time)
+
+        # Else, its for the writing mode
+        else:
+
+            # Then open the writer
+            self.video = cv2.VideoWriter()
+            self.nb_frames = 0
+
+        # Update the flag variable
+        self.has_startup = True
 
     def __len__(self):
         return self.nb_frames
@@ -136,12 +163,16 @@ class VideoDataStream(DataStream):
 
     def open_writer(
         self, 
-        filepath:Union[pathlib.Path, str],
+        video_path:Union[pathlib.Path, str],
         fps:Optional[int]=None,
-        size:Optional[int]=None
+        size:Optional[Tuple[int, int]]=None
         ) -> None:
         """Set the video writer by opening with the filepath."""
-        assert self.mode == 'writing' and self.nb_frames == 0
+        assert self.mode == 'writing'
+        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``open_writer`` before calling ``startup``."
+
+        # Storing information
+        self.video_path = video_path
 
         # Check if new fps and size is passed
         if fps:
@@ -154,7 +185,7 @@ class VideoDataStream(DataStream):
 
         # Opening the video writer given the desired parameters
         self.video.open(
-            str(filepath),
+            str(self.video_path),
             cv2.VideoWriter_fourcc(*'DIVX'),
             self.fps,
             (self.size[1], self.size[0])
@@ -167,6 +198,8 @@ class VideoDataStream(DataStream):
             size (Tuple[int, int]): The frame's width and height.
 
         """
+        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``get_frame_size`` before calling ``startup``."
+
         if isinstance(self.video, (cv2.VideoCapture, cv2.VideoWriter)):
             w = int(self.video.get(3))
             h = int(self.video.get(4))
@@ -178,6 +211,7 @@ class VideoDataStream(DataStream):
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         assert end_time > start_time, "``end_time`` should be greater than ``start_time``."
         assert self.mode == "reading", "``get`` currently works in ``reading`` mode."
+        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``get`` before calling ``startup``."
         
         # Generate mask for the window data
         after_start_time = self.timetrack['time'] >= start_time

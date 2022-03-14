@@ -118,6 +118,9 @@ class DataStream:
         """
         return len(self.timetrack)
 
+    def startup(self):
+        pass
+
     def make_timetrack(self, timeline: pd.TimedeltaIndex):
 
         # Constructing the timetrack (including time and data pointer)

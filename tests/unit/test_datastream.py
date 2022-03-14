@@ -17,8 +17,8 @@ import pandas as pd
 
 # Testing Library
 import pymmdt as mm
-import pymmdt.tabular as mmt
-import pymmdt.video as mmv
+import pymmdt.core.tabular as mmt
+import pymmdt.core.video as mmv
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -44,7 +44,8 @@ class DataStreamTestCase(unittest.TestCase):
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
-            fps=30
+            fps=30,
+            startup_now=True
         )
 
         # Create empty version of the data streams
@@ -53,7 +54,8 @@ class DataStreamTestCase(unittest.TestCase):
             name="test_empty_video",
             start_time=pd.Timedelta(0),
             fps=30,
-            size=self.video_ds.get_frame_size()
+            size=self.video_ds.get_frame_size(),
+            startup_now=True
         )
 
         # Creating list container for all datastreams
@@ -77,7 +79,7 @@ class DataStreamTestCase(unittest.TestCase):
         end_time = pd.Timedelta(seconds=2)
 
         # Before loading data
-        pre_free = mm.tools.get_free_memory()
+        pre_free = mm.core.tools.get_free_memory()
 
         # Testing tabular data
         t_datas = []
@@ -88,7 +90,7 @@ class DataStreamTestCase(unittest.TestCase):
         del t_datas
         gc.collect()
 
-        post_free = mm.tools.get_free_memory()
+        post_free = mm.core.tools.get_free_memory()
         
         # Calculate the diff of memory
         diff = np.abs(post_free - pre_free) / pre_free
@@ -102,7 +104,7 @@ class DataStreamTestCase(unittest.TestCase):
         end_time = pd.Timedelta(seconds=2)
 
         # Before loading data
-        pre_free = mm.tools.get_free_memory()
+        pre_free = mm.core.tools.get_free_memory()
 
         # Testing video data
         v_datas = []
@@ -114,8 +116,8 @@ class DataStreamTestCase(unittest.TestCase):
         gc.collect()
         
         # After loading data
-        post_free = mm.tools.get_free_memory()
-        
+        post_free = mm.core.tools.get_free_memory()
+
         # Calculate the diff of memory
         diff = np.abs(post_free - pre_free) / pre_free
 
@@ -135,22 +137,23 @@ class DataStreamTestCase(unittest.TestCase):
         h, w = self.video_ds.get_frame_size()
         empty_video_ds = mmv.VideoDataStream.empty(
             name='test_video_append',
+            startup_now=True
         )
         empty_video_ds.open_writer(
-            filepath=output_dir,
+            video_path=output_dir,
             fps=fps,
             size=(w, h)
         )
 
         # Before loading data
-        pre_free = mm.tools.get_free_memory()
+        pre_free = mm.core.tools.get_free_memory()
 
         # Testing video data
         for i in tqdm.tqdm(range(10)):
             empty_video_ds.append(video_data)
 
         # After loading data
-        post_free = mm.tools.get_free_memory()
+        post_free = mm.core.tools.get_free_memory()
 
         # Then close the video datastream to save
         empty_video_ds.close()

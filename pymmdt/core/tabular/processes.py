@@ -11,7 +11,7 @@ __package__ = 'tabular'
 # Built-in Imports
 from typing import Any
 
-from pymmdt.process import Process
+from pymmdt.core.process import Process
 
 class IdentityProcess(Process):
     

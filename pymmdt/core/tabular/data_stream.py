@@ -15,9 +15,9 @@ import pathlib
 
 import pandas as pd
 
-from pymmdt.data_stream import DataStream
-from pymmdt.process import Process
-from pymmdt.tools import get_windows
+from pymmdt.core.data_stream import DataStream
+from pymmdt.core.process import Process
+from pymmdt.core.tools import get_windows
 
 class TabularDataStream(DataStream):
     """Implementation of DataStream focused on Tabular data.

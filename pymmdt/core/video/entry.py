@@ -4,13 +4,14 @@ __package__ = 'tabular'
 # Built-in Imports
 import pathlib
 import gc
+import os
 
 # Third-party Imports
 import pandas as pd
 
 # Internal Imports
-from pymmdt.entry import Entry
-from pymmdt.video.data_stream import VideoDataStream
+from pymmdt.core.entry import Entry
+from pymmdt.core.video.data_stream import VideoDataStream
 
 class VideoEntry(Entry):
     """
@@ -45,12 +46,16 @@ class VideoEntry(Entry):
         self.dir = dir
         self.name = name
 
+        # If the directory doesn't exists, create it 
+        if not self.dir.exists():
+            os.mkdir(self.dir)
+
         # Setting initial values
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
         self.num_of_total_changes = 0
         
         self.save_loc = self.dir / f"{self.name}.avi"
-        self.stream = VideoDataStream.empty(name=name)
+        self.stream = VideoDataStream.empty(name=name, startup_now=True)
     
     def flush(self):
         """Commit the unsaved changes to memory.
@@ -86,7 +91,7 @@ class VideoEntry(Entry):
 
             # Opening the frame writer with the new data
             self.stream.open_writer(
-                filepath=self.save_loc,
+                video_path=self.save_loc,
                 fps=int(average_fps),
                 size=(w,h)
             )

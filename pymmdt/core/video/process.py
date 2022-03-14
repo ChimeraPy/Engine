@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from pymmdt.process import Process
+from pymmdt.core.process import Process
 
 class ShowVideo(Process):
     """Basic process that shows the video in a CV window.

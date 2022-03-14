@@ -61,8 +61,8 @@ class Manager(QObject):
             meta_check_step:int=5000,
             max_message_queue_size:int=1000,
             max_loading_queue_size:int=1000,
-            memory_limit:float=0.8,
-            loader_memory_ratio:float=0.1,
+            max_sorting_queue_size:int=1000,
+            memory_limit:float=0.5,
             verbose:bool=False,
         ):
         super().__init__()
@@ -76,6 +76,7 @@ class Manager(QObject):
         self.meta_check_step = meta_check_step # milliseconds
         self.max_message_queue_size = max_message_queue_size
         self.max_loading_queue_size = max_loading_queue_size
+        self.max_sorting_queue_size = max_sorting_queue_size
         self.verbose = verbose
 
         # Keeping track of all the data in the logdir
@@ -97,7 +98,6 @@ class Manager(QObject):
         self.loaded_windows: List = []
 
         # Keeping track of memory usage
-        self.loader_memory_ratio = loader_memory_ratio
         self.total_available_memory = memory_limit * psutil.virtual_memory().available
         self.loading_queue_memory_chunks = {}
         self.sorting_queue_memory_chunks = {}
@@ -108,7 +108,6 @@ class Manager(QObject):
         self.thread_exit.clear()
 
         # Keeping track of the pause/play state and the start, end time
-        self.stop_everything = False
         self._data_is_loaded = False
         self._is_play = False
         self.end_time = pd.Timedelta(seconds=0)
@@ -142,8 +141,7 @@ class Manager(QObject):
             },
             'SORTER':{
                 'UPDATE': {
-                    'COUNTER': self.respond_sorter_message_counter,
-                    'MEMORY': self.respond_sorter_message_memory
+                    'COUNTER': self.respond_sorter_message_counter
                 },
                 'META': {
                     'END': self.respond_sorter_message_end
@@ -216,22 +214,8 @@ class Manager(QObject):
 
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
-
-    def message_set_loading_window_loader(self, loading_window):
-        
-        # Set the time window to starting loading data
-        loading_window_message = {
-            'header': 'UPDATE',
-            'body': {
-                'type': 'LOADING_WINDOW',
-                'content': {
-                    'loading_window': loading_window
-                }
-            }
-        }
-        self.message_to_loading_queue.put(loading_window_message)
     
-    def message_pause_loader(self):
+    def message_pause_loader_and_sorter(self):
 
         # Sending the message to loader to pause!
         message = {
@@ -242,22 +226,11 @@ class Manager(QObject):
             }
         }
         self.message_to_loading_queue.put(message)
-
-    def message_pause_sorter(self):
-
-        # Sending the message to sorter to pause!
-        message = {
-            'header': 'META',
-            'body': {
-                'type': 'PAUSE',
-                'content': {},
-            }
-        }
         self.message_to_sorting_queue.put(message)
     
-    def message_resume_loader(self):
+    def message_resume_loader_and_sorter(self):
 
-        # Sending the message to loader to resume!
+        # Sending the message to loader to pause!
         message = {
             'header': 'META',
             'body': {
@@ -266,17 +239,6 @@ class Manager(QObject):
             }
         }
         self.message_to_loading_queue.put(message)
-    
-    def message_resume_sorter(self):
-
-        # Sending the message to sorter to resume!
-        message = {
-            'header': 'META',
-            'body': {
-                'type': 'RESUME',
-                'content': {},
-            }
-        }
         self.message_to_sorting_queue.put(message)
 
     def message_end_loading_and_sorting(self):
@@ -299,8 +261,6 @@ class Manager(QObject):
     def respond_loader_message_counter(self, uuid, loading_window, data_memory_usage):
         self.latest_window_loaded = loading_window
         self.loading_queue_memory_chunks[uuid] = data_memory_usage
-        new_state = loading_window / len(self.windows)
-        self.loading_bar.state = new_state
 
     def respond_loader_message_end(self):
         self.loader_finished = True
@@ -309,11 +269,6 @@ class Manager(QObject):
         new_state = loaded_time / self.end_time
         self.sorting_bar.state = new_state
         self.sorting_queue_memory_chunks[uuid] = data_memory_usage
-
-    def respond_sorter_message_memory(self, uuid):
-        while uuid not in self.loading_queue_memory_chunks:
-            time.sleep(0.01)
-        del self.loading_queue_memory_chunks[uuid]
 
     def respond_sorter_message_end(self):
         self.sorter_finished = True
@@ -331,20 +286,31 @@ class Manager(QObject):
         # Constantly check for messages
         while not self.thread_exit.is_set():
             
-            # Checking the loading message queue
-            try:
-                loading_message = self.message_from_loading_queue.get(timeout=0.01)
-                loading_message_new = True
-            except queue.Empty:
-                loading_message_new = False
+            # Prevent blocking, as we need to check if the thread_exist
+            # is set.
+            while not self.thread_exit.is_set():
 
-            # Ckecking the sorting message queue
-            try:
-                sorting_message = self.message_from_sorting_queue.get(timeout=0.01)
-                sorting_message_new = True
-            except queue.Empty:
-                sorting_message_new = False
+                # Checking the loading message queue
+                try:
+                    loading_message = self.message_from_loading_queue.get(timeout=0.05)
+                    loading_message_new = True
+                except queue.Empty:
+                    loading_message_new = False
 
+                # Ckecking the sorting message queue
+                try:
+                    sorting_message = self.message_from_sorting_queue.get(timeout=0.05)
+                    sorting_message_new = True
+                except queue.Empty:
+                    sorting_message_new = False
+
+                # If new message, process it right now
+                if loading_message_new or sorting_message_new:
+                    break
+
+                # else, placing a sleep timer
+                # time.sleep(0.05)
+              
             # Processing new loading messages
             if loading_message_new:
 
@@ -374,33 +340,17 @@ class Manager(QObject):
                 func(**sorting_message['body']['content'])
             
             # Check if the memory limit is passed
-            self.sorter_memory_used = sum(list(self.sorting_queue_memory_chunks.values()))
-            self.loader_memory_used = sum(list(self.loading_queue_memory_chunks.values()))
-            self.total_memory_used = self.sorter_memory_used + self.loader_memory_used
-
-            print(f"LOADER [{self.loading_queue.qsize()}]: {self.loader_memory_used/self.total_available_memory}, SORTER [{self.sorting_queue.qsize()}]: {self.sorter_memory_used/self.total_available_memory}, RATIO: {self.total_memory_used / self.total_available_memory}")
-
-            # If the system is supposed to continue operating, keep 
-            # regulating the memory.
-            if self.stop_everything is False:
-
-                # Check if we need to pause the sorter
-                if self.loader_memory_used > self.loader_memory_ratio *self.total_available_memory and not self.loader_paused:
-                    # Pause the sorting and wait until memory is cleared!
-                    self.message_pause_loader()
-                    self.loader_paused = True
-                elif self.loader_memory_used < self.loader_memory_ratio *self.total_available_memory and self.loader_paused:
-                    self.message_resume_loader()
-                    self.loader_paused = False
-
-                # Check if we need to pause the sorter
-                if self.sorter_memory_used > (1-self.loader_memory_ratio)*self.total_available_memory and not self.sorter_paused:
-                    # Pause the sorting and wait until memory is cleared!
-                    self.message_pause_sorter()
-                    self.sorter_paused = True
-                elif self.sorter_memory_used < (1-self.loader_memory_ratio)*self.total_available_memory and self.sorter_paused:
-                    self.message_resume_sorter()
-                    self.sorter_paused = False
+            self.total_memory_used = sum(list(self.sorting_queue_memory_chunks.values())) + sum(list(self.loading_queue_memory_chunks.values()))
+            
+            print(f"TMU: {self.total_memory_used}, AVAILABLE: {self.total_available_memory}, RATIO: {self.total_memory_used / self.total_available_memory}")
+            if self.total_memory_used > self.total_available_memory and not self.subprocesses_paused:
+                # Pause the loading and wait until memory is cleared!
+                self.message_pause_loader_and_sorter()
+                self.subprocesses_paused = True
+            elif self.total_memory_used < self.total_available_memory and self.subprocesses_paused:
+                # resume the loading and wait until memory is cleared!
+                self.message_resume_loader_and_sorter()
+                self.subprocesses_paused = False
 
     @pyqtSlot()
     def restart(self):
@@ -408,11 +358,15 @@ class Manager(QObject):
         print("Restarting!")
 
         # Send message to loading and sorting process to halt!
-        self.stop_everything = True
-        self.message_pause_loader()
-        self.message_pause_sorter()
-        self.sorter_paused = True
-        self.loader_paused = True
+        pause_message = {
+            'header': 'META',
+            'body': {
+                'type': 'PAUSE',
+                'content': {},
+            }
+        }
+        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+            message_to_queue.put(pause_message)
 
         # Waiting until the processed halted
         time.sleep(0.05)
@@ -423,26 +377,35 @@ class Manager(QObject):
         while self.sorting_queue.qsize():
             clear_queue(self.sorting_queue)
 
-        # Delete all the memory
-        self.loading_queue_memory_chunks = {}
-        self.sorting_queue_memory_chunks = {}
-        
-        # Set the time to the start_time
-        self.current_time = self.start_time
-        self._sliding_bar.state = self.current_time / (self.end_time) 
-
-        # Set the window of the loader
-        self.message_set_loading_window_loader(0)
+        # Set the time window to starting loading data
+        loading_window_message = {
+            'header': 'UPDATE',
+            'body': {
+                'type': 'LOADING_WINDOW',
+                'content': {
+                    'loading_window': 0
+                }
+            }
+        }
+        self.message_to_loading_queue.put(loading_window_message)
 
         # Waiting until the loading window message is processed
         time.sleep(0.05)
 
         # Continue the processes
-        self.message_resume_loader()
-        self.message_resume_sorter()
-        self.sorter_paused = False
-        self.loader_paused = False
-        self.stop_everything = False
+        resume_message = {
+            'header': 'META',
+            'body': {
+                'type': 'RESUME',
+                'content': {}
+            }
+        }
+        for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
+            message_to_queue.put(resume_message)
+
+        # Set the time to the start_time
+        self.current_time = self.start_time
+        self._sliding_bar.state = self.current_time / (self.end_time) 
 
         # Typically after rewind, the video is played
         self._is_play = True
@@ -628,7 +591,7 @@ class Manager(QObject):
         self.num_of_windows = 0
         self.latest_window_loaded = 0
         self.loader_finished = False
-        self.loader_paused = False
+        self.subprocesses_paused = False
 
         # Create the Loader with the specific parameters
         self.loader = Loader(
@@ -649,15 +612,11 @@ class Manager(QObject):
 
     def init_sorter(self):
         # Create the queue for sorted data 
-        self.sorting_queue = mp.Queue()
+        self.sorting_queue = mp.Queue(maxsize=self.max_sorting_queue_size)
         
         # Then create the message queues for the sorting subprocess
         self.message_to_sorting_queue = mp.Queue(maxsize=self.max_message_queue_size)
         self.message_from_sorting_queue = mp.Queue(maxsize=self.max_message_queue_size)
-
-        # Variables to track the sorter
-        self.sorter_paused = False
-        self.sorter_finished = False
 
         # Storing the sorting queues
         self.queues.update({
@@ -709,6 +668,8 @@ class Manager(QObject):
     @threaded
     def update_content(self):
 
+        tic = time.time()
+
         # Keep repeating until exiting the app
         while not self.thread_exit.is_set():
 
@@ -721,59 +682,106 @@ class Manager(QObject):
             if not self._is_play or self.session_complete:
                 time.sleep(0.05)
                 continue
- 
-            # Get the next entry information!
-            try:
-                data_chunk = self.sorting_queue.get(timeout=0.1)
-            except queue.Empty:
-                print('EMPTY')
-                # Check if all the data has been loaded, if so that means
-                # that all the data has been played
-                if self.sorting_bar.state == 1:
-                    print("Session end detected!")
-                    self.session_complete = True
-                    self._is_play = False
-                    self.playPauseChanged.emit()
-                
-                # Regardless, continue
-                continue
-            
-            # Get the time before updating
-            tic = time.time()
 
-            # Update the memory used by the sorting queue
-            if data_chunk['uuid']:
-                while data_chunk['uuid'] not in self.sorting_queue_memory_chunks:
-                    time.sleep(0.01)
-                del self.sorting_queue_memory_chunks[data_chunk['uuid']]
-            
             # Compute the average time it takes to update content, and its ratio 
             # to the expect time, clipping at 1
             average_update_delta = sum(self.update_content_times)/max(1, len(self.update_content_times))
+            update_delta_ratio = (self.time_step/1000) / max(self.time_step/1000,average_update_delta)
+            update_delta_ratio *= 0.98 # Applying a compensation factor
+            # print("AVERAGE: ", average_update_delta ," UPDATE DELTA RATIO: ", update_delta_ratio)
+            
+            # Start timing the process of uploading content
+            tic = time.time()
 
-            # Calculate the delta between the current time and the entry's time
-            time_delta = (data_chunk['entry_time'] - self.current_time).value / 1e9
-            time_delta = max(0,time_delta-average_update_delta) # Accounting for updating
-            time.sleep(time_delta)
+            # Calculating the t_{x+1} time
+            next_time = self.current_time + pd.Timedelta(milliseconds=self.time_step)
 
-            # Updating sliding bar
-            self.current_time = data_chunk['entry_time']
-            self._sliding_bar.state = self.current_time / (self.end_time) 
+            # Determine the number of data chunks to process given the 
+            # time_step window
+            time_window_idx = ((self.timetrack['time'] >= self.current_time) & \
+                (self.timetrack['time'] < next_time))
+            to_process_data_chunks = self.timetrack[time_window_idx]
 
-            # Update the content
-            self._dashboard_model.update_content(
-                data_chunk['index'],
-                data_chunk['user'],
-                data_chunk['entry_name'],
-                data_chunk['content']
-            )
+            # If there is no data chunks to process, update and continue
+            if len(to_process_data_chunks) == 0:
+                self.current_time = next_time
+                self._sliding_bar.state =  self.current_time / (self.end_time)
+                continue
+            
+            # Storing all the data chunks from t_x to t_{x+1}
+            data_chunks = []
+
+            # Get all the data chunks from t_x to t_{x+1}
+            while True:
+
+                # Get the next entry information!
+                try:
+                    data_chunk = self.sorting_queue.get(timeout=2*self.time_step/1000)
+                    # print(data_chunk['index'], ' - GOT DATA CHUNK TIME: ', data_chunk['entry_time'])
+                except queue.Empty:
+                    # Check if all the data has been loaded, if so that means
+                    # that all the data has been played
+                    if self.sorting_bar.state == 1:
+                        print("Session end detected!")
+                        self.session_complete = True
+                        self._is_play = False
+                        self.playPauseChanged.emit()
+                    
+                    # Regardless, break
+                    break
+
+                # Update the memory used by the sorting queue
+                if data_chunk['uuid']:
+                    del self.sorting_queue_memory_chunks[data_chunk['uuid']]
+
+                # Storing data only if its during or after the time window
+                if (to_process_data_chunks['time'] >= data_chunk['entry_time']).sum():
+                    data_chunks.append(data_chunk)
+                
+                # Once gotten the data, check if we have collected all the needed
+                # data
+                if len(data_chunks) == len(to_process_data_chunks):
+                    break
+
+            # Update to the content
+            for data_chunk in data_chunks:
+
+                # Calculate the delta between the current time and the entry's time
+                if data_chunk['entry_time'] > self.current_time:
+                    time_delta = (data_chunk['entry_time'] - self.current_time).value / 1e9
+                    time_delta = max(0,time_delta-0.05) # Accounting for updating
+                    time.sleep(update_delta_ratio*time_delta)
+
+                # Updating sliding bar
+                self.current_time = data_chunk['entry_time']
+                self._sliding_bar.state = self.current_time / (self.end_time) 
+
+                # Update the content
+                self._dashboard_model.update_content(
+                    data_chunk['index'],
+                    data_chunk['user'],
+                    data_chunk['entry_name'],
+                    data_chunk['content']
+                )
 
             # Computing the time difference of uploading content
             tac = time.time()
             delta = tac - tic
+            # print(f"UPDATING DELTA: {delta}")
+
+            # Sleeping the difference
+            time_delta = max(0, self.time_step/1000 - delta)
+            # print("LOOP END SLEEP: ", time_delta)
+            time.sleep(update_delta_ratio*time_delta)
 
             # Finally update the sliding bar
-            self.update_content_times.append(delta)
+            toe = time.time()
+            final_delta = toe-tic
+            self.update_content_times.append(final_delta)
+            # print(f"FINAL DELTA: {final_delta}")
+            self.current_time = next_time
+            # print('LOOP END: ', self.current_time)
+            self._sliding_bar.state = self.current_time / (self.end_time) 
     
     def exit(self):
 

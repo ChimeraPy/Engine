@@ -1,11 +1,12 @@
 # Built-in Imports
-from typing import List
+from typing import List, Dict, Any
 import os
 import math
 import multiprocessing as mp
 import threading
 import collections
 import queue
+import pickle
 
 # Third-Party Imports
 import psutil
@@ -95,9 +96,20 @@ def to_numpy(im:Image):
 
     return data
 
-def get_free_memory():
-    # available = psutil.virtual_memory().available
-    process = psutil.Process(os.getpid())
-    # available = process.memory_info().rss
-    available = psutil.virtual_memory().available - process.memory_info().rss
-    return available
+def get_memory_data_size(data:Any):
+
+    return len(pickle.dumps(data))
+
+# def get_load_data_size(data:Dict[str, Dict[str, pd.DataFrame]]):
+
+#     total_memory = 0
+#     for dff in data.values():
+#         for df in dff.values():
+#             total_memory += df.memory_usage(deep=True).sum()
+
+#     return total_memory
+
+
+# def get_logging_data_size(data: Dict[str, Any]):
+
+#     return data['data'].memory_usage(deep=True).sum()
