@@ -45,7 +45,7 @@ Component {
                 model: group
                 Rectangle {
                     id: groupRectangle
-                    width: 0.2*Screen.width
+                    width: 0.3*Screen.width
                     height: width * (9/16)
                     color: "#44475a"
 

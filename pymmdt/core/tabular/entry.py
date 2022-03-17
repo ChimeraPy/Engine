@@ -84,6 +84,11 @@ class TabularEntry(Entry):
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
         gc.collect()
 
+    def close(self):
+
+        # Apply the last changes and that's it!
+        self.flush()
+
 class ImageEntry(Entry):
 
     def __init__(
@@ -136,3 +141,8 @@ class ImageEntry(Entry):
         del self.unsaved_changes
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
         gc.collect()
+
+    def close(self):
+
+        # Apply the last changes and that's it!
+        self.flush()

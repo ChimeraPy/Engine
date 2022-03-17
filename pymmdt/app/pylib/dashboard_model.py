@@ -67,6 +67,12 @@ class DashboardModel(QAbstractListModel):
         # print(f"Job ID: {index} - g{group_idx} - - {user} - {entry_name} - time: {datetime.datetime.now()}")
         self.groups[group_idx].update_content(user, entry_name, content)
 
+    def reset_content(self):
+
+        # Iterate over all groups and reset their own content
+        for group in self.groups:
+            group.reset_content()
+
     def rowCount(self, parent):
         return len(self.groups)
 

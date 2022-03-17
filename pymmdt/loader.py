@@ -145,7 +145,7 @@ class Loader(BaseProcess):
             # Check if the loading is halted
             if self.loading_window == -1 or self.thread_pause.is_set():
                 if self.verbose:
-                    print("LOADER WAITING")
+                    print(f"LOADER WAITING: {self.loading_window} or {self.thread_pause.is_set()}")
                 time.sleep(0.5)
 
             # Only load windows if there are more to load

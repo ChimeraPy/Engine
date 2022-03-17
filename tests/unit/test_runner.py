@@ -12,9 +12,8 @@ import tqdm
 
 # PyMMDT Library
 import pymmdt as mm
-import pymmdt.tabular as mmt
-import pymmdt.video as mmv
-import pymmdt.utils.tobii as mmut
+import pymmdt.core.tabular as mmt
+import pymmdt.core.video as mmv
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -51,26 +50,19 @@ class SingleRunnerTestCase(unittest.TestCase):
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
-        # Construct the individual participant pipeline object
-        # Create an overall session and pipeline
-        self.session = mm.Session(
-            log_dir = OUTPUT_DIR,
-            experiment_name = "pymmdt"
-        )
-
         # Use a test pipeline
         # self.individual_pipeline = test_doubles.TestPipe()
-        self.individual_pipeline = mm.Pipe()
+        self.individual_pipeline = mm.core.Pipe()
 
     def test_runner_to_run(self):
         
         # Load construct the first runner
         self.runner = mm.SingleRunner(
             name='P01',
+            logdir=OUTPUT_DIR,
             data_streams=self.dss,
             pipe=self.individual_pipeline,
-            session=self.session,
-            time_window_size=pd.Timedelta(seconds=3),
+            time_window=pd.Timedelta(seconds=3),
             run_solo=True,
         )
 
@@ -84,12 +76,12 @@ class SingleRunnerTestCase(unittest.TestCase):
         # Load construct the first runner
         self.runner = mm.SingleRunner(
             name='P01',
+            logdir=OUTPUT_DIR,
             data_streams=self.dss,
             pipe=self.individual_pipeline,
-            session=self.session,
-            time_window_size=pd.Timedelta(seconds=3),
-            start_at=pd.Timedelta(seconds=5),
-            end_at=pd.Timedelta(seconds=10),
+            time_window=pd.Timedelta(seconds=3),
+            start_time=pd.Timedelta(seconds=5),
+            end_time=pd.Timedelta(seconds=10),
             run_solo=True,
         )
 
@@ -130,10 +122,10 @@ class GroupRunnerTestCase(unittest.TestCase):
         # Then for each participant, we need to setup their own session,
         # pipeline, and runner
         self.runners = []
-        for x in range(1,2+1):
+        for x in range(2):
             
             # Construct the individual participant pipeline object
-            individual_pipeline = mm.Pipe()
+            individual_pipeline = mm.core.Pipe()
 
             runner = mm.SingleRunner(
                 name=f"P0{x}",
@@ -145,21 +137,17 @@ class GroupRunnerTestCase(unittest.TestCase):
             self.runners.append(runner)
         
         # Create an overall session and pipeline
-        self.total_session = mm.Session(
-            log_dir = OUTPUT_DIR,
-            experiment_name = "pymmdt"
-        )
-        self.overall_pipeline = mm.Pipe()
+        self.overall_pipeline = mm.core.Pipe()
 
     def test_group_runner_run(self):
         
         # Pass all the runners to the Director
         group_runner = mm.GroupRunner(
+            logdir=OUTPUT_DIR,
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,
             runners=self.runners, 
-            session=self.total_session,
-            time_window_size=pd.Timedelta(seconds=5),
+            time_window=pd.Timedelta(seconds=5),
         )
 
         # Run the director
@@ -171,13 +159,13 @@ class GroupRunnerTestCase(unittest.TestCase):
         
         # Pass all the runners to the Director
         group_runner = mm.GroupRunner(
+            logdir=OUTPUT_DIR,
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,
             runners=self.runners, 
-            session=self.total_session,
-            time_window_size=pd.Timedelta(seconds=5),
-            start_at=pd.Timedelta(seconds=5),
-            end_at=pd.Timedelta(seconds=15),
+            time_window=pd.Timedelta(seconds=5),
+            start_time=pd.Timedelta(seconds=5),
+            end_time=pd.Timedelta(seconds=15),
         )
 
         # Run the director

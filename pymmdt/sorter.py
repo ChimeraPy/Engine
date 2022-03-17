@@ -110,11 +110,12 @@ class Sorter(BaseProcess):
 
         # Extract the content for each type of data stream
         if entry_dtype == 'image':
-            content = to_numpy(Image.open(entry.img_filepaths))
+            content = to_numpy(Image.open(entry.img_filepaths))[:,:,::-1]
         elif entry_dtype == 'video':
             content = entry.frames
         else:
-            raise NotImplementedError(f"{entry_dtype} content is not implemented yet!")
+            # raise NotImplementedError(f"{entry_dtype} content is not implemented yet!")
+            return None
 
         # If updating, the we need to generate uuid
         if self.sorted_entries_processed % self.update_counter_period == 0 and \

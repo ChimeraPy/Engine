@@ -74,7 +74,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
             name='P01',
             data_streams=[self.tabular_ds, self.video_ds],
             pipe=self.individual_pipeline,
-            time_window_size=pd.Timedelta(seconds=1),
+            time_window=pd.Timedelta(seconds=1),
             end_time=end_time,
             run_solo=True,
             memory_limit=0.8
@@ -92,7 +92,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
             name='P01',
             data_streams=[self.tabular_ds, self.video_ds],
             pipe=self.individual_pipeline,
-            time_window_size=pd.Timedelta(seconds=1),
+            time_window=pd.Timedelta(seconds=1),
             run_solo=True,
             memory_limit=0.5
         )
@@ -155,7 +155,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
             pipe=mm.core.Pipe(),
             runners=self.runners, 
             end_time=pd.Timedelta(seconds=5),
-            time_window_size=pd.Timedelta(seconds=3),
+            time_window=pd.Timedelta(seconds=3),
         )
 
     def test_group_runner_run(self):

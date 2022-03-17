@@ -41,7 +41,8 @@ class SingleRunner:
             max_logging_queue_size:int=1000,
             max_message_queue_size:int=100,
             memory_limit:float=0.8,
-            verbose=True,
+            memory_usage_factor:float=2.25,
+            verbose=False,
         ):
 
         # Convert the logdir to pathlib
@@ -63,6 +64,7 @@ class SingleRunner:
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
         self.total_available_memory = memory_limit * psutil.virtual_memory().available
+        self.memory_usage_factor = memory_usage_factor
         self.loading_queue_memory_chunks = {}
         self.logging_queue_memory_chunks = {}
         self.total_memory_used = 0
@@ -251,46 +253,30 @@ class SingleRunner:
 
     def respond_logger_message_end(self):
         self.logger_finished = True
-
+    
     @threaded
-    def check_messages(self):
+    def check_loader_messages(self):
 
         # Set the flag to check if new message
         loading_message = None
         loading_message_new = False
-        logging_message = None
-        logging_message_new = False
         
         # Constantly check for messages
         while not self.thread_exit.is_set():
-            
-            # Prevent blocking, as we need to check if the thread_exist
-            # is set.
-            while not self.thread_exit.is_set():
 
-                # Checking the loading message queue
-                try:
-                    loading_message = self.message_from_loading_queue.get(timeout=0.1)
-                    loading_message_new = True
-                except queue.Empty:
-                    loading_message_new = False
+            # Checking the loading message queue
+            try:
+                loading_message = self.message_from_loading_queue.get(timeout=0.1)
+                loading_message_new = True
+            except queue.Empty:
+                loading_message_new = False
 
-                # Ckecking the logging message queue
-                try:
-                    logging_message = self.message_from_logging_queue.get(timeout=0.1)
-                    logging_message_new = True
-                except queue.Empty:
-                    logging_message_new = False
-
-                # If new message, process it right now
-                if loading_message_new or logging_message_new:
-                    break
-
-                # else, placing a sleep timer
-                time.sleep(0.1)
-              
             # Processing new loading messages
             if loading_message_new:
+
+                # Printing if verbose
+                if self.verbose:
+                    print("NEW LOADING MESSAGE: ", loading_message)
 
                 # Obtain the function and execute it, by passing the 
                 # message
@@ -298,6 +284,39 @@ class SingleRunner:
 
                 # Execute the function and pass the message
                 func(**loading_message['body']['content'])
+
+            # Check if the memory limit is passed
+            self.total_memory_used = self.memory_usage_factor * (sum(list(self.logging_queue_memory_chunks.values())) + sum(list(self.loading_queue_memory_chunks.values())))
+
+            # Reporting memory usage if debugging
+            if self.verbose:
+                print(f"TMU: {self.total_memory_used}, AVAILABLE: {self.total_available_memory}, RATIO: {self.total_memory_used / self.total_available_memory}")
+
+            if self.total_memory_used > self.total_available_memory and not self.loader_paused:
+                # Pause the loading and wait until memory is cleared!
+                self.message_pause_loader()
+                self.loader_paused = True
+            elif self.total_memory_used < self.total_available_memory and self.loader_paused:
+                # resume the loading and wait until memory is cleared!
+                self.message_resume_loader()
+                self.loader_paused = False
+
+    @threaded
+    def check_logger_messages(self):
+
+        # Set the flag to check if new message
+        logging_message = None
+        logging_message_new = False
+        
+        # Constantly check for messages
+        while not self.thread_exit.is_set():
+            
+            # Checking the logging message queue
+            try:
+                logging_message = self.message_from_logging_queue.get(timeout=0.1)
+                logging_message_new = True
+            except queue.Empty:
+                logging_message_new = False
 
             # Processing new sorting messages
             if logging_message_new:
@@ -308,19 +327,6 @@ class SingleRunner:
 
                 # Execute the function and pass the message
                 func(**logging_message['body']['content'])
-
-            # Check if the memory limit is passed
-            self.total_memory_used = sum(list(self.logging_queue_memory_chunks.values())) + sum(list(self.loading_queue_memory_chunks.values()))
-            
-            # print(f"TMU: {total_memory_used}, AVAILABLE: {self.total_available_memory}, RATIO: {total_memory_used / self.total_available_memory}")
-            if self.total_memory_used > self.total_available_memory and not self.loader_paused:
-                # Pause the loading and wait until memory is cleared!
-                self.message_pause_loader()
-                self.loader_paused = True
-            elif self.total_memory_used < self.total_available_memory and self.loader_paused:
-                # resume the loading and wait until memory is cleared!
-                self.message_resume_loader()
-                self.loader_paused = False
 
     def set_session(self, session: Session) -> None:
         if hasattr(self, 'session'):
@@ -335,8 +341,10 @@ class SingleRunner:
         self.thread_exit.clear()
         
         # Begin the thread receiving messages
-        self.message_thread = self.check_messages()
-        self.message_thread.start()
+        self.message_loader_thread = self.check_loader_messages()
+        self.message_logger_thread = self.check_logger_messages()
+        self.message_loader_thread.start()
+        self.message_logger_thread.start()
         
         # Start the loader and logger
         self.loader.start()
@@ -389,7 +397,8 @@ class SingleRunner:
         self.logger.join()
 
         # Waiting for the threads to shutdown
-        self.message_thread.join()
+        self.message_loader_thread.join()
+        self.message_logger_thread.join()
 
     def process_data(self):
 
@@ -506,7 +515,8 @@ class GroupRunner(SingleRunner):
             max_logging_queue_size:int=1000,
             max_message_queue_size:int=100,
             memory_limit:float=0.8,
-            verbose=True,
+            memory_usage_factor:float=2.25,
+            verbose=False,
         ) -> None:
         """Construct the analyzer. 
 
@@ -534,6 +544,7 @@ class GroupRunner(SingleRunner):
         
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
+        self.memory_usage_factor = memory_usage_factor
         self.total_available_memory = memory_limit * psutil.virtual_memory().available
         self.loading_queue_memory_chunks = {}
         self.logging_queue_memory_chunks = {}

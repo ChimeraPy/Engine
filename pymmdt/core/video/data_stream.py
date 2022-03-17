@@ -38,7 +38,7 @@ class VideoDataStream(DataStream):
 
     def __init__(self, 
             name:str, 
-            start_time:Optional[pd.Timedelta]=None,
+            start_time:pd.Timedelta=pd.Timedelta(seconds=0),
             video_path:Optional[Union[pathlib.Path, str]]=None, 
             fps:Optional[int]=None,
             size:Optional[Tuple[int, int]]=None,
@@ -129,10 +129,10 @@ class VideoDataStream(DataStream):
             self.video = cv2.VideoCapture(str(self.video_path))
             self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
             self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.has_startup = True
-                
-            # Constructing timetrack
-            self.update_start_time(self.start_time)
+
+            # Now that we have video len size, we can update the video
+            # data stream's timetrack
+            self.update_timetrack()
 
         # Else, its for the writing mode
         else:
@@ -147,12 +147,18 @@ class VideoDataStream(DataStream):
     def __len__(self):
         return self.nb_frames
 
-    def update_start_time(self, start_time:pd.Timedelta):
+    def set_start_time(self, start_time:pd.Timedelta):
+        self.start_time = start_time
 
+    def shift_start_time(self, diff_time:pd.Timedelta):
+        self.start_time += diff_time
+
+    def update_timetrack(self):
+            
         # Creating new timeline
         self.timeline = pd.TimedeltaIndex(
             pd.timedelta_range(
-                start=start_time, 
+                start=self.start_time, 
                 periods=self.nb_frames, 
                 freq=f"{int(1e9/self.fps)}N"
             )
@@ -316,10 +322,6 @@ class VideoDataStream(DataStream):
             frame = getattr(row, data_column)
             self.video.write(np.uint8(frame).copy())
             self.nb_frames += 1
-
-        # Delete the append_data and collect memory
-        del append_data
-        gc.collect()
 
     def close(self):
         """Close the ``VideoDataStream`` instance."""

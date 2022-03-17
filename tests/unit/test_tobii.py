@@ -25,7 +25,7 @@ OUTPUT_DIR = ROOT_DIR / 'test_output'
 
 sys.path.append(str(ROOT_DIR))
 
-class TestTobiiExamplePipe(mm.Pipe):
+class TestTobiiExamplePipe(mm.core.Pipe):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
         self.session.add_video('test_video', data_samples['video'])
 
@@ -35,20 +35,13 @@ class TobiiTestCase(unittest.TestCase):
 
         # Load the data for all participants (ps)
         one_participant_dir = RAW_DATA_DIR / 'nurse_use_case' / '20211029T140731Z'
-        ps_dss = pymmdt.utils.tobii.load_participant_data(one_participant_dir, verbose=True)
+        ps_dss, ps_specs = pymmdt.utils.tobii.load_participant_data(one_participant_dir, verbose=True)
 
         # Clear out the previous pymmdt run 
         # since pipeline is still underdevelopment
-        exp_dir = OUTPUT_DIR / "pymmdt"
+        exp_dir = OUTPUT_DIR / "P01"
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
-
-        # Construct the individual participant pipeline object
-        # Create an overall session and pipeline
-        self.session = mm.Session(
-            log_dir = OUTPUT_DIR,
-            experiment_name = "pymmdt"
-        )
 
         # Use a test pipeline
         # individual_pipeline = test_doubles.TestExamplePipe()
@@ -56,12 +49,12 @@ class TobiiTestCase(unittest.TestCase):
 
         # Load construct the first runner
         self.runner = mm.SingleRunner(
+            logdir=OUTPUT_DIR,
             name='P01',
             data_streams=ps_dss,
             pipe=individual_pipeline,
-            session=self.session,
-            time_window_size=pd.Timedelta(seconds=1),
-            end_at=pd.Timedelta(seconds=10),
+            time_window=pd.Timedelta(seconds=1),
+            end_time=pd.Timedelta(seconds=10),
             run_solo=True,
         )
 
@@ -81,19 +74,11 @@ class TobiiTestCase(unittest.TestCase):
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
-        # Construct the individual participant pipeline object
-        # Create an overall session and pipeline
-        self.total_session = mm.Session(
-            log_dir = OUTPUT_DIR,
-            experiment_name = "pymmdt"
-        )
-
         # Create all the participant runners
         self.runners = []
         for ps_id, ps_data in pss_dss.items():
             
             # Use a test pipeline
-            # individual_pipeline = test_doubles.TestExamplePipe()
             individual_pipeline = TestTobiiExamplePipe()
 
             # Extracting the dss (data streams)
@@ -110,14 +95,14 @@ class TobiiTestCase(unittest.TestCase):
 
         # Construct the group runner
         self.runner = mm.GroupRunner(
+            logdir=OUTPUT_DIR,
             name="Teamwork Example #1",
-            pipe=mm.Pipe(),
+            pipe=mm.core.Pipe(),
             runners=self.runners, 
-            session=self.total_session,
-            end_at=pd.Timedelta(seconds=10),
-            time_window_size=pd.Timedelta(seconds=1),
+            end_time=pd.Timedelta(seconds=10),
+            time_window=pd.Timedelta(seconds=1),
         )
 
         # Run the group runner
-        self.runner.run()
-        # self.runner.run(verbose=True)
+        # self.runner.run()
+        self.runner.run(verbose=True)

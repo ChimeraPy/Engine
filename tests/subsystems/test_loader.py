@@ -99,8 +99,6 @@ class LoaderTests(unittest.TestCase):
             datas.append(data)
 
         # Then verify the data
-        # print(len(datas))
-        # print(datas[0])
         assert len(datas) == q_max_size, f"{len(datas)} != {q_max_size}"
 
         # Then get the messages from the loader

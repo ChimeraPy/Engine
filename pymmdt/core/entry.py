@@ -21,16 +21,6 @@ class Entry:
         # Append the dataframe
         self.unsaved_changes = self.unsaved_changes.append(df)
     
-    # def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta):
-
-    #     # Ensure that any new changes have been dedicated to memory
-    #     self.flush()
-
-    #     # Then call the data stream, get their data, and return it
-    #     data = self.stream.get(start_time, end_time)
-
-    #     return data
-
     def flush(self):
         """Write/Save changes and mark them as processed.
 
@@ -42,8 +32,11 @@ class Entry:
         raise NotImplementedError("``flush`` needs to be implemented.")
 
     def close(self):
+        """Write/Save changes and mark them as processed.
 
-        self.flush()
-        # self.stream.close()
+        Raises:
+            NotImplementedError: ``Entry`` is an abstract class. The 
+            ``close`` needs to be implemented in concrete classes.
 
-        return None
+        """
+        raise NotImplementedError("``close`` needs to be implemented.")

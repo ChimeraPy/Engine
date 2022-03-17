@@ -100,5 +100,15 @@ class GroupModel(QAbstractListModel):
         index = self.index(specific_entry_idx, 0)
         self.dataChanged.emit(index, index, [])
 
+    def reset_content(self):
+        
+        # Placing all black images into the content
+        self._entries['content'] = QtGui.QImage(str(RESOURCE_DIR/'default_image.jpg'))
+
+        # Updating all contents through the signal
+        for i in range(len(self._entries)):
+            index = self.index(i, 0)
+            self.dataChanged.emit(index, index, [])
+
     def roleNames(self):
         return self._roles

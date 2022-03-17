@@ -86,7 +86,7 @@ class BaseProcess(mp.Process):
 
                 # Handle the incoming message
                 if self.verbose:
-                    print(f"NEW MESSAGE - {message}")
+                    print(f"{self.__class__.__name__} - NEW MESSAGE - {message}")
 
                 # META --> General
                 if message['header'] == 'META':

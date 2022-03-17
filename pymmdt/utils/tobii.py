@@ -134,7 +134,7 @@ def synchronize_tobii_recordings(ps:Dict[str,Any]):
 
     # Find the earliest timestamp
     earliest_timestamp = min(timestamps)
-
+   
     # Update the tobii video and gaze datastreams
     for p_id, timestamp in zip(ps.keys(), timestamps):
 
@@ -147,8 +147,8 @@ def synchronize_tobii_recordings(ps:Dict[str,Any]):
 
         # Shift the data streams by the difference
         gaze_ds, video_ds = ps[p_id]['data']
-        gaze_ds.update_start_time(delta)
-        video_ds.update_start_time(delta)
+        gaze_ds.set_start_time(delta)
+        video_ds.set_start_time(delta)
 
 def load_session_data(
         data_dir:pathlib.Path,

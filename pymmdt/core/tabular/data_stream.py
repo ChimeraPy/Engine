@@ -150,10 +150,26 @@ class TabularDataStream(DataStream):
             data=empty_df
         )
 
-    def update_start_time(self, start_time:pd.Timedelta):
-        
+    def set_start_time(self, start_time:pd.Timedelta):
+
+        # Get the first element of the self.data
+        initial_start_time = self.data['_time_'][0]
+
+        # Then update the '_time_' column
+        self.data['_time_'] += (start_time - initial_start_time)
+       
+        # Update the timetrack
+        self.update_timetrack()
+
+    def shift_start_time(self, diff_time:pd.Timedelta):
+
         # First, update the self.data['_time_']
-        self.data['_time_'] += start_time
+        self.data['_time_'] += diff_time
+
+        # Update the timetrack
+        self.update_timetrack()
+
+    def update_timetrack(self):
 
         # Extract the timeline and convert it to timetrack
         timeline = self.data['_time_']

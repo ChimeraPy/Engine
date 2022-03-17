@@ -81,7 +81,7 @@ class Collector:
 
             # Construct a global timetrack
             self.construct_global_timetrack()
-            
+
             # Apply triming if start_time or end_time has been selected
             if type(start_time) != type(None) and isinstance(start_time, pd.Timedelta):
                 self.set_start_time(start_time)
