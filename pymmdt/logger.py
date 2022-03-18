@@ -117,7 +117,7 @@ class Logger(BaseProcess):
             json.dump(self.meta_data, json_file)
     
     def flush(self, data:Dict):
-            
+
         # Detecting if this is the first time for the session
         if data['session_name'] not in self.records.keys() or data['name'] not in self.records[data['session_name']].keys():
 

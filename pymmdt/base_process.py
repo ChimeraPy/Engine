@@ -1,27 +1,26 @@
-from typing import List, Dict, Sequence
+# Built-in Imports
 import multiprocessing as mp
 import threading
-import collections
 import queue
 import time
-import sys
 
-# Third-party imports
-from PIL import Image
-import numpy as np
-import tqdm
-import pandas as pd
-
-# PyMMDT Library
-from .core.collector import Collector
-from .core.tools import threaded, clear_queue, to_numpy
-from .core.video import VideoDataStream
-from .core.tabular import TabularDataStream
+# PyMMDT Imports
+from pymmdt.core.tools import threaded
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
 class BaseProcess(mp.Process):
+    """Class that contains essentials and comms. for subprocesses.
+
+    The purpose of ``BaseProcess`` is to be inherented by more concrete
+    classes of subprocesses. This class provides the base for the 
+    communication between the main process and the subprocesses. There
+    are two message queues for sending and receiving messages. A thread 
+    is generated to continuously check for new messages within this 
+    ``BaseProcess``.
+
+    """
 
     def __init__(
             self, 
@@ -47,6 +46,7 @@ class BaseProcess(mp.Process):
         self.subclass_message_to_functions = {} # Overriden in subclass
 
     def setup(self):
+        """Start the thread that checks for messages."""
 
         # Pausing information
         self.thread_pause = threading.Event()
@@ -62,6 +62,7 @@ class BaseProcess(mp.Process):
     
     @threaded 
     def check_messages(self):
+        """Creates the threaded function that can be called to ``start``."""
 
         # Set the flag to check if new message
         new_message = False
@@ -105,21 +106,34 @@ class BaseProcess(mp.Process):
                 func(**message['body']['content'])
 
     def pause(self):
+        """Pausing the main ``run`` routine of the process.
+    
+        For this to work, the implementation of the subprocesses' ``run``
+        needs to incorporate the ``self.thread_pause`` variable.
 
+        """
         # Setting the thread pause event
         self.thread_pause.set()
 
     def resume(self):
+        """Resuming the main ``run`` routine of the process.
+    
+        For this to work, the implementation of the subprocesses' ``run``
+        needs to incorporate the ``self.thread_pause`` variable.
+
+        """
 
         # Clearing the thread pause event
         self.thread_pause.clear()
 
     def end(self):
+        """Signal to stop the messaging thread"""
 
         # Setting the thread exit event
         self.thread_exit.set()
 
     def close(self):
+        """Closing the subprocesses, with stopping the message thread."""
 
         # Waiting for the thread to end
         self.check_messages_thread.join()

@@ -154,7 +154,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
             name="pymmdt",
             pipe=mm.core.Pipe(),
             runners=self.runners, 
-            end_time=pd.Timedelta(seconds=5),
+            # end_time=pd.Timedelta(seconds=5),
             time_window=pd.Timedelta(seconds=3),
         )
 

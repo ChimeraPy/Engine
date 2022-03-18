@@ -127,8 +127,11 @@ class VideoDataStream(DataStream):
             # therefore be passed to a process. We have to create it inside
             # the ``run`` method of the process.
             self.video = cv2.VideoCapture(str(self.video_path))
-            self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
             self.nb_frames = int(self.video.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            # Only update fps if there was no previous fps set
+            if type(self.fps) == type(None):
+                self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
 
             # Now that we have video len size, we can update the video
             # data stream's timetrack
@@ -141,6 +144,9 @@ class VideoDataStream(DataStream):
             self.video = cv2.VideoWriter()
             self.nb_frames = 0
 
+        # After creating the timetrack, we need to apply the trim
+        super().startup()
+
         # Update the flag variable
         self.has_startup = True
 
@@ -152,6 +158,9 @@ class VideoDataStream(DataStream):
 
     def shift_start_time(self, diff_time:pd.Timedelta):
         self.start_time += diff_time
+
+    def set_fps(self, fps:int):
+        self.fps = fps
 
     def update_timetrack(self):
             
@@ -221,7 +230,7 @@ class VideoDataStream(DataStream):
         
         # Generate mask for the window data
         after_start_time = self.timetrack['time'] >= start_time
-        before_end_time = self.timetrack['time'] <= end_time
+        before_end_time = self.timetrack['time'] < end_time
         time_window_mask = after_start_time & before_end_time
 
         # Obtain the data indicies

@@ -58,13 +58,7 @@ class VideoEntry(Entry):
         self.stream = VideoDataStream.empty(name=name, startup_now=True)
     
     def flush(self):
-        """Commit the unsaved changes to memory.
-
-        TODO:
-            - Might want to create a separate thread for this, as I/O
-            processes can be very slow. Or maybe we can add the new 
-            thread in the DataStream class ``save`` method.
-        """
+        """Commit the unsaved changes to memory."""
 
         # If no new changes, end
         if len(self.unsaved_changes.index) == 0:
@@ -75,9 +69,9 @@ class VideoEntry(Entry):
         if self.num_of_total_changes == 0:
             
             # This operation requires at least two samples
-            assert len(self.unsaved_changes['frames']) >= 2, "Time window\
-                    size is too small, requires 2 frames per data sample\
-                    to infer the FPS."
+            # If there not enough samples, wait until we do
+            if len(self.unsaved_changes['frames']) < 2:
+                return None
 
             # Determine the size
             first_frame = self.unsaved_changes['frames'].iloc[0]
@@ -104,9 +98,7 @@ class VideoEntry(Entry):
         self.unsaved_changes = self.unsaved_changes.iloc[0:0]
 
         # Ensure that the garbage is collected
-        del self.unsaved_changes
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
-        gc.collect()
 
     def close(self):
 

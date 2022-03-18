@@ -51,6 +51,8 @@ class DataStream:
         """
         self.name = name
         self.index = 0
+        self.before_trim_time = None
+        self.after_trim_time = None
         
         # Creating timetrack from timeline
         self.make_timetrack(timeline)
@@ -117,9 +119,21 @@ class DataStream:
 
         """
         return len(self.timetrack)
+    
+    def set_before_trim_time(self, trim_time:pd.Timedelta):
+        self.before_trim_time = trim_time
+
+    def set_after_trim_time(self, trim_time:pd.Timedelta):
+        self.after_trim_time = trim_time
 
     def startup(self):
-        pass
+
+        # Assuming that the timetrack has been already created
+        if isinstance(self.before_trim_time, pd.Timedelta):
+            self.trim_before(self.before_trim_time)
+
+        if isinstance(self.after_trim_time, pd.Timedelta):
+            self.trim_after(self.after_trim_time)
 
     def make_timetrack(self, timeline: pd.TimedeltaIndex):
 
