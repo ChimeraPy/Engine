@@ -54,8 +54,6 @@ class Manager(QObject):
     def __init__(
             self,
             logdir:str,
-            loading_sec_limit:int=5,
-            time_step:int=100,
             replay_speed:int=1,
             time_window:pd.Timedelta=pd.Timedelta(seconds=1),
             meta_check_step:int=5000,
@@ -72,8 +70,6 @@ class Manager(QObject):
 
         # Store the CI arguments
         self.logdir = pathlib.Path(logdir)
-        self.loading_sec_limit = loading_sec_limit
-        self.time_step: int = time_step # milliseconds
         self.replay_speed = replay_speed
         self.time_window = time_window
         self.meta_check_step = meta_check_step # milliseconds
@@ -132,6 +128,10 @@ class Manager(QObject):
         self.thread_exit = threading.Event()
         self.thread_exit.clear()
 
+        # Keeping track of the choice of sorting
+        # self.sort_by = "entry_name"
+        self.sort_by = "user"
+
         # Keeping track of the pause/play state and the start, end time
         self.stop_everything = False
         self._data_is_loaded = False
@@ -141,12 +141,6 @@ class Manager(QObject):
 
         # Apply the update to the meta data
         self.meta_update()
-
-        # Using a timer to periodically update content
-        # self.current_time_update = QPausableTimer()
-        # self.current_time_update.setInterval(self.time_step)
-        # self.current_time_update.timeout.connect(self.update_content)
-        # self.current_time_update.start()
 
         # Using a timer to periodically check for new data
         self.meta_check_timer = QTimer()
@@ -222,24 +216,10 @@ class Manager(QObject):
     
     @pyqtSlot()
     def restart(self):
-
-        print("Restarting!")
-
-        # Stopping playing 
-        self._is_play = False
-        self.playPauseChanged.emit()
-        self.session_complete = False
-
-        # Send message to loading and sorting process to halt!
-        self.stop_everything = True
-        self.message_pause_loader()
-        self.message_pause_sorter()
-        self.sorter_paused = True
-        self.loader_paused = True
-
-        # Waiting until the processed halted
-        time.sleep(0.1)
-
+       
+        # Pause the loader, sorter, and manager play thread
+        self.pre_change_stop()
+        
         # Clear the queues
         while self.loading_queue.qsize():
             clear_queue(self.loading_queue)
@@ -254,15 +234,78 @@ class Manager(QObject):
         self.current_time = self.start_time
         self._sliding_bar.state = self.current_time / (self.end_time) 
 
-        # Set the window of the loader
+        # Set the window of the loader and reset the session variable
+        self.session_complete = False
         self.message_set_loading_window_loader(0)
 
         # And reset the content
         self._dashboard_model.reset_content()
         self.modelChanged.emit()
 
-        # Waiting until the loading window message is processed
-        time.sleep(0.1)
+        # Resume the loader, sorter, and manager play thread
+        self.post_change_resume()
+        
+        # Typically after rewind, the video is played
+        self._is_play = True
+        self.playPauseChanged.emit()
+
+    @pyqtSlot()
+    def sort_by_user(self):
+       
+        # If already sorted as user, ignore
+        if self.sort_by == "user":
+            return None
+        
+        # Change to user
+        self.change_sort("user")
+
+    @pyqtSlot()
+    def sort_by_entry(self):
+        
+        # If already sorted as entry, ignore
+        if self.sort_by == "entry_name":
+            return None
+        
+        # Now sort by entry_name
+        self.change_sort("entry_name")
+
+    def change_sort(self, sort_by):
+
+        # Store if the session was playing
+        was_playing = self._is_play
+
+        # Updating the variable
+        self.sort_by = sort_by
+
+        # Stop loader, sorter, and main content thread
+        self.pre_change_stop()
+
+        # Update the content
+        self._dashboard_model.reset_content()
+        self._dashboard_model.update_data(self.entries, self.sort_by)
+        self.modelChanged.emit()
+        
+        # Resume loader, sorter, and main content thread
+        self.post_change_resume()
+
+        # If the session was playing, continue
+        self._is_play = was_playing
+        self.playPauseChanged.emit()
+
+    def pre_change_stop(self):
+        
+        # Stopping playing 
+        self._is_play = False
+        self.playPauseChanged.emit()
+
+        # Send message to loading and sorting process to halt!
+        self.stop_everything = True
+        self.message_pause_loader()
+        self.message_pause_sorter()
+        self.sorter_paused = True
+        self.loader_paused = True
+
+    def post_change_resume(self):
 
         # Continue the processes
         self.message_resume_loader()
@@ -270,10 +313,6 @@ class Manager(QObject):
         self.sorter_paused = False
         self.loader_paused = False
         self.stop_everything = False
-
-        # Typically after rewind, the video is played
-        self._is_play = True
-        self.playPauseChanged.emit()
 
     def message_set_loading_window_loader(self, loading_window):
         
@@ -515,7 +554,7 @@ class Manager(QObject):
 
         # Loading data streams
         users_data_streams = collections.defaultdict(list)
-        for user_name, user_meta in tqdm.tqdm(zip(unique_users, users_meta), disable=not self.verbose):
+        for user, user_meta in tqdm.tqdm(zip(unique_users, users_meta), disable=not self.verbose):
             for index, row in user_meta.iterrows():
 
                 # Extract useful meta
@@ -562,7 +601,7 @@ class Manager(QObject):
                     raise RuntimeError(f"{dtype} is not a valid option.")
 
                 # Store the data in Dict
-                users_data_streams[user_name].append(ds)
+                users_data_streams[user].append(ds)
 
         return users_data_streams
 
@@ -614,8 +653,9 @@ class Manager(QObject):
                 self.entries = self.create_entries_df(meta_data)
 
                 # Add the data to the dashboard
-                self._dashboard_model.update_data(self.entries)
+                self._dashboard_model.update_data(self.entries, self.sort_by)
                 self._timetrack_model.update_data(self.entries, self.start_time, self.end_time)
+                self.modelChanged.emit()
 
                 # Loading the data for the Collector
                 unique_users = self.entries['user'].unique()
@@ -756,7 +796,7 @@ class Manager(QObject):
 
             # Also, not processing if not playing or the session is complete
             if not self._is_play or self.session_complete:
-                time.sleep(0.05)
+                time.sleep(0.1)
                 continue
  
             # Get the next entry information!
@@ -797,6 +837,7 @@ class Manager(QObject):
             # Calculate the delta between the current time and the entry's time
             time_delta = (data_chunk['entry_time'] - self.current_time).value / 1e9
             time_delta = max(0,time_delta-average_update_delta) # Accounting for updating
+            # print(time_delta)
             time.sleep(time_delta)
 
             # Updating sliding bar

@@ -19,6 +19,7 @@ Item {
             orientation: ListView.Vertical
             model: Manager.dashboard_model
             delegate: BaseDiagramDelegate {}
+            clip: true
         }
     }
 }

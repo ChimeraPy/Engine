@@ -1,13 +1,10 @@
-from typing import List, Dict, Sequence, Optional
+from typing import Dict, Sequence, Optional, Any
 import multiprocessing as mp
 import queue
 import time
 import uuid
 
 # Third-party imports
-from PIL import Image
-import numpy as np
-import tqdm
 import pandas as pd
 
 # PyMMDT Library
@@ -17,6 +14,14 @@ from pymmdt.core.collector import Collector
 from pymmdt.base_process import BaseProcess
 
 class Loader(BaseProcess):
+    """Subprocess tasked with loading data from memory.
+
+    This process plays the vital role of loading the data from memory.
+    The class creates an instance of the ``Collector`` that aligns all
+    the input datastreams in ``user_data_streams``. All the loaded data
+    is put into ``loading_queue`` for other processes to use.
+    """
+
 
     def __init__(
             self,
@@ -29,6 +34,35 @@ class Loader(BaseProcess):
             end_time:Optional[pd.Timedelta]=None,
             verbose:bool=False
             ):
+        """Construct a ``Loader`` obtain to load data from data streams.
+
+        Args:
+            loading_queue (mp.Queue): The queue where loaded items are 
+            placed.
+            
+            message_to_queue (mp.Queue): The queue used for sending 
+            messages to the ``Loader`` process.
+            
+            message_from_queue (mp.Queue): The queue used for receiving 
+            messages from the ``Loader`` process.
+
+            users_data_streams (Dict[str, Sequence[DataStream]]): The 
+            datastreams to be synchronized and loaded from by the 
+            ``Collector`` instance.
+
+            time_window (pd.Timedelta): The size of the time window used
+            for loading data by the ``Collector``.
+
+            start_time (pd.Timedelta): The initial start time of the 
+            global timetrack. This is to help skip parts that are not 
+            so important.
+
+            end_time (pd.Timedelta): The end time to restrict all data
+            stream timelines when construct the global timetrack.
+
+            verbose (bool): Enabling debugging printouts.
+
+        """
         super().__init__(
             message_to_queue=message_to_queue,
             message_from_queue=message_from_queue,
@@ -48,12 +82,17 @@ class Loader(BaseProcess):
         })
 
     def set_loading_window(self, loading_window:int):
-        
+        """message_to function to set the loading window.
+
+        Args:
+            loading_window (int): loading_window
+
+        """
         # Set the time window
         self.loading_window = loading_window
          
     def message_timetrack_update(self):
-
+        """message_from function to provide updated timetrack info."""
         # Create the message
         collector_construction_message = {
             'header': 'UPDATE',
@@ -72,8 +111,14 @@ class Loader(BaseProcess):
         except queue.Full:
             print("Timetrack update message failed to send!")
 
-    def message_loading_window_counter(self, data_chunk):
+    def message_loading_window_counter(self, data_chunk: Dict[str, Any]):
+        """message_from function to provide memory usage of data chunk.
 
+        Args:
+            data_chunk (Dict[str, Any]): Data chunk being placed in the 
+            queue, which its memory consumption needs to be tracked.
+
+        """
         # Create the message
         loading_window_message = {
             'header': 'UPDATE',

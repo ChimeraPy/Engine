@@ -7,34 +7,35 @@ Component {
         id: groupRectangle
         anchors.left: parent.left
         anchors.right: parent.right
-        height: entries.childrenRect.height + entryTitle.height
+        height: entries.childrenRect.height + groupTitle.height
         color: "#44475a"
 
-        // Title of dtype
+        // Title of group
         Text {
-            id: entryTitle
+            id: groupTitle
             anchors.top: parent.top
-            anchors.topMargin: 15
+            anchors.topMargin: 10
             anchors.left: parent.left
             anchors.right: parent.right
             text: qsTr(sort_by)
             font.pointSize: 16
             horizontalAlignment: Text.AlignLeft
+            color: "white"
         }
 
         // Underline of the Title
         Rectangle {
-            id: entryTitleUnderline
+            id: groupTitleUnderline
             height: 2
-            anchors.top: entryTitle.bottom
+            anchors.top: groupTitle.bottom
             anchors.left: parent.left
             anchors.right: parent.right
-            color: "black"
+            color: "white"
         }
 
         Flow {
             id: entries
-            anchors.top: entryTitleUnderline.bottom
+            anchors.top: groupTitleUnderline.bottom
             anchors.topMargin: 15
             anchors.left: parent.left
             anchors.right: parent.right

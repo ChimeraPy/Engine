@@ -117,7 +117,7 @@ def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Tuple[Sequenc
     )
 
     # Set the fps for the video
-    video_ds.set_fps(25)
+    # video_ds.set_fps(25)
 
     # Storing recording ID
     participant_data = [gaze_ds, video_ds]

@@ -8,18 +8,20 @@ Component {
         anchors.left: parent.left
         anchors.right: parent.right
         height: timelinesColumn.childrenRect.height
-        color: "green"
+        color: "#282a36"
 
         Rectangle {
             id: userTitleRect
             anchors.left: parent.left
             width: 30
             height: parent.height
-            color: "red"
+            // color: "white"
+            color: "#282a36"
 
             Text {
                 height: totalUserRect.height
                 color: "white"
+                // color: "#282a36"
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -34,7 +36,7 @@ Component {
             anchors.right: parent.right
             height: childrenRect.height
             width: totalUserRect.width - userTitleRect.width
-            color: "orange"
+            // color: "orange"
 
             Column {
                 id: timelinesColumn
@@ -49,7 +51,7 @@ Component {
                         height: 30
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        color: "blue"
+                        color: "#282a36"
 
                         Loader {
                             source: switch(dtype) {

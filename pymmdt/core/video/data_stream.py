@@ -40,7 +40,7 @@ class VideoDataStream(DataStream):
             name:str, 
             start_time:pd.Timedelta=pd.Timedelta(seconds=0),
             video_path:Optional[Union[pathlib.Path, str]]=None, 
-            fps:Optional[int]=None,
+            fps:Optional[Union[float,int]]=None,
             size:Optional[Tuple[int, int]]=None,
             color_mode:str="BGR",
             startup_now:bool=False
@@ -103,7 +103,7 @@ class VideoDataStream(DataStream):
             cls, 
             name:str, 
             start_time:Optional[pd.Timedelta]=None, 
-            fps:Optional[int]=None, 
+            fps:Optional[Union[float,int]]=None, 
             size:Optional[Tuple[int, int]]=None,
             video_path:Optional[Union[pathlib.Path, str]]=None,
             startup_now:bool=False
@@ -131,7 +131,8 @@ class VideoDataStream(DataStream):
 
             # Only update fps if there was no previous fps set
             if type(self.fps) == type(None):
-                self.fps = int(self.video.get(cv2.CAP_PROP_FPS))
+                self.fps = self.video.get(cv2.CAP_PROP_FPS)
+
 
             # Now that we have video len size, we can update the video
             # data stream's timetrack
@@ -179,7 +180,7 @@ class VideoDataStream(DataStream):
     def open_writer(
         self, 
         video_path:Union[pathlib.Path, str],
-        fps:Optional[int]=None,
+        fps:Optional[Union[float,int]]=None,
         size:Optional[Tuple[int, int]]=None
         ) -> None:
         """Set the video writer by opening with the filepath."""
@@ -196,7 +197,7 @@ class VideoDataStream(DataStream):
             self.size = size
 
         # Before opening, check that the neccesary video data is provided
-        assert isinstance(self.fps, int) and isinstance(self.size, tuple)
+        assert isinstance(self.fps, (float, int)) and isinstance(self.size, tuple)
 
         # Opening the video writer given the desired parameters
         self.video.open(
@@ -289,7 +290,7 @@ class VideoDataStream(DataStream):
         # it means that some jump or cut has happend.
         # We need to clear our the reading queue and set the video.
         if self.data_index != new_data_index:
-            print(f"Video miss - reassigning index: {self.data_index}-{new_data_index}")
+            # print(f"Video miss - reassigning index: {self.data_index}-{new_data_index}")
             if self.mode == "reading":
 
                 # Set the new location for the video

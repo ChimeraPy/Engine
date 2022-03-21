@@ -9,6 +9,7 @@ Item {
         id: entryTitle
         anchors.top: parent.top
         text: qsTr(user)+"\\" + qsTr(entry_name)
+        font.pointSize: 12
         color: "white"
     }
 

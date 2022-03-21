@@ -45,6 +45,9 @@ def main():
     parser.add_argument(
         "--verbose", dest="verbose", type=bool, default=False, help="Verbose output for debugging."
     )
+    parser.add_argument(
+        "--memory_limit", dest="memory_limit", type=float, default=0.8, help="RAM memory limit percentage available for the PyMMDT Dashboard."
+    )
     args = parser.parse_args()
 
     # Convert relative path to absolute paths

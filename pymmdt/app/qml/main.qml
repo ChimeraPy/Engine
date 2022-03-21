@@ -66,7 +66,6 @@ Window {
                 width: 100
                 display: AbstractButton.TextOnly
                 transformOrigin: Item.Center
-                font.pointSize: 13
                 anchors.bottom: parent.bottom
                 anchors.left: parent.left
                 anchors.top: parent.top
@@ -78,6 +77,7 @@ Window {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     color: "#f8f8f2"
+                    font.pointSize: 16
                     text: qsTr("PyMMDT")
                 }
             }
@@ -97,48 +97,51 @@ Window {
 
             }
 
-            // Button {
-            //     id: userButton
-            //     x: 0.15 * parent.width
-            //     width: 100
-            //     anchors.bottom: parent.bottom
-            //     anchors.top: parent.top
-            //     background: Rectangle {
-            //         color: "transparent"
-            //     }
-            //     Text {
-            //         anchors.fill: parent
-            //         horizontalAlignment: Text.AlignHCenter
-            //         verticalAlignment: Text.AlignVCenter
-            //         color: "#f8f8f2"
-            //         text: qsTr("User-Sort")
-            //     }
-            // }
+            Button {
+                id: userButton
+                x: 0.15 * parent.width
+                width: 100
+                anchors.bottom: parent.bottom
+                anchors.top: parent.top
+                background: Rectangle {
+                    color: "transparent"
+                }
+                Text {
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    color: "#f8f8f2"
+                    font.pointSize: 12
+                    text: qsTr("User-Sort")
+                }
+                onClicked: Manager.sort_by_user()
+            }
 
-            // Button {
-            //     id: entryButton
-            //     x: 0.35 * parent.width
-            //     width: 100
-            //     anchors.top: parent.top
-            //     anchors.bottom: parent.bottom
-            //     background: Rectangle {
-            //         color: "transparent"
-            //     }
-            //     Text {
-            //         anchors.fill: parent
-            //         horizontalAlignment: Text.AlignHCenter
-            //         verticalAlignment: Text.AlignVCenter
-            //         color: "#f8f8f2"
-            //         text: qsTr("Entry-Sort")
-            //     }
-            // }
+            Button {
+                id: entryButton
+                x: 0.25 * parent.width
+                width: 100
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                background: Rectangle {
+                    color: "transparent"
+                }
+                Text {
+                    anchors.fill: parent
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    color: "#f8f8f2"
+                    font.pointSize: 12
+                    text: qsTr("Entry-Sort")
+                }
+                onClicked: Manager.sort_by_entry()
+            }
         }
 
         // Timetrack (container for Timelines)
         Rectangle {
             id: timeTrack
-            // height: timetrackView.contentHeight
-            height: 200
+            height: Math.min(timetrackView.childrenRect.height, 200)
             color: "#282a36"
             anchors.bottom: parent.bottom
             anchors.right: parent.right
@@ -158,7 +161,8 @@ Window {
                 width: LoadingBar.state * (timeTrack.width - 30)
                 height: parent.height
                 visible: Manager.data_is_loaded
-                color: "purple"
+                color: "red"
+                opacity: 0
             }
             
             Rectangle {
@@ -166,7 +170,8 @@ Window {
                 width: SortingBar.state * (timeTrack.width - 30)
                 height: parent.height
                 visible: Manager.data_is_loaded
-                color: "magenta"
+                color: "white"
+                opacity: 0.5
             }
 
             Rectangle {

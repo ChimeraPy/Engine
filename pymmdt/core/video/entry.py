@@ -81,12 +81,12 @@ class VideoEntry(Entry):
             t1 = self.unsaved_changes['_time_'].iloc[0]
             t2 = self.unsaved_changes['_time_'].iloc[1]
             period = (t2.microseconds - t1.microseconds) / 1_000_000
-            average_fps = int(1 / period)
+            average_fps = (1 / period) - 0.000300003000028 # This is necessary for some reason ?
 
             # Opening the frame writer with the new data
             self.stream.open_writer(
                 video_path=self.save_loc,
-                fps=int(average_fps),
+                fps=average_fps,
                 size=(w,h)
             )
 

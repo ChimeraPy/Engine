@@ -30,16 +30,23 @@ class DashboardModel(QAbstractListModel):
 
         self.entries = pd.DataFrame()
         self.groups = []
-        self._sort_by = 'entry_name'
+        self._sort_by = None
+        # self._sort_by = 'entry_name'
 
-    def sort_by(self, by):
-        assert by in self.entries.columns
+    def update_data(self, entries, sort_by):
 
-    def update_data(self, entries):
+        # Reset model if different sort_by
+        if self._sort_by != sort_by:
+            model_should_be_resetted = True
+        else:
+            model_should_be_resetted = False
+
+        # Update the sort_by
+        self._sort_by = sort_by
 
         # Storing the entries
         self.entries = entries
-
+    
         # Split the dataframes based on the sort_by
         self.unique_groups_tags = self.entries[self._sort_by].unique().tolist()
         groups = [self.entries.loc[self.entries[self._sort_by] == x]\
@@ -52,13 +59,17 @@ class DashboardModel(QAbstractListModel):
 
         # Now group the entries
         self.groups = [GroupModel(group) for group in groups]
+           
+        # If the groups were changed, we need to reset the model
+        if model_should_be_resetted:
+            self.modelReset.emit()
 
     def update_content(self, index, user, entry_name, content):
   
         # First, determine which group by the sort_by
         if self._sort_by == 'entry_name':
             group_idx = self.unique_groups_tags.index(entry_name)
-        elif self._sort_by == 'user_name':
+        elif self._sort_by == 'user':
             group_idx = self.unique_groups_tags.index(user)
         else:
             raise RuntimeError("Invalid _sort_by type for DashboardModel.")
