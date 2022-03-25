@@ -1,8 +1,7 @@
 """PyMMDT Package.
 
-PyMMDT is a package that focus on multimodal data analytics and visualization.
-
-Find our documentation at: https://edavalosanaya.github.io/PyMMDT/
+PyMMDT is a package that focus on multimodal data analytics and 
+visualization.
 
 """
 
@@ -12,7 +11,6 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from .exception import MemoryLimitError
 from .data_stream import DataStream
 from .process import Process
 from .collector import Collector

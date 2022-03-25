@@ -1,4 +1,4 @@
-from typing import List, Dict, Sequence
+from typing import Dict, Any
 import multiprocessing as mp
 import queue
 import time
@@ -6,8 +6,6 @@ import uuid
 
 # Third-party imports
 from PIL import Image
-import numpy as np
-import tqdm
 import pandas as pd
 
 # PyMMDT Library
@@ -26,7 +24,7 @@ class Sorter(BaseProcess):
             message_from_queue:mp.Queue,
             entries:pd.DataFrame,
             update_counter_period:int=10,
-            verbose=False
+            verbose:bool=False
         ):
         
         super().__init__(
@@ -44,7 +42,7 @@ class Sorter(BaseProcess):
         # Keeping track of the entries and their meta information
         self.entries = entries.set_index(['user', 'entry_name'])
 
-    def message_sorter_pulled_from_loading_queue(self, uuid):
+    def message_sorter_pulled_from_loading_queue(self, uuid:str):
 
         message = {
             'header': 'UPDATE',
@@ -62,7 +60,7 @@ class Sorter(BaseProcess):
         except queue.Full:
             print("Error: ``message_sorter_pulled_from_loading_queue`` failed to send!")
 
-    def message_loading_sorted(self, data_chunk):
+    def message_loading_sorted(self, data_chunk:Dict[str,Any]):
 
         # Check that the uuid is not None
         assert data_chunk['uuid'] != None
@@ -103,7 +101,7 @@ class Sorter(BaseProcess):
         except queue.Full:
             print("Error: finished sorting message failed to send!")
 
-    def add_content_to_queue(self, entry):
+    def add_content_to_queue(self, entry:pd.Series):
 
         # Obtaining the data type
         entry_dtype = self.entries.loc[entry.group, entry.ds_type]['dtype']
@@ -210,14 +208,6 @@ class Sorter(BaseProcess):
 
             # Apply to the total_df
             total_df.apply(lambda x: self.add_content_to_queue(x), axis=1)
-            # for index, row in total_df.iterrows():
-
-            #     # Check if we need to stop ASAP
-            #     if self.thread_exit.is_set():
-            #         break
-
-            #     # Update content
-            #     self.add_content_to_queue(row)
 
         # Closing the process
         self.close()

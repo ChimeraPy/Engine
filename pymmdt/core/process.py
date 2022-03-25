@@ -9,7 +9,7 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Sequence, Optional, Union, List
+from typing import Optional, Union, List
 
 # Third-party imports
 import pandas as pd

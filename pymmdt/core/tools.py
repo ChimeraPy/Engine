@@ -1,6 +1,5 @@
 # Built-in Imports
-from typing import List, Dict, Any
-import os
+from typing import List, Any
 import math
 import multiprocessing as mp
 import threading
@@ -9,7 +8,6 @@ import queue
 import pickle
 
 # Third-Party Imports
-import psutil
 from PIL import Image
 import numpy as np
 import pandas as pd
@@ -71,8 +69,9 @@ def get_windows(
 
     return windows
 
-# Got this function from: https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/
 def to_numpy(im:Image):
+    # Got this function from: 
+    # https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/
 
     # Load the image
     im.load()
@@ -99,17 +98,3 @@ def to_numpy(im:Image):
 def get_memory_data_size(data:Any):
 
     return len(pickle.dumps(data))
-
-# def get_load_data_size(data:Dict[str, Dict[str, pd.DataFrame]]):
-
-#     total_memory = 0
-#     for dff in data.values():
-#         for df in dff.values():
-#             total_memory += df.memory_usage(deep=True).sum()
-
-#     return total_memory
-
-
-# def get_logging_data_size(data: Dict[str, Any]):
-
-#     return data['data'].memory_usage(deep=True).sum()

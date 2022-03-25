@@ -1,6 +1,3 @@
-"""."""
-__package__ = "pymmdt"
-
 # Built-in Imports
 from typing import Sequence, Dict, Any, Union, List, Optional
 import curses
@@ -8,14 +5,11 @@ import time
 import threading
 import multiprocessing as mp
 import queue
-import gc
 import pathlib
-import pprint
 
 # Third-Party Imports
 import psutil
 import pandas as pd
-import tqdm
 
 # Internal Imports
 from .loader import Loader
@@ -23,9 +17,34 @@ from .logger import Logger
 from .core.pipe import Pipe
 from .core.data_stream import DataStream
 from .core.session import Session
-from .core.tools import get_memory_data_size, threaded
+from .core.tools import threaded
 
 class SingleRunner:
+    """Orchestracting class for running single data pipelines.
+
+    The ``SingleRunner`` class is tasked with managing and coordinating
+    the data pipeline between all the classes. The ``SingleRunner`` is 
+    the main process for processing data, defined by the flow and logic
+    defined in the ``Pipe``. 
+
+    The ``SingleRunner`` provides a TUI to keep track of the data
+    pipeline processing and its progress. Additional information 
+    includes the memory consumption by the system. Most of the 
+    communication between the ``SingleRunner``, ``Loader``, and ``Logger``
+    is handled by communication threads in each process.
+
+    The ``SingleRunner`` also provides methods that start with 
+    ``message_*`` or ``respond_*`` to are used to send or receive 
+    messages from the ``Loader`` and ``Logger``. ``message_*`` are for
+    sending messages. ``respond_*`` are for receiving and responding to
+    messages.
+
+    There are a distinction between ``SingleRunner`` and ``GroupRunner`` 
+    for there intended use. The ``SingleRunner` is focused on single 
+    participant or object of study data pipelines. ``GroupRunner`` is 
+    used when there are participants or tracked elements.
+
+    """
     
     def __init__(
             self,
@@ -44,7 +63,53 @@ class SingleRunner:
             memory_usage_factor:float=2.25,
             verbose=False,
         ):
+        """
 
+        Args:
+            name (str): The name of the ``SingleRunner`` that would be
+            used for storing the data generated during the processing.
+
+            pipe (Pipe): The pipeline to be used by the
+            ``SingleRunner``.
+
+            data_streams (Sequence[DataStream]): The data streams to be
+            feed into the data pipeline.
+
+            run_solo (bool): Flag variable indicating if the 
+            ``SingleRunner`` will be run separately or in a group by the
+            ``GroupRunner``.
+
+            time_window (pd.Timedelta): The size of the time window.
+
+            logdir (Optional[Union[str,pathlib.Path]]): The log directory
+            to use for saving and logging data to.
+
+            start_time (Optional[pd.Timedelta]): A timestamp to define
+            the start time of the processing. Any data before the 
+            ``start_time`` will be ignored.
+
+            end_time (Optional[pd.Timedelta]): A timestamp to define 
+            the end tim of the processing. Any data after the 
+            ``end_time`` will be ignored.
+
+            max_loading_queue_size (int): Max size of the loading queue.
+            max_logging_queue_size (int): Max size of the logging queue.
+            max_message_queue_size (int): Max size of the message queues.
+
+            memory_limit (float): The percentage of the available RAM 
+            that will be permitted to be used by the ``SingleRunner``. 
+            For slower computers and with small RAM, a smaller
+            ``memory_limit`` is highly recommended.
+
+            memory_usage_factor (float): This factor is used to more
+            accurate account for the memory used by the library. Even 
+            with tracking all memory loaded, the actual memory is
+            typically higher. The factor is to account for this 
+            difference.
+
+            verbose (bool): Debugging printout.
+
+        """
         # Convert the logdir to pathlib
         if isinstance(logdir, str):
             self.logdir = pathlib.Path(logdir)
@@ -131,7 +196,19 @@ class SingleRunner:
             start_time:Optional[pd.Timedelta],
             end_time:Optional[pd.Timedelta]
         ) -> None:
+        """Routine for initializing the ``Loader``.
 
+        Args:
+            time_window (pd.Timedelta): Size of the time window.
+            max_loading_queue_size (int): Max size of the loading queue.
+
+            start_time (Optional[pd.Timedelta]): The cutoff of the start 
+            time of the global timetrack.
+
+            end_time (Optional[pd.Timedelta]): The cutoff of the end 
+            time of the global timetrack.
+
+        """
         # Then, create the data queues for loading and logging
         self.loading_queue = mp.Queue(maxsize=max_loading_queue_size)
 
@@ -168,7 +245,12 @@ class SingleRunner:
             self,
             max_logging_queue_size:int,
         ) -> None:
+        """Routine for initializing the ``Logger``.
 
+        Args:
+            max_logging_queue_size (int): Max size of the logging queue.
+
+        """
         # Create the queue for the logging data
         self.logging_queue = mp.Queue(maxsize=max_logging_queue_size)
        
@@ -198,6 +280,7 @@ class SingleRunner:
         })
 
     def message_pause_loader(self):
+        """Message to pause the ``Loader``."""
 
         # Sending the message to loader to pause!
         pause_message = {
@@ -210,6 +293,7 @@ class SingleRunner:
         self.message_to_loading_queue.put(pause_message)
     
     def message_resume_loader(self):
+        """Message to resume the ``Loader``."""
 
         # Sending the message to loader to pause!
         pause_message = {
@@ -222,6 +306,7 @@ class SingleRunner:
         self.message_to_loading_queue.put(pause_message)
 
     def message_end_loading_and_logging(self):
+        """Message to terminate the ``Loader`` and ``Logging``."""
 
         # Sending message to loader and logger to stop!
         end_message = {
@@ -234,29 +319,93 @@ class SingleRunner:
         self.message_to_loading_queue.put(end_message)
         self.message_to_logging_queue.put(end_message)
 
-    def respond_loader_message_timetrack(self, timetrack, windows):
+    def respond_loader_message_timetrack(self, timetrack:pd.DataFrame, windows:list):
+        """Respond to the retrieved message with initialization info.
+
+        Args:
+            timetrack (pd.DataFrame): The global timetrack generated by
+            the ``Collector``.
+
+            windows (list): List of the windows with their start and end
+            times.
+
+        """
         self.timetrack = timetrack
         self.num_of_windows = len(windows)
 
-    def respond_loader_message_counter(self, uuid, loading_window, data_memory_usage):
+    def respond_loader_message_counter(
+            self, 
+            uuid:str, 
+            loading_window:int, 
+            data_memory_usage:int
+        ):
+        """Respond to update in ``Loader`` window counter.
+
+        This message is vital for its memory usage information. We need
+        to track this memory consumption to when we need to limit memory
+        usage.
+
+        Args:
+            uuid (str): The unique id of the loaded data. This id helps
+            track the memory of each loaded data chunk and note when
+            the memory has been return to the OS.
+
+            loading_window: The id of the loading window.
+
+            data_memory_usage: The number of bytes used by the loaded
+            data chunk.
+
+        """
         self.latest_window_loaded = loading_window
         self.loading_queue_memory_chunks[uuid] = data_memory_usage
 
-    def respond_logger_message_counter(self, num_of_logged_data, uuid):
+    def respond_logger_message_counter(
+            self, 
+            num_of_logged_data:int, 
+            uuid:str
+        ):
+        """Respond to update in ``Logger`` logged data.
+
+        Args:
+            num_of_logged_data (int): The number of logged data chunks.
+            This is used in the TUI to provide a overview of the system.
+
+            uuid (str): The unique id of the logged data chunk. This id
+            helps track the memory deleted by the logger.
+
+        """
         self.num_of_logged_data = num_of_logged_data
+
+        # Sometimes the uuid has not been added yet so we need to wait
         while uuid not in self.logging_queue_memory_chunks:
             time.sleep(0.01)
+
         del self.logging_queue_memory_chunks[uuid]
 
     def respond_loader_message_end(self):
+        """Respond to the ``Loader`` inform that it has ended."""
         self.loader_finished = True
 
     def respond_logger_message_end(self):
+        """Respond to the ``Logger`` inform that it has ended."""
         self.logger_finished = True
     
     @threaded
     def check_loader_messages(self):
+        """Message thread checks for new messages and limit memory usage.
+        
+        The ``Loader`` message queues are checked frequently and if 
+        there is a new message, then the corresponding function is 
+        executed. These functions are defined by the protocols layed out 
+        in the ``__init__``. 
 
+        Given the memory usage information from the ``Loader`` and 
+        ``Logger``, this thread enforces the memory limit by pausing and
+        resuming the operation of each process. ``Loader`` consumes
+        memory while ``Logger`` frees the RAM memory back to the system 
+        to use.
+
+        """
         # Set the flag to check if new message
         loading_message = None
         loading_message_new = False
@@ -303,7 +452,20 @@ class SingleRunner:
 
     @threaded
     def check_logger_messages(self):
+        """Message thread checks for new messages and limit memory usage.
+        
+        The ``Logger`` message queues are checked frequently and if 
+        there is a new message, then the corresponding function is 
+        executed. These functions are defined by the protocols layed out 
+        in the ``__init__``. 
 
+        Given the memory usage information from the ``Loader`` and 
+        ``Logger``, this thread enforces the memory limit by pausing and
+        resuming the operation of each process. ``Loader`` consumes
+        memory while ``Logger`` frees the RAM memory back to the system 
+        to use.
+
+        """
         # Set the flag to check if new message
         logging_message = None
         logging_message_new = False
@@ -329,13 +491,31 @@ class SingleRunner:
                 func(**logging_message['body']['content'])
 
     def set_session(self, session: Session) -> None:
+        """Setting the session for ``SingleRunner``.
+
+        This function is called by the ``GroupRunner`` to provide 
+        subsessions to the ``SingleRunner``. Else, the ``SingleRunner``
+        creates its own session (when ``run_solo`` is set to True).
+
+        Args:
+            session (Session): The session used to log data.
+        
+        """
+        # If there is already a session for the runner, this is not 
+        # okay and we need to raise an alarm!
         if hasattr(self, 'session'):
             raise RuntimeError(f"Runner <name={self.name}> has already a Session")
         else:
             self.session = session
 
     def setup(self) -> None:
+        """Setup the ``SingleRunner``'s run.
 
+        The setup includes the messaging threads, the ``Loader``, the
+        ``Logger``, and the additional variables to coordinate these
+        multiprocessing and multithreaded components.
+
+        """
         # Creating threading Event to indicate stopping processing
         self.thread_exit = threading.Event()
         self.thread_exit.clear()
@@ -351,15 +531,38 @@ class SingleRunner:
         self.logger.start()
 
     def start(self) -> None:
-        
+        """Start the data pipeline and its processing.
+
+        This routine is focuses on the pipeline passed to the
+        ``SingleRunner``, while the ``setup`` method is more for the 
+        other components.
+
+        """
         # set the session to the pipe
         self.pipe.set_session(self.session)
 
         # First, execute the ``start`` routine of the pipe
         self.pipe.start()
 
-    def step(self, data_samples: Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]) -> Any:
+    def step(
+            self, 
+            data_samples: Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]
+        ) -> Any:
+        """Routine for processing single step of data in the timeline.
 
+        Args:
+            data_samples (Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]):
+            The first level of the dictionary handles the 
+            ``SingleRunner``'s name (compatibility with the 
+            ``GroupRunner``. The second level of the dictionary then
+            uses (data stream name key, data frame data) pairs.
+
+        Returns:
+            Any: The output of the ``Pipe`` can be later used by the 
+            ``GroupRunner``. More details can be found in the ``step``
+            method of the ``GroupRunner``.
+
+        """
         # Then process the sample
         output = self.pipe.step(data_samples[self.name])
 
@@ -367,12 +570,20 @@ class SingleRunner:
         return output
     
     def end(self) -> None:
+        """Ending the ``SingleRunner``."""
         
         # Closing components
         self.pipe.end()
 
     def shutdown(self) -> None:
+        """Shutting down the ``SingleRunner``.
 
+        This shutdown also includes the messasing threads, ``Logger`` 
+        and ``Loader`` processes, and clearing all the messages from the
+        queues. Note: processes cannot be complete ``join`` until all
+        connected queues are cleared.
+
+        """
         # Stop the loader and logger
         self.message_end_loading_and_logging() 
 
@@ -401,7 +612,13 @@ class SingleRunner:
         self.message_logger_thread.join()
 
     def process_data(self):
+        """Main routine for loading and processing data chunks.
 
+        This routine acts as the base routine for ``get``ting data 
+        chunks from the ``loading_queue`` and passing them through the
+        ``Pipe``.
+
+        """
         # Keep track of the number of processed data chunks
         self.num_processed_data_chunks = 0
         
@@ -431,7 +648,13 @@ class SingleRunner:
             self.num_processed_data_chunks += 1
         
     def tui_main(self, stdscr):
-        
+        """Routine for TUI.
+
+        The routine for the TUI updates the information from each
+        process, such as the ``Loader`` and ``Logger``. Additionally,
+        the memory usage is reported as well.
+
+        """
         # Continue the TUI until the other threads are complete.
         while True:
 
@@ -468,8 +691,9 @@ class SingleRunner:
         """Run the data pipeline.
 
         Args:
-            verbose (bool): If to include logging and loading bar to
-            help visualize the wait time until completion.
+            verbose (bool): If to include a TUI for tracking the 
+            progress of loading, processing, and logging of data 
+            throughout the data pipeline process.
 
         """
         # Assertions
@@ -497,7 +721,13 @@ class SingleRunner:
         self.shutdown()
 
 class GroupRunner(SingleRunner):
-    """Multimodal Data Processing Group Director.
+    """Orchestracting class for running multiple data pipelines.
+
+    The ``GroupRunner`` inherents and thereby uses plenty of methods 
+    from ``SingleRunner``. The main difference is that ``GroupRunner``
+    manages the processing of multiple ``SingleRunner`` and then an 
+    additional group data pipeline. The output of each ``SingleRunner``
+    can then be used as the input to the group data pipeline.
 
     """
 
@@ -516,16 +746,51 @@ class GroupRunner(SingleRunner):
             max_message_queue_size:int=100,
             memory_limit:float=0.8,
             memory_usage_factor:float=2.25,
-            verbose=False,
+            verbose:bool=False,
         ) -> None:
-        """Construct the analyzer. 
+        """Construct the ``GroupRunner``.
 
         Args:
-            data_streams (Sequence[DataStream]): A list of data streams to process forward.
-            pipe (Pipe): The pipeline to send forward the data samples from the data streams toward.
+            logdir (Union[str, pathlib.Path]): The logging directory to
+            save the logged data.
+
+            name (str): The name of the ``GroupRunner`` that will be 
+            used to create a unique logging directory.
+
+            pipe (Pipe): The group pipeline that will process all output
+            content of each input runners.
+
+            runners (Sequence[SingleRunner]): List of runners to run 
+            concurrently.
+
+            time_window (pd.Timedelta): Size of the time window.
+
+            data_streams (Sequence[DataStream]): The data streams that
+            correlate to the group instead of any ``SingleRunner``.
+
+            start_time (pd.Timedelta): The start time of the entire
+            global timeline.
+
+            end_time (pd.Timedelta): The end time of the entire global
+            timeline.
+
+            max_loading_queue_size (int): Max loading queue size
+            max_logging_queue_size (int): Max logging queue size
+            max_message_queue_size (int): Max message queue size
+
+            memory_limit (float): The percentage of available memory 
+            permitted for the ``GroupRunner`` to use. The limit 
+            restricts overloading the system.
+
+            memory_usage_factor (float): The recorded memory usage of 
+            the system does not fully capture its memory footprint. To
+            account for this possibly memory overloading and system
+            crash, a factor is used to compensate for this as a safety
+            measure.
+
+            verbose (bool): Debugging printout.
 
         """
-
         # Convert the logdir to pathlib
         if isinstance(logdir, str):
             self.logdir = pathlib.Path(logdir)
@@ -621,7 +886,13 @@ class GroupRunner(SingleRunner):
             runner.pipe.set_session(runner_session)
         
     def start(self) -> None:
-        
+        """Start the data pipelines and their processing.
+
+        This routine is focuses on the pipeline passed to the
+        ``GroupRunner`` and its ``SingleRunner`` instances, 
+        while the ``setup`` method is more for the other components.
+
+        """
         # Execute the runners' ``start`` routine
         for runner in self.runners:
             runner.start()
@@ -630,7 +901,23 @@ class GroupRunner(SingleRunner):
         super().start()
 
     def step(self, all_data_samples: Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]) -> None:
+        """One time step to processing ``get``ing data and processing it.
 
+        Args:
+            all_data_samples (Dict[str, Dict[str, Union[pd.DataFrame, List[pd.DataFrame]]]]): 
+            These are all the data samples for each runner. The first 
+            level of the dictionary is organized by the ``name`` of the
+            ``SingleRunner`` and ``GroupRunner``. Then, the second level
+            of the dictionary is organized by the ``name`` of the data
+            streams. The value in the second level is the data frame
+            acquired from the respective data stream.
+
+            An important distinction between ``SingleRunner`` and 
+            ``GroupRunner`` is that the output of each ``SingleRunner``
+            is then passed to the ``GroupRunner`` to further analyze
+            the conjuction of all the ``SingleRunner`` instances.
+
+        """
         # Get samples for all the runners and propagate them
         for runner in self.runners:
             # Get the output of the each runner
@@ -641,6 +928,7 @@ class GroupRunner(SingleRunner):
         self.pipe.step(all_data_samples)
 
     def end(self) -> None:
+        """Ending the data pipelines."""
 
         # Execute the runners' ``end`` routine
         for runner in self.runners:

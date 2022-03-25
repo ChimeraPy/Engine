@@ -77,6 +77,9 @@ class VideoEntry(Entry):
             first_frame = self.unsaved_changes['frames'].iloc[0]
             w, h = first_frame.shape[0], first_frame.shape[1]
 
+            # Determine if RGB or grey video
+            is_grey = len(first_frame.shape) == 2
+
             # Determine the fps
             t1 = self.unsaved_changes['_time_'].iloc[0]
             t2 = self.unsaved_changes['_time_'].iloc[1]
@@ -87,7 +90,8 @@ class VideoEntry(Entry):
             self.stream.open_writer(
                 video_path=self.save_loc,
                 fps=average_fps,
-                size=(w,h)
+                size=(w,h),
+                grey=is_grey
             )
 
         # Else, let's save the changes

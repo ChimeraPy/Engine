@@ -181,7 +181,8 @@ class VideoDataStream(DataStream):
         self, 
         video_path:Union[pathlib.Path, str],
         fps:Optional[Union[float,int]]=None,
-        size:Optional[Tuple[int, int]]=None
+        size:Optional[Tuple[int, int]]=None,
+        grey=False
         ) -> None:
         """Set the video writer by opening with the filepath."""
         assert self.mode == 'writing'
@@ -200,12 +201,21 @@ class VideoDataStream(DataStream):
         assert isinstance(self.fps, (float, int)) and isinstance(self.size, tuple)
 
         # Opening the video writer given the desired parameters
-        self.video.open(
-            str(self.video_path),
-            cv2.VideoWriter_fourcc(*'DIVX'),
-            self.fps,
-            (self.size[1], self.size[0])
-        )
+        if not grey:
+            self.video.open(
+                str(self.video_path),
+                cv2.VideoWriter_fourcc(*'DIVX'),
+                self.fps,
+                (self.size[1], self.size[0])
+            )
+        else:
+            self.video.open(
+                str(self.video_path),
+                cv2.VideoWriter_fourcc(*'DIVX'),
+                self.fps,
+                (self.size[1], self.size[0]),
+                0 # This is to save grey video
+            )
 
     def get_frame_size(self) -> Tuple[int, int]:
         """Get the video frame's width and height.

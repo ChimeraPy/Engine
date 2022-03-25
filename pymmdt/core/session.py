@@ -8,11 +8,9 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, Any
 import uuid
 import multiprocessing as mp
-import json
-import collections
 
 # Third-party Imports
 import pandas as pd

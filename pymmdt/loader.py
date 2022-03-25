@@ -20,8 +20,8 @@ class Loader(BaseProcess):
     The class creates an instance of the ``Collector`` that aligns all
     the input datastreams in ``user_data_streams``. All the loaded data
     is put into ``loading_queue`` for other processes to use.
-    """
 
+    """
 
     def __init__(
             self,
@@ -33,7 +33,7 @@ class Loader(BaseProcess):
             start_time:Optional[pd.Timedelta]=None,
             end_time:Optional[pd.Timedelta]=None,
             verbose:bool=False
-            ):
+        ):
         """Construct a ``Loader`` obtain to load data from data streams.
 
         Args:
@@ -139,7 +139,7 @@ class Loader(BaseProcess):
             print("Loading window counter message failed to send!")
 
     def message_finished_loading(self):
-
+        """message_from function to inform that the loading is complete."""
         # Create the message
         finished_loading_message = {
             'header': 'META',
@@ -162,7 +162,16 @@ class Loader(BaseProcess):
             print("END message failed to send!")
 
     def run(self):
+        """Run the subprocess to load the data.
 
+        This is the main routine of the ``Loader``. It loads data from 
+        all data streams in time window intervals. The ``Collector``
+        instance handles the alignment of the data streams by
+        constructing the global timeline. Once we get a chunk of data,
+        the ``Loader`` places it into the ``loading_queue`` for other
+        subprocesses to ``get`` from.
+
+        """
         # Perform process setup
         self.setup()
 
