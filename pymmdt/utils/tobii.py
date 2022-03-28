@@ -21,9 +21,16 @@ from pymmdt.core.data_stream import DataStream
 from pymmdt.core.video.data_stream import VideoDataStream
 from pymmdt.core.tabular.data_stream import TabularDataStream
 
-# Loading data from files
 def load_g3_file(gz_filepath:pathlib.Path) -> Dict:
+    """Load the Tobii g3 file.
 
+    Args:
+        gz_filepath (pathlib.Path): The filepath to the gz file.
+
+    Returns:
+        Dict: The content of the gz file.
+
+    """
     # Load the data from file 
     with open(gz_filepath, mode='rt') as f:
         data = f.read()
@@ -38,7 +45,16 @@ def load_g3_file(gz_filepath:pathlib.Path) -> Dict:
     return data_dict
 
 def load_temporal_gz_file(gz_filepath:pathlib.Path, verbose:bool=False) -> pd.DataFrame:
-   
+    """Load the temporal gz file.
+
+    Args:
+        gz_filepath (pathlib.Path): Filepath to the gz file.
+        verbose (bool): Debugging printout.
+
+    Returns:
+        pd.DataFrame: The contents of the gz file.
+
+    """
     # Convert the total_data to a dataFrame
     df = pd.DataFrame()
 
@@ -77,7 +93,25 @@ def load_temporal_gz_file(gz_filepath:pathlib.Path, verbose:bool=False) -> pd.Da
     return df
 
 # Loading data for participants
-def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Tuple[Sequence[DataStream], pd.DataFrame]:
+def load_single_session(
+        dir:pathlib.Path, 
+        verbose:bool=False
+    )-> Tuple[Sequence[DataStream], pd.DataFrame]:
+    """Load a single Tobii session data.
+
+    If this is the first time loading the session, a longer processing
+    will be done to convert gz data to csv. This is done so that future
+    loads are in orders of magnitude faster.
+
+    Args:
+        dir (pathlib.Path): The session's directory.
+        verbose (bool): Debugging printout.
+
+    Returns:
+        Tuple[Sequence[DataStream], pd.DataFrame]: Tuple containing a
+        list of the data streams ('video' and 'gaze') and the recording
+        specifications as a data frame.
+    """
 
     # Before trying to original data format, check if the faster csv 
     # version of the data is available
@@ -116,21 +150,29 @@ def load_participant_data(dir:pathlib.Path, verbose:bool=False) -> Tuple[Sequenc
         start_time=pd.Timedelta(0),
     )
 
-    # Set the fps for the video
-    # video_ds.set_fps(25)
+    # Construct the session's dictionary
+    session_data_dict = {
+        'data': [gaze_ds, video_ds],
+        'rec_specs': recording_specs_df
+    }
 
-    # Storing recording ID
-    participant_data = [gaze_ds, video_ds]
+    return session_data_dict
 
-    return participant_data, recording_specs_df
+def synchronize_tobii_recordings(sessions:Dict[str,Any]):
+    """Synchronize multiple Tobii sessions.
 
-def synchronize_tobii_recordings(ps:Dict[str,Any]):
-
+    Args:
+        sessions (Dict[str,Any]): A dictionary of sessions, organized
+        by keys (names of the sessions) and the values (the tuple of 
+        the session's data streams and recordings specifications).
+    
+    """
+    
     # Extract all the timestamps
     timestamps = []
-    for p_id in ps.keys():
+    for session_id in sessions.keys():
         # Get the timestamp (in str form)
-        str_timestamp = ps[p_id]['rec_specs']['created']
+        str_timestamp = sessions[session_id]['rec_specs']['created']
         # Convert the str form to datetime
         timestamp = pd.to_datetime(str_timestamp)
         timestamps.append(timestamp)
@@ -139,7 +181,7 @@ def synchronize_tobii_recordings(ps:Dict[str,Any]):
     earliest_timestamp = min(timestamps)
    
     # Update the tobii video and gaze datastreams
-    for p_id, timestamp in zip(ps.keys(), timestamps):
+    for session_id, timestamp in zip(sessions.keys(), timestamps):
 
         # If the same, skip it
         if timestamp == earliest_timestamp:
@@ -149,41 +191,52 @@ def synchronize_tobii_recordings(ps:Dict[str,Any]):
         delta = timestamp - earliest_timestamp
 
         # Shift the data streams by the difference
-        gaze_ds, video_ds = ps[p_id]['data']
+        gaze_ds, video_ds = sessions[session_id]['data']
         gaze_ds.set_start_time(delta)
         video_ds.set_start_time(delta)
 
-def load_session_data(
+def load_multiple_sessions_in_one_directory(
         data_dir:pathlib.Path,
         time_sync:bool=True,
         verbose:bool=False
-    ) -> Dict[str, Dict]:
+    ) -> Dict[str, Dict[str,Any]]:
+    """Load multiple Tobii session if found in the same parent directory.
+
+    Args:
+        data_dir (pathlib.Path): The directory containing the Tobii
+        sessions.
+
+        time_sync (bool): If to synchronize the Tobii sessions.
+        verbose (bool): Debugging printout.
+
+    Returns:
+        Dict[str, Dict[str,Any]]: The sessions arranged in a dictionary. Keys are
+        the name of the sessions and the values are dictionary with the 
+        following string keys: ``data`` and ``rec_specs``.
+    """
 
     # Load the participant IDs
     with open(data_dir / 'meta.json') as f:
         meta_json = json.load(f)
 
     # Loading all participant datas
-    p_meta = meta_json['PARTICIPANT_ID']
-    ps = {}
-    for p_id, p_dir in p_meta.items():
+    sessions_meta = meta_json['PARTICIPANT_ID']
+    sessions = {}
+    for session_id, session_dir in sessions_meta.items():
 
         # Create complete path
-        complete_p_dir = data_dir / p_dir
+        complete_session_dir = data_dir / session_dir
 
         # Loading each participant data
-        p_data, rec_specs = load_participant_data(complete_p_dir, verbose=verbose)
+        session_data_dict = load_single_session(complete_session_dir, verbose=verbose)
 
         # Store the participant data
-        ps[p_id] = {
-            'data': p_data,
-            'rec_specs': rec_specs,
-        }
+        sessions[session_id] = session_data_dict
 
     # If time_sync, then shift the data streams to start depending on the
     # recordings' timestamps.
     if time_sync:
-        synchronize_tobii_recordings(ps)
+        synchronize_tobii_recordings(sessions)
 
     # Return all the participants data
-    return ps
+    return sessions

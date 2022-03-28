@@ -3,6 +3,8 @@
 from PyQt5.QtCore import QObject, pyqtProperty, pyqtSignal
 
 class SlidingBarObject(QObject):
+    """A simple sliding bar to track the current time."""
+
     stateChanged = pyqtSignal(float)
 
     def __init__(self):

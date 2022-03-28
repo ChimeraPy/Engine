@@ -2,10 +2,7 @@
 # https://stackoverflow.com/questions/64505389/cant-reference-existing-qml-elements-from-python
 
 # Built-in Imports
-from typing import Optional, List, Dict, Sequence
-import os
-import sys
-import datetime
+from typing import List, Dict, Sequence
 import pathlib
 import json
 import collections
@@ -13,10 +10,8 @@ import queue
 import threading
 import time
 import multiprocessing as mp
-import multiprocessing.managers as mpm
 
 # Third-party Imports
-import numpy as np
 import pandas as pd
 import tqdm
 import psutil
@@ -31,7 +26,6 @@ from PyQt5.QtCore import QTimer, QObject, pyqtProperty, pyqtSignal, pyqtSlot
 from .dashboard_model import DashboardModel
 from .timetrack_model import TimetrackModel
 from .sliding_bar_object import SlidingBarObject
-from .pausable_timer import QPausableTimer
 from .loading_bar_object import LoadingBarObject
 
 # PyMMDT Library Imports
@@ -54,8 +48,7 @@ class Manager(QObject):
     def __init__(
             self,
             logdir:str,
-            replay_speed:int=1,
-            time_window:pd.Timedelta=pd.Timedelta(seconds=1),
+            time_window:pd.Timedelta=pd.Timedelta(seconds=0.5),
             meta_check_step:int=5000,
             max_message_queue_size:int=1000,
             max_loading_queue_size:int=1000,
@@ -63,6 +56,24 @@ class Manager(QObject):
             loader_memory_ratio:float=0.1,
             verbose:bool=False,
         ):
+        """Construct the ``Manager``.
+
+        Args:
+            logdir (str): Directory containing the saved logged data.
+            time_window (pd.Timedelta): Size of the time window.
+            meta_check_step (int): The period for checking meta changes.
+            max_message_queue_size (int): Max messaging queue size.
+            max_loading_queue_size (int): Max loading queue size.
+            memory_limit (float): Percentage of available RAM memory
+            that will be permitted to be used by the library. The memory
+            limit restricts the use of additional memory.
+
+            loader_memory_ratio (float): Memory factor to account for 
+            possible lag in memory consumption tracking.
+
+            verbose (bool): Debugging printout.
+
+        """
         super().__init__()
 
         if verbose:
@@ -70,7 +81,6 @@ class Manager(QObject):
 
         # Store the CI arguments
         self.logdir = pathlib.Path(logdir)
-        self.replay_speed = replay_speed
         self.time_window = time_window
         self.meta_check_step = meta_check_step # milliseconds
         self.max_message_queue_size = max_message_queue_size
@@ -182,6 +192,7 @@ class Manager(QObject):
 
     @pyqtSlot()
     def play_pause(self):
+        """Pressing the pause/play button."""
 
         # Before enabling data, we need to check if the meta data is 
         # valid, if not, then do nothing
@@ -194,9 +205,6 @@ class Manager(QObject):
         # If now we are playing,
         if self.is_play:
 
-            # Continue the update timer
-            # self.current_time_update.resume()
-
             # First, check if the session has been run complete, if so
             # restart it
             if self.session_complete:
@@ -204,18 +212,12 @@ class Manager(QObject):
                 # print("Restarted detected!")
                 self.restart()
 
-        # else, we are stopping!
-        else:
-            ...
-
-            # # Pause the update timer
-            # self.current_time_update.pause()
-
         # Update the button icon's and other changes based on is_play property
         self.playPauseChanged.emit()
     
     @pyqtSlot()
     def restart(self):
+        """Pressing the restart button."""
        
         # Pause the loader, sorter, and manager play thread
         self.pre_change_stop()
@@ -251,6 +253,7 @@ class Manager(QObject):
 
     @pyqtSlot()
     def sort_by_user(self):
+        """Pressing the 'Sort-By-User' button."""
        
         # If already sorted as user, ignore
         if self.sort_by == "user":
@@ -261,6 +264,7 @@ class Manager(QObject):
 
     @pyqtSlot()
     def sort_by_entry(self):
+        """Pressing the 'Sort-By-Entry button."""
         
         # If already sorted as entry, ignore
         if self.sort_by == "entry_name":
@@ -269,8 +273,16 @@ class Manager(QObject):
         # Now sort by entry_name
         self.change_sort("entry_name")
 
-    def change_sort(self, sort_by):
+    def change_sort(self, sort_by:str):
+        """Changing the sorting of the content in the dashboard. 
 
+        There are two possible configuration for the dashboard: "user"
+        and "entry_name". 
+
+        Args:
+            sort_by (str): "user" or "entry_name" options.
+
+        """
         # Store if the session was playing
         was_playing = self._is_play
 
@@ -293,6 +305,7 @@ class Manager(QObject):
         self.playPauseChanged.emit()
 
     def pre_change_stop(self):
+        """Steps required before changing timeline components."""
         
         # Stopping playing 
         self._is_play = False
@@ -306,6 +319,7 @@ class Manager(QObject):
         self.loader_paused = True
 
     def post_change_resume(self):
+        """Steps required after changing timeline components."""
 
         # Continue the processes
         self.message_resume_loader()
@@ -314,8 +328,13 @@ class Manager(QObject):
         self.loader_paused = False
         self.stop_everything = False
 
-    def message_set_loading_window_loader(self, loading_window):
-        
+    def message_set_loading_window_loader(self, loading_window:int):
+        """Messaging loader to set value of loading_window.
+
+        Args:
+            loading_window (int): The value to set to the ``Loader``.
+
+        """
         # Set the time window to starting loading data
         loading_window_message = {
             'header': 'UPDATE',
@@ -329,6 +348,7 @@ class Manager(QObject):
         self.message_to_loading_queue.put(loading_window_message)
     
     def message_pause_loader(self):
+        """Messaging loader to pause."""
 
         # Sending the message to loader to pause!
         message = {
@@ -341,6 +361,7 @@ class Manager(QObject):
         self.message_to_loading_queue.put(message)
 
     def message_pause_sorter(self):
+        """Messaging sorter to pause."""
 
         # Sending the message to sorter to pause!
         message = {
@@ -353,6 +374,7 @@ class Manager(QObject):
         self.message_to_sorting_queue.put(message)
     
     def message_resume_loader(self):
+        """Messaging loader to resume."""
 
         # Sending the message to loader to resume!
         message = {
@@ -365,6 +387,7 @@ class Manager(QObject):
         self.message_to_loading_queue.put(message)
     
     def message_resume_sorter(self):
+        """Messaging sorter to resume."""
 
         # Sending the message to sorter to resume!
         message = {
@@ -377,6 +400,7 @@ class Manager(QObject):
         self.message_to_sorting_queue.put(message)
 
     def message_end_loading_and_sorting(self):
+        """Messaging loader and sorter to shutdown."""
         
         # Informing all process to end
         message = {
@@ -389,36 +413,96 @@ class Manager(QObject):
         for message_to_queue in [self.message_to_sorting_queue, self.message_to_loading_queue]:
             message_to_queue.put(message)
 
-    def respond_loader_message_timetrack(self, timetrack, windows):
+    def respond_loader_message_timetrack(
+            self, 
+            timetrack:pd.DataFrame, 
+            windows:list
+        ):
+        """Responding to loader's initialization message.
+
+        Args:
+            timetrack (pd.DataFrame): Collector's global timetrack.
+            windows (list): List of windows (Window: namedtuple with 
+            ``start`` and ``end`` attributes.)
+
+        """
         self.timetrack = timetrack
         self.num_of_windows = len(windows)
 
-    def respond_loader_message_counter(self, uuid, loading_window, data_memory_usage):
+    def respond_loader_message_counter(
+            self, 
+            uuid:str, 
+            loading_window:int, 
+            data_memory_usage:int
+        ):
+        """Respond to loader message about new loaded data chunk.
+
+        This information includes the essential data memory usage.
+
+        Args:
+            uuid (str): Data chunk's uuid.
+            loading_window (int): Loading window id.
+            data_memory_usage (int): The size of the data chunk.
+
+        """
         self.latest_window_loaded = loading_window
         self.loading_queue_memory_chunks[uuid] = data_memory_usage
+        
+        # Updating the ``Loader``'s loading bar.
         new_state = loading_window / len(self.windows)
         self.loading_bar.state = new_state
 
     def respond_loader_message_end(self):
+        """Responding to the loader inform us that it finished!"""
         self.loader_finished = True
 
-    def respond_sorter_message_counter(self, uuid, loaded_time, data_memory_usage):
-        new_state = loaded_time / self.end_time
-        self.sorting_bar.state = new_state
+    def respond_sorter_message_counter(
+            self, 
+            uuid:str, 
+            loaded_time:pd.Timedelta, 
+            data_memory_usage:int
+        ):
+        """Responding to sorter informing batch of series data is loaded.
+
+        Args:
+            uuid (str): batch id.
+            loaded_time (pd.Timedelta): The batch's latest timestamp.
+            data_memory_usage (int): The size of the batch.
+
+        """
         self.sorting_queue_memory_chunks[uuid] = data_memory_usage
 
-    def respond_sorter_message_memory(self, uuid):
+        # Updating the ``Sorter``'s loading bar.
+        new_state = loaded_time / self.end_time
+        self.sorting_bar.state = new_state
+
+    def respond_sorter_message_memory(self, uuid:str):
+        """Respond to sorter inform that it ``put`` from loading queue.
+
+        Args:
+            uuid (str): The loading queue data chunk's uuid.
+        
+        """
+        # Waiting until recorded memory usage is up-to-date.
         while uuid not in self.loading_queue_memory_chunks:
             print(f"Trying to delete {uuid} from {self.loading_queue_memory_chunks}")
             time.sleep(0.01)
+
+        # Delete the data from the tracked memory.
         del self.loading_queue_memory_chunks[uuid]
 
     def respond_sorter_message_end(self):
+        """Responding to sorter inform that it has ended sorting."""
         self.sorter_finished = True
         self.sorting_bar.state = 1
 
     @threaded
     def check_loader_messages(self):
+        """Thread dedicated to listening for ``Loader`` messages.
+
+        This thread also manages the ``Loader``'s memory consumption.
+
+        """
 
         # Set the flag to check if new message
         loading_message = None
@@ -455,24 +539,34 @@ class Manager(QObject):
 
             # Priting if verbose
             if self.verbose:
-                print(f"LOADER [{self.loading_queue.qsize()}]: {self.loader_memory_used/self.total_available_memory}, SORTER [{self.sorting_queue.qsize()}]: {self.sorter_memory_used/self.total_available_memory}, RATIO: {self.total_memory_used / self.total_available_memory}")
+                print(f"LOADER [{self.loading_queue.qsize()}]: \
+                    {self.loader_memory_used/self.total_available_memory}, \
+                    SORTER [{self.sorting_queue.qsize()}]: \
+                    {self.sorter_memory_used/self.total_available_memory}, \
+                    RATIO: {self.total_memory_used / self.total_available_memory}")
 
             # If the system is supposed to continue operating, keep 
             # regulating the memory.
             if self.stop_everything is False:
 
                 # Check if we need to pause the sorter
-                if self.loader_memory_used > self.loader_memory_ratio *self.total_available_memory and not self.loader_paused:
+                if self.loader_memory_used > self.loader_memory_ratio * self.total_available_memory \
+                    and not self.loader_paused:
                     # Pause the sorting and wait until memory is cleared!
                     self.message_pause_loader()
                     self.loader_paused = True
-                elif self.loader_memory_used < self.loader_memory_ratio *self.total_available_memory and self.loader_paused:
+                elif self.loader_memory_used < self.loader_memory_ratio *self.total_available_memory \
+                    and self.loader_paused:
                     self.message_resume_loader()
                     self.loader_paused = False
 
     @threaded
     def check_sorter_messages(self):
+        """Thread dedicated to listening ``Sorter`` messages.
 
+        This thread also manages the ``Sorter``'s memory consumption.
+        
+        """
         # Set the flag to check if new message
         sorting_message = None
         sorting_message_new = False
@@ -504,8 +598,6 @@ class Manager(QObject):
             # Check if the memory limit is passed
             self.sorter_memory_used = sum(list(self.sorting_queue_memory_chunks.values()))
 
-            # print(f"LOADER [{self.loading_queue.qsize()}]: {self.loader_memory_used/self.total_available_memory}, SORTER [{self.sorting_queue.qsize()}]: {self.sorter_memory_used/self.total_available_memory}, RATIO: {self.total_memory_used / self.total_available_memory}")
-
             # If the system is supposed to continue operating, keep 
             # regulating the memory.
             if self.stop_everything is False:
@@ -520,6 +612,7 @@ class Manager(QObject):
                     self.sorter_paused = False
  
     def get_meta(self):
+        """Get the meta found in the ``logdir`` directory."""
 
         # Obtain all the meta files
         root_meta = self.logdir / 'meta.json' 
@@ -540,18 +633,22 @@ class Manager(QObject):
             meta_data = json.load(f)
             # meta_data['is_subsession'] = False
 
-        # Check if there is any subsessions and get their meta
-        # total_meta = {'root': meta_data}
-        # for sub_id in meta_data['subsessions']:
-        #     with open(self.logdir / sub_id / 'meta.json', 'r') as f:
-        #         total_meta[sub_id] = json.load(f)
-        #         total_meta[sub_id]['is_subsession'] = True
-
         # return total_meta
         return meta_data
 
     def load_data_streams(self, unique_users:List, users_meta:Dict) -> Dict[str, Sequence[DataStream]]:
+        """Load the data streams found in the ``logdir``.
 
+        Args:
+            unique_users (List): The expected unique users.
+            users_meta (Dict): The meta data for each user.
+
+        Returns:
+            Dict[str, Sequence[DataStream]]: Dictionary organized by 
+            keys (names of the data streams) and values (list of data
+            streams).
+
+        """
         # Loading data streams
         users_data_streams = collections.defaultdict(list)
         for user, user_meta in tqdm.tqdm(zip(unique_users, users_meta), disable=not self.verbose):
@@ -606,7 +703,15 @@ class Manager(QObject):
         return users_data_streams
 
     def create_entries_df(self, meta_data:Dict) -> pd.DataFrame:
+        """Create the meta data frame of the entries.
 
+        Args:
+            meta_data (Dict): The original meta data of the entries.
+
+        Returns:
+            pd.DataFrame: The meta data frame of the entries.
+        
+        """
         # Construct pd.DataFrame for the data
         # For each session data, store entries by modality
         entries = collections.defaultdict(list)
@@ -633,7 +738,13 @@ class Manager(QObject):
         return entries
 
     def meta_update(self):
-        
+        """The periodic function to check if meta data has changed.
+
+        The goal is that eventually both the ``SingleRunner`` and
+        ``GroupRunner`` will run along with the front-end to visualize,
+        in real time, the output of the ``Pipeline``.
+
+        """
         # In the update function, we need to check the data stored in 
         # the logdir.
         meta_data = self.get_meta()
@@ -691,6 +802,7 @@ class Manager(QObject):
         self.meta_data = meta_data
    
     def init_loader(self):
+        """Initialize the ``Loader``."""
         
         # Then, create the data queues for loading and logging
         self.loading_queue = mp.Queue(maxsize=self.max_loading_queue_size)
@@ -723,6 +835,7 @@ class Manager(QObject):
         })
 
     def init_sorter(self):
+        """Initialize the ``Sorter``."""
         # Create the queue for sorted data 
         self.sorting_queue = mp.Queue()
         
@@ -753,6 +866,7 @@ class Manager(QObject):
         )
     
     def setup(self):
+        """Peform the application's complete setup."""
         
         # Changing the time_window_size based on the number of entries
         div_factor = min(len(self.entries), 10)
@@ -785,7 +899,14 @@ class Manager(QObject):
 
     @threaded
     def update_content(self):
+        """Main thread for updating the content on the dashboard.
 
+        This thread grabs the output of the ``Sorter`` and uses it to 
+        update the images in the dashboard. Here is the data flow.
+
+        ``Loader`` --> ``Sorter`` --> ``update_content`` Thread
+
+        """
         # Keep repeating until exiting the app
         while not self.thread_exit.is_set():
 
@@ -860,7 +981,15 @@ class Manager(QObject):
             self.update_content_times.append(delta)
     
     def exit(self):
+        """Exiting the application.
+        
+        For subprocess to fully exit, their connecting queues must be
+        completely empty. Therefore, below you will see plenty of 
+        attempts and safety checks to ensure that the messaging and 
+        data queues are complete empty before executing the ``join``
+        method of the subprocesses.
 
+        """
         print("Closing")
 
         # Only execute the thread and process ending if data is loaded

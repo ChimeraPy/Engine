@@ -15,11 +15,7 @@ from typing import Optional, Union, List
 import pandas as pd
 
 class Process():
-    """Generic class that compartmentalizes computational steps for a datastream.
-
-    """
-    session = None
-    time = pd.Timedelta(0)
+    """Class that compartmentalizes computational steps for a datastream."""
 
     def __init__(self):
         ...
@@ -42,15 +38,6 @@ class Process():
         """
         return self.__repr__()
     
-    def start(self): 
-        """Apply process onto data sample.
-
-        Raises:
-            NotImplementedError: ``start`` method needs to be overwritten.
-
-        """
-        raise NotImplementedError("``start`` method needs to be implemented.")
-    
     def step(self, *args, **kwargs) -> Optional[Union[pd.DataFrame, List[pd.DataFrame]]]: 
         """Apply process onto data sample.
 
@@ -59,12 +46,3 @@ class Process():
 
         """
         raise NotImplementedError("``step`` method needs to be implemented.")
-    
-    def end(self): 
-        """Apply process onto data sample.
-
-        Raises:
-            NotImplementedError: ``end`` method needs to be overwritten.
-
-        """
-        raise NotImplementedError("``end`` method needs to be implemented.")

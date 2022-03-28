@@ -15,8 +15,14 @@ import pandas as pd
 # Helper Classes
 Window = collections.namedtuple("Window", ['start', 'end'])
 
-# From: https://stackoverflow.com/a/19846691/13231446 
 def threaded(fn):
+    """Decorator for class methods to be spawn new thread.
+    
+    From: https://stackoverflow.com/a/19846691/13231446 
+
+    Args:
+        fn: The method of a class.
+    """
     def wrapper(*args, **kwargs):
         thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
         # thread.start()
@@ -24,19 +30,22 @@ def threaded(fn):
         return thread
     return wrapper
 
-def multiprocessed(fn):
-    def wrapper(*args, **kwargs):
-        process = multiprocessing.Process(target=fn, args=args, kwargs=kwargs)
-        # thread.start()
-        process.deamon = True
-        return process
-    return wrapper
+# def multiprocessed(fn):
+#     def wrapper(*args, **kwargs):
+#         process = multiprocessing.Process(target=fn, args=args, kwargs=kwargs)
+#         # thread.start()
+#         process.deamon = True
+#         return process
+#     return wrapper
 
 def clear_queue(input_queue: mp.Queue):
-    # print(input_queue.qsize())
+    """Clear a queue.
+
+    Args:
+        input_queue (mp.Queue): Queue to be cleared.
+    """
 
     while input_queue.qsize() != 0:
-        # print(input_queue.qsize())
 
         # Make sure to account for possible automic modification of the
         # queue
@@ -51,6 +60,17 @@ def get_windows(
         end_time:pd.Timedelta, 
         time_window_size:pd.Timedelta
     ) -> List[Window]:
+    """Compute the start and end times of the windows found in range.
+
+    Args:
+        start_time (pd.Timedelta): The start time of the range.
+        end_time (pd.Timedelta): The end time of the range.
+        time_window_size (pd.Timedelta): The size of the time window.
+
+    Returns:
+        List[Window]: A list of the window (namedtuples with ``start``
+        and ``end`` attributes).
+    """
 
     # Determine how many time windows given the total time and size
     total_time = (end_time - start_time)
@@ -69,9 +89,18 @@ def get_windows(
 
     return windows
 
-def to_numpy(im:Image):
-    # Got this function from: 
-    # https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/
+def to_numpy(im:Image) -> np.ndarray:
+    """Convert a PIL Image to numpy np.ndarray.
+    
+    Got this function from: 
+    https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/
+
+    Args:
+        im (Image): The PIL image.
+
+    Returns:
+        np.ndarray: The numpy image.
+    """
 
     # Load the image
     im.load()
@@ -95,6 +124,23 @@ def to_numpy(im:Image):
 
     return data
 
-def get_memory_data_size(data:Any):
+def get_memory_data_size(data:Any) -> int:
+    """Calculate the memory usage of a Python object.
 
+    This was a solution to a memory leak issue. Here is the SO link:
+    https://stackoverflow.com/q/71447286/13231446
+
+    The main issue is that multiprocessing.Queue pickles an input and 
+    unpickles when using ``get``. Numpy arrays do not handle this well,
+    for their memory meta data is corrupted when this happends. This 
+    caused memory to not be accurately computed. The solution was to 
+    repickle the data and measure the len of the pickle string. This is
+    a temporary solution, as I would like NumPy to solve this issue.
+
+    Args:
+        data (Any): The python object in question.
+
+    Returns:
+        int: Size of the Python object in bytes.
+    """
     return len(pickle.dumps(data))

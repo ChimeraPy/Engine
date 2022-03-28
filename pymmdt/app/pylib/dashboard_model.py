@@ -4,7 +4,6 @@
 #https://stackoverflow.com/questions/4303561/pyqt-and-qml-how-can-i-create-a-custom-data-model
 
 # Built-in Imports
-import datetime
 
 # Third-party Imports
 import pandas as pd
@@ -16,7 +15,15 @@ from PyQt5.QtCore import QAbstractListModel, Qt
 from .group_model import GroupModel
 
 class DashboardModel(QAbstractListModel):
+    """Data Model that tracks the dashboard.
 
+    This is the base level of the data model for the dashboard. An 
+    additional level is perform by the ``GroupModel``. The dashboard
+    model focuses on the ``user`` and ``entry_name`` separation.
+
+    """
+   
+    # Role tagging
     SortByRole = Qt.UserRole + 1
     GroupRole = Qt.UserRole + 2
 
@@ -25,15 +32,24 @@ class DashboardModel(QAbstractListModel):
         GroupRole: b"group"
     }
 
-    def __init__(self): #, entries:List[ModalityModel]=None):
+    def __init__(self):
         super().__init__()
 
+        # Creating empty essential variables.
         self.entries = pd.DataFrame()
         self.groups = []
         self._sort_by = None
-        # self._sort_by = 'entry_name'
 
-    def update_data(self, entries, sort_by):
+    def update_data(self, entries:pd.DataFrame, sort_by:str):
+        """Updating data organized by the entries and sorting preference.
+
+        Args:
+            entries (pd.DataFrame): Data frame containing detailed
+            information of the entries.
+
+            sort_by (str): Flag to indicate if sorting by ``user`` or 
+            ``entry_name``.
+        """
 
         # Reset model if different sort_by
         if self._sort_by != sort_by:
@@ -65,7 +81,15 @@ class DashboardModel(QAbstractListModel):
             self.modelReset.emit()
 
     def update_content(self, index, user, entry_name, content):
-  
+        """Update the content given entries.
+
+        Args:
+            index: Job number.
+            user: Name of the user.
+            entry_name: Name of the entry.
+            content: The actual content that is meant to be used.
+
+        """
         # First, determine which group by the sort_by
         if self._sort_by == 'entry_name':
             group_idx = self.unique_groups_tags.index(entry_name)
@@ -79,15 +103,24 @@ class DashboardModel(QAbstractListModel):
         self.groups[group_idx].update_content(user, entry_name, content)
 
     def reset_content(self):
+        """Reset content by using default black image."""
 
         # Iterate over all groups and reset their own content
         for group in self.groups:
             group.reset_content()
 
     def rowCount(self, parent):
+        """PyQt5 required function to now the size of the model."""
         return len(self.groups)
 
     def data(self, index, role=None):
+        """PyQt5 required function to retrieve data in model.
+
+        Args:
+            index: PyQt5 index.
+            role: The types of roles (types of data).
+
+        """
         row = index.row()
         if role == self.SortByRole:
             return self.unique_groups_tags[row]
@@ -97,4 +130,5 @@ class DashboardModel(QAbstractListModel):
         return None
 
     def roleNames(self):
+        """PyQt5 required function to define the roles of the model."""
         return self._roles

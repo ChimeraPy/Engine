@@ -4,13 +4,20 @@ import cv2
 
 # PyQt5 Imports
 from PyQt5 import QtGui
-from PyQt5.QtCore import QThread
 
 # Constants
 GRAY_COLOR_TABLE = [QtGui.qRgb(i, i, i) for i in range(256)]
 
-def toQImage(im):
+def toQImage(im:np.ndarray) -> QtGui.QImage:
+    """Convert a numpy image into a PyQt5 QImage.
 
+    Args:
+        im (np.ndarray): The inputted numpy image.
+
+    Returns:
+        QtGui.QImage: The transformed image as a PyQt5 QImage.
+
+    """
     if im is None:
         return QtGui.QImage()
 

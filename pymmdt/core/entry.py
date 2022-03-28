@@ -2,20 +2,26 @@
 __package__ = 'pymmdt'
 
 # Built-in Imports
-
-# Third-party Imports
-import pandas as pd
+from typing import Dict
 
 class Entry:
     """Abstract Entry to be saved in the session and tracking changes."""
 
     def __repr__(self):
+        """String representation of ``Entry``."""
         return f"{self.__class__.__name__} <name={self.name}>"
     
     def __str__(self):
+        """String representation of ``Entry``."""
         return self.__repr__()
 
-    def append(self, data_chunk:dict):
+    def append(self, data_chunk:Dict):
+        """Append data to the entry - recording as unsaved changes.
+
+        Args:
+            data_chunk (Dict): Data chunk to be appended to entry data.
+
+        """
         # Get the dataframe
         df = data_chunk['data']
         # Append the dataframe

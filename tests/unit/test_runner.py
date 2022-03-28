@@ -51,8 +51,8 @@ class SingleRunnerTestCase(unittest.TestCase):
             shutil.rmtree(exp_dir)
 
         # Use a test pipeline
-        # self.individual_pipeline = test_doubles.TestPipe()
-        self.individual_pipeline = mm.core.Pipe()
+        # self.individual_pipeline = test_doubles.TestPipeline()
+        self.individual_pipeline = mm.core.Pipeline()
 
     def test_runner_to_run(self):
         
@@ -125,7 +125,7 @@ class GroupRunnerTestCase(unittest.TestCase):
         for x in range(2):
             
             # Construct the individual participant pipeline object
-            individual_pipeline = mm.core.Pipe()
+            individual_pipeline = mm.core.Pipeline()
 
             runner = mm.SingleRunner(
                 name=f"P0{x}",
@@ -137,7 +137,7 @@ class GroupRunnerTestCase(unittest.TestCase):
             self.runners.append(runner)
         
         # Create an overall session and pipeline
-        self.overall_pipeline = mm.core.Pipe()
+        self.overall_pipeline = mm.core.Pipeline()
 
     def test_group_runner_run(self):
         

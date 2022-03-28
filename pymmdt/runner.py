@@ -14,7 +14,7 @@ import pandas as pd
 # Internal Imports
 from .loader import Loader
 from .logger import Logger
-from .core.pipe import Pipe
+from .core.pipeline import Pipeline
 from .core.data_stream import DataStream
 from .core.session import Session
 from .core.tools import threaded
@@ -25,7 +25,7 @@ class SingleRunner:
     The ``SingleRunner`` class is tasked with managing and coordinating
     the data pipeline between all the classes. The ``SingleRunner`` is 
     the main process for processing data, defined by the flow and logic
-    defined in the ``Pipe``. 
+    defined in the ``Pipeline``. 
 
     The ``SingleRunner`` provides a TUI to keep track of the data
     pipeline processing and its progress. Additional information 
@@ -49,7 +49,7 @@ class SingleRunner:
     def __init__(
             self,
             name:str,
-            pipe:Pipe,
+            pipe:Pipeline,
             data_streams:Sequence[DataStream],
             run_solo:bool=False,
             time_window:pd.Timedelta=pd.Timedelta(seconds=5),
@@ -69,7 +69,7 @@ class SingleRunner:
             name (str): The name of the ``SingleRunner`` that would be
             used for storing the data generated during the processing.
 
-            pipe (Pipe): The pipeline to be used by the
+            pipe (Pipeline): The pipeline to be used by the
             ``SingleRunner``.
 
             data_streams (Sequence[DataStream]): The data streams to be
@@ -558,7 +558,7 @@ class SingleRunner:
             uses (data stream name key, data frame data) pairs.
 
         Returns:
-            Any: The output of the ``Pipe`` can be later used by the 
+            Any: The output of the ``Pipeline`` can be later used by the 
             ``GroupRunner``. More details can be found in the ``step``
             method of the ``GroupRunner``.
 
@@ -616,7 +616,7 @@ class SingleRunner:
 
         This routine acts as the base routine for ``get``ting data 
         chunks from the ``loading_queue`` and passing them through the
-        ``Pipe``.
+        ``Pipeline``.
 
         """
         # Keep track of the number of processed data chunks
@@ -735,7 +735,7 @@ class GroupRunner(SingleRunner):
             self, 
             logdir:Union[str, pathlib.Path],
             name:str,
-            pipe:Pipe,
+            pipe:Pipeline,
             runners:Sequence[SingleRunner],
             time_window:pd.Timedelta,
             data_streams:Sequence[DataStream]=[],
@@ -757,7 +757,7 @@ class GroupRunner(SingleRunner):
             name (str): The name of the ``GroupRunner`` that will be 
             used to create a unique logging directory.
 
-            pipe (Pipe): The group pipeline that will process all output
+            pipe (Pipeline): The group pipeline that will process all output
             content of each input runners.
 
             runners (Sequence[SingleRunner]): List of runners to run 

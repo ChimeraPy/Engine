@@ -9,16 +9,26 @@ from PyQt5.QtCore import pyqtProperty
 # Internal Imports
 
 class ContentImage(QtQuick.QQuickPaintedItem):
+    """This is the painted item that is the image in the Dashboard."""
 
+    # Signals
     imageChanged = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
+        """Constructing the ``ContentImage`` and saving an image."""
         super().__init__(parent)
-        # self.setRenderTarget(QtQuick.QQuickPaintedItem.FramebufferObject)
         self._image = QtGui.QImage()
 
     def paint(self, painter):
+        """Paint method from PyQt5 that paints the graphical element.
 
+        In this method, we have to use our acquired image and draw as 
+        an element in the dashboard.
+
+        Args:
+            painter: Qt Painter
+
+        """
         if self._image.isNull():
             return
 

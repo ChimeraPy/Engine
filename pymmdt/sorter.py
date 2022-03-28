@@ -16,6 +16,14 @@ from .base_process import BaseProcess
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
 class Sorter(BaseProcess):
+    """Subprocess tasked with sorting the content temporally.
+
+    The ``Sorter`` obtains data loaded by the ``Loader`` and sorts all
+    the data samples (from all the data streams) into a single queue. 
+    This makes it easier to synchronize content and how it is updated
+    in the application front-end.
+
+    """
 
     def __init__(self,
             loading_queue:mp.Queue,
@@ -26,6 +34,32 @@ class Sorter(BaseProcess):
             update_counter_period:int=10,
             verbose:bool=False
         ):
+        """Construct a ``Sorter`` to temporally sort all data.
+
+        Args:
+            loading_queue (mp.Queue): The input loading queue that the 
+            sorter will ``get`` data from.
+
+            sorting_queue (mp.Queue): The output sorting queue that the
+            sorter will ``put`` data to.
+
+            message_to_queue (mp.Queue): The message queue to send 
+            messages to the ``Sorter``.
+
+            message_from_queue (mp.Queue): The message queue to recieve
+            messages from the ``Sorter``.
+
+            entries (pd.DataFrame): A data frame that contains various 
+            attributes of the entries.
+
+            update_counter_period (int): This is the period in when the
+            ``Sorter`` reports sorted data. Too frequent and the system
+            will be overloaded by the messages. Too large periods and
+            the memory consumption of the ``Sorter`` won't be accurately
+            tracked.
+
+            verbose (bool): Debugging printout.
+        """
         
         super().__init__(
             message_to_queue=message_to_queue,
@@ -43,6 +77,12 @@ class Sorter(BaseProcess):
         self.entries = entries.set_index(['user', 'entry_name'])
 
     def message_sorter_pulled_from_loading_queue(self, uuid:str):
+        """``Sorter`` sending message: getting data from loading queue.
+
+        Args:
+            uuid (str): The unique identifier for a group of sorted data.
+
+        """
 
         message = {
             'header': 'UPDATE',
@@ -61,7 +101,13 @@ class Sorter(BaseProcess):
             print("Error: ``message_sorter_pulled_from_loading_queue`` failed to send!")
 
     def message_loading_sorted(self, data_chunk:Dict[str,Any]):
+        """``Sorter`` sending message: putting data to sorting queue.
 
+        Args:
+            data_chunk (Dict[str,Any]): The data chunk that is being
+            ``put`` into sorting queue.
+
+        """
         # Check that the uuid is not None
         assert data_chunk['uuid'] != None
 
@@ -85,6 +131,7 @@ class Sorter(BaseProcess):
             print("Error: loading sorted messaged failed to send!")
 
     def message_finished_sorting(self):
+        """``Sorter`` sending message: finishing sorting all data."""
 
         # Create the message
         finished_sorting_message = {
@@ -102,7 +149,16 @@ class Sorter(BaseProcess):
             print("Error: finished sorting message failed to send!")
 
     def add_content_to_queue(self, entry:pd.Series):
+        """Apply function for pd.DataFrame to individually put into sorting queue.
 
+        This is the main routine that handles the individual rows in the
+        collection of all the data samples.
+
+        Args:
+            entry (pd.Series): The row of the data frame to be added
+            to the sorting queue.
+
+        """
         # Obtaining the data type
         entry_dtype = self.entries.loc[entry.group, entry.ds_type]['dtype']
 
@@ -154,7 +210,15 @@ class Sorter(BaseProcess):
         self.sorted_entries_processed += 1
 
     def run(self):
+        """The main routine for sorting data.
 
+        The ``run`` method setup the communication thread and the gets 
+        data from the ``loading queue``, sorts it, and places the sorted
+        content into the ``sorting queue``. The sorted content is then
+        used by the front-end application to update images, videos, and 
+        other content.
+
+        """
         # Run the setup for the process
         self.setup()
 

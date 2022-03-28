@@ -8,7 +8,15 @@ import pandas as pd
 from PyQt5.QtCore import QAbstractListModel, Qt
 
 class TimelineModel(QAbstractListModel):
+    """The model to represent single entry timelines.
 
+    This is the second level model for the timetrack. The 
+    ``TimetrackModel`` uses multiple ``TimelineModel`` to represent the
+    collective timelines of all entries.
+
+    """
+
+    # Role tagging
     EntryRole = Qt.UserRole + 1
     UserRole = Qt.UserRole + 2
     DTypeRole = Qt.UserRole + 3
@@ -23,6 +31,11 @@ class TimelineModel(QAbstractListModel):
             self, 
             entries:Optional[pd.DataFrame]=None
         ):
+        """Construct the ``TimelineModel`` instance for the entries.
+
+        Args:
+            entries (Optional[pd.DataFrame]): entries
+        """
         super().__init__()
 
         # Store Entries
@@ -32,9 +45,17 @@ class TimelineModel(QAbstractListModel):
             self._entries: pd.DataFrame = pd.DataFrame({})
 
     def rowCount(self, parent):
+        """PyQt5 required function to report number of data elements."""
         return len(self._entries)
 
     def data(self, index, role=None):
+        """PyQt5 required function to retrieve data from the model.
+
+        Args:
+            index: PyQt5 index.
+            role: The attribute to be access for a data row.
+
+        """
         row = index.row()
         if role == self.EntryRole:
             return self._entries.iloc[row]["entry_name"]
@@ -44,4 +65,5 @@ class TimelineModel(QAbstractListModel):
             return self._entries.iloc[row]["dtype"]
 
     def roleNames(self):
+        """PyQt5 required function to report the roles for the model."""
         return self._roles

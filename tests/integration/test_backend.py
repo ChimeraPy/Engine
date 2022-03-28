@@ -27,7 +27,7 @@ RAW_DATA_DIR = TEST_DIR / 'data'
 OUTPUT_DIR = TEST_DIR / 'test_output' 
 
 # Creating test pipe class and instance
-class TestExamplePipe(mm.core.Pipe):
+class TestExamplePipeline(mm.core.Pipeline):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
         self.session.add_tabular('test_tabular', data_samples['test_tabular'])
         self.session.add_video('test_video', data_samples['test_video'])
@@ -61,8 +61,8 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
             shutil.rmtree(experiment_dir)
         
         # Use a test pipeline
-        # individual_pipeline = test_doubles.TestExamplePipe()
-        self.individual_pipeline = TestExamplePipe()
+        # individual_pipeline = test_doubles.TestExamplePipeline()
+        self.individual_pipeline = TestExamplePipeline()
         
     def test_single_short_runner_run(self):
         
@@ -92,7 +92,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
             name='P01',
             data_streams=[self.tabular_ds, self.video_ds],
             pipe=self.individual_pipeline,
-            time_window=pd.Timedelta(seconds=1),
+            time_window=pd.Timedelta(seconds=0.5),
             run_solo=True,
             memory_limit=0.5
         )
@@ -137,7 +137,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         for x in range(2):
             
             # Use a test pipeline
-            individual_pipeline = TestExamplePipe()
+            individual_pipeline = TestExamplePipeline()
 
             runner = mm.SingleRunner(
                 name=f"P0{x}",
@@ -152,10 +152,11 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         self.runner = mm.GroupRunner(
             logdir=OUTPUT_DIR,
             name="pymmdt",
-            pipe=mm.core.Pipe(),
+            pipe=mm.core.Pipeline(),
             runners=self.runners, 
             # end_time=pd.Timedelta(seconds=5),
-            time_window=pd.Timedelta(seconds=3),
+            time_window=pd.Timedelta(seconds=0.5),
+            memory_limit=0.5
         )
 
     def test_group_runner_run(self):

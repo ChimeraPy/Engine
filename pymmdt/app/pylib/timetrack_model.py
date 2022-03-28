@@ -1,5 +1,4 @@
 # Built-in Imports
-from typing import Optional
 
 # Third-party Imports
 import pandas as pd
@@ -11,7 +10,13 @@ from PyQt5.QtCore import QAbstractListModel, Qt
 from .timeline_model import TimelineModel
 
 class TimetrackModel(QAbstractListModel):
+    """Main model for the timetrack. 
+
+    This model uses multiple ``TimelineModel``s to model multiple users.
     
+    """
+   
+    # Role tagging
     UserRole = Qt.UserRole + 1
     GroupRole = Qt.UserRole + 2
 
@@ -20,17 +25,37 @@ class TimetrackModel(QAbstractListModel):
         GroupRole: b"timelines"
     }
     
-    def __init__(self): #, entries:List[ModalityModel]=None):
+    def __init__(self):
+        """Construct the ``TimetrackModel``.
+        """
         super().__init__()
 
+        # Default empty values for essential variables.
         self.entries = pd.DataFrame()
         self.app_start_time = pd.Timedelta(seconds=0)
         self.app_end_time = pd.Timedelta(seconds=0)
         self.timeline_group_names = []
         self.timeline_groups = []
 
-    def update_data(self, entries, app_start_time, app_end_time):
+    def update_data(
+            self, 
+            entries:pd.DataFrame, 
+            app_start_time:pd.Timedelta, 
+            app_end_time:pd.Timedelta
+        ):
+        """Update the timetrack's meta data.
 
+        The entries contain the independent timeline's start and end
+        time information. In conjuction with the total application
+        start and end time, a timetrack of the entire session is 
+        possible.
+
+        Args:
+            entries (pd.DataFrame): Data frame of entries' information.
+            app_start_time (pd.Timedelta): Global start time.
+            app_end_time (pd.Timedelta): Global end time.
+
+        """
         # Storing the entries
         self.entries = entries
         self.app_start_time = app_start_time
@@ -51,9 +76,17 @@ class TimetrackModel(QAbstractListModel):
         self.timeline_groups = [TimelineModel(group) for group in groups]
     
     def rowCount(self, parent):
+        """PyQt5 required function to report number of data elements."""
         return len(self.timeline_groups)
 
     def data(self, index, role=None):
+        """PyQt5 required function to retrieve data from the model.
+
+        Args:
+            index: PyQt5 index.
+            role: The attribute to be access for a data row.
+
+        """
         row = index.row()
         if role == self.UserRole:
             return self.timeline_group_names[row]
@@ -63,4 +96,5 @@ class TimetrackModel(QAbstractListModel):
         return None
 
     def roleNames(self):
+        """PyQt5 required function to report the roles for the model."""
         return self._roles

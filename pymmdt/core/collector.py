@@ -10,25 +10,22 @@ __package__ = 'pymmdt'
 
 # Built-in Imports
 from typing import Sequence, Dict
-import os
-import time
-import psutil
 import collections
 import queue
-import gc
 
 # Third-party Imports
 import pandas as pd
 
 # Internal Imports
 from pymmdt.core.data_stream import DataStream
-from pymmdt.core.tools import threaded, get_windows
+from pymmdt.core.tools import get_windows
 
 class Collector:
-    """Generic collector that stores only data streams.
+    """Data ``Collector`` loads, syncs, and fuzes data streams.
 
-    The offline collector allows the use of both __getitem__ and __next__
-    to obtain the data pointer to a data stream to fetch the actual data.
+    The ``Collector`` has the responsibility of constructing the global
+    timetrack and pulling data from the data streams by using the 
+    timetrack.
 
     Attributes:
         data_streams (Dict[str, mm.DataStream]): A dictionary of the 
@@ -93,6 +90,7 @@ class Collector:
 
     @classmethod
     def empty(cls):
+        """Construct an empty ``Collector``."""
         return cls(empty=True)
 
     def set_data_streams(
@@ -100,7 +98,17 @@ class Collector:
             data_streams_groups:Dict[str, Sequence[DataStream]]={},
             time_window:pd.Timedelta=pd.Timedelta(0),
         ) -> None:
+        """Setting the data streams for an empty ``Collector``.
 
+        Args:
+            data_streams_groups (Dict[str, Sequence[DataStream]]): The 
+            data streams organized by the group they belong to. The 
+            division of the groups is mostly by the ``SingleRunner``
+            and ``GroupRunner``'s names.
+
+            time_window (pd.Timedelta): Size of the time window.
+
+        """
         # Prepare the DataStreams by startup them!
         for group_name, dss in data_streams_groups.items():
             for ds in dss:
@@ -116,7 +124,15 @@ class Collector:
         self.windows = get_windows(self.start_time, self.end_time, self.time_window)
 
     def construct_global_timetrack(self):
+        """Construct the global timetrack.
 
+        The method for constructing the global timetrack is by using the
+        timelines of each data streams. A pd.TimedeltaIndex column 
+        with labelled ``time`` is used to sort the multimodal data. 
+
+        If verbose, the global timetrack is saved as well.
+
+        """
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
             for ds in ds_list:
@@ -145,32 +161,45 @@ class Collector:
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
 
         # For debugging purposes, save the timetrack to csv to debug
-        # self.global_timetrack.to_csv('global_timetrack.csv', index=False)
+        if self.verbose:
+            self.global_timetrack.to_csv('global_timetrack.csv', index=False)
         
     def set_start_time(self, time:pd.Timedelta):
+        """Set the start time, clipping previous time in the global timetrack.
+
+        Args:
+            time (pd.Timedelta): start time clipping.
+
+        """
         assert time < self.end_time, "start_time cannot be greater than end_time."
         self.start_time = time
 
     def set_end_time(self, time:pd.Timedelta):
+        """Set the end time, clipping after time in the global timetrack.
+
+        Args:
+            time (pd.Timedelta): end time clipping.
+
+        """
         assert time > self.start_time, "end_time cannot be smaller than start_time."
         self.end_time = time
 
     def set_loading_queue(self, loading_queue:queue.Queue):
+        """Setting the loading queue to the ``Collector``.
+
+        Args:
+            loading_queue (queue.Queue): The loading queue to put data.
+
+        """
         assert isinstance(loading_queue, queue.Queue), "loading_queue must be a queue.Queue."
         self.loading_queue = loading_queue
 
     def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
-        """
+        """Getting data from all data streams.
 
         Obtain the data samples from all data streams given the 
         window start and end time. Additionally, we are tracking the 
-        average memory consumed per-group samples. To avoid overloading,
-        a memory limit is being placed. If the memory limit would be 
-        exceeded, we raise a MemoryLimitError.
-
-        Raises:
-            MemoryLimitError: Collector `get` is trying to loading past 
-            the memory limit.
+        average memory consumed per-group samples. 
 
         """
         # Checking input logic and type
@@ -190,14 +219,31 @@ class Collector:
 
         return all_samples
 
-    def get_timetrack(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+    def get_timetrack(
+            self, 
+            start_time: pd.Timedelta, 
+            end_time: pd.Timedelta
+        ) -> pd.DataFrame:
+        """Get the timetrack that ranges from start to end time.
+
+        Args:
+            start_time (pd.Timedelta): Start of time window.
+            end_time (pd.Timedelta): End of time window.
+
+        Returns:
+            pd.DataFrame: The global timetrack from that range.
+
+        """
         return self.global_timetrack[(self.global_timetrack['time'] >= start_time) & (self.global_timetrack['time'] < end_time)]
 
     def __len__(self):
+        """Get the size of the global timetrack."""
         return len(self.global_timetrack)
 
     def close(self):
+        """Close all data streams and ``Collector``."""
 
+        # Iterate through all data streams and close them.
         for dss in self.data_streams_groups.values():
             for ds in dss:
                 ds.close()

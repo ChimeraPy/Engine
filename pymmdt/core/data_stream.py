@@ -9,16 +9,11 @@ Contains the following classes:
 __package__ = 'pymmdt'
 
 # Built-in Imports
-from typing import Iterator, Any
 
 # Third Party Imports
 import pandas as pd
 
 # Internal Imports
-
-########################################################################
-# Generic Classes
-########################################################################
 
 class DataStream:
     """Generic data stream for processing. 
@@ -75,42 +70,6 @@ class DataStream:
         """
         return self.__repr__()
 
-    def __iter__(self) -> Iterator[Any]:
-        """Construct iterator for ``DataStream``.
-
-        Returns:
-            Iterator[DataSample]: The offline data stream's iterator.
-
-        """
-        self.index = 0
-        return self
-
-    def __next__(self) -> Any:
-        """Get next data sample from ``DataStream``.
-
-        Returns:
-            DataSample: the next data sample.
-
-        """
-        if self.index >= len(self):
-            raise StopIteration
-        else:
-            sample = self.__getitem__(self.index)
-            self.index += 1
-            return sample
-    
-    def __getitem__(self, index) -> Any:
-        """Get indexed data sample from ``Any``.
-
-        Returns:
-            DataSample: The indexed data sample.
-
-        Raises:
-            NotImplementedError: __getitem__ needs to be overwritten.
-
-        """
-        raise NotImplementedError("__getitem__ needs to be implemented.")
-    
     def __len__(self) -> int:
         """Get size of ``DataStream``.
 
@@ -121,12 +80,24 @@ class DataStream:
         return len(self.timetrack)
     
     def set_before_trim_time(self, trim_time:pd.Timedelta):
+        """Setting the time where anything before is removed.
+
+        Args:
+            trim_time (pd.Timedelta): Cutoff time.
+
+        """
         self.before_trim_time = trim_time
 
     def set_after_trim_time(self, trim_time:pd.Timedelta):
+        """Setting the time where anything after is removed.
+
+        Args:
+            trim_time (pd.Timedelta): Cutoff time.
+        """
         self.after_trim_time = trim_time
 
     def startup(self):
+        """Start the data stream by applying the before and after trims."""
 
         # Assuming that the timetrack has been already created
         if isinstance(self.before_trim_time, pd.Timedelta):
@@ -136,14 +107,40 @@ class DataStream:
             self.trim_after(self.after_trim_time)
 
     def make_timetrack(self, timeline: pd.TimedeltaIndex):
+        """Convert the data stream's timeline to a timetrack.
 
+        Args:
+            timeline (pd.TimedeltaIndex): The simple timeline of the 
+            data stream.
+        
+        """
         # Constructing the timetrack (including time and data pointer)
         self.timetrack = pd.DataFrame({
             'time': timeline,
             'ds_index': [x for x in range(len(timeline))]
         })
 
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+    def get(
+        self, 
+        start_time: pd.Timedelta, 
+        end_time: pd.Timedelta
+        ) -> pd.DataFrame:
+        """Get the data samples from the time window.
+
+        Args:
+            start_time (pd.Timedelta): The start time where the time 
+            window is loaded from.
+            end_time (pd.Timedelta): The end time where the time window
+            is loaded from.
+
+        Raises: 
+            NotImplementedError: ``get`` needs to be implemented in a
+            concrete child of the ``DataStream``.
+
+        Returns:
+            pd.DataFrame: The data frame containing all data samples 
+            found within the time window.
+        """
         raise NotImplementedError
 
     def trim_before(self, trim_time: pd.Timedelta) -> None:
@@ -197,7 +194,7 @@ class DataStream:
         """
         raise NotImplementedError("``empty`` needs to be implemented.")
 
-    def append(self, timestamp: pd.Timedelta, sample: Any) -> None:
+    def append(self, timestamp: pd.Timedelta, sample: pd.DataFrame) -> None:
         """Add a data sample to the data stream
 
         Raises:

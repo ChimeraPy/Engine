@@ -2,6 +2,8 @@
 from PyQt5.QtCore import QObject, pyqtProperty, pyqtSignal
 
 class LoadingBarObject(QObject):
+    """Simple state-based loading bar for tracking load data."""
+
     stateChanged = pyqtSignal(float)
 
     def __init__(self):

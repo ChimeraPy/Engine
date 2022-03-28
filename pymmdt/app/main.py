@@ -13,7 +13,12 @@ from PyQt5.QtQml import QQmlApplicationEngine, qmlRegisterType
 from pymmdt.app.pylib import Manager, ContentImage
 
 def application_setup(args:Dict):
+    """Setting the application and passing arguments to the ``Manager``.
 
+    Args:
+        args (Dict): The arguments that will be passed to the ``Manager``.
+
+    """
     # QML Register
     qmlRegisterType(ContentImage, "pymmdt.app.pylib" , 1, 0, "ContentImage")
 
@@ -37,6 +42,7 @@ def application_setup(args:Dict):
     return app, engine, manager
 
 def main():
+    """Entry point for the front-end application."""
     # Create arguments for the application
     parser = argparse.ArgumentParser(description="PyMMDT Dashboard CI Tool")
     parser.add_argument(
