@@ -14,8 +14,8 @@ import tqdm
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.utils.tobii
+import chimerapy as cp
+import chimerapy.utils.tobii
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -25,7 +25,7 @@ OUTPUT_DIR = ROOT_DIR / 'test_output'
 
 sys.path.append(str(ROOT_DIR))
 
-class TestTobiiExamplePipeline(mm.core.Pipeline):
+class TestTobiiExamplePipeline(cp.Pipeline):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
         self.session.add_video('test_video', data_samples['video'])
 
@@ -35,9 +35,9 @@ class TobiiTestCase(unittest.TestCase):
 
         # Load the data for all participants (ps)
         one_participant_dir = RAW_DATA_DIR / 'nurse_use_case' / '20211029T140731Z'
-        participant_session = pymmdt.utils.tobii.load_single_session(one_participant_dir, verbose=True)
+        participant_session = chimerapy.utils.tobii.load_single_session(one_participant_dir, verbose=True)
 
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
         exp_dir = OUTPUT_DIR / "P01"
         if exp_dir.exists():
@@ -48,7 +48,7 @@ class TobiiTestCase(unittest.TestCase):
         individual_pipeline = TestTobiiExamplePipeline()
 
         # Load construct the first runner
-        self.runner = mm.SingleRunner(
+        self.runner = cp.SingleRunner(
             logdir=OUTPUT_DIR,
             name='P01',
             data_streams=participant_session['data'],
@@ -66,11 +66,11 @@ class TobiiTestCase(unittest.TestCase):
 
         # Load the data for all participants (ps)
         session_dir = RAW_DATA_DIR / 'nurse_use_case'
-        participant_sessions = pymmdt.utils.tobii.load_multiple_sessions_in_one_directory(session_dir, verbose=True)
+        participant_sessions = chimerapy.utils.tobii.load_multiple_sessions_in_one_directory(session_dir, verbose=True)
 
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
-        exp_dir = OUTPUT_DIR / "pymmdt"
+        exp_dir = OUTPUT_DIR / "ChimeraPy"
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
@@ -84,7 +84,7 @@ class TobiiTestCase(unittest.TestCase):
             # Extracting the dss (data streams)
             dss = ps_data['data']
 
-            runner = mm.SingleRunner(
+            runner = cp.SingleRunner(
                 name=f"{ps_id}",
                 data_streams=dss.copy(),
                 pipe=individual_pipeline,
@@ -94,10 +94,10 @@ class TobiiTestCase(unittest.TestCase):
             self.runners.append(runner)
 
         # Construct the group runner
-        self.runner = mm.GroupRunner(
+        self.runner = cp.GroupRunner(
             logdir=OUTPUT_DIR,
             name="Teamwork Example #1",
-            pipe=mm.core.Pipeline(),
+            pipe=cp.Pipeline(),
             runners=self.runners, 
             end_time=pd.Timedelta(seconds=10),
             time_window=pd.Timedelta(seconds=1),

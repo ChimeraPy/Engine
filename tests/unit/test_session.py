@@ -13,14 +13,12 @@ import pprint
 
 # Third-Party Imports
 import psutil
-from memory_profiler import profile
+# from memory_profiler import profile
 import numpy as np
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -37,12 +35,12 @@ class SessionTestCase(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -52,21 +50,21 @@ class SessionTestCase(unittest.TestCase):
         # Create a list of the data streams
         self.dss = [self.tabular_ds, self.video_ds]
         
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
-        self.exp_dir = OUTPUT_DIR / "pymmdt"
+        self.exp_dir = OUTPUT_DIR / "ChimeraPy"
         if self.exp_dir.exists():
             shutil.rmtree(self.exp_dir)
         
         # Create the logging queue and exiting event
-        self.logging_queue = mp.Queue(maxsize=100)
+        self.logging_queue = cp.tools.PortableQueue(maxsize=100)
         # self.logging_queue = queue.Queue(maxsize=100)
         self.thread_exit = threading.Event()
         self.thread_exit.clear()
 
         # Construct the individual participant pipeline object
         # Create an overall session and pipeline
-        self.session = mm.core.Session(
+        self.session = cp.Session(
             name='test',
             logging_queue=self.logging_queue
         )
@@ -111,7 +109,7 @@ class SessionTestCase(unittest.TestCase):
         assert self.logging_queue.qsize() == 4
 
         # Clear the queue
-        mm.core.tools.clear_queue(self.logging_queue)
+        cp.tools.clear_queue(self.logging_queue)
   
 if __name__ == "__main__":
     # unittest.main()

@@ -16,9 +16,7 @@ import tqdm
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -35,12 +33,12 @@ class DataStreamTestCase(unittest.TestCase):
         self.csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=self.csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -49,8 +47,8 @@ class DataStreamTestCase(unittest.TestCase):
         )
 
         # Create empty version of the data streams
-        self.empty_tabular_ds = mmt.TabularDataStream.empty(name="test_empty_tabular")
-        self.empty_video_ds = mmv.VideoDataStream.empty(
+        self.empty_tabular_ds = cp.TabularDataStream.empty(name="test_empty_tabular")
+        self.empty_video_ds = cp.VideoDataStream.empty(
             name="test_empty_video",
             start_time=pd.Timedelta(0),
             fps=30,
@@ -131,9 +129,9 @@ class DataStreamTestCase(unittest.TestCase):
         # TODO: Implement this feature for other types of data streams:
         # VideoDataStream
 
-        new_tabular_ds = mmt.TabularDataStream.from_process_and_ds(
+        new_tabular_ds = cp.TabularDataStream.from_process_and_ds(
             name='test_new_tabular',
-            process=mmt.IdentityProcess(),
+            process=cp.IdentityProcess(),
             in_ds=self.tabular_ds
         )
 
@@ -142,7 +140,7 @@ class DataStreamTestCase(unittest.TestCase):
 
         return None
 
-    def test_trimming_before(self):
+    def test_tricping_before(self):
         
         # Defining start and end time
         start_time = pd.Timedelta(seconds=0)
@@ -154,17 +152,17 @@ class DataStreamTestCase(unittest.TestCase):
             before_trim_data = ds.get(start_time, end_time)
             assert before_trim_data.empty != True
 
-            # Then apply trimming
+            # Then apply tricping
             ds.trim_before(end_time)
 
-            # Get the data after trimming
+            # Get the data after tricping
             after_trim_data = ds.get(start_time, end_time)
             assert before_trim_data.equals(after_trim_data) != True
             assert after_trim_data.empty
 
         return None
 
-    def test_trimming_after(self):
+    def test_tricping_after(self):
         
         # Defining start and end time
         start_time = pd.Timedelta(seconds=10)
@@ -176,10 +174,10 @@ class DataStreamTestCase(unittest.TestCase):
             before_trim_data = ds.get(start_time, end_time)
             assert before_trim_data.empty != True
 
-            # Then apply trimming
+            # Then apply tricping
             ds.trim_after(start_time)
 
-            # Get the data after trimming
+            # Get the data after tricping
             after_trim_data = ds.get(start_time, end_time)
             assert before_trim_data.equals(after_trim_data) != True
             assert after_trim_data.empty
@@ -201,4 +199,4 @@ if __name__ == "__main__":
     # For debugging purposes
     # test = DataStreamTestCase()
     # test.setUp()
-    # test.test_trimming_before()
+    # test.test_tricping_before()

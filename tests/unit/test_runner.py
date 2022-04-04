@@ -10,10 +10,8 @@ import sys
 import pandas as pd
 import tqdm
 
-# PyMMDT Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+# ChimeraPy Library
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -30,12 +28,12 @@ class SingleRunnerTestCase(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        tabular_ds = mmt.TabularDataStream(
+        tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        video_ds = mmv.VideoDataStream(
+        video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -44,20 +42,20 @@ class SingleRunnerTestCase(unittest.TestCase):
         # Create a list of the data streams
         self.dss = [tabular_ds, video_ds]
         
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
-        exp_dir = OUTPUT_DIR / "pymmdt"
+        exp_dir = OUTPUT_DIR / "ChimeraPy"
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
         # Use a test pipeline
         # self.individual_pipeline = test_doubles.TestPipeline()
-        self.individual_pipeline = mm.core.Pipeline()
+        self.individual_pipeline = cp.Pipeline()
 
     def test_runner_to_run(self):
         
         # Load construct the first runner
-        self.runner = mm.SingleRunner(
+        self.runner = cp.SingleRunner(
             name='P01',
             logdir=OUTPUT_DIR,
             data_streams=self.dss,
@@ -74,7 +72,7 @@ class SingleRunnerTestCase(unittest.TestCase):
     def test_runner_run_with_shorter_sections(self):
 
         # Load construct the first runner
-        self.runner = mm.SingleRunner(
+        self.runner = cp.SingleRunner(
             name='P01',
             logdir=OUTPUT_DIR,
             data_streams=self.dss,
@@ -99,12 +97,12 @@ class GroupRunnerTestCase(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        tabular_ds = mmt.TabularDataStream(
+        tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        video_ds = mmv.VideoDataStream(
+        video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -113,9 +111,9 @@ class GroupRunnerTestCase(unittest.TestCase):
         # Create a list of the data streams
         dss = [tabular_ds, video_ds]
 
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
-        exp_dir = OUTPUT_DIR / "pymmdt"
+        exp_dir = OUTPUT_DIR / "ChimeraPy"
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
 
@@ -125,9 +123,9 @@ class GroupRunnerTestCase(unittest.TestCase):
         for x in range(2):
             
             # Construct the individual participant pipeline object
-            individual_pipeline = mm.core.Pipeline()
+            individual_pipeline = cp.Pipeline()
 
-            runner = mm.SingleRunner(
+            runner = cp.SingleRunner(
                 name=f"P0{x}",
                 data_streams=dss.copy(),
                 pipe=individual_pipeline,
@@ -137,12 +135,12 @@ class GroupRunnerTestCase(unittest.TestCase):
             self.runners.append(runner)
         
         # Create an overall session and pipeline
-        self.overall_pipeline = mm.core.Pipeline()
+        self.overall_pipeline = cp.Pipeline()
 
     def test_group_runner_run(self):
         
         # Pass all the runners to the Director
-        group_runner = mm.GroupRunner(
+        group_runner = cp.GroupRunner(
             logdir=OUTPUT_DIR,
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,
@@ -158,7 +156,7 @@ class GroupRunnerTestCase(unittest.TestCase):
     def test_group_runner_with_shorter_run(self):
         
         # Pass all the runners to the Director
-        group_runner = mm.GroupRunner(
+        group_runner = cp.GroupRunner(
             logdir=OUTPUT_DIR,
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,

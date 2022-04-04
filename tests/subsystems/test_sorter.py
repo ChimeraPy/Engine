@@ -18,9 +18,7 @@ import psutil
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -37,12 +35,12 @@ class SorterTests(unittest.TestCase):
         self.csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=self.csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(seconds=0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -58,21 +56,21 @@ class SorterTests(unittest.TestCase):
     def test_creating_and_simple_running_loader(self):
         
         # Creating the necessary queues
-        delay = 1 # has to be at least 0.2
+        delay = 2 # has to be at least 0.2 (for linux) and 2 (for macOS)
         q_max_size = 5
         time_window = pd.Timedelta(seconds=0.1)
         update_counter_period = 2
 
-        loading_queue = mp.Queue(maxsize=q_max_size)
-        message_loading_to_queue = mp.Queue(maxsize=100)
-        message_loading_from_queue = mp.Queue(maxsize=100)
+        loading_queue = cp.tools.PortableQueue(maxsize=q_max_size)
+        message_loading_to_queue = cp.tools.PortableQueue(maxsize=100)
+        message_loading_from_queue = cp.tools.PortableQueue(maxsize=100)
 
-        sorting_queue = mp.Queue(maxsize=q_max_size)
-        message_sorting_to_queue = mp.Queue(maxsize=100)
-        message_sorting_from_queue = mp.Queue(maxsize=100)
+        sorting_queue = cp.tools.PortableQueue(maxsize=q_max_size*5)
+        message_sorting_to_queue = cp.tools.PortableQueue(maxsize=100)
+        message_sorting_from_queue = cp.tools.PortableQueue(maxsize=100)
 
         # Create data loader
-        loader = mm.Loader(
+        loader = cp.Loader(
             loading_queue=loading_queue,
             message_to_queue=message_loading_to_queue,
             message_from_queue=message_loading_from_queue,
@@ -82,21 +80,22 @@ class SorterTests(unittest.TestCase):
         )
 
         # Create data sorter
-        sorter = mm.Sorter(
+        sorter = cp.Sorter(
             loading_queue=loading_queue,
             sorting_queue=sorting_queue,
             message_to_queue=message_sorting_to_queue,
             message_from_queue=message_sorting_from_queue,
             entries=self.entries,
-            update_counter_period=update_counter_period
+            update_counter_period=update_counter_period,
+            verbose=True
         )
 
         # Start the loader and get data
         loader.start()
-        sorter.start()
 
         # Wait until the data queue is full
-        time.sleep(delay)
+        while loading_queue.qsize() != q_max_size:
+            time.sleep(0.1)
 
         # Then tell the loader to stop!
         end_message = {
@@ -107,15 +106,17 @@ class SorterTests(unittest.TestCase):
             }
         }
         message_loading_to_queue.put(end_message)
+
+        # Now start the sorter
+        print("Start sorter")
+        sorter.start()
         
-        # Wait until loader fully stops
-        time.sleep(delay)
+        # Wait until sorter complex all
+        while loading_queue.qsize() != 0:
+            time.sleep(0.1)
         
         # Give some time for the sorter to finish all
         message_sorting_to_queue.put(end_message)
-
-        # Wait until sorter fully stops
-        time.sleep(delay)
 
         # Get loader data
         l_datas = []
@@ -143,10 +144,8 @@ class SorterTests(unittest.TestCase):
             s_messages.append(message_sorting_from_queue.get())
         print(len(s_messages))
 
-        assert q_max_size == len(l_datas)
-        assert q_max_size == len(s_datas)
-        assert q_max_size == len(l_messages)/update_counter_period+1
-        assert q_max_size == len(s_messages)+1
+        assert len(l_datas) == 0
+        assert len(l_messages)-1 == q_max_size
 
         # Then wait until the loader and sorter joins
         loader.join()

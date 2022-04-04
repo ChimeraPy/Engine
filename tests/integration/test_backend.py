@@ -15,10 +15,8 @@ import pandas as pd
 import tqdm
 import numpy as np
 
-# PyMMDT Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+# ChimeraPy Library
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -26,8 +24,8 @@ TEST_DIR = CURRENT_DIR.parent
 RAW_DATA_DIR = TEST_DIR / 'data' 
 OUTPUT_DIR = TEST_DIR / 'test_output' 
 
-# Creating test pipe class and instance
-class TestExamplePipeline(mm.core.Pipeline):
+#  reating test pipe class and instance
+class TestExamplePipeline(cp.Pipeline):
     def step(self, data_samples: Dict[str, Dict[str, pd.DataFrame]]):
         self.session.add_tabular('test_tabular', data_samples['test_tabular'])
         self.session.add_video('test_video', data_samples['test_video'])
@@ -42,12 +40,12 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -69,7 +67,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         end_time = pd.Timedelta(seconds=30)
 
         # Load construct the first runner
-        self.runner = mm.SingleRunner(
+        self.runner = cp.SingleRunner(
             logdir=OUTPUT_DIR,
             name='P01',
             data_streams=[self.tabular_ds, self.video_ds],
@@ -87,7 +85,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
     def test_single_memory_stress_runner_run(self):
         
         # Load construct the first runner
-        self.runner = mm.SingleRunner(
+        self.runner = cp.SingleRunner(
             logdir=OUTPUT_DIR,
             name='P01',
             data_streams=[self.tabular_ds, self.video_ds],
@@ -110,21 +108,21 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
             fps=30
         )
         
-        # Clear out the previous pymmdt run 
+        # Clear out the previous ChimeraPy run 
         # since pipeline is still underdevelopment
-        exp_dir = OUTPUT_DIR / "pymmdt"
+        exp_dir = OUTPUT_DIR / "ChimeraPy"
         if exp_dir.exists():
             shutil.rmtree(exp_dir)
         
@@ -139,7 +137,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
             # Use a test pipeline
             individual_pipeline = TestExamplePipeline()
 
-            runner = mm.SingleRunner(
+            runner = cp.SingleRunner(
                 name=f"P0{x}",
                 data_streams=dss.copy(),
                 pipe=individual_pipeline,
@@ -149,10 +147,10 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
             self.runners.append(runner)
 
         # Load construct the first runner
-        self.runner = mm.GroupRunner(
+        self.runner = cp.GroupRunner(
             logdir=OUTPUT_DIR,
-            name="pymmdt",
-            pipe=mm.core.Pipeline(),
+            name="ChimeraPy",
+            pipe=cp.Pipeline(),
             runners=self.runners, 
             # end_time=pd.Timedelta(seconds=5),
             time_window=pd.Timedelta(seconds=0.5),

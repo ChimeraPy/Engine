@@ -16,9 +16,7 @@ import psutil
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -35,12 +33,12 @@ class CollectorTestCase(unittest.TestCase):
         self.csv_data['_time_'] = pd.to_timedelta(self.csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=self.csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -48,7 +46,7 @@ class CollectorTestCase(unittest.TestCase):
         self.dss = [self.tabular_ds, self.video_ds]
 
         # Create a collector 
-        self.collector = mm.core.Collector(
+        self.collector = cp.Collector(
             {'P01': self.dss},
             time_window=pd.Timedelta(seconds=2),
         )
@@ -58,7 +56,7 @@ class CollectorTestCase(unittest.TestCase):
     def test_empty_collector(self):
 
         # Test empty collector constructor
-        empty_collector = mm.core.Collector(empty=True)
+        empty_collector = cp.Collector(empty=True)
         empty_collector.set_data_streams({'P01': self.dss}, pd.Timedelta(seconds=2))
         
         # Setting start and end time

@@ -12,7 +12,7 @@ import time
 # Third-Party Imports
 
 # Testing Library
-import pymmdt.app as mma
+import chimerapy.app as cpa
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))

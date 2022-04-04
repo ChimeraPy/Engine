@@ -8,16 +8,14 @@ import os
 import multiprocessing as mp
 
 # Third-Party Imports
-from memory_profiler import profile
+# from memory_profiler import profile
 import pprint
 import numpy as np
 import psutil
 import pandas as pd
 
 # Testing Library
-import pymmdt as mm
-import pymmdt.core.tabular as mmt
-import pymmdt.core.video as mmv
+import chimerapy as cp
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -34,12 +32,12 @@ class LoggerTests(unittest.TestCase):
         csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
         # Create each type of data stream
-        self.tabular_ds = mmt.TabularDataStream(
+        self.tabular_ds = cp.TabularDataStream(
             name="test_tabular",
             data=csv_data,
             time_column="_time_"
         )
-        self.video_ds = mmv.VideoDataStream(
+        self.video_ds = cp.VideoDataStream(
             name="test_video",
             start_time=pd.Timedelta(0),
             video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -56,12 +54,12 @@ class LoggerTests(unittest.TestCase):
             shutil.rmtree(experiment_dir)
             os.mkdir(experiment_dir)
 
-        self.logging_queue = mp.Queue(maxsize=100)
-        self.message_to_queue = mp.Queue(maxsize=100)
-        self.message_from_queue = mp.Queue(maxsize=100)
+        self.logging_queue = cp.tools.PortableQueue(maxsize=100)
+        self.message_to_queue = cp.tools.PortableQueue(maxsize=100)
+        self.message_from_queue = cp.tools.PortableQueue(maxsize=100)
       
         # Create the logger
-        self.logger = mm.Logger(
+        self.logger = cp.Logger(
             logdir=self.logdir,
             experiment_name='testing_logger',
             logging_queue=self.logging_queue,
@@ -110,11 +108,11 @@ class LoggerTests(unittest.TestCase):
         print("Started logger")
 
         # Create root and other sessions that interface to the logger
-        root_session = mm.core.Session(
+        root_session = cp.Session(
             name='root',
             logging_queue=self.logging_queue
         )
-        subsession = mm.core.Session(
+        subsession = cp.Session(
             name='P01',
             logging_queue=self.logging_queue
         )
@@ -137,29 +135,32 @@ class LoggerTests(unittest.TestCase):
         }
         self.message_to_queue.put(end_message)
 
-        print("Sent END message")
-       
-        # Then wait until the loader joins
-        self.logger.join()
+        # Wait until the logger is done
+        while self.logging_queue.qsize() != 0:
+            time.sleep(0.1)
 
-        print("Logger joined!")
-        
         # Then get the messages from the loader
         messages = []
         while self.message_from_queue.qsize() != 0:
             messages.append(self.message_from_queue.get())
 
-        print(messages)
+        print("Sent END message")
+       
+        # Then wait until the loader joins
+        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
+        self.logger.join()
+
+        print("Logger joined!")
 
     # @profile
     def test_logger_memory_stress(self):
 
         # Create root and other sessions that interface to the logger
-        root_session = mm.core.Session(
+        root_session = cp.Session(
             name='root',
             logging_queue=self.logging_queue
         )
-        subsession = mm.core.Session(
+        subsession = cp.Session(
             name='P01',
             logging_queue=self.logging_queue
         )
@@ -167,7 +168,7 @@ class LoggerTests(unittest.TestCase):
         print("Finished session construction")
 
         # Add data
-        for i in range(10):
+        for i in range(3):
             self.adding_test_data(root_session)
             self.adding_test_data(subsession)
 
@@ -190,24 +191,27 @@ class LoggerTests(unittest.TestCase):
         }
         self.message_to_queue.put(end_message)
 
+        time.sleep(0.5)
+
         print("Sent END message")
-  
-        # Then wait until the loader joins
-        self.logger.join()
-        
-        # Then get the messages from the loader
+
+        # Then get the messages from the logger
         messages = []
         while self.message_from_queue.qsize() != 0:
             messages.append(self.message_from_queue.get())
 
         print(messages)
+  
+        # Then wait until the logger joins
+        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
+        self.logger.join()
 
         print("Logger joined!")
 
     def test_single_session_threading_saving_and_closing(self):
 
         # Create root and other sessions that interface to the logger
-        root_session = mm.core.Session(
+        root_session = cp.Session(
             name='root',
             logging_queue=self.logging_queue
         )
@@ -215,7 +219,7 @@ class LoggerTests(unittest.TestCase):
         print("Finished session construction")
 
         # Add data
-        for i in range(10):
+        for i in range(3):
             self.adding_test_data(root_session)
 
         # Start the logger
@@ -234,8 +238,16 @@ class LoggerTests(unittest.TestCase):
         self.message_to_queue.put(end_message)
 
         print("Sent END message")
+
+        time.sleep(0.5)
+
+        # Then get the messages from the logger
+        messages = []
+        while self.message_from_queue.qsize() != 0:
+            messages.append(self.message_from_queue.get())
   
-        # Then wait until the loader joins
+        # Then wait until the logger joins
+        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
         self.logger.join()
 
         # All the data should be processed
