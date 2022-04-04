@@ -1,0 +1,4 @@
+# Required for GitHub Pages
+Sphinx==4.5.0
+myst-parser==0.17.0
+furo==2021.11.16
