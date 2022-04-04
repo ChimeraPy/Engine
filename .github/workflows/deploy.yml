@@ -10,7 +10,6 @@ jobs:
   deploy:
 
     # Run on latest ubuntu
-    name: PyPI Upload
     runs-on: ubuntu-20.04 # ubuntu-latest
     
     # The process

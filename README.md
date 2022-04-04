@@ -36,5 +36,3 @@ pip install .
 ## License
 
 ChimeraPy uses the GNU GENERAL PUBLIC LICENSE, as found in [LICENSE](https://oele-isis-vanderbilt/ChimeraPy/blob/main/LICENSE) file.
-
-## Contributing

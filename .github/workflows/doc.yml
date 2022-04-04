@@ -3,7 +3,7 @@ name: Documentation Build
 on: [push, pull_request]
 
 jobs:
-  build:
+  doc:
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch. Without this if check, checks are duplicated since
     # internal PRs match both the push and pull_request events.
@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
 
       - name: Set up latest Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v2
 
       - name: Install dependencies
         run: |
@@ -25,8 +25,8 @@ jobs:
           python -m pip install -e ".[d]"
           python -m pip install -r "docs/requirements.txt"
 
-      - name: Build API documentation
-        runs: sphinx-apidoc -f -o docs/source chimerapy
+      # - name: Build API documentation
+      #   runs: sphinx-apidoc -f -o docs/source chimerapy
 
       # - name: Build documentation
       #   run: sphinx-build -a -b html -W --keep-going docs/ docs/_build
