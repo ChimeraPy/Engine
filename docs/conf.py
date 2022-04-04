@@ -40,7 +40,8 @@ needs_sphinx = "4.5"
 extensions = [
     'sphinx.ext.autodoc', # to autogenerate documentation
     'sphinx.ext.napoleon', # to support Google Docstring
-    'myst_parser' # include Markdown Support
+    'myst_parser', # include Markdown Support
+    'sphinx.ext.githubpages'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
