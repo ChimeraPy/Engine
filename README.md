@@ -2,7 +2,8 @@
 
 ChimeraPy is a package that focus on temporal multimodal data analytics 
 and visualization. It is build on top of pandas and multiprocessing to
-provide a simple yet efficient approach to data processing.
+provide a simple yet efficient approach to data processing. ChimeraDash
+is also provided as a visualization tool for multimodal data streams.
 
 ChimeraPy Main Features:
  - Time alignment of multiple data streams
