@@ -11,6 +11,11 @@ jobs:
     - uses: actions/checkout@master
       with:
         fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
+    - name: Dependencies
+      run: |
+        cd docs/
+        pip install -r requirements.txt
+        cd ..
     - name: Build and Commit
       uses: sphinx-notes/pages@v2
     - name: Push changes
