@@ -1,0 +1,914 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>chimerapy.core package &#8212; chimerapy 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="chimerapy.core.tabular package" href="chimerapy.core.tabular.html" />
+    <link rel="prev" title="chimerapy.app.pylib package" href="chimerapy.app.pylib.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="chimerapy-core-package">
+<h1>chimerapy.core package<a class="headerlink" href="#chimerapy-core-package" title="Permalink to this headline">¶</a></h1>
+<section id="subpackages">
+<h2>Subpackages<a class="headerlink" href="#subpackages" title="Permalink to this headline">¶</a></h2>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="chimerapy.core.tabular.html">chimerapy.core.tabular package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.tabular.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.tabular.html#module-chimerapy.core.tabular.data_stream">chimerapy.core.tabular.data_stream module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.tabular.html#module-chimerapy.core.tabular.entry">chimerapy.core.tabular.entry module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.tabular.html#module-chimerapy.core.tabular.processes">chimerapy.core.tabular.processes module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.tabular.html#module-chimerapy.core.tabular">Module contents</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="chimerapy.core.video.html">chimerapy.core.video package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.video.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.video.html#module-chimerapy.core.video.data_stream">chimerapy.core.video.data_stream module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.video.html#module-chimerapy.core.video.entry">chimerapy.core.video.entry module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.video.html#module-chimerapy.core.video.process">chimerapy.core.video.process module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="chimerapy.core.video.html#module-chimerapy.core.video">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this headline">¶</a></h2>
+</section>
+<section id="module-chimerapy.core.collector">
+<span id="chimerapy-core-collector-module"></span><h2>chimerapy.core.collector module<a class="headerlink" href="#module-chimerapy.core.collector" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Collector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_streams_groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#chimerapy.core.data_stream.DataStream" title="chimerapy.core.data_stream.DataStream"><span class="pre">chimerapy.core.data_stream.DataStream</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">Timedelta('0</span> <span class="pre">days</span> <span class="pre">00:00:00')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">empty</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Data <code class="docutils literal notranslate"><span class="pre">Collector</span></code> loads, syncs, and fuzes data streams.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">Collector</span></code> has the responsibility of constructing the global
+timetrack and pulling data from the data streams by using the
+timetrack.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.data_streams">
+<span class="sig-name descname"><span class="pre">data_streams</span></span><a class="headerlink" href="#chimerapy.core.collector.Collector.data_streams" title="Permalink to this definition">¶</a></dt>
+<dd><p>A dictionary of the</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dict[str, mm.DataStream]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">data</span> <span class="pre">streams</span> <span class="pre">that</span> <span class="pre">its</span> <span class="pre">keys</span> <span class="pre">are</span> <span class="pre">the</span> <span class="pre">name</span> <span class="pre">of</span> <span class="pre">the</span> <span class="pre">data</span> <span class="pre">streams.</span></span></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.global_timetrack">
+<span class="sig-name descname"><span class="pre">global_timetrack</span></span><a class="headerlink" href="#chimerapy.core.collector.Collector.global_timetrack" title="Permalink to this definition">¶</a></dt>
+<dd><p>A data frame that stores the time,</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">data</span> <span class="pre">stream</span> <span class="pre">type,</span> <span class="pre">and</span> <span class="pre">data</span> <span class="pre">pointers</span> <span class="pre">to</span> <span class="pre">allow</span> <span class="pre">the</span> <span class="pre">iteration</span> <span class="pre">over</span></span></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py">
+<span class="sig-name descname"><span class="pre">all</span> <span class="pre">samples</span> <span class="pre">in</span> <span class="pre">all</span> <span class="pre">data</span> <span class="pre">streams</span> <span class="pre">efficiently.</span></span></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close all data streams and <code class="docutils literal notranslate"><span class="pre">Collector</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.construct_global_timetrack">
+<span class="sig-name descname"><span class="pre">construct_global_timetrack</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.construct_global_timetrack" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct the global timetrack.</p>
+<p>The method for constructing the global timetrack is by using the
+timelines of each data streams. A pd.TimedeltaIndex column
+with labelled <code class="docutils literal notranslate"><span class="pre">time</span></code> is used to sort the multimodal data.</p>
+<p>If verbose, the global timetrack is saved as well.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.empty">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">empty</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.empty" title="Permalink to this definition">¶</a></dt>
+<dd><p>Construct an empty <code class="docutils literal notranslate"><span class="pre">Collector</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#chimerapy.core.collector.Collector.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Getting data from all data streams.</p>
+<p>Obtain the data samples from all data streams given the
+window start and end time. Additionally, we are tracking the
+average memory consumed per-group samples.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.get_timetrack">
+<span class="sig-name descname"><span class="pre">get_timetrack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.core.frame.DataFrame</span></span></span><a class="headerlink" href="#chimerapy.core.collector.Collector.get_timetrack" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the timetrack that ranges from start to end time.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start_time</strong> (<em>pd.Timedelta</em>) – Start of time window.</p></li>
+<li><p><strong>end_time</strong> (<em>pd.Timedelta</em>) – End of time window.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The global timetrack from that range.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.set_data_streams">
+<span class="sig-name descname"><span class="pre">set_data_streams</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_streams_groups</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Sequence</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#chimerapy.core.data_stream.DataStream" title="chimerapy.core.data_stream.DataStream"><span class="pre">chimerapy.core.data_stream.DataStream</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_window</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">Timedelta('0</span> <span class="pre">days</span> <span class="pre">00:00:00')</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.collector.Collector.set_data_streams" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setting the data streams for an empty <code class="docutils literal notranslate"><span class="pre">Collector</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_streams_groups</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Sequence</em><em>[</em><a class="reference internal" href="#chimerapy.core.data_stream.DataStream" title="chimerapy.core.data_stream.DataStream"><em>DataStream</em></a><em>]</em><em>]</em>) – The</p></li>
+<li><p><strong>The</strong> (<em>data streams organized by the group they belong to.</em>) – </p></li>
+<li><p><strong>SingleRunner</strong> (<em>division of the groups is mostly by the</em>) – </p></li>
+<li><p><strong>names.</strong> (<em>and GroupRunner's</em>) – </p></li>
+<li><p><strong>time_window</strong> (<em>pd.Timedelta</em>) – Size of the time window.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.set_end_time">
+<span class="sig-name descname"><span class="pre">set_end_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.set_end_time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the end time, clipping after time in the global timetrack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>time</strong> (<em>pd.Timedelta</em>) – end time clipping.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.set_loading_queue">
+<span class="sig-name descname"><span class="pre">set_loading_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">loading_queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">queue.Queue</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.set_loading_queue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setting the loading queue to the <code class="docutils literal notranslate"><span class="pre">Collector</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>loading_queue</strong> (<em>queue.Queue</em>) – The loading queue to put data.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.collector.Collector.set_start_time">
+<span class="sig-name descname"><span class="pre">set_start_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.collector.Collector.set_start_time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the start time, clipping previous time in the global timetrack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>time</strong> (<em>pd.Timedelta</em>) – start time clipping.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.data_source">
+<span id="chimerapy-core-data-source-module"></span><h2>chimerapy.core.data_source module<a class="headerlink" href="#module-chimerapy.core.data_source" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.data_source.Api">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Api</span></span><a class="headerlink" href="#chimerapy.core.data_source.Api" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#chimerapy.core.data_source.DataSource" title="chimerapy.core.data_source.DataSource"><code class="xref py py-class docutils literal notranslate"><span class="pre">chimerapy.core.data_source.DataSource</span></code></a></p>
+<p>TODO Implementation.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.data_source.DataSource">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DataSource</span></span><a class="headerlink" href="#chimerapy.core.data_source.DataSource" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>TODO Implementation.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.data_source.Sensor">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Sensor</span></span><a class="headerlink" href="#chimerapy.core.data_source.Sensor" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <a class="reference internal" href="#chimerapy.core.data_source.DataSource" title="chimerapy.core.data_source.DataSource"><code class="xref py py-class docutils literal notranslate"><span class="pre">chimerapy.core.data_source.DataSource</span></code></a></p>
+<p>TODO Implementation.</p>
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.data_stream">
+<span id="chimerapy-core-data-stream-module"></span><h2>chimerapy.core.data_stream module<a class="headerlink" href="#module-chimerapy.core.data_stream" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DataStream</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timeline</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.core.indexes.timedeltas.TimedeltaIndex</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Generic data stream for processing.</p>
+<p><code class="docutils literal notranslate"><span class="pre">DataStream</span></code> is intended to be inherented and its __getitem__         method to be overwritten to fit the modality of the actual data.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.index">
+<span class="sig-name descname"><span class="pre">index</span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Keeping track of the current sample to load in __next__.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><strong>NotImplementedError</strong> – __getitem__ function needs to be implemented             before calling.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.append">
+<span class="sig-name descname"><span class="pre">append</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sample</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Add a data sample to the data stream</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><strong>NotImplementedError</strong> – <code class="docutils literal notranslate"><span class="pre">append</span></code> needs to be overwritten.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close routine for <code class="docutils literal notranslate"><span class="pre">DataStream</span></code>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.empty">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">empty</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.empty" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an empty data stream.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><strong>NotImplementedError</strong> – empty needs to be overwritten.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.core.frame.DataFrame</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get the data samples from the time window.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start_time</strong> (<em>pd.Timedelta</em>) – The start time where the time                 window is loaded from.</p></li>
+<li><p><strong>end_time</strong> (<em>pd.Timedelta</em>) – The end time where the time window                 is loaded from.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises</dt>
+<dd class="field-even"><p><strong>NotImplementedError</strong> – <code class="docutils literal notranslate"><span class="pre">get</span></code> needs to be implemented in a                 concrete child of the <code class="docutils literal notranslate"><span class="pre">DataStream</span></code>.</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The data frame containing all data samples                 found within the time window.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>pd.DataFrame</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.make_timetrack">
+<span class="sig-name descname"><span class="pre">make_timetrack</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">timeline</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.core.indexes.timedeltas.TimedeltaIndex</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.make_timetrack" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert the data stream’s timeline to a timetrack.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>timeline</strong> (<em>pd.TimedeltaIndex</em>) – The simple timeline of the</p></li>
+<li><p><strong>stream.</strong> (<em>data</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.set_after_trim_time">
+<span class="sig-name descname"><span class="pre">set_after_trim_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trim_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.set_after_trim_time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setting the time where anything after is removed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>trim_time</strong> (<em>pd.Timedelta</em>) – Cutoff time.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.set_before_trim_time">
+<span class="sig-name descname"><span class="pre">set_before_trim_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trim_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.set_before_trim_time" title="Permalink to this definition">¶</a></dt>
+<dd><p>Setting the time where anything before is removed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>trim_time</strong> (<em>pd.Timedelta</em>) – Cutoff time.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.set_index">
+<span class="sig-name descname"><span class="pre">set_index</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.set_index" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the index used for the __next__ method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>new_index</strong> (<em>int</em>) – The new index to be set.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.startup">
+<span class="sig-name descname"><span class="pre">startup</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.startup" title="Permalink to this definition">¶</a></dt>
+<dd><p>Start the data stream by applying the before and after trims.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.trim_after">
+<span class="sig-name descname"><span class="pre">trim_after</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trim_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.trim_after" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove data points after the trim_time timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>trim_time</strong> (<em>pd.Timedelta</em>) – The cut-off time.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.data_stream.DataStream.trim_before">
+<span class="sig-name descname"><span class="pre">trim_before</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">trim_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.data_stream.DataStream.trim_before" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove data points before the trim_time timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>trim_time</strong> (<em>pd.Timedelta</em>) – The cut-off time.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.entry">
+<span id="chimerapy-core-entry-module"></span><h2>chimerapy.core.entry module<a class="headerlink" href="#module-chimerapy.core.entry" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.entry.Entry">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Entry</span></span><a class="headerlink" href="#chimerapy.core.entry.Entry" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Abstract Entry to be saved in the session and tracking changes.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.entry.Entry.append">
+<span class="sig-name descname"><span class="pre">append</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_chunk</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.entry.Entry.append" title="Permalink to this definition">¶</a></dt>
+<dd><p>Append data to the entry - recording as unsaved changes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data_chunk</strong> (<em>Dict</em>) – Data chunk to be appended to entry data.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.entry.Entry.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.entry.Entry.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write/Save changes and mark them as processed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>NotImplementedError</strong> – <code class="docutils literal notranslate"><span class="pre">Entry</span></code> is an abstract class. The</p></li>
+<li><p><strong>close` needs to be implemented in concrete classes</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.entry.Entry.flush">
+<span class="sig-name descname"><span class="pre">flush</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.entry.Entry.flush" title="Permalink to this definition">¶</a></dt>
+<dd><p>Write/Save changes and mark them as processed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>NotImplementedError</strong> – <code class="docutils literal notranslate"><span class="pre">Entry</span></code> is an abstract class. The</p></li>
+<li><p><strong>flush` needs to be implemented in concrete classes</strong> – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.pipeline">
+<span id="chimerapy-core-pipeline-module"></span><h2>chimerapy.core.pipeline module<a class="headerlink" href="#module-chimerapy.core.pipeline" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Pipeline</span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#chimerapy.core.pipeline.Pipeline" title="chimerapy.core.pipeline.Pipeline"><span class="pre">chimerapy.core.pipeline.Pipeline</span></a></span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.copy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a deep copy of the pipe.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.end">
+<span class="sig-name descname"><span class="pre">end</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Ending routine of the <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code></p>
+<p>This method is has a similar purpose as <code class="docutils literal notranslate"><span class="pre">start</span></code>, where the
+user can define logic at the end of the processing by the
+<code class="docutils literal notranslate"><span class="pre">Pipeline</span></code>.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.session">
+<span class="sig-name descname"><span class="pre">session</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.session" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.set_session">
+<span class="sig-name descname"><span class="pre">set_session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">session</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chimerapy.core.session.Session" title="chimerapy.core.session.Session"><span class="pre">chimerapy.core.session.Session</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.set_session" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the session to the <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> instance.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>session</strong> (<a class="reference internal" href="#chimerapy.core.session.Session" title="chimerapy.core.session.Session"><em>Session</em></a>) – The session that acts as the interface                 between the <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> and the <code class="docutils literal notranslate"><span class="pre">Logger</span></code>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.start">
+<span class="sig-name descname"><span class="pre">start</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Starting routine for the <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code>.</p>
+<p>This method is intended to be overwritten by the user to execute
+code before the <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> starts processing data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.pipeline.Pipeline.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#chimerapy.core.pipeline.Pipeline.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Take one step in processing a time window collection of data.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">step</span></code> method is the heart of the user defined processing
+of the data from the data streams. Here the user organizes the
+ordering and what type of processing will be performed to
+achieve getting the desired output.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data_samples</strong> (<em>Union</em><em>[</em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>pd.DataFrame</em><em>]</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>Dict</em><em>[</em><em>str</em><em>, </em><em>pd.DataFrame</em><em>]</em><em>]</em><em>]</em>) – The data samples are provided by the <code class="docutils literal notranslate"><span class="pre">Loader</span></code>. The first                 level keys are the runners’ (<code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code> and                 <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code>) names. The second level keys are then the                 names of the data streams; hence, the second level values                 are the data frames obtain from each data stream.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The                 output (if running in a <code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code> that is                 orchestrated by <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code>) is then feed to the main                 <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> of the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> to allow collective                 analyze of multiple <code class="docutils literal notranslate"><span class="pre">Pipelines</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Optional[Union[pd.DataFrame, List[pd.DataFrame]]]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.process">
+<span id="chimerapy-core-process-module"></span><h2>chimerapy.core.process module<a class="headerlink" href="#module-chimerapy.core.process" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.process.Process">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Process</span></span><a class="headerlink" href="#chimerapy.core.process.Process" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Class that compartmentalizes computational steps for a datastream.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.process.Process.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#chimerapy.core.process.Process.step" title="Permalink to this definition">¶</a></dt>
+<dd><p>Apply process onto data sample.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises</dt>
+<dd class="field-odd"><p><strong>NotImplementedError</strong> – <code class="docutils literal notranslate"><span class="pre">step</span></code> method needs to be overwritten.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.session">
+<span id="chimerapy-core-session-module"></span><h2>chimerapy.core.session module<a class="headerlink" href="#module-chimerapy.core.session" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Session</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">logging_queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#chimerapy.core.tools.PortableQueue" title="chimerapy.core.tools.PortableQueue"><span class="pre">chimerapy.core.tools.PortableQueue</span></a></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.session.Session" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Interface to the <code class="docutils literal notranslate"><span class="pre">Logger</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">Session</span></code> class aids in formating and feed data to logging
+queue in a standardized manner. Aside from this, it a relatively
+simple class.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.add_image">
+<span class="sig-name descname"><span class="pre">add_image</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">numpy.ndarray</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.session.Session.add_image" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log an image to an specified entry at an optional timestamp.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – The name of the <code class="docutils literal notranslate"><span class="pre">Entry</span></code> to store it.</p></li>
+<li><p><strong>data</strong> (<em>np.ndarray</em>) – The image to store.</p></li>
+<li><p><strong>timestamp</strong> (<em>pd.Timedelta</em>) – The optional timestamp</p></li>
+<li><p><strong>with.</strong> (<em>to tag the image</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.add_images">
+<span class="sig-name descname"><span class="pre">add_images</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_time_'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'frames'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.session.Session.add_images" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log images stored in a pd.DataFrame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the images’ entry.</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – The data frame containing the images.</p></li>
+<li><p><strong>time_column</strong> (<em>str</em>) – The name of the time column.</p></li>
+<li><p><strong>data_column</strong> (<em>str</em>) – The name of the data column containing</p></li>
+<li><p><strong>images.</strong> (<em>the</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.add_tabular">
+<span class="sig-name descname"><span class="pre">add_tabular</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">pandas.core.series.Series</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">pandas.core.frame.DataFrame</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_time_'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.session.Session.add_tabular" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log tabular data.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the tabular data.</p></li>
+<li><p><strong>data</strong> (<em>Union</em><em>[</em><em>pd.Series</em><em>, </em><em>pd.DataFrame</em><em>, </em><em>Dict</em><em>]</em>) – Tabular data.</p></li>
+<li><p><strong>time_column</strong> (<em>str</em>) – Name of the time column.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.add_video">
+<span class="sig-name descname"><span class="pre">add_video</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.core.frame.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'_time_'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_column</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'frames'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#chimerapy.core.session.Session.add_video" title="Permalink to this definition">¶</a></dt>
+<dd><p>Log frames to form a video.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>name</strong> (<em>str</em>) – Name of the video’s entry.</p></li>
+<li><p><strong>df</strong> (<em>pd.DataFrame</em>) – Data frame with video frames.</p></li>
+<li><p><strong>time_column</strong> (<em>str</em>) – The name of the time column.</p></li>
+<li><p><strong>data_column</strong> (<em>str</em>) – The name of the data column contanting</p></li>
+<li><p><strong>frames.</strong> (<em>the video's</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.record_memory_usage">
+<span class="sig-name descname"><span class="pre">record_memory_usage</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_chunk</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.session.Session.record_memory_usage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Record the memory usage of newly <code class="docutils literal notranslate"><span class="pre">put</span></code> data in logging queue.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data_chunk</strong> (<em>Dict</em><em>[</em><em>str</em><em>, </em><em>Any</em><em>]</em>) – The recently <code class="docutils literal notranslate"><span class="pre">put</span></code> data chunk.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.session.Session.set_runner">
+<span class="sig-name descname"><span class="pre">set_runner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">runner</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Runner</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.session.Session.set_runner" title="Permalink to this definition">¶</a></dt>
+<dd><p>Set the <code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code> or <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> to the session.</p>
+<p>This is important for helping the runner in tracking the memory
+inside the logging queue. It provides the runner required in
+<code class="docutils literal notranslate"><span class="pre">record_memory_usage</span></code> method.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>runner</strong> (<em>'Runner'</em>) – The runner that the session is working</p></li>
+<li><p><strong>Pipeline.</strong> (<em>for. Mostly correlated to the runner's</em>) – </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core.tools">
+<span id="chimerapy-core-tools-module"></span><h2>chimerapy.core.tools module<a class="headerlink" href="#module-chimerapy.core.tools" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">PortableQueue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">multiprocessing.queues.Queue</span></code></p>
+<p>A portable implementation of multiprocessing.Queue.
+Because of multithreading / multiprocessing semantics, Queue.qsize() may
+raise the NotImplementedError exception on Unix platforms like Mac OS X
+where sem_getvalue() is not implemented. This subclass addresses this
+problem by using a synchronized shared counter (initialized to zero) and
+increasing / decreasing its value every time the put() and get() methods
+are called, respectively. This not only prevents NotImplementedError from
+being raised, but also allows us to implement a reliable version of both
+qsize() and empty().</p>
+<p>Code acquired from:
+<a class="reference external" href="https://github.com/vterron/lemon/blob/d60576bec2ad5d1d5043bcb3111dff1fcb58a8d6/methods.py#L536-L573">https://github.com/vterron/lemon/blob/d60576bec2ad5d1d5043bcb3111dff1fcb58a8d6/methods.py#L536-L573</a></p>
+<p>According to the StackOver post here:
+<a class="reference external" href="https://stackoverflow.com/questions/65609529/python-multiprocessing-queue-notimplementederror-macos">https://stackoverflow.com/questions/65609529/python-multiprocessing-queue-notimplementederror-macos</a></p>
+<p>Fixing the <cite>size</cite> not an attribute of Queue can be found here:
+<a class="reference external" href="https://stackoverflow.com/questions/69897765/cannot-access-property-of-subclass-of-multiprocessing-queues-queue-in-multiproce">https://stackoverflow.com/questions/69897765/cannot-access-property-of-subclass-of-multiprocessing-queues-queue-in-multiproce</a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue.clear">
+<span class="sig-name descname"><span class="pre">clear</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue.clear" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove all elements from the Queue.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue.empty">
+<span class="sig-name descname"><span class="pre">empty</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue.empty" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reliable implementation of multiprocessing.Queue.empty()</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue.get">
+<span class="sig-name descname"><span class="pre">get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue.get" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue.put">
+<span class="sig-name descname"><span class="pre">put</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue.put" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.PortableQueue.qsize">
+<span class="sig-name descname"><span class="pre">qsize</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.PortableQueue.qsize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Reliable implementation of multiprocessing.Queue.qsize()</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.tools.SharedCounter">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SharedCounter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.SharedCounter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A synchronized shared counter.
+The locking done by multiprocessing.Value ensures that only a single
+process or thread may read or write the in-memory ctypes object. However,
+in order to do n += 1, Python performs a read followed by a write, so a
+second process may read the old value before the new one is written by the
+first process. The solution is to use a multiprocessing.Lock to guarantee
+the atomicity of the modifications to Value.
+This class comes almost entirely from Eli Bendersky’s blog:
+<a class="reference external" href="http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/">http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing/</a></p>
+<dl class="py method">
+<dt class="sig sig-object py" id="chimerapy.core.tools.SharedCounter.increment">
+<span class="sig-name descname"><span class="pre">increment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.SharedCounter.increment" title="Permalink to this definition">¶</a></dt>
+<dd><p>Increment the counter by n (default = 1)</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="chimerapy.core.tools.SharedCounter.value">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">value</span></span><a class="headerlink" href="#chimerapy.core.tools.SharedCounter.value" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the value of the counter</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="chimerapy.core.tools.Window">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Window</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.Window" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code></p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.tools.Window.end">
+<span class="sig-name descname"><span class="pre">end</span></span><a class="headerlink" href="#chimerapy.core.tools.Window.end" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 1</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="chimerapy.core.tools.Window.start">
+<span class="sig-name descname"><span class="pre">start</span></span><a class="headerlink" href="#chimerapy.core.tools.Window.start" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for field number 0</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chimerapy.core.tools.clear_queue">
+<span class="sig-name descname"><span class="pre">clear_queue</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input_queue</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">multiprocessing.queues.Queue</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.clear_queue" title="Permalink to this definition">¶</a></dt>
+<dd><p>Clear a queue.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>input_queue</strong> (<em>mp.Queue</em>) – Queue to be cleared.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chimerapy.core.tools.get_memory_data_size">
+<span class="sig-name descname"><span class="pre">get_memory_data_size</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="headerlink" href="#chimerapy.core.tools.get_memory_data_size" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculate the memory usage of a Python object.</p>
+<p>This was a solution to a memory leak issue. Here is the SO link:
+<a class="reference external" href="https://stackoverflow.com/q/71447286/13231446">https://stackoverflow.com/q/71447286/13231446</a></p>
+<p>The main issue is that multiprocessing.Queue pickles an input and
+unpickles when using <code class="docutils literal notranslate"><span class="pre">get</span></code>. Numpy arrays do not handle this well,
+for their memory meta data is corrupted when this happends. This
+caused memory to not be accurately computed. The solution was to
+repickle the data and measure the len of the pickle string. This is
+a temporary solution, as I would like NumPy to solve this issue.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data</strong> (<em>Any</em>) – The python object in question.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Size of the Python object in bytes.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chimerapy.core.tools.get_windows">
+<span class="sig-name descname"><span class="pre">get_windows</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_time</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time_window_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas._libs.tslibs.timedeltas.Timedelta</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#chimerapy.core.tools.Window" title="chimerapy.core.tools.Window"><span class="pre">chimerapy.core.tools.Window</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#chimerapy.core.tools.get_windows" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute the start and end times of the windows found in range.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start_time</strong> (<em>pd.Timedelta</em>) – The start time of the range.</p></li>
+<li><p><strong>end_time</strong> (<em>pd.Timedelta</em>) – The end time of the range.</p></li>
+<li><p><strong>time_window_size</strong> (<em>pd.Timedelta</em>) – The size of the time window.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A list of the window (namedtuples with <code class="docutils literal notranslate"><span class="pre">start</span></code>
+and <code class="docutils literal notranslate"><span class="pre">end</span></code> attributes).</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>List[<a class="reference internal" href="#chimerapy.core.tools.Window" title="chimerapy.core.tools.Window">Window</a>]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chimerapy.core.tools.threaded">
+<span class="sig-name descname"><span class="pre">threaded</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#chimerapy.core.tools.threaded" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decorator for class methods to be spawn new thread.</p>
+<p>From: <a class="reference external" href="https://stackoverflow.com/a/19846691/13231446">https://stackoverflow.com/a/19846691/13231446</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>fn</strong> – The method of a class.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="chimerapy.core.tools.to_numpy">
+<span class="sig-name descname"><span class="pre">to_numpy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">im:</span> <span class="pre">&lt;module</span> <span class="pre">'PIL.Image'</span> <span class="pre">from</span> <span class="pre">'/home/eduardo/anaconda3/envs/chimerapy_dev/lib/python3.9/site-packages/PIL/Image.py'&gt;</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">numpy.ndarray</span></span></span><a class="headerlink" href="#chimerapy.core.tools.to_numpy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert a PIL Image to numpy np.ndarray.</p>
+<p>Got this function from:
+<a class="reference external" href="https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/">https://uploadcare.com/blog/fast-import-of-pillow-images-to-numpy-opencv-arrays/</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>im</strong> (<em>Image</em>) – The PIL image.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The numpy image.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-chimerapy.core">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-chimerapy.core" title="Permalink to this headline">¶</a></h2>
+<p>ChimeraPy Package.</p>
+<p>ChimeraPy is a package that focus on multimodal data analytics and
+visualization.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">chimerapy</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../framework/index.html">Overview</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/index.html">Usage</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/index.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../authors.html">Authors</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../contributing/index.html">Contributing</a><ul>
+  <li><a href="chimerapy.html">chimerapy package</a><ul>
+      <li>Previous: <a href="chimerapy.app.pylib.html" title="previous chapter">chimerapy.app.pylib package</a></li>
+      <li>Next: <a href="chimerapy.core.tabular.html" title="next chapter">chimerapy.core.tabular package</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Vanderbilt OELE Laboratory.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.5.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/source/chimerapy.core.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

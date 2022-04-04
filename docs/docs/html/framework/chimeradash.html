@@ -1,0 +1,150 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>ChimeraDash: A Multimodal Data Dashboard &#8212; chimerapy 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Getting Started" href="../getting_started.html" />
+    <link rel="prev" title="Group Runner Overview" href="group_runner_overview.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="chimeradash-a-multimodal-data-dashboard">
+<h1>ChimeraDash: A Multimodal Data Dashboard<a class="headerlink" href="#chimeradash-a-multimodal-data-dashboard" title="Permalink to this headline">¶</a></h1>
+<p>After all this work: loading your data, defining your pipeline,
+compartmentalizing your processes, and saving your data, you want to see
+you data! That is what ChimeraDash is for, to visualize multimodal data
+in an single application. Below is a screenshot of an example use case
+of ChimeraDash.</p>
+<p><img alt="ChimeraDash Screenshot" src="../_images/ChimeraDash.png" /></p>
+<p>ChimeraDash works by using the data that was logged by the <code class="docutils literal notranslate"><span class="pre">Logger</span></code>.
+Once the pipeline has been executed and all the logged data is saved,
+you can invoke ChimeraDash with a simple command:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">chimerapy</span> <span class="o">--</span><span class="n">logdir</span> <span class="o">&lt;</span><span class="n">your</span> <span class="n">experiment</span> <span class="n">directory</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<section id="groups-user-or-entry-name">
+<h2>Groups: User or Entry Name<a class="headerlink" href="#groups-user-or-entry-name" title="Permalink to this headline">¶</a></h2>
+<p>The visualize data can then be sorted by the <code class="docutils literal notranslate"><span class="pre">user</span></code> (the
+<code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code> associated with your data) or the <code class="docutils literal notranslate"><span class="pre">entry_name</span></code> (the
+name you provided when you called <code class="docutils literal notranslate"><span class="pre">session.add_*</span></code>). The ability to
+sort data in different ways to help compare and contrast different
+individuals when using the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code>.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">chimerapy</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Overview</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="time_sync.html">Time Synchronization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="single_runner_overview.html">Single Runner Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="group_runner_overview.html">Group Runner Overview</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">ChimeraDash: A Multimodal Data Dashboard</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#groups-user-or-entry-name">Groups: User or Entry Name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/index.html">Usage</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/index.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../authors.html">Authors</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Overview</a><ul>
+      <li>Previous: <a href="group_runner_overview.html" title="previous chapter">Group Runner Overview</a></li>
+      <li>Next: <a href="../getting_started.html" title="next chapter">Getting Started</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Vanderbilt OELE Laboratory.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.5.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/framework/chimeradash.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

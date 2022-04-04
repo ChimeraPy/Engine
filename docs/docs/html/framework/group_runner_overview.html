@@ -1,0 +1,191 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>Group Runner Overview &#8212; chimerapy 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css" />
+    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="ChimeraDash: A Multimodal Data Dashboard" href="chimeradash.html" />
+    <link rel="prev" title="Single Runner Overview" href="single_runner_overview.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="group-runner-overview">
+<h1>Group Runner Overview<a class="headerlink" href="#group-runner-overview" title="Permalink to this headline">¶</a></h1>
+<p>In constrast to the <code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code>, the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> is focuses in
+use cases where there are multiple objects/persons of interest, with
+their own sensors and data streams. The <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> provides the
+capability of running multiple individual pipelines and then a single
+group pipeline. This can be seen in the illustration below.</p>
+<p><img alt="GroupRunner Overview" src="../_images/group_runner_overview.drawio.png" /></p>
+<p>Note: All the boxes in different colors are their own process which are
+connected by data and messasing queues to the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> (the main
+process that spawns the <code class="docutils literal notranslate"><span class="pre">Loader</span></code> and the <code class="docutils literal notranslate"><span class="pre">Logger</span></code>).</p>
+<section id="loader">
+<h2>Loader<a class="headerlink" href="#loader" title="Permalink to this headline">¶</a></h2>
+<p>In the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> use case, the <code class="docutils literal notranslate"><span class="pre">Loader</span></code> and <code class="docutils literal notranslate"><span class="pre">Collector</span></code> have
+the more challenging task of loading, syncing, and organizing data from
+multiple data streams for multiple objects/persons of interest. A
+2 level dictionary is used to organize the time window data from each
+data stream for each object/person of interest. Here is an example
+dictionary:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data_samples</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;root&#39;</span><span class="p">:</span> <span class="p">{</span>
+        <span class="s1">&#39;group_camera&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({}),</span>
+        <span class="s1">&#39;group_sensor&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({}),</span>
+    <span class="p">},</span>
+    <span class="s1">&#39;P01&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="c1"># participant #01</span>
+        <span class="s1">&#39;egocentric_video&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({}),</span>
+        <span class="s1">&#39;text&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({})</span>
+    <span class="p">},</span>
+    <span class="s1">&#39;P02&#39;</span><span class="p">:</span> <span class="p">{</span> <span class="c1"># participant #02</span>
+        <span class="s1">&#39;egocentric_video&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({}),</span>
+        <span class="s1">&#39;text&#39;</span><span class="p">:</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">({})</span>
+<span class="p">}</span>
+
+</pre></div>
+</div>
+<p>The data loaded by the <code class="docutils literal notranslate"><span class="pre">Loader</span></code> is then placed in the loading queue,
+waiting for the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> to later forward propagate through the
+pipeline.</p>
+</section>
+<section id="individual-pipeline-group-pipeline">
+<h2>Individual Pipeline + Group Pipeline<a class="headerlink" href="#individual-pipeline-group-pipeline" title="Permalink to this headline">¶</a></h2>
+<p>Similar to <code class="docutils literal notranslate"><span class="pre">SingleRunner</span></code> use case, the data is forward propagated
+through the individual pipelines. In constrast, the output of the
+individual pipelines are then passed as input for the group pipeline
+to allow analysis between objects/persons of interest (like collaboration).</p>
+<section id="processes">
+<h3>Processes<a class="headerlink" href="#processes" title="Permalink to this headline">¶</a></h3>
+<p>The user-defined processes are modular compartments that store the logic
+intended to perform an operation on the data streams. NOTE: currently
+processes are run purely serially, there is current development to
+parallelize these process to improve time effiency.</p>
+</section>
+</section>
+<section id="logging">
+<h2>Logging<a class="headerlink" href="#logging" title="Permalink to this headline">¶</a></h2>
+<p>Logging data in the <code class="docutils literal notranslate"><span class="pre">GroupRunner</span></code> use case is more complicated. The
+logged data (as defined in the pipelines) is saved and organized by
+separating the each pipeline’s data into individual folders. The group
+pipeline’s logged data is saved in the root directory of the logging
+folder.</p>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">chimerapy</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Overview</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="time_sync.html">Time Synchronization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="single_runner_overview.html">Single Runner Overview</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Group Runner Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#loader">Loader</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#individual-pipeline-group-pipeline">Individual Pipeline + Group Pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#logging">Logging</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="chimeradash.html">ChimeraDash: A Multimodal Data Dashboard</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../getting_started.html">Getting Started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/index.html">Usage</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/index.html">API documentation</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../contributing/index.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../authors.html">Authors</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Overview</a><ul>
+      <li>Previous: <a href="single_runner_overview.html" title="previous chapter">Single Runner Overview</a></li>
+      <li>Next: <a href="chimeradash.html" title="next chapter">ChimeraDash: A Multimodal Data Dashboard</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Vanderbilt OELE Laboratory.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.5.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/framework/group_runner_overview.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
