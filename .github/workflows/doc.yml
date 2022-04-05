@@ -1,23 +1,33 @@
 name: Documentation
-on:
-  push:
-    branches:
-    - main
+
+# on:
+#   push:
+#     branches:
+#     - main
+on: workflow_dispatch # to test it
+
 jobs:
-  build:
+  deploy_docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-python@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+
+    - name: Checkout to another branch
     - uses: actions/checkout@master
       with:
         fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
-    - name: Dependencies
+
+    - name: Installing Dependencies
       run: |
         cd docs/
         pip install -r requirements.txt
         cd ..
+
     - name: Build and Commit
       uses: sphinx-notes/pages@v2
+
     - name: Push changes
       uses: ad-m/github-push-action@master
       with:
