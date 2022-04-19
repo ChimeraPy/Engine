@@ -34,7 +34,7 @@ class TobiiTestCase(unittest.TestCase):
     def test_load_tobii_one_participant(self):
 
         # Load the data for all participants (ps)
-        one_participant_dir = RAW_DATA_DIR / 'nurse_use_case' / '20211029T140731Z'
+        one_participant_dir = RAW_DATA_DIR / 'example_use_case' / 'tobii_testing' / '20220315T043740Z'
         participant_session = chimerapy.utils.tobii.load_single_session(one_participant_dir, verbose=True)
 
         # Clear out the previous ChimeraPy run 
@@ -65,7 +65,7 @@ class TobiiTestCase(unittest.TestCase):
     def test_load_tobii_session(self):
 
         # Load the data for all participants (ps)
-        session_dir = RAW_DATA_DIR / 'nurse_use_case'
+        session_dir = RAW_DATA_DIR / 'example_use_case' / 'tobii_testing'
         participant_sessions = chimerapy.utils.tobii.load_multiple_sessions_in_one_directory(session_dir, verbose=True)
 
         # Clear out the previous ChimeraPy run 

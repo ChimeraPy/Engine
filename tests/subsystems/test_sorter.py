@@ -53,7 +53,7 @@ class SorterTests(unittest.TestCase):
 
         return None
 
-    def test_creating_and_simple_running_loader(self):
+    def test_creating_and_simple_running_sorter(self):
         
         # Creating the necessary queues
         delay = 2 # has to be at least 0.2 (for linux) and 2 (for macOS)
@@ -107,6 +107,9 @@ class SorterTests(unittest.TestCase):
         }
         message_loading_to_queue.put(end_message)
 
+        # Wait until the Loader fully stops
+        time.sleep(1)
+
         # Now start the sorter
         print("Start sorter")
         sorter.start()
@@ -145,7 +148,7 @@ class SorterTests(unittest.TestCase):
         print(len(s_messages))
 
         assert len(l_datas) == 0
-        assert len(l_messages)-1 == q_max_size
+        assert len(l_messages)-1 == q_max_size, f"{len(l_messages)-1} == {q_max_size}"
 
         # Then wait until the loader and sorter joins
         loader.join()

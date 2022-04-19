@@ -60,7 +60,7 @@ class SingleRunnerTestCase(unittest.TestCase):
             logdir=OUTPUT_DIR,
             data_streams=self.dss,
             pipe=self.individual_pipeline,
-            time_window=pd.Timedelta(seconds=3),
+            time_window=pd.Timedelta(seconds=0.5),
             run_solo=True,
         )
 
@@ -77,7 +77,7 @@ class SingleRunnerTestCase(unittest.TestCase):
             logdir=OUTPUT_DIR,
             data_streams=self.dss,
             pipe=self.individual_pipeline,
-            time_window=pd.Timedelta(seconds=3),
+            time_window=pd.Timedelta(seconds=0.5),
             start_time=pd.Timedelta(seconds=5),
             end_time=pd.Timedelta(seconds=10),
             run_solo=True,
@@ -145,7 +145,7 @@ class GroupRunnerTestCase(unittest.TestCase):
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,
             runners=self.runners, 
-            time_window=pd.Timedelta(seconds=5),
+            time_window=pd.Timedelta(seconds=0.5),
         )
 
         # Run the director
@@ -161,7 +161,7 @@ class GroupRunnerTestCase(unittest.TestCase):
             name="Nurse Teamwork Example #1",
             pipe=self.overall_pipeline,
             runners=self.runners, 
-            time_window=pd.Timedelta(seconds=5),
+            time_window=pd.Timedelta(seconds=0.5),
             start_time=pd.Timedelta(seconds=5),
             end_time=pd.Timedelta(seconds=15),
         )

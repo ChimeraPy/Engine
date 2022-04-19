@@ -52,7 +52,7 @@ class LoaderTests(unittest.TestCase):
         return None
 
     def test_creating_and_simple_running_loader(self):
-        
+
         # Creating the necessary queues
         delay = 2 # has to be at least 0.2
         q_max_size = 3
@@ -88,6 +88,9 @@ class LoaderTests(unittest.TestCase):
             }
         }
         message_to_queue.put(end_message)
+
+        # Wait until the loader fully stops
+        time.sleep(1)
 
         print("After putting end message")
 
