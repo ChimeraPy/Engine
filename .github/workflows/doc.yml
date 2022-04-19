@@ -44,9 +44,18 @@ jobs:
         mkdir gh-pages
         touch gh-pages/.nojekyll
         mv docs/_build/html gh-pages
+        ls -la
 
-    - name: Deploy documentation
-      uses: JamesIves/github-pages-deploy-action@4.1.4
-      with:
-        branch: gh-pages
-        folder: gh-pages
+    # - name: Deploy documentation
+    #   uses: JamesIves/github-pages-deploy-action@4.1.4
+    #   with:
+    #     branch: gh-pages
+    #     folder: gh-pages
+    #
+    - name: Commit changes to github pages
+      run: |
+        cd ChimeraPy
+        git add gh-pages/
+        git commit 
+        git push origin gh-pages
+
