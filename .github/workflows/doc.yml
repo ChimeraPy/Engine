@@ -12,30 +12,39 @@ jobs:
 
     - name: Setup Python
       uses: actions/setup-python@master
-
+    
     - name: Checkout to another branch
       uses: actions/checkout@v2
       with:
         fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
         path: ChimeraPy
 
+    - name: Install System Requires for Ubuntu
+      run: |
+        sudo apt-get update
+        # sudo apt-get install ffmpeg libsm6 libxext6
+        # sudo apt-get update && apt-get install libgl1
+        sudo apt-get install ffmpeg libsm6 libxext6 -y
+        sudo apt-get install tree
+    
     - name: Install ChimeraPy
       run: |
+        cd ChimeraPy
         pip install -e .
 
     - name: Installing Dependencies
       run: |
-        cd docs/
+        cd ChimeraPy/docs/
         pip install -r requirements.txt
-        cd ..
 
     - name: Build documentation
       run: |
+        cd ChimeraPy/docs/
+        make html
+        cd ../../
         mkdir gh-pages
         touch gh-pages/.nojekyll
-        cd docs/
-        make html
-        mv docs/_build/html gh-pages
+        mv ChimeraPy/docs/_build/html gh-pages
 
     - name: Deploy documentation
       uses: JamesIves/github-pages-deploy-action@4.1.4
