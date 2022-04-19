@@ -348,7 +348,7 @@ class VideoDataStream(DataStream):
         )
 
         # Add to the timetrack (cannot be inplace)
-        self.timetrack = self.timetrack.append(append_timetrack)
+        self.timetrack = pd.concat([self.timetrack, append_timetrack])
         self.timetrack['ds_index'] = self.timetrack['ds_index'].astype(int)
 
         # Appending the file to the video writer

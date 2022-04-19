@@ -8,6 +8,7 @@ import os
 import threading
 import queue
 import gc
+import signal
 
 # Third-Party Imports
 import cv2
@@ -98,6 +99,33 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         # Run the runner with everything set
         self.runner.run(verbose=True)
         # self.runner.run()
+    
+    def test_single_handling_keyboard_interrupt_with_tui(self):
+
+        def create_keyboard_interrupt():
+            time.sleep(1)
+            signal.raise_signal(signal.SIGINT)
+        
+        # Load construct the first runner
+        self.runner = cp.SingleRunner(
+            logdir=OUTPUT_DIR,
+            name='P01',
+            data_streams=[self.tabular_ds, self.video_ds],
+            pipe=self.individual_pipeline,
+            time_window=pd.Timedelta(seconds=0.5),
+            run_solo=True,
+            memory_limit=0.5
+        )
+        
+        # Create thread that later calls the keyboard interrupt signal
+        signal_thread = threading.Thread(target=create_keyboard_interrupt, args=())
+        signal_thread.start()
+
+        # Run!
+        self.runner.run(verbose=True)
+
+        # Then stoping the thread
+        signal_thread.join()
         
 class GroupRunnerBackEndTestCase(unittest.TestCase):
     

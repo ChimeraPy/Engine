@@ -130,14 +130,17 @@ def clear_queue(input_queue: Queue):
     """
 
     while input_queue.qsize() != 0:
-
-        # Make sure to account for possible automic modification of the
+        # print(input_queue.qsize())
+        # Make sure to account for possible atomic modification of the
         # queue
         try:
             data = input_queue.get(timeout=0.1)
             del data
         except queue.Empty:
-            continue
+            return
+        except EOFError:
+            print("Queue EOFError --- data corruption")
+            return 
 
 def get_windows(
         start_time:pd.Timedelta, 

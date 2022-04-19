@@ -3,6 +3,7 @@ import multiprocessing as mp
 import queue
 import time
 import uuid
+import signal
 
 # Third-party imports
 import pandas as pd
@@ -174,6 +175,9 @@ class Loader(BaseProcess):
         """
         # Perform process setup
         self.setup()
+        
+        # Ignore SIGINT signal
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # Load the data streams and create the Collector
         self.collector = Collector(

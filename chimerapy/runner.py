@@ -1,11 +1,13 @@
 # Built-in Imports
 from typing import Sequence, Dict, Any, Union, List, Optional
+import sys
 import curses
 import time
 import threading
 import multiprocessing as mp
 import queue
 import pathlib
+import signal
 
 # Third-Party Imports
 import psutil
@@ -17,7 +19,7 @@ from .logger import Logger
 from .core.pipeline import Pipeline
 from .core.data_stream import DataStream
 from .core.session import Session
-from .core.tools import threaded, PortableQueue
+from .core.tools import threaded, clear_queue, PortableQueue
 
 class SingleRunner:
     """Orchestracting class for running single data pipelines.
@@ -178,6 +180,10 @@ class SingleRunner:
             self.session.set_runner(self)
             self.pipe.set_session(self.session)
 
+    def sigint_handler(self, signal, frame):
+        print("KEYBOARD INTERRUPT IS CAUGHT!")
+        self.thread_exit.set()
+
     def init_loader(
             self, 
             time_window:pd.Timedelta,
@@ -229,6 +235,9 @@ class SingleRunner:
             'm_to_loading': self.message_to_loading_queue, 
             'm_from_loading': self.message_from_loading_queue,
         })
+        
+        # Handling keyboard interrupt
+        signal.signal(signal.SIGINT, self.sigint_handler)
 
     def init_logger(
             self,
@@ -267,7 +276,10 @@ class SingleRunner:
             'm_to_logging': self.message_to_logging_queue,
             'f_to_logging': self.message_from_logging_queue
         })
-
+        
+        # Handling keyboard interrupt
+        signal.signal(signal.SIGINT, self.sigint_handler)
+        
     def message_pause_loader(self):
         """Message to pause the ``Loader``."""
 
@@ -576,8 +588,9 @@ class SingleRunner:
         # Stop the loader and logger
         self.message_end_loading_and_logging() 
 
-        # Now we have to wait until the logger is done
-        while True:
+        # Wait until the Loader and logger are done, expect if the 
+        # thread exit event has been already set.
+        while not self.thread_exit.is_set():
 
             # Waiting 
             time.sleep(0.1)
@@ -591,10 +604,17 @@ class SingleRunner:
 
         # If the thread ended, we should stop the message thread
         self.thread_exit.set()
-        
-        # Joining the subprocesses
-        self.loader.join()
-        self.logger.join()
+
+        # Clear out all mesages
+        while self.loader.is_alive() or self.logger.is_alive():
+
+            # Clear the queue if necessary
+            for q_name, queue in self.queues.items():
+                clear_queue(queue)
+            
+            # Joining the subprocesses
+            self.loader.join(timeout=1)
+            self.logger.join(timeout=1)
 
         # Waiting for the threads to shutdown
         self.message_loader_thread.join()
@@ -612,7 +632,7 @@ class SingleRunner:
         self.num_processed_data_chunks = 0
         
         # Continue iterating
-        while True:
+        while not self.thread_exit.is_set():
 
             # Retrieveing sample from the loading queue
             data_chunk = self.loading_queue.get(block=True)
@@ -645,7 +665,7 @@ class SingleRunner:
 
         """
         # Continue the TUI until the other threads are complete.
-        while True:
+        while not self.thread_exit.is_set():
 
             # Create information string
             info_str = f"""\

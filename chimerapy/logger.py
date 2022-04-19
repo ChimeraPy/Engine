@@ -7,6 +7,7 @@ import pathlib
 import time
 import os
 import queue
+import signal
 
 # Third-party imports
 
@@ -61,7 +62,7 @@ class Logger(BaseProcess):
             message_to_queue=message_to_queue,
             message_from_queue=message_from_queue
         )
-
+        
         # Save the input parameters
         self.logdir = logdir
         self.experiment_name = experiment_name
@@ -219,6 +220,9 @@ class Logger(BaseProcess):
         """
         # Perform process setup
         self.setup()
+        
+        # Ignore SIGINT signal
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         # Keeping track of processed data
         self.num_of_logged_data = 0

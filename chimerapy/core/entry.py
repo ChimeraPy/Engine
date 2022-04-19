@@ -4,6 +4,9 @@ __package__ = 'chimerapy'
 # Built-in Imports
 from typing import Dict
 
+# Third-party Imports
+import pandas as pd
+
 class Entry:
     """Abstract Entry to be saved in the session and tracking changes."""
 
@@ -25,7 +28,7 @@ class Entry:
         # Get the dataframe
         df = data_chunk['data']
         # Append the dataframe
-        self.unsaved_changes = self.unsaved_changes.append(df)
+        self.unsaved_changes = pd.concat([self.unsaved_changes,df])
     
     def flush(self):
         """Write/Save changes and mark them as processed.
