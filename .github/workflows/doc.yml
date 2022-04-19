@@ -25,7 +25,6 @@ jobs:
         # sudo apt-get install ffmpeg libsm6 libxext6
         # sudo apt-get update && apt-get install libgl1
         sudo apt-get install ffmpeg libsm6 libxext6 -y
-        sudo apt-get install tree
     
     - name: Install ChimeraPy
       run: |
@@ -41,10 +40,10 @@ jobs:
       run: |
         cd ChimeraPy/docs/
         make html
-        cd ../../
+        cd ../
         mkdir gh-pages
         touch gh-pages/.nojekyll
-        mv ChimeraPy/docs/_build/html gh-pages
+        mv docs/_build/html gh-pages
 
     - name: Deploy documentation
       uses: JamesIves/github-pages-deploy-action@4.1.4
