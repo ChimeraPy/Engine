@@ -1,72 +1,5 @@
-#name: Documentation
-
-#on:
-#  push:
-#    branches:
-#    - main
-
-#jobs:
-#  deploy_docs:
-#    runs-on: ubuntu-latest
-#    steps:
-
-#    - name: Setup Python
-#      uses: actions/setup-python@master
-    
-#    - name: Checkout to another branch
-#      uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
-#        path: ChimeraPy
-
-#    - name: Install System Requirements for Ubuntu
-#      run: |
-#        sudo apt-get update
-#        # sudo apt-get install ffmpeg libsm6 libxext6
-#        # sudo apt-get update && apt-get install libgl1
-#        sudo apt-get install ffmpeg libsm6 libxext6 -y
-    
-#    - name: Install ChimeraPy
-#      run: |
-#        cd ChimeraPy
-#        pip install -e .
-
-#    - name: Installing Dependencies
-#      run: |
-#        cd ChimeraPy/docs/
-#        pip install -r requirements.txt
-
-#    - name: Build documentation
-#      run: |
-#        cd ChimeraPy/docs/
-#        make html
-#        cd ../
-#        mkdir gh-pages
-#        touch gh-pages/.nojekyll
-#        mv docs/_build/html gh-pages
-
-#    # - name: Deploy documentation
-#    #   uses: JamesIves/github-pages-deploy-action@4.1.4
-#    #   with:
-#    #     branch: gh-pages
-#    #     folder: gh-pages
-#    #
-#    - name: Commit changes to github pages
-#      run: |
-#        cd ChimeraPy
-#        git add gh-pages/
-
-#    - uses: stefanzweifel/git-auto-commit-action@v4
-#      with:
-#        commit_message: Commit doc changes and deploy to gh-pages
-
-#    - name: Push changes
-#      uses: ad-m/github-push-action@master
-#      with:
-#        github_token: ${{ secrets.GITHUB_TOKEN }}
-#        branch: gh-pages
-
 name: Documentation
+
 on:
   push:
     branches:
@@ -78,20 +11,20 @@ jobs:
     steps:
 
     - name: Install Python
-    - uses: actions/setup-python@v2
+      uses: actions/setup-python@v2
 
     - name: Checkout
-    - uses: actions/checkout@master
+      uses: actions/checkout@master
       with:
         fetch-depth: 0 # otherwise, you will failed to push refs to dest repo
 
     - name: Install System Requirements for Ubuntu
-     run: |
+      run: |
        sudo apt-get update
        sudo apt-get install ffmpeg libsm6 libxext6 -y
     
-   - name: Install ChimeraPy
-     run: |
+    - name: Install ChimeraPy
+      run: |
        pip install -e .
 
     - name: Install Python Dependencies
