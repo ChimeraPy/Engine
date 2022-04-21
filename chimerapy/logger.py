@@ -1,6 +1,8 @@
 # Built-in Imports
 from typing import Dict, Any
 import multiprocessing as mp
+import queue
+import threading
 import collections
 import json
 import pathlib
@@ -12,7 +14,7 @@ import signal
 # Third-party imports
 
 # ChimeraPy Library
-from .core.tools import PortableQueue
+from .core.tools import PortableQueue, threaded
 from .core.video import VideoEntry
 from .core.tabular import TabularEntry, ImageEntry
 from .base_process import BaseProcess
@@ -72,12 +74,18 @@ class Logger(BaseProcess):
 
         # Keeping records of all logged data
         self.records = collections.defaultdict(dict)
+        self.threads = collections.defaultdict(dict)
+        self.queues = collections.defaultdict(dict)
         self.meta_data = {}
         self.dtype_to_class = {
             'tabular': TabularEntry,
             'image': ImageEntry,
             'video': VideoEntry
         }
+        
+        # Create a lock to prevent multiple threads from executing 
+        # interferring code at the same time
+        self.lock = threading.Lock()
         
         # Create the folder if it doesn't exist 
         if not self.logdir.exists():
@@ -140,9 +148,75 @@ class Logger(BaseProcess):
     
     def _save_meta_data(self):
         """Save the meta to a JSON file."""
+        # Added lock to prevent interfering in writing data in shared file
+        self.lock.acquire()
         with open(self.experiment_dir / 'meta.json', "w") as json_file:
             json.dump(self.meta_data, json_file)
-    
+        self.lock.release()
+
+    def create_entry(self, data_chunk:Dict[str, Any]):
+        """Create an entry and add it to the records and meta data.
+
+        Args:
+            data_chunk (Dict[str, Any]): The data chunk that details the \
+            data type and name for the entry.
+
+        """
+        # New session processing (get the entry's directory)
+        if data_chunk['session_name'] == 'root':
+            entry_dir = self.experiment_dir
+
+        else:# Add the new session to the subsesssions list
+            if data_chunk['session_name'] not in self.meta_data['subsessions']:
+                self.meta_data['subsessions'].append(data_chunk['session_name'])
+            entry_dir = self.experiment_dir / data_chunk['session_name']
+
+        # Selecting the class
+        entry_cls = self.dtype_to_class[data_chunk['dtype']]
+
+        # Creating the entry and recording in meta data
+        self.records[data_chunk['session_name']][data_chunk['name']] = entry_cls(entry_dir, data_chunk['name'])
+        entry_meta_data = {
+            'dtype': data_chunk['dtype'],
+            'start_time': str(data_chunk['data'].iloc[0]._time_),
+            'end_time': str(data_chunk['data'].iloc[-1]._time_),
+        }
+        self.meta_data['records'][data_chunk['session_name']][data_chunk['name']] = entry_meta_data
+        self._save_meta_data()
+  
+    @threaded
+    def entry_thread(self, queue:queue.Queue):
+        """Create a new thread for an entry of data.
+
+        Each thread has the individual responsibility of update a specific 
+        entry. The input queue is the matching data flow for said entry.
+
+        Args:
+            queue (queue.Queue): The queue that feeds data to the thread.
+
+        """
+        # Continue processing
+        while True:
+
+            # If we have data to log, work on it
+            if queue.qsize() != 0:
+                
+                # Log the data
+                data_chunk = queue.get()
+                self.flush(data_chunk)
+
+                # Notify that the data is complete!
+                self.num_of_logged_data += 1
+                self.message_logging_status(data_chunk)
+
+            # Else, sleep to save resources
+            else:
+                time.sleep(0.1)
+
+            # Breaking condition
+            if self.thread_exit.is_set() and queue.qsize() == 0:
+                break
+   
     def flush(self, data:Dict[str, Any]):
         """Flush out unsaved logged changes by saving and clearing cache.
 
@@ -161,53 +235,19 @@ class Logger(BaseProcess):
                 ``data``.
 
         """
+        # Test that the new data entry is valid to the type of entry
+        assert isinstance(self.records[data['session_name']][data['name']], self.dtype_to_class[data['dtype']]), \
+            f"Entry Type={self.records[data['session_name']][data['name']]} should match input data dtype {data['dtype']}"
 
-        # Detecting if this is the first time for the session
-        if data['session_name'] not in self.records.keys() or data['name'] not in self.records[data['session_name']].keys():
-
-            # New session processing (get the entry's directory)
-            session_name = data['session_name']
-            if session_name == 'root':
-                entry_dir = self.experiment_dir
-
-            else:# Add the new session to the subsesssions list
-                if session_name not in self.meta_data['subsessions']:
-                    self.meta_data['subsessions'].append(session_name)
-                entry_dir = self.experiment_dir / session_name
-
-            # Selecting the class
-            entry_cls = self.dtype_to_class[data['dtype']]
-
-            # Creating the entry and recording in meta data
-            self.records[session_name][data['name']] = entry_cls(entry_dir, data['name'])
-            entry_meta_data = {
-                'dtype': data['dtype'],
-                'start_time': str(data['data'].iloc[0]._time_),
-                'end_time': str(data['data'].iloc[-1]._time_),
-            }
-            self.meta_data['records'][session_name][data['name']] = entry_meta_data
+        # Need to update the end_time for meta_data
+        if len(data['data']) > 0:
+            end_time_stamp = str(data['data'].iloc[-1]._time_)
+            self.meta_data['records'][data['session_name']][data['name']]['end_time'] = end_time_stamp 
             self._save_meta_data()
 
-            # Append the data to the new entry
-            self.records[data['session_name']][data['name']].append(data)
-            self.records[data['session_name']][data['name']].flush()
-
-        # Not the first time
-        else:
-
-            # Test that the new data entry is valid to the type of entry
-            assert isinstance(self.records[data['session_name']][data['name']], self.dtype_to_class[data['dtype']]), \
-                f"Entry Type={self.records[data['session_name']][data['name']]} should match input data dtype {data['dtype']}"
-
-            # Need to update the end_time for meta_data
-            if len(data['data']) > 0:
-                end_time_stamp = str(data['data'].iloc[-1]._time_)
-                self.meta_data['records'][data['session_name']][data['name']]['end_time'] = end_time_stamp 
-                self._save_meta_data()
-
-            # If everything is good, add the change to the track history
-            self.records[data['session_name']][data['name']].append(data)
-            self.records[data['session_name']][data['name']].flush()
+        # Now that we have account for both scenarios, just log data!
+        self.records[data['session_name']][data['name']].append(data)
+        self.records[data['session_name']][data['name']].flush()
 
     def run(self):
         """Run the ``Logger``.
@@ -233,24 +273,47 @@ class Logger(BaseProcess):
             # First check if there is an item in the queue
             if self.logging_queue.qsize() != 0:
 
-                # Reporting
-                # if self.verbose:
-                #     ...
-
                 # Get the data frome the queue and calculate the memory usage
                 data_chunk = self.logging_queue.get(block=True)
-                
-                # Then process the data and tracking total
-                self.flush(data_chunk)
-                self.num_of_logged_data += 1
-                self.message_logging_status(data_chunk)
+
+                # Extract the session name and entry name
+                session_name = data_chunk['session_name']
+                entry_name = data_chunk['name']
+
+                # Determine if the data chunk is for a new entry, if so,
+                # then create a new thread and pass that data!
+                if session_name not in self.records.keys() or entry_name not in self.records[session_name].keys():
+                   
+                    # Create the entry for the data_chunk
+                    self.create_entry(data_chunk)
+
+                    # Setup the thread with its queue
+                    new_entry_queue = queue.Queue() 
+                    new_entry_thread = self.entry_thread(queue=new_entry_queue)
+
+                    # Start the thread
+                    new_entry_thread.start()
+
+                    # Store them
+                    self.queues[session_name][entry_name] = new_entry_queue
+                    self.threads[session_name][entry_name] = new_entry_thread
+
+                # Now that we have ensure that a thread exists, feed the
+                # data chunk to that thread
+                self.queues[session_name][entry_name].put(data_chunk)
 
             else:
-                time.sleep(0.5)
+                time.sleep(0.1)
 
             # Break Condition
             if self.thread_exit.is_set() and self.logging_queue.qsize() == 0:
                 break
+
+        # Wait until all the logging threads have stopped!
+        for session_name in self.threads.keys():
+            for entry_name in self.threads[session_name].keys():
+                thread = self.threads[session_name][entry_name]
+                thread.join()
 
         # Sending message that the Logger finished!
         self.message_logger_finished()

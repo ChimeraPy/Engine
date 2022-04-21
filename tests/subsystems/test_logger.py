@@ -6,6 +6,7 @@ import pathlib
 import shutil
 import os
 import multiprocessing as mp
+import queue
 
 # Third-Party Imports
 # from memory_profiler import profile
@@ -55,16 +56,16 @@ class LoggerTests(unittest.TestCase):
             os.mkdir(experiment_dir)
 
         self.logging_queue = cp.tools.PortableQueue(maxsize=100)
-        self.message_to_queue = cp.tools.PortableQueue(maxsize=100)
-        self.message_from_queue = cp.tools.PortableQueue(maxsize=100)
+        self.message_to_logger = cp.tools.PortableQueue(maxsize=100)
+        self.message_from_logger = cp.tools.PortableQueue(maxsize=100)
       
         # Create the logger
         self.logger = cp.Logger(
             logdir=self.logdir,
             experiment_name='testing_logger',
             logging_queue=self.logging_queue,
-            message_to_queue=self.message_to_queue,
-            message_from_queue=self.message_from_queue,
+            message_to_queue=self.message_to_logger,
+            message_from_queue=self.message_from_logger,
             verbose=True
         )
     
@@ -102,11 +103,6 @@ class LoggerTests(unittest.TestCase):
 
     def test_creating_and_simple_running_logger(self):
  
-        # Start the logger
-        self.logger.start()
-
-        print("Started logger")
-
         # Create root and other sessions that interface to the logger
         root_session = cp.Session(
             name='root',
@@ -122,6 +118,19 @@ class LoggerTests(unittest.TestCase):
         # Add data
         self.adding_test_data(root_session)
         self.adding_test_data(subsession)
+
+        # Check how much data chunks were passed to the logger
+        total_logged_data = self.logging_queue.qsize()
+        print(f'Total logged data: {total_logged_data}')
+        
+        # Start the logger
+        self.logger.start()
+
+        print("Started logger")
+
+        # Wait until the logger is done
+        while self.logging_queue.qsize() != 0:
+            time.sleep(0.1)
         
         print("Finished logging data")
 
@@ -133,24 +142,39 @@ class LoggerTests(unittest.TestCase):
                 'content': {},
             }
         }
-        self.message_to_queue.put(end_message)
-
-        # Wait until the logger is done
-        while self.logging_queue.qsize() != 0:
-            time.sleep(0.1)
-
-        # Then get the messages from the loader
-        messages = []
-        while self.message_from_queue.qsize() != 0:
-            messages.append(self.message_from_queue.get())
+        self.message_to_logger.put(end_message)
 
         print("Sent END message")
+
+        # Wait until the logger confirms shutdown
+        messages = []
+        while True:
+            try:
+                # Read the message
+                message = self.message_from_logger.get(timeout=0.1)
+                messages.append(message)
+
+                # Break condition
+                if message['body']['type'] == 'END':
+                    break
+
+            except queue.Empty:
+                print(".", end="")
+                time.sleep(0.1)
+
+        # Printout the messages
+        pprint.pprint(messages)
        
         # Then wait until the loader joins
-        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
+        print(self.logging_queue.qsize(), self.message_from_logger.qsize(), self.message_to_logger.qsize())
         self.logger.join()
 
         print("Logger joined!")
+
+        # Now we have to check that the logger did the right behavior
+        assert self.logging_queue.qsize() == 0, f"logging queue should be empty, instead it is {self.logging_queue.qsize()}"
+        assert len(messages) == total_logged_data + 1, f"For each logged data, we should receive logging confirmation from the Logger (exp: {total_logged_data+1}, actual: {len(messages)})."
+
 
     # @profile
     def test_logger_memory_stress(self):
@@ -189,7 +213,7 @@ class LoggerTests(unittest.TestCase):
                 'content': {},
             }
         }
-        self.message_to_queue.put(end_message)
+        self.message_to_logger.put(end_message)
 
         time.sleep(0.5)
 
@@ -197,13 +221,13 @@ class LoggerTests(unittest.TestCase):
 
         # Then get the messages from the logger
         messages = []
-        while self.message_from_queue.qsize() != 0:
-            messages.append(self.message_from_queue.get())
+        while self.message_from_logger.qsize() != 0:
+            messages.append(self.message_from_logger.get())
 
         print(messages)
   
         # Then wait until the logger joins
-        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
+        print(self.logging_queue.qsize(), self.message_from_logger.qsize(), self.message_to_logger.qsize())
         self.logger.join()
 
         print("Logger joined!")
@@ -235,19 +259,19 @@ class LoggerTests(unittest.TestCase):
                 'content': {},
             }
         }
-        self.message_to_queue.put(end_message)
+        self.message_to_logger.put(end_message)
 
         print("Sent END message")
 
-        time.sleep(0.5)
+        time.sleep(1)
 
         # Then get the messages from the logger
         messages = []
-        while self.message_from_queue.qsize() != 0:
-            messages.append(self.message_from_queue.get())
+        while self.message_from_logger.qsize() != 0:
+            messages.append(self.message_from_logger.get())
   
         # Then wait until the logger joins
-        print(self.logging_queue.qsize(), self.message_from_queue.qsize(), self.message_to_queue.qsize())
+        print(self.logging_queue.qsize(), self.message_from_logger.qsize(), self.message_to_logger.qsize())
         self.logger.join()
 
         # All the data should be processed
@@ -285,7 +309,11 @@ class LoggerTests(unittest.TestCase):
         with open(self.logger.experiment_dir / "meta.json", "r") as json_file:
             actual_meta = json.load(json_file)
 
+        print("EXPECTED META")
         pprint.pprint(expected_meta)
+        print(2*"\n")
+
+        print("ACTUAL META")
         pprint.pprint(actual_meta)
 
 if __name__ == "__main__":

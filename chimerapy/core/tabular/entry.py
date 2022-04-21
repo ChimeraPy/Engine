@@ -23,18 +23,14 @@ class TabularEntry(Entry):
         dir:pathlib.Path,
         name:str,
         ):
-        """__init__.
+        """Construct an Tabular Entry.
 
         Args:
-            dir (pathlib.Path): The directory to store the snap shots 
+            dir (pathlib.Path): The directory to store the snap shots \
             of data.
-
             name (str): The name of the ``Entry``.
 
-            dtype (str): The type of data (image, tabular, json).
-
         """
-
         # Saving the Entry attributes
         self.dir = dir
         self.name = name
@@ -57,13 +53,7 @@ class TabularEntry(Entry):
         self.flush()
 
     def flush(self):
-        """Commit the unsaved changes to memory.
-
-        TODO
-            - Might want to create a separate thread for this, as I/O
-            processes can be very slow. Or maybe we can add the new 
-            thread in the DataStream class ``save`` method.
-        """
+        """Commit the unsaved changes to memory."""
 
         # If no new changes, end
         if len(self.unsaved_changes.index) == 0:
@@ -100,23 +90,27 @@ class ImageEntry(Entry):
         # Storing input parameters
         self.dir = dir
         self.name = name
-        
-        # If the directory doesn't exists, create it 
-        if not self.dir.exists():
-            os.mkdir(self.dir)
-        
+                
         # Setting initial values
         self.unsaved_changes = pd.DataFrame(columns=['_time_', 'data'])
         self.num_of_total_changes = 0
 
         # For image entry, need to save to a new directory
         self.save_loc = self.dir / self.name
+        print(self.dir, self.dir.exists())
         os.mkdir(self.save_loc)
 
         # # Create a tabular data stream for the data
         # self.stream = TabularDataStream.empty(name=name)
     
     def flush(self):
+        """Flush out unsaved changes to memory.
+
+        For ``ImageEntry``, a folder is created, the images are stored
+        inside, and finally a csv file is saved with the timestamps 
+        pertaining to each image.
+
+        """
         # Depending on different type of inputs, we should save data differently
         # For images, we just need to save each image logged
         # Save the unsaved changes
