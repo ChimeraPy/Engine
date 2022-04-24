@@ -33,6 +33,13 @@ jobs:
       - name: Setup DVC
         uses: iterative/setup-dvc@v1
 
+      - name: Create credentials
+        id: create-json
+        uses: jsdaniell/create-json@1.1.2
+        with:
+          name: "service_account_secret.json"
+          json: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+
       - name: Download Test data
         run: |
           echo ${{ secrets.SERVICE_ACCOUNT_JSON }} > service_account_secret.json
