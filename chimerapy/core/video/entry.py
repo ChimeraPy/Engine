@@ -14,18 +14,7 @@ from chimerapy.core.entry import Entry
 from chimerapy.core.video.data_stream import VideoDataStream
 
 class VideoEntry(Entry):
-    """
-
-    Attributes:
-        dir (pathlib.Path): The directory/path to store the generated 
-        file.
-
-        name (str): The name of the entry and its data.
-
-        stream (DataStream): The DataSteam object to write the data.
-
-    """
-
+    
     def __init__(
         self, 
         dir:pathlib.Path,
@@ -34,14 +23,11 @@ class VideoEntry(Entry):
         """
 
         Args:
-            dir (pathlib.Path): The directory/filepath to store the 
+            dir (pathlib.Path): The directory/filepath to store the \
             generated data file.
-
             name (str): The name of ``Entry``.
 
-            stream (DataStream): The stream instance to store the data.
         """
-
         # Saving the Entry attributes
         self.dir = dir
         self.name = name

@@ -12,6 +12,7 @@ import pickle
 from PIL import Image
 import numpy as np
 import pandas as pd
+import psutil
 
 # Helper Classes
 Window = collections.namedtuple("Window", ['start', 'end'])
@@ -231,3 +232,20 @@ def get_memory_data_size(data:Any) -> int:
         int: Size of the Python object in bytes.
     """
     return len(pickle.dumps(data))
+
+def get_threads_cpu_percent(p:psutil.Process, interval:float=0.1) -> List:
+    # Got this from:
+    # https://stackoverflow.com/a/46401536/13231446
+
+    # First, check if the process is still running 
+    if not p.is_running():
+        return []
+    
+    total_percent = p.cpu_percent(interval)
+    total_time = sum(p.cpu_times())
+    
+    # Account for a division by zero
+    if total_time == 0:
+        return []
+
+    return [total_percent * ((t.system_time + t.user_time)/total_time) for t in p.threads()]

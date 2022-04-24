@@ -1,6 +1,8 @@
 # Built-in Imports
 from typing import Sequence, Dict, Any, Union, List, Optional
 import sys
+import collections
+import os
 import curses
 import time
 import threading
@@ -19,7 +21,7 @@ from .logger import Logger
 from .core.pipeline import Pipeline
 from .core.data_stream import DataStream
 from .core.session import Session
-from .core.tools import threaded, clear_queue, PortableQueue
+from .core.tools import threaded, clear_queue, PortableQueue,  get_threads_cpu_percent
 
 class SingleRunner:
     """Orchestracting class for running single data pipelines.
@@ -664,25 +666,81 @@ class SingleRunner:
         the memory usage is reported as well.
 
         """
+        # Enable scrolling and setting timeouts
+        stdscr.scrollok(1)
+        stdscr.timeout(1)
+
+        # Outside of while loop, generate useful setup
+        process_stats = {
+            'Runner': psutil.Process(os.getpid()),
+            'Loader': psutil.Process(self.loader.pid),
+            'Logger': psutil.Process(self.logger.pid)
+        }
+
         # Continue the TUI until the other threads are complete.
         while not self.thread_exit.is_set():
 
+            # Generate the report for the threads of the Loader
+            cpu_usage_string = ''
+            processes_cpu_info = collections.defaultdict(dict)
+
+            # For each process, generate a string about their process cpu
+            # consumption and thread cpu consumption
+            for i, (process, stats) in enumerate(process_stats.items()):
+
+                # Check if the process is still alive
+                if not stats.is_running():
+                    # Add terminal info
+                    if i == 0:
+                        cpu_usage_string += f"{process}: Terminal\n"
+                    else:
+                        cpu_usage_string += f"\t\t    {process}: Terminal\n"
+                    # Skip the rest of for loop
+                    continue
+
+                # Get process data
+                processes_cpu_info[process]['process'] = process_stats[process].cpu_percent() / psutil.cpu_count()
+                processes_cpu_info[process]['threads'] = ''
+
+                # Get thread data
+                threads_cpu_data = get_threads_cpu_percent(stats)
+
+                # For each thread, generate a specific string
+                for j, thread_info in enumerate(threads_cpu_data):
+                    processes_cpu_info[process]['threads'] += f'Thread {i}: {thread_info:.2f}'
+                    # Handling spacing
+                    if j != len(threads_cpu_data):
+                        if (j + 1) % 5 != 0:
+                            processes_cpu_info[process]['threads'] += '\t'
+                        else:
+                            processes_cpu_info[process]['threads'] += '\n\t\t\t'
+
+                # Append process string to cpu_usage_string
+                if i == 0:
+                    cpu_usage_string += f"{process}: {processes_cpu_info[process]['process']:.2f}\n\t\t\t{processes_cpu_info[process]['threads']}\n"
+                else:
+                    cpu_usage_string += f"\t\t    {process}: {processes_cpu_info[process]['process']:.2f}\n\t\t\t{processes_cpu_info[process]['threads']}\n"
+
             # Create information string
-            info_str = f"""\
-            Loading:
-                Loaded Data: {self.latest_window_loaded}/{self.num_of_windows}
-                Loading Queue Size: {self.loading_queue.qsize()}/{self.max_loading_queue_size}
-            Processing: 
-                Processed Data: {self.num_processed_data_chunks}/{self.num_of_windows}
-            Logging:
-                Logged Data: {self.num_of_logged_data}
-                Logging Queue Size: {self.logging_queue.qsize()}/{self.max_logging_queue_size}
+            data_pipeline_info_str = f"""\
+            Data Pipeline Information
+                Loading:
+                    Loaded Data: {self.latest_window_loaded}/{self.num_of_windows}
+                    Loading Queue Size: {self.loading_queue.qsize()}/{self.max_loading_queue_size}
+                Processing: 
+                    Processed Data: {self.num_processed_data_chunks}/{self.num_of_windows}
+                Logging:
+                    Logged Data: {self.num_of_logged_data}
+                    Logging Queue Size: {self.logging_queue.qsize()}/{self.max_logging_queue_size}
             System Information:
                 Memory Usage: {(self.total_memory_used/self.total_available_memory):.2f}
+                CPU Usage: 
+                    {cpu_usage_string}
             """
 
             # Info about data loading
-            stdscr.addstr(0,0, info_str)
+            stdscr.addstr(0,0, data_pipeline_info_str)
+            # stdscr.addstr(0,20,system_info_str)
 
             # Refresh the screen
             stdscr.refresh()

@@ -97,12 +97,8 @@ class ImageEntry(Entry):
 
         # For image entry, need to save to a new directory
         self.save_loc = self.dir / self.name
-        print(self.dir, self.dir.exists())
         os.mkdir(self.save_loc)
 
-        # # Create a tabular data stream for the data
-        # self.stream = TabularDataStream.empty(name=name)
-    
     def flush(self):
         """Flush out unsaved changes to memory.
 

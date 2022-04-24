@@ -119,7 +119,7 @@ class TabularDataStream(DataStream):
                 continue
 
             # else, there is data that we should append to the dataframe
-            df = df.append(output)
+            df = pd.concat([df,output])
 
         # If there is a cache request, save the data to the specific path
         if cache and not cache.exists():
@@ -220,8 +220,8 @@ class TabularDataStream(DataStream):
         )
 
         # Add to the timetrack (cannot be inplace)
-        self.timetrack = self.timetrack.append(append_timetrack)
+        self.timetrack = pd.concat([self.timetrack, append_timetrack])
         self.timetrack['ds_index'] = self.timetrack['ds_index'].astype(int)
 
         # Then add it to the data body (cannot be inplace)
-        self.data = self.data.append(append_data)
+        self.data = pd.concat([self.data, append_data])
