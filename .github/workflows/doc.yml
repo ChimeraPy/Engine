@@ -25,7 +25,7 @@ jobs:
     
     - name: Install ChimeraPy
       run: |
-       pip install -e .
+          python3 -m pip install .
 
     - name: Install Python Dependencies
       run: |

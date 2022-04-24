@@ -1,50 +1,45 @@
 name: Test
 
-on: workflow_dispatch # to test it
+# Look at this: https://github.com/iterative/dvc/pull/7213
+# Forum: https://discuss.dvc.org/t/cml-github-actions-google-drive-service-account/795/3?fbclid=IwAR21DBJ3bP2m3VwZ7EUp4U1ik0YQbNRgAIdemg14msCC7UtnaBao81oTTDE
+# https://github.com/iterative/cml#using-cml-with-dvc
+# https://github.com/iterative/dvc.org/blob/master/content/docs/user-guide/setup-google-drive-remote.md
+# https://www.ravirajag.dev/blog/mlops-github-actions
+
+on:
+  push:
 
 jobs:
-
-  # Goal is to test the package with various version of python
   test:
 
-    # We want to run on external PRs, but not on our own internal PRs as they'll be run
-    # by the push to the branch. Without this if check, checks are duplicated since
-    # internal PRs match both the push and pull_request events.
-    if:
-      github.event_name == 'push' || github.event.pull_request.head.repo.full_name !=
-      github.repository
-
-    # Run on latest ubuntu for various version of python
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        # python-version: [3.6, 3.7, 3.8, 3.9]
-        python-version: [3.9]
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+    runs-on: [ubuntu-latest]
 
     # The process
     steps:
-      # Create environment
+      - name: Set up Python 
+        uses: actions/setup-python@v2
+
       - uses: actions/checkout@v2
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      # Install pymmdt locally
       - name: Install dependencies locally
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get update
-            # sudo apt-get install -y python3-opencv
-            sudo apt-get install ffmpeg libsm6 libxext6 -y
-          fi
-          # All need to run the following
-          python3 -m pip install --upgrade pip
+          sudo apt-get update
+          sudo apt-get install ffmpeg libsm6 libxext6 -y
+
+      - name: Install ChimeraPy
+        run: |
           python3 -m pip install .
-      # Test the build
+
+      - name: Setup DVC
+        uses: iterative/setup-dvc@v1
+
+      - name: Download Test data
+        run: |
+          echo ${{ secrets.SERVICE_ACCOUNT_JSON }} > service_account_secret.json
+          dvc remote modify myremote --local gdrive_use_service_account true
+          dvc remote modify myremote --local gdrive_service_account_json_file_path service_account_secret.json 
+          dvc pull --run-cache -v 
+
       - name: Test with unittest
         run: |
           python -m unittest discover
