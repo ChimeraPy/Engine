@@ -59,8 +59,7 @@ class TobiiTestCase(unittest.TestCase):
         )
 
         # Run the runner
-        self.runner.run(verbose=True)
-        # self.runner.run()
+        self.runner.run()
 
     def test_load_tobii_session(self):
 
@@ -104,5 +103,4 @@ class TobiiTestCase(unittest.TestCase):
         )
 
         # Run the group runner
-        # self.runner.run()
-        self.runner.run(verbose=True)
+        self.runner.run()

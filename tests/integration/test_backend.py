@@ -80,8 +80,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         )
         
         # Run the runner with everything set
-        self.runner.run(verbose=True)
-        # self.runner.run()
+        self.runner.run()
         
     def test_single_memory_stress_runner_run(self):
         
@@ -97,10 +96,9 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         )
         
         # Run the runner with everything set
-        self.runner.run(verbose=True)
-        # self.runner.run()
+        self.runner.run()
     
-    def test_single_handling_keyboard_interrupt_with_tui(self):
+    def test_single_handling_keyboard_interrupt(self):
 
         def create_keyboard_interrupt():
             time.sleep(1)
@@ -122,7 +120,7 @@ class SingleRunnerBackEndTestCase(unittest.TestCase):
         signal_thread.start()
 
         # Run!
-        self.runner.run(verbose=True)
+        self.runner.run()
 
         # Then stoping the thread
         signal_thread.join()
@@ -188,8 +186,7 @@ class GroupRunnerBackEndTestCase(unittest.TestCase):
     def test_group_runner_run(self):
         
         # Run the runner with everything set
-        self.runner.run(verbose=True)
-        # self.runner.run()
+        self.runner.run()
         
 if __name__ == "__main__":
     unittest.main()

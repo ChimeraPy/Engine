@@ -67,7 +67,7 @@ class SingleRunnerTestCase(unittest.TestCase):
         )
 
         # Running should be working!
-        self.runner.run(verbose=True)
+        self.runner.run()
 
         return None
 
@@ -86,11 +86,11 @@ class SingleRunnerTestCase(unittest.TestCase):
         )
 
         # Running should be working!
-        self.runner.run(verbose=True)
+        self.runner.run()
 
         return None
 
-    def test_runner_handling_keyboard_interrupt_without_tui(self):
+    def test_runner_handling_keyboard_interrupt(self):
 
         def create_keyboard_interrupt():
             time.sleep(1)
@@ -120,34 +120,6 @@ class SingleRunnerTestCase(unittest.TestCase):
         # Then stoping the thread
         signal_thread.join()
     
-    def test_runner_handling_keyboard_interrupt_with_tui(self):
-
-        def create_keyboard_interrupt():
-            time.sleep(1)
-            signal.raise_signal(signal.SIGINT)
-        
-        # Load construct the first runner
-        self.runner = cp.SingleRunner(
-            name='P01',
-            logdir=OUTPUT_DIR,
-            data_streams=self.dss,
-            pipe=self.individual_pipeline,
-            time_window=pd.Timedelta(seconds=0.5),
-            start_time=pd.Timedelta(seconds=0),
-            end_time=pd.Timedelta(seconds=20),
-            run_solo=True,
-        )
-
-        # Create thread that later calls the keyboard interrupt signal
-        signal_thread = threading.Thread(target=create_keyboard_interrupt, args=())
-        signal_thread.start()
-
-        # Run!
-        self.runner.run(verbose=True)
-
-        # Then stoping the thread
-        signal_thread.join()
-
 class GroupRunnerTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -209,7 +181,7 @@ class GroupRunnerTestCase(unittest.TestCase):
         )
 
         # Run the director
-        group_runner.run(verbose=True)
+        group_runner.run()
 
         return None
 
@@ -227,7 +199,7 @@ class GroupRunnerTestCase(unittest.TestCase):
         )
 
         # Run the director
-        group_runner.run(verbose=True)
+        group_runner.run()
 
         return None
 
@@ -259,34 +231,6 @@ class GroupRunnerTestCase(unittest.TestCase):
 
         return None
     
-    def test_group_runner_run_with_keyboard_interrupt_with_tui(self):
-        
-        def create_keyboard_interrupt():
-            time.sleep(1)
-            signal.raise_signal(signal.SIGINT)
-        
-        # Pass all the runners to the Director
-        group_runner = cp.GroupRunner(
-            logdir=OUTPUT_DIR,
-            name="Nurse Teamwork Example #1",
-            pipe=self.overall_pipeline,
-            runners=self.runners, 
-            time_window=pd.Timedelta(seconds=0.5),
-            verbose=True
-        )
-        
-        # Create thread that later calls the keyboard interrupt signal
-        signal_thread = threading.Thread(target=create_keyboard_interrupt, args=())
-        signal_thread.start()
-
-        # Run the director
-        group_runner.run(verbose=True)
-        
-        # Then stoping the thread
-        signal_thread.join()
-
-        return None
-
 if __name__ == "__main__":
     # Run when debugging is not needed
     unittest.main()

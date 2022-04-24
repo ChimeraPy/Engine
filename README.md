@@ -1,5 +1,7 @@
 # ChimeraPy
 
+[Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy) | [PyPI](https://pypi.org/project/chimerapy/)
+
 ChimeraPy is a package that focus on temporal multimodal data analytics 
 and visualization. It is build on top of pandas and multiprocessing to
 provide a simple yet efficient approach to data processing. ChimeraDash
@@ -15,8 +17,6 @@ Roadmap:
  - Online Processing
  - Autoloading to ChimeraDash
  - CPU, memory, and speed optimizations
-
-[Here is the Documentation!](https://oele-isis-vanderbilt.github.io/ChimeraPy).
 
 ## Installation
 
