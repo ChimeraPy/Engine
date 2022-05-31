@@ -4,14 +4,14 @@ __package__ = 'chimerapy'
 # Built-in Imports
 from typing import Union, Dict, Any
 import uuid
-import multiprocessing as mp
 
 # Third-party Imports
 import pandas as pd
 import numpy as np
 
 # Internal Imports
-from chimerapy.core.tools import get_memory_data_size, PortableQueue
+from chimerapy.core.tools import PointCloudTransmissionFormat, get_memory_data_size, PortableQueue,\
+        PointCloudTransmissionFormat
 
 class Session:
     """Interface to the ``Logger``. 
@@ -62,6 +62,10 @@ class Session:
 
         if type(self.runner) != type(None):
             self.runner.logging_queue_memory_chunks[data_chunk['uuid']] = get_memory_data_size(data_chunk)
+
+            # If debugging!
+            if self.runner.verbose:
+                print(f"SESSION - LOGGER Memory Update {data_chunk['uuid']}: {get_memory_data_size(data_chunk)}")
     
     def add_image(
             self, 
@@ -97,7 +101,7 @@ class Session:
             'data': df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
 
         # Accounting for memory usage
         self.record_memory_usage(data_chunk)
@@ -124,7 +128,7 @@ class Session:
             return None
 
         # Renaming and extracting only the content we want
-        # images_df = df[[data_column, time_column]].copy()
+        # images_df = df[[data_column, time_column]]
         images_df = df[[data_column, time_column]]
         images_df = images_df.rename(columns={data_column: 'frames', time_column: '_time_'})
         
@@ -136,7 +140,7 @@ class Session:
             'data': images_df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
         
         # Accounting for memory usage
         self.record_memory_usage(data_chunk)
@@ -163,8 +167,15 @@ class Session:
             return None
 
         # Renaming and extracting only the video content
-        video_df = df[[data_column, time_column]].copy()
+        video_df = df[[data_column, time_column]]
         video_df = video_df.rename(columns={data_column: 'frames', time_column: '_time_'})
+
+        # Check that the data is valid (e.g. pd.NA)
+        video_df = video_df.dropna()
+
+        # If after cleaning the df it is empty, just skip it!
+        if len(video_df) == 0:
+            return None
 
         # Put data in the logging queue
         data_chunk = {
@@ -174,7 +185,7 @@ class Session:
             'data': video_df,
             'dtype': 'video'
         }
-        self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
         
         # Accounting for memory usage
         self.record_memory_usage(data_chunk)
@@ -215,7 +226,51 @@ class Session:
             'data': df.rename(columns={time_column: '_time_'}),
             'dtype': 'tabular'
         }
-        self.logging_queue.put(data_chunk.copy())
+        self.logging_queue.put(data_chunk)
 
+        # Accounting for memory usage
+        self.record_memory_usage(data_chunk)
+
+    def add_point_clouds(
+            self,
+            name:str,
+            df:pd.DataFrame,
+            time_column:str='_time_',
+            data_column:str='pcd'
+        ) -> None:
+        """Log point clouds stored in a pd.DataFrame.
+
+        Args:
+            name (str): Name of the point cloud's entry.
+            df (pd.DataFrame): The data frame containing the point clouds.
+            time_column (str): The name of the time column.
+            data_column (str): The name of the data column containing 
+            the point clouds.
+
+        """
+
+        # If the data is empty, skip it
+        if len(df) == 0:
+            return None
+
+        # Renaming and extracting only the content we want
+        pcd_df = df[[data_column, time_column]]
+        pcd_df = pcd_df.rename(columns={data_column: 'unsafe_pcd', time_column: '_time_'})
+
+        # Making PointClouds pickeable https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
+        # https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
+        pcd_df['pcd'] = pcd_df.apply(lambda x: PointCloudTransmissionFormat(x.unsafe_pcd), axis=1)
+        pcd_df = pcd_df.drop(['unsafe_pcd'], axis=1)
+        
+        # Put data in the logging queue
+        data_chunk = {
+            'uuid': uuid.uuid4(),
+            'session_name': self.name,
+            'name': name,
+            'data': pcd_df,
+            'dtype': 'point_cloud'
+        }
+        self.logging_queue.put(data_chunk)
+        
         # Accounting for memory usage
         self.record_memory_usage(data_chunk)

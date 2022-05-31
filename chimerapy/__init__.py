@@ -1,11 +1,12 @@
 # Adding the path of ChimeraPy to PATH
 import os
 import sys
+import logging
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Level 1 imports
-from .runner import SingleRunner, GroupRunner
+from .runner import Runner
 from .loader import Loader
 from .logger import Logger
 from .sorter import Sorter
@@ -23,10 +24,10 @@ __all__ = [
     'TabularDataStream', 
     'VideoDataStream', 
     'Pipeline', 
-    'DataSource',
+    # 'DataSource',
     'Process',
-    'SingleRunner',
-    'GroupRunner',
-    'Sensor',
+    # 'SingleRunner',
+    # 'GroupRunner',
+    # 'Sensor',
     'tools',
 ]

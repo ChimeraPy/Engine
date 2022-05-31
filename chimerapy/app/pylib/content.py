@@ -50,10 +50,6 @@ class ContentImage(QtQuick.QQuickPaintedItem):
         # Then apply the expansion
         image = self._image.scaled(int(ratio * img_w), int(ratio * img_h))
 
-        # Then, mirror the image (for some reason, the painter automatically
-        # mirrors to image so we have to undo this.)
-        # image = image.mirrored(horizontal=True, vertical=False)
-
         # Finally, update the image by the painter
         painter.drawImage(QtCore.QPoint(), image)
 

@@ -10,8 +10,13 @@ import pandas as pd
 class Process():
     """Class that compartmentalizes computational steps for a datastream."""
 
-    def __init__(self):
-        ...
+    inputs = []
+
+    def __init__(self, name:str, inputs:List):
+
+        # Storing inputs
+        self.name = name
+        self.inputs = inputs
 
     def __repr__(self):
         """Representation of ``Process``.

@@ -12,9 +12,9 @@ import pandas as pd
 from .core.tools import get_memory_data_size, PortableQueue
 from .core.data_stream import DataStream
 from .core.collector import Collector
-from .base_process import BaseProcess
+from .base_actor import BaseActor
 
-class Loader(BaseProcess):
+class Loader(BaseActor):
     """Subprocess tasked with loading data from memory.
 
     This process plays the vital role of loading the data from memory.
@@ -76,7 +76,7 @@ class Loader(BaseProcess):
         self.time_window = time_window
         self.start_time = start_time
         self.end_time = end_time
-    
+        
         # Adding specific function class from the message
         self.subclass_message_to_functions.update({
             'LOADING_WINDOW': self.set_loading_window

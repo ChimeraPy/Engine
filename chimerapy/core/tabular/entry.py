@@ -2,19 +2,16 @@
 __package__ = 'tabular'
 
 # Built-in Imports
-from typing import Union, Dict, Optional, Any
 import pathlib
 import os
 import gc
 
 # Third-party Imports
 import pandas as pd
-import numpy as np
 import cv2
 
 # Internal Imports
 from chimerapy.core.entry import Entry
-from chimerapy.core.tabular.data_stream import TabularDataStream
 
 class TabularEntry(Entry):
 

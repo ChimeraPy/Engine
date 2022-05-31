@@ -10,6 +10,7 @@ import queue
 import threading
 import time
 import multiprocessing as mp
+import cProfile
 
 # Third-party Imports
 import pandas as pd
@@ -66,13 +67,11 @@ class Manager(QObject):
             meta_check_step (int): The period for checking meta changes.
             max_message_queue_size (int): Max messaging queue size.
             max_loading_queue_size (int): Max loading queue size.
-            memory_limit (float): Percentage of available RAM memory
-            that will be permitted to be used by the library. The memory
-            limit restricts the use of additional memory.
-
-            loader_memory_ratio (float): Memory factor to account for 
-            possible lag in memory consumption tracking.
-
+            memory_limit (float): Percentage of available RAM memory \
+                that will be permitted to be used by the library. The memory \
+                limit restricts the use of additional memory.
+            loader_memory_ratio (float): Memory factor to account for \
+                possible lag in memory consumption tracking.
             verbose (bool): Debugging printout.
 
         """
@@ -884,11 +883,16 @@ class Manager(QObject):
                 
         # Get the necessary information to create the Collector 
         self.windows = get_windows(self.start_time, self.end_time, self.time_window)
-        self.update_content_times = collections.deque(maxlen=100)
      
         # Starting the Manager's messaging thread and the content update thread
         self.check_loader_messages_thread = self.check_loader_messages()
         self.check_sorter_messages_thread = self.check_sorter_messages()
+
+        # Create update content threads based on the number fo entries
+        # num_of_threads = min(len(self.entries), 5)
+        # self.update_content_threads = []
+        # for i in range(num_of_threads):
+        #     self.update_content_threads.append(self.update_content())
         self.update_content_thread = self.update_content()
 
         # Create container for all queues
@@ -901,6 +905,8 @@ class Manager(QObject):
         # Start the threads
         self.check_loader_messages_thread.start()
         self.check_sorter_messages_thread.start()
+        # for thread in self.update_content_threads:
+        #     thread.start()
         self.update_content_thread.start()
 
         # Start the processes
@@ -909,7 +915,7 @@ class Manager(QObject):
 
     @threaded
     def update_content(self):
-        """Main thread for updating the content on the dashboard.
+        """Thread for updating the content on the dashboard.
 
         This thread grabs the output of the ``Sorter`` and uses it to 
         update the images in the dashboard. Here is the data flow.
@@ -917,11 +923,17 @@ class Manager(QObject):
         ``Loader`` --> ``Sorter`` --> ``update_content`` Thread
 
         """
+        # profiler = cProfile.Profile()
+        # profiler.enable()
+        
+        # Create variables for the thread
+        update_content_times = collections.deque(maxlen=100)
+
         # Keep repeating until exiting the app
         while not self.thread_exit.is_set():
 
-            # Only processing if we have the global timetrack
-            if type(self.timetrack) == type(None):
+            # Only process if data is loaded
+            if not self._data_is_loaded:
                 time.sleep(1)
                 continue
 
@@ -963,13 +975,13 @@ class Manager(QObject):
             
             # Compute the average time it takes to update content, and its ratio 
             # to the expect time, clipping at 1
-            average_update_delta = sum(self.update_content_times)/max(1, len(self.update_content_times))
+            average_update_delta = sum(update_content_times)/max(1, len(update_content_times))
 
             # Calculate the delta between the current time and the entry's time
             time_delta = (data_chunk['entry_time'] - self.current_time).value / 1e9
-            time_delta = max(0,time_delta-average_update_delta) # Accounting for updating
+            time_delta = max(0,time_delta-average_update_delta - 0.021) # Accounting for updating
             # print(time_delta)
-            time.sleep(time_delta)
+            # time.sleep(time_delta)
 
             # Updating sliding bar
             self.current_time = data_chunk['entry_time']
@@ -988,7 +1000,10 @@ class Manager(QObject):
             delta = tac - tic
 
             # Finally update the sliding bar
-            self.update_content_times.append(delta)
+            update_content_times.append(delta)
+
+        # profiler.disable()
+        # profiler.print()
     
     def exit(self):
         """Exiting the application.
@@ -1012,8 +1027,11 @@ class Manager(QObject):
             self.check_loader_messages_thread.join()
             self.check_sorter_messages_thread.join()
             # print("Checking message thread join")
-            
+           
             self.update_content_thread.join()
+            # for thread in self.update_content_threads:
+            #     thread.join()
+
             # print("Content update thread join")
             # self.current_time_update.stop()
             # print("Content timer stopped")

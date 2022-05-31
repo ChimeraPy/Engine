@@ -7,6 +7,7 @@ import threading
 import collections
 import queue
 import pickle
+import open3d as o3d
 
 # Third-Party Imports
 from PIL import Image
@@ -107,6 +108,20 @@ class PortableQueue(Queue):
         """ Remove all elements from the Queue. """
         while not self.empty():
             self.get()
+
+class PointCloudTransmissionFormat:
+
+    def __init__(self, pointcloud: o3d.geometry.PointCloud):
+        self.points = np.array(pointcloud.points)
+        self.colors = np.array(pointcloud.colors)
+        self.normals = np.array(pointcloud.normals)
+
+    def create_pointcloud(self) -> o3d.geometry.PointCloud:
+        pointcloud = o3d.geometry.PointCloud()
+        pointcloud.points = o3d.utility.Vector3dVector(self.points)
+        pointcloud.colors = o3d.utility.Vector3dVector(self.colors)
+        pointcloud.normals = o3d.utility.Vector3dVector(self.normals)
+        return pointcloud
 
 def threaded(fn):
     """Decorator for class methods to be spawn new thread.

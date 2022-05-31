@@ -4,21 +4,23 @@ import threading
 import queue
 import time
 
+# Third-party Imports
+
 # ChimeraPy Imports
 from chimerapy.core.tools import threaded
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
-class BaseProcess(mp.Process):
+class BaseActor(mp.Process):
     """Class that contains essentials and comms. for subprocesses.
 
-    The purpose of ``BaseProcess`` is to be inherented by more concrete
+    The purpose of ``BaseActor`` is to be inherented by more concrete
     classes of subprocesses. This class provides the base for the 
     communication between the main process and the subprocesses. There
     are two message queues for sending and receiving messages. A thread 
     is generated to continuously check for new messages within this 
-    ``BaseProcess``.
+    ``BaseActor``.
 
     """
 

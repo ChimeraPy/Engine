@@ -80,7 +80,7 @@ class VideoEntry(Entry):
                 grey=is_grey
             )
 
-        # Else, let's save the changes
+        # Now, just save the changes
         self.stream.append(self.unsaved_changes)
         
         # Update the counter and clear out the unsaved items

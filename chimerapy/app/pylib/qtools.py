@@ -30,8 +30,6 @@ def toQImage(im:np.ndarray) -> QtGui.QImage:
         elif len(im.shape) == 3:
             if im.shape[2] == 3:
                 w, h, _ = im.shape
-                # rgb_image = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-                # flip_image = cv2.flip(rgb_image, 1)
                 qim = QtGui.QImage(im.data, h, w, QtGui.QImage.Format_RGB888)
                 return qim.copy()
 

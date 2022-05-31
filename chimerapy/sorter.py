@@ -10,12 +10,12 @@ import pandas as pd
 
 # ChimeraPy Library
 from .core.tools import to_numpy, get_memory_data_size, PortableQueue
-from .base_process import BaseProcess
+from .base_actor import BaseActor
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
-class Sorter(BaseProcess):
+class Sorter(BaseActor):
     """Subprocess tasked with sorting the content temporally.
 
     The ``Sorter`` obtains data loaded by the ``Loader`` and sorts all
@@ -234,7 +234,7 @@ class Sorter(BaseProcess):
             # If paused, just continue sleeping
             if self.thread_pause.is_set():
                 if self.verbose:
-                    print("SORTER WAITING")
+                    print("Sorter: waiting")
                 time.sleep(0.5)
                 continue
 
@@ -249,7 +249,7 @@ class Sorter(BaseProcess):
 
             # Printing information about pulling
             if self.verbose:
-                print("[Sorter]: Pulled data from loading_queue.")
+                print("Sorter: Pulled data from loading_queue.")
             
             # If 'END' message, continue
             if isinstance(data_chunk, str):

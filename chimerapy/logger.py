@@ -17,12 +17,13 @@ import signal
 from .core.tools import PortableQueue, threaded
 from .core.video import VideoEntry
 from .core.tabular import TabularEntry, ImageEntry
-from .base_process import BaseProcess
+from .core.three_d import PointCloudEntry
+from .base_actor import BaseActor
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
-class Logger(BaseProcess):
+class Logger(BaseActor):
     """Subprocess tasked with logging in an annotated and organized manner.
 
     The ``Logger`` focuses on logging data chunks, while keeping record
@@ -80,7 +81,8 @@ class Logger(BaseProcess):
         self.dtype_to_class = {
             'tabular': TabularEntry,
             'image': ImageEntry,
-            'video': VideoEntry
+            'video': VideoEntry,
+            'point_cloud': PointCloudEntry
         }
         
         # Create a lock to prevent multiple threads from executing 
@@ -126,7 +128,7 @@ class Logger(BaseProcess):
         try:
             self.message_from_queue.put(logging_status_message.copy(), timeout=0.5)
         except queue.Full:
-            print("Logging_status_message failed to send!")
+            print("Logger: Logging_status_message failed to send!")
 
     def message_logger_finished(self):
         """message_from function to report logging completion."""
@@ -144,7 +146,7 @@ class Logger(BaseProcess):
         try:
             self.message_from_queue.put(logging_status_message.copy(), timeout=0.5)
         except queue.Full:
-            print("Logging_status_message failed to send!")
+            print("Logger: Logging_status_message failed to send!")
     
     def _save_meta_data(self):
         """Save the meta to a JSON file."""
@@ -245,6 +247,10 @@ class Logger(BaseProcess):
             self.meta_data['records'][data['session_name']][data['name']]['end_time'] = end_time_stamp 
             self._save_meta_data()
 
+        # Debugging
+        if self.verbose:
+            print(f"Logger: saving {data['session_name']} - {data['name']}")
+
         # Now that we have account for both scenarios, just log data!
         self.records[data['session_name']][data['name']].append(data)
         self.records[data['session_name']][data['name']].flush()
@@ -279,6 +285,10 @@ class Logger(BaseProcess):
                 # Extract the session name and entry name
                 session_name = data_chunk['session_name']
                 entry_name = data_chunk['name']
+                
+                # Debugging
+                if self.verbose:
+                    print(f"Loader: ``get`` data chunk with {session_name} - {entry_name}")
 
                 # Determine if the data chunk is for a new entry, if so,
                 # then create a new thread and pass that data!

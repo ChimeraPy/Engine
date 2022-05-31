@@ -116,7 +116,10 @@ class GroupModel(QAbstractListModel):
         entry_type = self._entries['dtype'].iloc[specific_entry_idx]
 
         # Converting the content to a QImage
-        qcontent = toQImage(content)
+        if entry_type in ['video', 'tabular', 'image']:
+            qcontent = toQImage(content)
+        elif entry_type in ['point_cloud']:
+            qcontent = None
 
         # Then update that one
         # print(f"Updating: {specific_entry_idx} - {user} - {entry_name} - with {qcontent}")

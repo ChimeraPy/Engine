@@ -5,7 +5,6 @@ __package__ = 'video'
 from typing import Union, Tuple, Optional
 import multiprocessing as mp
 import pathlib
-import gc
 
 # Third-party Imports
 # import vidgear.gears
@@ -55,7 +54,6 @@ class VideoDataStream(DataStream):
         self.size = size
         self.color_mode = color_mode
         self.has_startup = False
-        self.compression_queue = mp.Queue(maxsize=5)
         
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
@@ -137,7 +135,6 @@ class VideoDataStream(DataStream):
             if type(self.fps) == type(None):
                 self.fps = self.video.get(cv2.CAP_PROP_FPS)
 
-
             # Now that we have video len size, we can update the video
             # data stream's timetrack
             self.update_timetrack()
@@ -168,7 +165,7 @@ class VideoDataStream(DataStream):
         self.fps = fps
 
     def update_timetrack(self):
-            
+
         # Creating new timeline
         self.timeline = pd.TimedeltaIndex(
             pd.timedelta_range(
@@ -278,7 +275,6 @@ class VideoDataStream(DataStream):
 
         # Get all the samples
         times = data_idx['time'].tolist()
-        # stacked_frames = self.video.get_batch(list_of_frames).asnumpy() # decord does not play nice with PyQt5
         frames = []
         for i in range(start_data_index, end_data_index+1):
             res, frame = self.video.read()
@@ -314,7 +310,6 @@ class VideoDataStream(DataStream):
         # it means that some jump or cut has happend.
         # We need to clear our the reading queue and set the video.
         if self.data_index != new_data_index:
-            # print(f"Video miss - reassigning index: {self.data_index}-{new_data_index}")
             if self.mode == "reading":
 
                 # Set the new location for the video
@@ -333,7 +328,8 @@ class VideoDataStream(DataStream):
         assert isinstance(time_column_data.iloc[0], pd.Timedelta), "time column should be ``pd.Timedelta`` objects."
 
         # Check that the data in the frames is indeed np.arrays
-        assert isinstance(append_data[data_column].iloc[0], np.ndarray), "appending data needs to be store in column ``frames`` as a np.array."
+        assert isinstance(append_data[data_column].iloc[0], np.ndarray), f"appending data needs to be store in column ``frames`` as a np.array. Instead it was {type(append_data[data_column].iloc[0])}."
+
 
         # This operation can only be done in the writing mode
         assert self.mode == "writing"
