@@ -7,7 +7,8 @@ import threading
 import collections
 import queue
 import pickle
-import open3d as o3d
+# import open3d as o3d
+import logging
 
 # Third-Party Imports
 from PIL import Image
@@ -17,6 +18,9 @@ import psutil
 
 # Helper Classes
 Window = collections.namedtuple("Window", ['start', 'end'])
+
+# Logging
+logger = logging.getLogger(__name__)
 
 class SharedCounter(object):
     """ A synchronized shared counter.
@@ -67,6 +71,7 @@ class PortableQueue(Queue):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs, ctx=mp.get_context())
         self.size = SharedCounter(0)
+        self.alive = mp.Value('i', True)
     
     def __getstate__(self):
         return super().__getstate__() + (self.size,)
@@ -76,6 +81,9 @@ class PortableQueue(Queue):
         self.size = state[-1]
 
     def put(self, *args, **kwargs):
+        # raise RuntimeError(f"{self.__class__.__name__}")
+        if not self.alive.value:
+            return None
 
         # Have to account for timeout to make this implementation
         # faithful to the complete mp.Queue implementation.
@@ -106,22 +114,34 @@ class PortableQueue(Queue):
 
     def clear(self):
         """ Remove all elements from the Queue. """
+        logger.debug(f'{self.__class__.__name__}:clear, size={self.qsize()}')
         while not self.empty():
-            self.get()
+            try:
+                self.get(timeout=0.1)
+            except queue.Empty:
+                logger.debug(f'{self.__class__.__name__}:clear, empty!')
+                return
+            except EOFError:
+                print("Queue EOFError --- data corruption")
+                return 
 
-class PointCloudTransmissionFormat:
+    def destroy(self):
+        self.clear()
+        self.alive.value = False
 
-    def __init__(self, pointcloud: o3d.geometry.PointCloud):
-        self.points = np.array(pointcloud.points)
-        self.colors = np.array(pointcloud.colors)
-        self.normals = np.array(pointcloud.normals)
+# class PointCloudTransmissionFormat:
 
-    def create_pointcloud(self) -> o3d.geometry.PointCloud:
-        pointcloud = o3d.geometry.PointCloud()
-        pointcloud.points = o3d.utility.Vector3dVector(self.points)
-        pointcloud.colors = o3d.utility.Vector3dVector(self.colors)
-        pointcloud.normals = o3d.utility.Vector3dVector(self.normals)
-        return pointcloud
+#     def __init__(self, pointcloud: o3d.geometry.PointCloud):
+#         self.points = np.array(pointcloud.points)
+#         self.colors = np.array(pointcloud.colors)
+#         self.normals = np.array(pointcloud.normals)
+
+#     def create_pointcloud(self) -> o3d.geometry.PointCloud:
+#         pointcloud = o3d.geometry.PointCloud()
+#         pointcloud.points = o3d.utility.Vector3dVector(self.points)
+#         pointcloud.colors = o3d.utility.Vector3dVector(self.colors)
+#         pointcloud.normals = o3d.utility.Vector3dVector(self.normals)
+#         return pointcloud
 
 def threaded(fn):
     """Decorator for class methods to be spawn new thread.
@@ -146,13 +166,14 @@ def clear_queue(input_queue: Queue):
     """
 
     while input_queue.qsize() != 0:
-        # print(input_queue.qsize())
+        logger.debug(f'tools.clear_queue, size={input_queue.qsize()}')
         # Make sure to account for possible atomic modification of the
         # queue
         try:
-            data = input_queue.get(timeout=0.1)
+            data = input_queue.get(timeout=0.1, block=False)
             del data
         except queue.Empty:
+            logger.debug(f'tools.clear_queue, empty!')
             return
         except EOFError:
             print("Queue EOFError --- data corruption")
@@ -226,27 +247,6 @@ def to_numpy(im:Image) -> np.ndarray:
         raise RuntimeError("encoder error %d in tobytes" % s)
 
     return data
-
-def get_memory_data_size(data:Any) -> int:
-    """Calculate the memory usage of a Python object.
-
-    This was a solution to a memory leak issue. Here is the SO link:
-    https://stackoverflow.com/q/71447286/13231446
-
-    The main issue is that multiprocessing.Queue pickles an input and 
-    unpickles when using ``get``. Numpy arrays do not handle this well,
-    for their memory meta data is corrupted when this happends. This 
-    caused memory to not be accurately computed. The solution was to 
-    repickle the data and measure the len of the pickle string. This is
-    a temporary solution, as I would like NumPy to solve this issue.
-
-    Args:
-        data (Any): The python object in question.
-
-    Returns:
-        int: Size of the Python object in bytes.
-    """
-    return len(pickle.dumps(data))
 
 def get_threads_cpu_percent(p:psutil.Process, interval:float=0.1) -> List:
     # Got this from:

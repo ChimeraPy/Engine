@@ -11,10 +11,17 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from .data_stream import DataStream
-from .process import Process
-from .collector import Collector
+# Not exposed
+# from .loader import Loader
+# from .logger import Logger
+# from .entry import Entry
+# from .collector import Collector
+# from .session import Session
+
+# Exposed
 from .pipeline import Pipeline
-from .session import Session
+from .process import Process
+from .data_stream import DataStream
 from .data_source import DataSource, Sensor, Api
-from . import tools
+from .tabular import TabularDataStream
+from .video import VideoDataStream

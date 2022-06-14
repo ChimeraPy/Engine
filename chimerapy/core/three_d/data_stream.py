@@ -12,7 +12,7 @@ import open3d as o3d
 
 # Internal Imports
 from chimerapy.core.data_stream import DataStream
-from chimerapy.core.tools import PointCloudTransmissionFormat
+from chimerapy.utils.tools import PointCloudTransmissionFormat
 
 class PointCloudDataStream(DataStream):
 

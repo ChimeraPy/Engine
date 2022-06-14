@@ -14,16 +14,16 @@ import signal
 # Third-party imports
 
 # ChimeraPy Library
-from .core.tools import PortableQueue, threaded
-from .core.video import VideoEntry
-from .core.tabular import TabularEntry, ImageEntry
-from .core.three_d import PointCloudEntry
-from .base_actor import BaseActor
+from chimerapy.utils.tools import PortableQueue, threaded
+from chimerapy.utils.memory_manager import MemoryManager
+from chimerapy.core.video import VideoEntry
+from chimerapy.core.tabular import TabularEntry, ImageEntry
+from chimerapy.core.process import Process
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
-class Logger(BaseActor):
+class Writer(Process):
     """Subprocess tasked with logging in an annotated and organized manner.
 
     The ``Logger`` focuses on logging data chunks, while keeping record
@@ -37,10 +37,7 @@ class Logger(BaseActor):
             self,
             logdir:pathlib.Path,
             experiment_name:str,
-            logging_queue:PortableQueue,
-            message_to_queue:PortableQueue,
-            message_from_queue:PortableQueue,
-            verbose:bool=False
+            memory_manager:MemoryManager
         ):
         """Construct a ``Logger`` to log data in a structured manner.
 
@@ -51,38 +48,28 @@ class Logger(BaseActor):
             experiment_name (str): The name of the experiment, which \
                 will be used to create a unique folder for the ``Logger``.
 
-            logging_queue (PortableQueue): The logging queue where the \
-                ``Logger`` will ``get`` to process and save into memory.
-
-            message_to_queue (PortableQueue): The messaging queue used to \
-                send messages to the ``Logger``.
-
-            message_from_queue (PortableQueue): The messaging queue used to \
-                receive messages from the ``Logger``.
-
         """
         super().__init__(
-            message_to_queue=message_to_queue,
-            message_from_queue=message_from_queue
+            name=self.__class__.__name__,
+            inputs=None,
+            run_type='reactive'
         )
         
         # Save the input parameters
         self.logdir = logdir
         self.experiment_name = experiment_name
         self.experiment_dir = self.logdir / self.experiment_name
-        self.logging_queue = logging_queue
-        self.verbose = verbose
+        self.memory_manager = memory_manager
 
         # Keeping records of all logged data
         self.records = collections.defaultdict(dict)
         self.threads = collections.defaultdict(dict)
-        self.queues = collections.defaultdict(dict)
+        self.thread_queues = collections.defaultdict(dict)
         self.meta_data = {}
         self.dtype_to_class = {
             'tabular': TabularEntry,
             'image': ImageEntry,
-            'video': VideoEntry,
-            'point_cloud': PointCloudEntry
+            'video': VideoEntry
         }
         
         # Create a lock to prevent multiple threads from executing 
@@ -128,7 +115,7 @@ class Logger(BaseActor):
         try:
             self.message_from_queue.put(logging_status_message.copy(), timeout=0.5)
         except queue.Full:
-            print("Logger: Logging_status_message failed to send!")
+            print("Logging_status_message failed to send!")
 
     def message_logger_finished(self):
         """message_from function to report logging completion."""
@@ -146,7 +133,7 @@ class Logger(BaseActor):
         try:
             self.message_from_queue.put(logging_status_message.copy(), timeout=0.5)
         except queue.Full:
-            print("Logger: Logging_status_message failed to send!")
+            print("Logging_status_message failed to send!")
     
     def _save_meta_data(self):
         """Save the meta to a JSON file."""
@@ -216,7 +203,7 @@ class Logger(BaseActor):
                 time.sleep(0.1)
 
             # Breaking condition
-            if self.thread_exit.is_set() and queue.qsize() == 0:
+            if self.to_shutdown.value and queue.qsize() == 0:
                 break
    
     def flush(self, data:Dict[str, Any]):
@@ -247,25 +234,11 @@ class Logger(BaseActor):
             self.meta_data['records'][data['session_name']][data['name']]['end_time'] = end_time_stamp 
             self._save_meta_data()
 
-        # Debugging
-        if self.verbose:
-            print(f"Logger: saving {data['session_name']} - {data['name']}")
-
         # Now that we have account for both scenarios, just log data!
         self.records[data['session_name']][data['name']].append(data)
         self.records[data['session_name']][data['name']].flush()
 
-    def run(self):
-        """Run the ``Logger``.
-
-        This is the main routine of the ``Logger`` which frequently 
-        checks for new logged data and saves it to an ``Entry``. More of
-        the details for saving the logged data can be found in the 
-        ``flush`` method.
-
-        """
-        # Perform process setup
-        self.setup()
+    def setup(self) -> None:
         
         # Ignore SIGINT signal
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -273,74 +246,47 @@ class Logger(BaseActor):
         # Keeping track of processed data
         self.num_of_logged_data = 0
 
-        # Continuously check if there are data to log and save
-        while True: 
+    def step(self, data_chunk:Dict[str, Any]) -> None:
 
-            # First check if there is an item in the queue
-            if self.logging_queue.qsize() != 0:
+        # Extract the session name and entry name
+        session_name = data_chunk['session_name']
+        entry_name = data_chunk['name']
 
-                # Get the data frome the queue and calculate the memory usage
-                data_chunk = self.logging_queue.get(block=True)
+        # Determine if the data chunk is for a new entry, if so,
+        # then create a new thread and pass that data!
+        if session_name not in self.records.keys() or entry_name not in self.records[session_name].keys():
+           
+            # Create the entry for the data_chunk
+            self.create_entry(data_chunk)
 
-                # Extract the session name and entry name
-                session_name = data_chunk['session_name']
-                entry_name = data_chunk['name']
-                
-                # Debugging
-                if self.verbose:
-                    print(f"Loader: ``get`` data chunk with {session_name} - {entry_name}")
+            # Setup the thread with its queue
+            new_entry_queue = queue.Queue() 
+            new_entry_thread = self.entry_thread(queue=new_entry_queue)
 
-                # Determine if the data chunk is for a new entry, if so,
-                # then create a new thread and pass that data!
-                if session_name not in self.records.keys() or entry_name not in self.records[session_name].keys():
-                   
-                    # Create the entry for the data_chunk
-                    self.create_entry(data_chunk)
+            # Start the thread
+            new_entry_thread.start()
 
-                    # Setup the thread with its queue
-                    new_entry_queue = queue.Queue() 
-                    new_entry_thread = self.entry_thread(queue=new_entry_queue)
+            # Store them
+            self.thread_queues[session_name][entry_name] = new_entry_queue
+            self.threads[session_name][entry_name] = new_entry_thread
 
-                    # Start the thread
-                    new_entry_thread.start()
+        # Now that we have ensure that a thread exists, feed the
+        # data chunk to that thread
+        self.thread_queues[session_name][entry_name].put(data_chunk)
 
-                    # Store them
-                    self.queues[session_name][entry_name] = new_entry_queue
-                    self.threads[session_name][entry_name] = new_entry_thread
-
-                # Now that we have ensure that a thread exists, feed the
-                # data chunk to that thread
-                self.queues[session_name][entry_name].put(data_chunk)
-
-            else:
-                time.sleep(0.1)
-
-            # Break Condition
-            if self.thread_exit.is_set() and self.logging_queue.qsize() == 0:
-                break
+    def teardown(self):
+        super().teardown()
 
         # Wait until all the logging threads have stopped!
         for session_name in self.threads.keys():
             for entry_name in self.threads[session_name].keys():
                 thread = self.threads[session_name][entry_name]
                 thread.join()
-
-        # Sending message that the Logger finished!
-        self.message_logger_finished()
-
-        # Save all the entries and close!
-        self.shutdown()
-        self.close()
-
-    def shutdown(self):
-        """Shutdown the ``Logger```.
-
-        This routine is important to properly close the ``Entry`` 
-        instances created by the ``Logger``. The ``Entry`` is required
-        to ``close`` to fully save the file.
-
-        """
+        
         # Then close all the entries
         for session in self.records.values():
             for entry in session.values():
                 entry.close()
+
+        # Sending message that the Logger finished!
+        self.message_logger_finished()

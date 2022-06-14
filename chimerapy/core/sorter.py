@@ -9,13 +9,13 @@ from PIL import Image
 import pandas as pd
 
 # ChimeraPy Library
-from .core.tools import to_numpy, get_memory_data_size, PortableQueue
-from .base_actor import BaseActor
+from chimerapy.utils.tools import to_numpy, get_memory_data_size, PortableQueue
+from chimerapy.core.process import Process
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
 
-class Sorter(BaseActor):
+class Sorter(Process):
     """Subprocess tasked with sorting the content temporally.
 
     The ``Sorter`` obtains data loaded by the ``Loader`` and sorts all

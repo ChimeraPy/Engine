@@ -11,7 +11,7 @@ import pandas as pd
 
 # Internal Imports
 from chimerapy.core.data_stream import DataStream
-from chimerapy.core.tools import get_windows
+from chimerapy.utils.tools import get_windows
 
 class Collector:
     """Data ``Collector`` loads, syncs, and fuzes data streams.
@@ -37,7 +37,6 @@ class Collector:
             start_time:pd.Timedelta=None,
             end_time:pd.Timedelta=None,
             empty:bool=False,
-            verbose:bool=False
         ) -> None:
         """Construct the ``Collector``.
 
@@ -55,7 +54,6 @@ class Collector:
         # Constructing the data stream dictionary
         self.data_streams_groups = data_streams_groups
         self.time_window = time_window
-        self.verbose = verbose
 
         # Starting up the datastreams
         for dss in self.data_streams_groups.values():
@@ -123,8 +121,6 @@ class Collector:
         timelines of each data streams. A pd.TimedeltaIndex column 
         with labelled ``time`` is used to sort the multimodal data. 
 
-        If verbose, the global timetrack is saved as well.
-
         """
         dss_times= []
         for group_name, ds_list in self.data_streams_groups.items():
@@ -154,8 +150,7 @@ class Collector:
         self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
 
         # For debugging purposes, save the timetrack to csv to debug
-        if self.verbose:
-            self.global_timetrack.to_csv('global_timetrack.csv', index=False)
+        # self.global_timetrack.to_csv('global_timetrack.csv', index=False)
         
     def set_start_time(self, time:pd.Timedelta):
         """Set the start time, clipping previous time in the global timetrack.

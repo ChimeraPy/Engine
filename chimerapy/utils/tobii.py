@@ -18,8 +18,6 @@ import tqdm
 
 # Built-in Imports
 from chimerapy.core.data_stream import DataStream
-from chimerapy.core.video.data_stream import VideoDataStream
-from chimerapy.core.tabular.data_stream import TabularDataStream
 
 def load_g3_file(gz_filepath:pathlib.Path) -> Dict:
     """Load the Tobii g3 file.
@@ -112,6 +110,9 @@ def load_single_session(
         list of the data streams ('video' and 'gaze') and the recording
         specifications as a data frame.
     """
+    # Lazy loading
+    from chimerapy.io.video.data_stream import VideoDataStream
+    from chimerapy.io.tabular.data_stream import TabularDataStream
 
     # Before trying to original data format, check if the faster csv 
     # version of the data is available

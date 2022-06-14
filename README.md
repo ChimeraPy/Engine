@@ -1,4 +1,6 @@
-# ChimeraPy
+![logo](docs/_static/chimerapy_logo_with_name.png)
+
+--------------------------------------------------------------------------------
 
 [Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy) | [PyPI](https://pypi.org/project/chimerapy/)
 

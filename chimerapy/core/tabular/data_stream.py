@@ -10,7 +10,7 @@ import pandas as pd
 
 from chimerapy.core.data_stream import DataStream
 from chimerapy.core.process import Process
-from chimerapy.core.tools import get_windows
+from chimerapy.utils.tools import get_windows
 
 class TabularDataStream(DataStream):
     """Implementation of DataStream focused on Tabular data.

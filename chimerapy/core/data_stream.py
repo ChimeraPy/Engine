@@ -71,6 +71,12 @@ class DataStream:
 
         """
         return len(self.timetrack)
+
+    def __eq__(self, other: 'DataStream') -> bool:
+        if type(other) != type(self):
+            return False
+        else:
+            return self.name == other.name
     
     def set_before_trim_time(self, trim_time:pd.Timedelta):
         """Setting the time where anything before is removed.

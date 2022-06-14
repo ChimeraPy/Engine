@@ -10,13 +10,15 @@ import pandas as pd
 import numpy as np
 
 # Internal Imports
-from chimerapy.core.tools import PointCloudTransmissionFormat, get_memory_data_size, PortableQueue,\
-        PointCloudTransmissionFormat
+# from chimerapy.utils.tools import PointCloudTransmissionFormat, PortableQueue,\
+        # PointCloudTransmissionFormat
+from chimerapy.utils.tools import PortableQueue
+from chimerapy.utils.memory_manager import MemoryManager, get_memory_data_size
 
 class Session:
-    """Interface to the ``Logger``. 
+    """Interface to the ``Writer``. 
 
-    The ``Session`` class aids in formating and feed data to logging 
+    The ``Session`` class aids in formating and feed data to writing
     queue in a standardized manner. Aside from this, it a relatively
     simple class.
 
@@ -25,48 +27,22 @@ class Session:
     def __init__(
             self, 
             name:str,
-            logging_queue:PortableQueue,
+            queue:PortableQueue,
+            memory_manager:MemoryManager
         ) -> None:
         """``Session`` Constructor.
 
         Args:
             name (str): The name of the session.
-            logging_queue (PortableQueue): The queue where all formatted 
+            queue (PortableQueue): The queue where all formatted 
             data chunks are ``put``.
 
         """
-        # Storing the logging queue and name for the session
+        # Storing the writing queue and name for the session
         self.name = name
-        self.logging_queue = logging_queue
-        self.runner = None
+        self.queue = queue
+        self.memory_manager = memory_manager
 
-    def set_runner(self, runner:'Runner'):
-        """Set the ``SingleRunner`` or ``GroupRunner`` to the session.
-
-        This is important for helping the runner in tracking the memory
-        inside the logging queue. It provides the runner required in 
-        ``record_memory_usage`` method.
-
-        Args:
-            runner ('Runner'): The runner that the session is working 
-            for. Mostly correlated to the runner's ``Pipeline``.
-        """
-        self.runner = runner
-
-    def record_memory_usage(self, data_chunk: Dict[str, Any]):
-        """Record the memory usage of newly ``put`` data in logging queue.
-
-        Args:
-            data_chunk (Dict[str, Any]): The recently ``put`` data chunk.
-        """
-
-        if type(self.runner) != type(None):
-            self.runner.logging_queue_memory_chunks[data_chunk['uuid']] = get_memory_data_size(data_chunk)
-
-            # If debugging!
-            if self.runner.verbose:
-                print(f"SESSION - LOGGER Memory Update {data_chunk['uuid']}: {get_memory_data_size(data_chunk)}")
-    
     def add_image(
             self, 
             name:str, 
@@ -93,7 +69,7 @@ class Session:
         # Create a pd.DataFrame for the data
         df = pd.DataFrame({'frames': [data], '_time_': [timestamp]})
 
-        # Put data in the logging queue
+        # Put data in the writing queue
         data_chunk = {
             'uuid': uuid.uuid4(),
             'session_name': self.name,
@@ -101,10 +77,10 @@ class Session:
             'data': df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk)
+        self.queue.put(data_chunk)
 
         # Accounting for memory usage
-        self.record_memory_usage(data_chunk)
+        self.memory_manager.add(data_chunk, which='writer')
 
     def add_images(
             self,
@@ -132,7 +108,7 @@ class Session:
         images_df = df[[data_column, time_column]]
         images_df = images_df.rename(columns={data_column: 'frames', time_column: '_time_'})
         
-        # Put data in the logging queue
+        # Put data in the writing queue
         data_chunk = {
             'uuid': uuid.uuid4(),
             'session_name': self.name,
@@ -140,10 +116,10 @@ class Session:
             'data': images_df,
             'dtype': 'image'
         }
-        self.logging_queue.put(data_chunk)
+        self.queue.put(data_chunk)
         
         # Accounting for memory usage
-        self.record_memory_usage(data_chunk)
+        self.memory_manager.add(data_chunk, which='writer')
         
     def add_video(
             self,
@@ -177,7 +153,7 @@ class Session:
         if len(video_df) == 0:
             return None
 
-        # Put data in the logging queue
+        # Put data in the writing queue
         data_chunk = {
             'uuid': uuid.uuid4(),
             'session_name': self.name,
@@ -185,10 +161,10 @@ class Session:
             'data': video_df,
             'dtype': 'video'
         }
-        self.logging_queue.put(data_chunk)
+        self.queue.put(data_chunk)
         
         # Accounting for memory usage
-        self.record_memory_usage(data_chunk)
+        self.memory_manager.add(data_chunk, which='writer')
         
     def add_tabular(
             self, 
@@ -218,7 +194,7 @@ class Session:
         else:
             raise TypeError(f"{type(data)} is an invalid type for ``add_tabular``.")
 
-        # Put data in the logging queue
+        # Put data in the writing queue
         data_chunk = {
             'uuid': uuid.uuid4(),
             'session_name': self.name,
@@ -226,51 +202,51 @@ class Session:
             'data': df.rename(columns={time_column: '_time_'}),
             'dtype': 'tabular'
         }
-        self.logging_queue.put(data_chunk)
+        self.queue.put(data_chunk)
 
         # Accounting for memory usage
-        self.record_memory_usage(data_chunk)
+        self.memory_manager.add(data_chunk, which='writer')
 
-    def add_point_clouds(
-            self,
-            name:str,
-            df:pd.DataFrame,
-            time_column:str='_time_',
-            data_column:str='pcd'
-        ) -> None:
-        """Log point clouds stored in a pd.DataFrame.
+    # def add_point_clouds(
+    #         self,
+    #         name:str,
+    #         df:pd.DataFrame,
+    #         time_column:str='_time_',
+    #         data_column:str='pcd'
+    #     ) -> None:
+    #     """Log point clouds stored in a pd.DataFrame.
 
-        Args:
-            name (str): Name of the point cloud's entry.
-            df (pd.DataFrame): The data frame containing the point clouds.
-            time_column (str): The name of the time column.
-            data_column (str): The name of the data column containing 
-            the point clouds.
+    #     Args:
+    #         name (str): Name of the point cloud's entry.
+    #         df (pd.DataFrame): The data frame containing the point clouds.
+    #         time_column (str): The name of the time column.
+    #         data_column (str): The name of the data column containing 
+    #         the point clouds.
 
-        """
+    #     """
 
-        # If the data is empty, skip it
-        if len(df) == 0:
-            return None
+    #     # If the data is empty, skip it
+    #     if len(df) == 0:
+    #         return None
 
-        # Renaming and extracting only the content we want
-        pcd_df = df[[data_column, time_column]]
-        pcd_df = pcd_df.rename(columns={data_column: 'unsafe_pcd', time_column: '_time_'})
+    #     # Renaming and extracting only the content we want
+    #     pcd_df = df[[data_column, time_column]]
+    #     pcd_df = pcd_df.rename(columns={data_column: 'unsafe_pcd', time_column: '_time_'})
 
-        # Making PointClouds pickeable https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
-        # https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
-        pcd_df['pcd'] = pcd_df.apply(lambda x: PointCloudTransmissionFormat(x.unsafe_pcd), axis=1)
-        pcd_df = pcd_df.drop(['unsafe_pcd'], axis=1)
+    #     # Making PointClouds pickeable https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
+    #     # https://github.com/isl-org/Open3D/issues/218#issuecomment-923016145
+    #     pcd_df['pcd'] = pcd_df.apply(lambda x: PointCloudTransmissionFormat(x.unsafe_pcd), axis=1)
+    #     pcd_df = pcd_df.drop(['unsafe_pcd'], axis=1)
         
-        # Put data in the logging queue
-        data_chunk = {
-            'uuid': uuid.uuid4(),
-            'session_name': self.name,
-            'name': name,
-            'data': pcd_df,
-            'dtype': 'point_cloud'
-        }
-        self.logging_queue.put(data_chunk)
+    #     # Put data in the writing queue
+    #     data_chunk = {
+    #         'uuid': uuid.uuid4(),
+    #         'session_name': self.name,
+    #         'name': name,
+    #         'data': pcd_df,
+    #         'dtype': 'point_cloud'
+    #     }
+    #     self.queue.put(data_chunk)
         
-        # Accounting for memory usage
-        self.record_memory_usage(data_chunk)
+    #     # Accounting for memory usage
+    #     self.memory_manager.add(data_chunk)
