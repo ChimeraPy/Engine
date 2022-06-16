@@ -6,6 +6,8 @@ import queue
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager
 import psutil
+import logging
+logger = logging.getLogger(__name__)
 
 # Third-Party Imports
 import pytest
@@ -14,12 +16,6 @@ import pandas as pd
 
 # Testing Library
 import chimerapy as cp
-from chimerapy.core.reader import Reader
-from chimerapy.utils import MemoryManager
-from chimerapy.utils.tools import clear_queue
-
-# Perform global information
-BaseManager.register('MemoryManager', MemoryManager)
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -31,9 +27,9 @@ OUTPUT_DIR = TEST_DIR / 'test_output'
 def memory_manager():
     
     # Create memory manager that is shared between processes
-    base_manager = BaseManager()
+    base_manager = cp.utils.MPManager()
     base_manager.start()
-    memory_manager = MemoryManager(
+    memory_manager = cp.utils.MemoryManager(
         memory_limit=0.5
     )
 
@@ -65,7 +61,7 @@ def dss():
 def reader(dss, memory_manager):
     
     # Create data reader
-    reader_i = Reader(
+    reader_i = cp.Reader(
         memory_manager=memory_manager,
         users_data_streams=dss,
         time_window=pd.Timedelta(seconds=0.1),
@@ -95,7 +91,7 @@ def test_memory_tracking(reader):
 
     for i in range(NUM_OF_STEPS):
         data_chunk = reader.step()
-        reader.data_from_queue.put(data_chunk)
+        reader.out_queue.put(data_chunk)
 
     # Check the memory
     assert len(reader.memory_manager.get_uuids()) == NUM_OF_STEPS
@@ -154,21 +150,19 @@ def test_creating_and_simple_running_reader(reader):
 
     # Start the reader and get data
     reader.start()
-    time.sleep(0.1)
+    logger.info("TEST: reader - start")
 
-    # for queue in reader.queues:
-    #     print(queue.qsize())
-    
-    assert False
-     
+    time.sleep(1)
+
     # Pause the reader
     reader.pause()
+    logger.info("TEST: reader - pause")
 
     # Wait until the reader fully stops
     time.sleep(1)
     # assert False
 
-    print(reader.data_from_queue.qsize())
+    assert reader.out_queue.qsize() != 0
     # Then get the data
     # datas = []
     # while True:
@@ -180,9 +174,6 @@ def test_creating_and_simple_running_reader(reader):
 
     # assert len(datas) != 0
     
-    reader.shutdown()
-    reader.join()
-
 def test_changing_the_index_of_reader(reader):
 
     # Start the reader and get data

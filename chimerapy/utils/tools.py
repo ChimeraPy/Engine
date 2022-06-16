@@ -114,15 +114,15 @@ class PortableQueue(Queue):
 
     def clear(self):
         """ Remove all elements from the Queue. """
-        logger.debug(f'{self.__class__.__name__}:clear, size={self.qsize()}')
         while not self.empty():
             try:
+                logger.debug(f'{self.__class__.__name__}:clear, size={self.qsize()}')
                 self.get(timeout=0.1)
             except queue.Empty:
                 logger.debug(f'{self.__class__.__name__}:clear, empty!')
                 return
             except EOFError:
-                print("Queue EOFError --- data corruption")
+                logger.warning("Queue EOFError --- data corruption")
                 return 
 
     def destroy(self):
@@ -176,7 +176,7 @@ def clear_queue(input_queue: Queue):
             logger.debug(f'tools.clear_queue, empty!')
             return
         except EOFError:
-            print("Queue EOFError --- data corruption")
+            logger.warning("Queue EOFError --- data corruption")
             return 
 
 def get_windows(

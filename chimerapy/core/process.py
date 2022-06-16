@@ -30,7 +30,7 @@ class Process(mp.Process):
             self, 
             name:str,
             inputs:Optional[List],
-            run_type:Literal['proactive', 'reactive']='reactive',
+            run_type:Literal['producer', 'consumer']='consumer',
             verbose:bool=False
         ):
         # mp.Process __init__
@@ -43,19 +43,19 @@ class Process(mp.Process):
         self.verbose = verbose
 
         # Storing the data queues
-        self.data_to_queue = PortableQueue()
-        self.data_from_queue = PortableQueue()
+        self.in_queue = PortableQueue(maxsize=1000)
+        self.out_queue = PortableQueue(maxsize=1000)
 
         # Storing the message queues
-        self.message_to_queue = PortableQueue()
-        self.message_from_queue = PortableQueue()
+        self.message_in_queue = PortableQueue(maxsize=1000)
+        self.message_out_queue = PortableQueue(maxsize=1000)
 
         # Store all the queues in a container to later refer to all queues
         self.queues = [
-            self.data_to_queue,
-            self.data_from_queue,
-            self.message_to_queue,
-            self.message_from_queue
+            self.in_queue,
+            self.out_queue,
+            self.message_in_queue,
+            self.message_out_queue
         ]
        
         # Process state information
@@ -98,7 +98,7 @@ class Process(mp.Process):
         return self.to_shutdown.value
 
     def shutdown(self):
-        print(f'{self.__class__.__name__} - shutdown')
+        logger.debug(f'{self.__class__.__name__} - shutdown')
         self.to_shutdown.value = True
     
     def pause(self):
@@ -112,7 +112,7 @@ class Process(mp.Process):
         self.paused.value = True
 
         # Logging
-        print(f"{self.__class__.__name__}: paused")
+        logger.debug(f"{self.__class__.__name__}: paused")
 
     def resume(self):
         """Resuming the main ``run`` routine of the process.
@@ -128,28 +128,28 @@ class Process(mp.Process):
     def put(self, data_chunk:Any):
 
         # Forward the data_chunk to the queue
-        self.data_to_queue.put(data_chunk)
+        self.in_queue.put(data_chunk)
         
         # Logging
-        print(f"{self.__class__.__name__}: put")
+        logger.debug(f"{self.__class__.__name__}: put")
 
     def get(self, timeout:float=None):
         
         # Logging
-        print(f"{self.__class__.__name__}: get")
+        logger.debug(f"{self.__class__.__name__}: get")
 
         # Obtain the message from the from_queue
-        return self.data_from_queue.get(timeout=timeout)
+        return self.out_queue.get(timeout=timeout)
 
     def put_message(self, message:Dict):
 
         # Forward the message to the messaging queue
-        self.message_to_queue.put(message)
+        self.message_in_queue.put(message)
     
     def get_message(self, timeout:float=None):
 
         # Forward the message to the messaging queue
-        return self.message_from_queue.get(timeout=timeout)
+        return self.message_out_queue.get(timeout=timeout)
 
     def setup(self):
         """Setup function is inteded to be overwritten for custom setup."""
@@ -158,7 +158,7 @@ class Process(mp.Process):
     def teardown(self):
 
         # Logging 
-        print(f"{self.__class__.__name__}: teardown")
+        logger.debug(f"{self.__class__.__name__}: teardown")
         
         # Notify other methods that teardown is ongoing
         self.to_shutdown.value = True
@@ -168,7 +168,7 @@ class Process(mp.Process):
 
         # First, clear out all the queues
         for i, queue in enumerate(self.queues):
-            print(f"{self.__class__.__name__}: clearing queue {i}")
+            logger.debug(f"{self.__class__.__name__}: clearing queue {i}")
             queue.destroy()
  
     def step(self, *args, **kwargs):
@@ -195,7 +195,7 @@ class Process(mp.Process):
             # is set.
             while not self.to_shutdown.value:
                 try:
-                    message = self.message_to_queue.get(timeout=1)
+                    message = self.message_in_queue.get(timeout=1)
                     new_message = True
                     break
                 except queue.Empty:
@@ -207,7 +207,7 @@ class Process(mp.Process):
 
                 # Handle the incoming message
                 if self.verbose:
-                    print(f"{self.__class__.__name__} - NEW MESSAGE - {message}")
+                    logger.debug(f"{self.__class__.__name__} - NEW MESSAGE - {message}")
 
                 # META --> General
                 if message['header'] == 'META':
@@ -227,8 +227,8 @@ class Process(mp.Process):
 
     def run(self):
 
-        # print("run!")
-        print('RUN!')
+        # logger.debug("run!")
+        logger.debug('RUN!')
 
         # Change the state of the process
         self.is_running.value = True
@@ -239,18 +239,18 @@ class Process(mp.Process):
         # Continously execute the following steps
         while not self.to_shutdown.value:
 
-            print(f"while loop - {self.to_shutdown.value}")
+            logger.debug(f"while loop - {self.to_shutdown.value}")
 
             # Check if the loading is halted
             if self.paused.value:
                 time.sleep(0.5)
                 continue
 
-            if self.run_type == 'reactive': # consumer
+            if self.run_type == 'consumer': # consumer
 
                 # Execute the step, keep trying every 0.1 second apart
                 try:
-                    data_chunk = self.data_to_queue.get(timeout=1)
+                    data_chunk = self.in_queue.get(timeout=1)
                 except queue.Empty:
                     time.sleep(0.1)
                     continue
@@ -258,36 +258,25 @@ class Process(mp.Process):
                 # If we got a message, step through it
                 output = self.step(data_chunk)
 
-                # If we got an output, pass it to the queue
-                if type(output) != type(None):
-                    
-                    # Keep trying to put the output into the output queue,
-                    # but prevent locking if shutdown
-                    while not self.to_shutdown.value:
-                        try:
-                            self.data_from_queue.put(output, timeout=1)
-                        except queue.Empty:
-                            time.sleep(0.1)
-
-            elif self.run_type == 'proactive': # producer
+            elif self.run_type == 'producer': # producer
                 
                 # If we got a message, step through it
                 output = self.step()
-                
-                # If we got an output, pass it to the queue
-                if type(output) != type(None):
-
-                    # Keep trying to put the output into the output queue,
-                    # but prevent locking if shutdown
-                    while not self.to_shutdown.value:
-                        try:
-                            self.data_from_queue.put(output, timeout=1)
-                        except queue.Empty:
-                            time.sleep(0.1)
 
             else:
-                raise RuntimeError(f"Invalid ``run_type``: {self.run_type}\
-                    - should be either 'proactive' or 'reactive'.") 
+                raise RuntimeError("Invalid `run_type`")
+                
+            # If we got an output, pass it to the queue
+            if type(output) != type(None):
+
+                # Keep trying to put the output into the output queue,
+                # but prevent locking if shutdown
+                while not self.to_shutdown.value:
+                    try:
+                        self.out_queue.put(output, timeout=1)
+                        break
+                    except queue.Full:
+                        time.sleep(0.1)
 
         # Execute teardown
         self.teardown()

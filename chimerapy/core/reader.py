@@ -15,7 +15,7 @@ from chimerapy.utils.memory_manager import MemoryManager
 from chimerapy.core.data_stream import DataStream
 from chimerapy.core.collector import Collector
 from chimerapy.core.process import Process
-from chimerapy.utils.tools import clear_queue
+from chimerapy.utils.tools import clear_queue, get_windows
 
 # Logging
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ class Reader(Process):
         super().__init__(
             name=self.__class__.__name__,
             inputs=None,
-            run_type='proactive'
+            run_type='producer'
         )
 
         # Save the input parameters
@@ -105,7 +105,7 @@ class Reader(Process):
 
         # Send the message
         try:
-            self.message_from_queue.put(collector_construction_message.copy(), timeout=0.5)
+            self.message_out_queue.put(collector_construction_message.copy(), timeout=0.5)
         except queue.Full:
             logger.debug("Timetrack update message failed to send!")
 
@@ -122,17 +122,19 @@ class Reader(Process):
 
         # Sending the message
         try:
-            self.message_from_queue.put(finished_reading_message.copy(), timeout=0.5)
+            self.message_out_queue.put(finished_reading_message.copy(), timeout=0.5)
         except queue.Full:
             logger.debug("Finished reading messaged failed to send!")
 
         # Also tell the sorting process that the data is complete
         try:
-            self.data_from_queue.put('END', timeout=0.5)
+            self.out_queue.put('END', timeout=0.5)
         except queue.Full:
             logger.debug("END message failed to send!")
 
     def setup(self) -> None:
+
+        self.windows = get_windows(pd.Timedelta(seconds=0), pd.Timedelta(seconds=10), pd.Timedelta(seconds=1))
         
         # Ignore SIGINT signal
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -157,7 +159,7 @@ class Reader(Process):
         # Before anything, check that there is enough memory
         logger.debug(f"Reader: {self.memory_manager.total_memory_used()}")
         if self.memory_manager.total_memory_used(percentage=True) > 1:
-            logger.debug("Reader: consumed all memory")
+            logger.info("Reader: consumed all memory")
             return None
 
         # Get the window information of the window to read to queue
@@ -191,9 +193,9 @@ class Reader(Process):
         return data_chunk
 
     def teardown(self):
-        super().teardown()
-        
         # Closing the collector
         if type(self.collector) != type(None):
             self.collector.close()
 
+        super().teardown()
+        

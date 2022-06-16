@@ -15,15 +15,16 @@ import logging.config
 
 LOGGING_CONFIG = { 
     'version': 1,
-    'disable_existing_loggers': True,
+    'disable_existing_loggers': False,
     'formatters': { 
         'standard': { 
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
+            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            'datefmt': "%Y-%m-%d %H:%M:%S"
         },
     },
     'handlers': { 
         'default': { 
-            'level': 'INFO',
+            'level': 'DEBUG',
             'formatter': 'standard',
             'class': 'logging.StreamHandler',
             'stream': 'ext://sys.stdout',  # Default is stderr
@@ -43,9 +44,9 @@ logging.config.dictConfig(LOGGING_CONFIG)
 
 # Level 2 imports
 from chimerapy.core import Process, Pipeline, DataSource,\
-    Sensor, Api
+    Sensor, Api, Reader, Writer, Collector, Session
 
-from chimerapy.utils import tools
+import chimerapy.utils as utils
 
 # Level 3 imports
 from chimerapy.core.tabular import TabularDataStream
@@ -56,8 +57,12 @@ __all__ = [
     'TabularDataStream', 
     'VideoDataStream', 
     'Pipeline', 
+    'Reader',
+    'Writer',
+    'Collector',
+    'Session',
     'DataSource',
     'Process',
     'Sensor',
-    'tools',
+    'utils',
 ]
