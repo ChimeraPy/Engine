@@ -75,11 +75,11 @@ def test_start_and_shutting_down(reader):
 
     # Start 
     reader.start()
-
+    time.sleep(0.5)
     # Stop
     reader.shutdown()
     reader.join()
-    assert reader.get_shutdown() == True
+    assert reader.get_running() == True
 
 def test_memory_tracking(reader):
 

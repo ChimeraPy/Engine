@@ -51,8 +51,7 @@ class Writer(Process):
         """
         super().__init__(
             name=self.__class__.__name__,
-            inputs=None,
-            run_type='reactive'
+            inputs=None
         )
         
         # Save the input parameters
@@ -185,7 +184,7 @@ class Writer(Process):
 
         """
         # Continue processing
-        while True:
+        while self.running.value:
 
             # If we have data to log, work on it
             if queue.qsize() != 0:
@@ -203,7 +202,7 @@ class Writer(Process):
                 time.sleep(0.1)
 
             # Breaking condition
-            if self.to_shutdown.value and queue.qsize() == 0:
+            if queue.qsize() == 0:
                 break
    
     def flush(self, data:Dict[str, Any]):

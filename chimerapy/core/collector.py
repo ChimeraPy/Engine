@@ -10,10 +10,16 @@ import queue
 import pandas as pd
 
 # Internal Imports
+from chimerapy.core.process import Process
 from chimerapy.core.data_stream import DataStream
-from chimerapy.utils.tools import get_windows
+from chimerapy.utils.tools import get_windows, PortableQueue
 
-class Collector:
+# Logging
+import logging
+logger = logging.getLogger(__name__)
+
+
+class Collector(Process):
     """Data ``Collector`` loads, syncs, and fuzes data streams.
 
     The ``Collector`` has the responsibility of constructing the global
@@ -51,14 +57,17 @@ class Collector:
         retrieve the correct data in an orderly fashion.
 
         """
+        super().__init__(
+            name=self.__class__.__name__,
+            inputs=None,
+        )
+        # this makes sure that there is no inqueue in the data
+        self.in_queue = None
+        self.out_queue = PortableQueue(maxsize=10)
+
         # Constructing the data stream dictionary
         self.data_streams_groups = data_streams_groups
         self.time_window = time_window
-
-        # Starting up the datastreams
-        for dss in self.data_streams_groups.values():
-            for ds in dss:
-                ds.startup()
         
         # Keeping counter for the number of windows loaded
         self.windows = []
@@ -78,6 +87,13 @@ class Collector:
         
             # Determine the number of windows
             self.windows = get_windows(self.start_time, self.end_time, self.time_window)
+        
+        # Starting up the datastreams
+        logger.debug(f"Collector: Starting datasets")
+        for dss in self.data_streams_groups.values():
+            for ds in dss:
+                ds.startup(self.windows)
+                ds.start()
 
     @classmethod
     def empty(cls):
@@ -100,10 +116,6 @@ class Collector:
             time_window (pd.Timedelta): Size of the time window.
 
         """
-        # Prepare the DataStreams by startup them!
-        for group_name, dss in data_streams_groups.items():
-            for ds in dss:
-                ds.startup()
         
         # Once data streams are provided and time_window, we can 
         # finally setup the global timetrack
@@ -113,6 +125,11 @@ class Collector:
         
         # Determine the number of windows
         self.windows = get_windows(self.start_time, self.end_time, self.time_window)
+         
+         # Prepare the DataStreams by startup them!
+        for group_name, dss in data_streams_groups.items():
+            for ds in dss:
+                ds.startup(self.windows)
 
     def construct_global_timetrack(self):
         """Construct the global timetrack.
@@ -182,7 +199,7 @@ class Collector:
         assert isinstance(loading_queue, queue.Queue), "loading_queue must be a queue.Queue."
         self.loading_queue = loading_queue
 
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> Dict[str, Dict[str, pd.DataFrame]]:
+    def step(self) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Getting data from all data streams.
 
         Obtain the data samples from all data streams given the 
@@ -190,21 +207,22 @@ class Collector:
         average memory consumed per-group samples. 
 
         """
-        # Checking input logic and type
-        assert start_time < end_time, "start_time must be earlier than end_time."
-
         # Creating containers for all sample's data and meta data.
         all_samples = collections.defaultdict(dict)
 
         # Iterating over all groups (like users) and their corresponding
         # data streams.
         for group_name, ds_list in self.data_streams_groups.items():
+            to_get = all(ds.out_queue.qsize() > 0 for ds in ds_list)
+            if not to_get:
+                continue
+
             for ds in ds_list:
-                
                 # Obtaining the sample and storing it
-                sample: pd.DataFrame = ds.get(start_time, end_time)
+                sample: pd.DataFrame = ds.get(timeout=0.1)
                 all_samples[group_name][ds.name] = sample
 
+        # print("getting data from collector: ", all_samples)
         return all_samples
 
     def get_timetrack(

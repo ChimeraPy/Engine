@@ -17,7 +17,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 # ChimeraPy Library
-import chimerapy as cp
+from chimerapy.core.process import Process
+from chimerapy.core.pipeline import Pipeline
+from chimerapy.core.tabular import TabularDataStream
+from chimerapy.core.video import VideoDataStream
 
 # Constants
 CURRENT_DIR = pathlib.Path(os.path.dirname(os.path.abspath(__file__)))
@@ -25,12 +28,12 @@ TEST_DIR = CURRENT_DIR.parent
 RAW_DATA_DIR = TEST_DIR / 'data' 
 OUTPUT_DIR = TEST_DIR / 'test_output' 
 
-class SimpleProcess(cp.Process):
+class SimpleProcess(Process):
 
     def step(self, data_samples: Dict[str, pd.DataFrame]):
         return data_samples[list(data_samples.keys())[0]]
 
-class TestPipeline(cp.Pipeline):
+class PipelineTest(Pipeline):
 
     def __init__(self, data_streams:dict):
         super().__init__(name='test1', inputs=list(data_streams.values()), logdir=OUTPUT_DIR)
@@ -56,12 +59,12 @@ def dss():
     csv_data['_time_'] = pd.to_timedelta(csv_data['time'], unit="s")
 
     # Create each type of data stream
-    tabular_ds = cp.TabularDataStream(
+    tabular_ds = TabularDataStream(
         name="test_tabular",
         data=csv_data,
         time_column="_time_"
     )
-    video_ds = cp.VideoDataStream(
+    video_ds = VideoDataStream(
         name="test_video",
         start_time=pd.Timedelta(0),
         video_path=RAW_DATA_DIR/"example_use_case"/"test_video1.mp4",
@@ -73,7 +76,7 @@ def dss():
 
 @pytest.fixture
 def pipeline(dss):
-    pipeline = TestPipeline(dss)
+    pipeline = PipelineTest(dss)
     yield pipeline
     pipeline.shutdown()
     pipeline.join()
@@ -89,7 +92,7 @@ def check_if_equal_layer(a, b):
 def test_pipeline_nonrun_shutdown(dss):
     
     # Create the pipeline
-    pipeline = TestPipeline(dss)
+    pipeline = PipelineTest(dss)
     pipeline.shutdown()
     pipeline.join()
 
@@ -129,15 +132,15 @@ def test_pipeline_graph_construction(dss, pipeline):
 
 def test_merging_two_pipelines(dss, pipeline):
 
-    class SecondTestPipeline(cp.Pipeline):
+    class SecondPipelineTest(Pipeline):
 
         def __init__(self, input_pipeline):
             super().__init__(name='test2', inputs=[input_pipeline], logdir=OUTPUT_DIR)
 
-            self.q1 = cp.Process(name='q1', inputs=[input_pipeline.p3])
+            self.q1 = Process(name='q1', inputs=[input_pipeline.p3])
 
     # Construct the pipeline
-    second_pipeline = SecondTestPipeline(pipeline)
+    second_pipeline = SecondPipelineTest(pipeline)
     
     # Now create the expected directed graph
     expected_graph = nx.DiGraph()
@@ -171,6 +174,9 @@ def test_forward_propagate(pipeline):
 
     # Run the pipeline
     pipeline.step()
+
+def test_run(pipeline):
+    pipeline.run()
  
 # # def test_runner_handling_keyboard_interrupt():
 
@@ -180,7 +186,7 @@ def test_forward_propagate(pipeline):
 # #         print("KEYBOARD INTERRUPT!")
     
 # #     # Load construct the first runner
-# #     self.runner = cp.SingleRunner(
+# #     self.runner = SingleRunner(
 # #         name='P01',
 # #         logdir=OUTPUT_DIR,
 # #         data_streams=self.dss,
@@ -206,7 +212,7 @@ def test_forward_propagate(pipeline):
 # # def test_group_runner_run(self):
     
 # #     # Pass all the runners to the Director
-# #     group_runner = cp.GroupRunner(
+# #     group_runner = GroupRunner(
 # #         logdir=OUTPUT_DIR,
 # #         name="Nurse Teamwork Example #1",
 # #         pipe=self.overall_pipeline,
@@ -222,7 +228,7 @@ def test_forward_propagate(pipeline):
 # # def test_group_runner_with_shorter_run(self):
     
 # #     # Pass all the runners to the Director
-# #     group_runner = cp.GroupRunner(
+# #     group_runner = GroupRunner(
 # #         logdir=OUTPUT_DIR,
 # #         name="Nurse Teamwork Example #1",
 # #         pipe=self.overall_pipeline,
@@ -244,7 +250,7 @@ def test_forward_propagate(pipeline):
 # #         signal.raise_signal(signal.SIGINT)
     
 # #     # Pass all the runners to the Director
-# #     group_runner = cp.GroupRunner(
+# #     group_runner = GroupRunner(
 # #         logdir=OUTPUT_DIR,
 # #         name="Nurse Teamwork Example #1",
 # #         pipe=self.overall_pipeline,

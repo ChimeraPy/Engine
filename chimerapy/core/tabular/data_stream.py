@@ -61,6 +61,9 @@ class TabularDataStream(DataStream):
             return self.data.equals(other.data)
         else:
             return False
+    
+    def __hash__(self):
+        return super().__hash__()
 
     def __len__(self):
         return len(self.data)
@@ -170,7 +173,7 @@ class TabularDataStream(DataStream):
         timeline = self.data['_time_']
         self.make_timetrack(timeline)
 
-    def get(
+    def get_start_end(
             self, 
             start_time: pd.Timedelta, 
             end_time: pd.Timedelta

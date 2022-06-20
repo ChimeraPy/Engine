@@ -21,10 +21,10 @@ import curses
 
 # Local Imports
 from chimerapy.utils.memory_manager import MemoryManager, MPManager
-from chimerapy.core.data_stream import DataStream
-from chimerapy.core.session import Session
-from chimerapy.utils.tools import clear_queue, PortableQueue, threaded
 from chimerapy.core.process import Process
+from chimerapy.core.session import Session
+from chimerapy.utils.tools import threaded
+from chimerapy.core.data_stream import DataStream
 from chimerapy.core.reader import Reader
 from chimerapy.core.writer import Writer
 
@@ -54,6 +54,7 @@ class Pipeline(metaclass=NewInitCaller):
             start_time:Optional[pd.Timedelta]=None,
             end_time:Optional[pd.Timedelta]=None,
             memory_limit:float=0.8,
+            verbose:bool=False,
         ) -> None:
         """Construct a ``Pipeline``.
 
@@ -95,9 +96,9 @@ class Pipeline(metaclass=NewInitCaller):
         self.dss = collections.defaultdict(list) # data streams
  
         # Pipeline state information
-        self.setup_executed = False
-        self.to_shutdown = mp.Value('i', False)
-        
+        self.setup_executed = mp.Value('i', False)
+        self.running = mp.Value('i', True)
+
         # Convert the logdir to pathlib
         if isinstance(logdir, str):
             self.logdir = pathlib.Path(logdir)
@@ -148,7 +149,7 @@ class Pipeline(metaclass=NewInitCaller):
         # Create session for runner
         self.session = Session(
             name='root',
-            logging_queue=self.writer.data_to_queue,
+            queue=self.writer.out_queue,
             memory_manager=self.memory_manager
         )
         
@@ -330,7 +331,7 @@ class Pipeline(metaclass=NewInitCaller):
         reader_message_new = False
         
         # Constantly check for messages
-        while not self.to_shutdown.value:
+        while self.running.value:
 
             # Checking the loading message queue
             try:
@@ -374,8 +375,7 @@ class Pipeline(metaclass=NewInitCaller):
         writer_message_new = False
         
         # Constantly check for messages
-        while not self.to_shutdown.value:
-            
+        while self.running.value:
             # Checking the logging message queue
             try:
                 writer_message = self.writer.get_message(timeout=0.1)
@@ -453,7 +453,7 @@ class Pipeline(metaclass=NewInitCaller):
         # signal.signal(signal.SIGINT, self.sigint_handler)
 
     # def sigint_handler(self, signal, frame):
-    #     self.to_shutdown.value = True
+        # self.running.value = True
 
     def setup(self) -> None:
         """Setup the ``Runner``'s run.
@@ -464,6 +464,10 @@ class Pipeline(metaclass=NewInitCaller):
 
         """
 
+        # Set the readers and writers up
+        self.reader.setup()
+        self.writer.setup()
+
         # Start the reader and writer
         self.reader.start()
         self.writer.start()
@@ -471,6 +475,8 @@ class Pipeline(metaclass=NewInitCaller):
         # Start the message threads
         self.message_reader_thread.start()
         self.message_writer_thread.start()
+
+        self.setup_executed.value = True
 
     def shutdown(self) -> None:
         """Shutting down the ``Pipeline``.
@@ -482,7 +488,7 @@ class Pipeline(metaclass=NewInitCaller):
 
         """
         # Notify other methods that teardown is ongoing
-        self.to_shutdown.value = True
+        self.running.value = False
 
     def join(self) -> None:
         
@@ -548,7 +554,7 @@ class Pipeline(metaclass=NewInitCaller):
     def step(self) -> bool:
 
         # If the setup has not been executed it, run it now
-        if not self.setup_executed:
+        if not self.setup_executed.value:
             self.setup()
 
         # Retrieveing sample from the loading queue
@@ -556,14 +562,13 @@ class Pipeline(metaclass=NewInitCaller):
             data_chunk = self.reader.get(timeout=1)
         except queue.Empty:
             return True
-        
+
         # Check for end condition
-        if data_chunk == 'END':
+        if (data_chunk == 'END' or data_chunk is None):
             return False
 
         # Decompose the data chunk
         all_data_samples = data_chunk['data'] 
-
         # Track the memory
         self.memory_manager.remove(data_chunk)
 
@@ -584,7 +589,7 @@ class Pipeline(metaclass=NewInitCaller):
         self.num_processed_data_chunks = 0
         
         # Continue iterating
-        while not self.to_shutdown.value:
+        while self.running.value:
 
             # Take a step
             to_continue = self.step()
@@ -616,7 +621,7 @@ class Pipeline(metaclass=NewInitCaller):
         }
 
         # Continue the TUI until the other threads are complete.
-        while not self.to_shutdown.value:
+        while self.running.value:
 
             # Generate the report for the threads of the Reader
             cpu_usage_string = ''

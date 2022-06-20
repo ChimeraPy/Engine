@@ -1,24 +1,27 @@
-from typing import Dict, Sequence, Optional, Any
-import multiprocessing as mp
+# Package Management
+__package__ = 'chimerapy'
+
+# Built-in Imports
+from typing import Sequence, Dict, Optional, Any
+import collections
 import queue
-import time
+import multiprocessing as mp
 import uuid
 import signal
 import logging
 
+# Internal Imports
+from chimerapy.core.process import Process
+from chimerapy.core.data_stream import DataStream
+from chimerapy.utils.tools import get_windows, PortableQueue
+from chimerapy.utils.memory_manager import MemoryManager
+
 # Third-party imports
 import pandas as pd
 
-# ChimeraPy Library
-from chimerapy.utils.tools import PortableQueue
-from chimerapy.utils.memory_manager import MemoryManager
-from chimerapy.core.data_stream import DataStream
-from chimerapy.core.collector import Collector
-from chimerapy.core.process import Process
-from chimerapy.utils.tools import clear_queue, get_windows
-
 # Logging
 logger = logging.getLogger(__name__)
+
 
 class Reader(Process):
     """Subprocess tasked with reading data from memory.
@@ -60,24 +63,36 @@ class Reader(Process):
         super().__init__(
             name=self.__class__.__name__,
             inputs=None,
-            run_type='producer'
         )
+        # this makes sure that there is no inqueue in the data
+        self.in_queue = None
+        self.out_queue = PortableQueue(maxsize=10)
 
-        # Save the input parameters
+        # Constructing the data stream dictionary
         self.users_data_streams = users_data_streams
+        self.time_window = time_window
         self.memory_manager = memory_manager
         self.time_window = time_window
         self.start_time = start_time
         self.end_time = end_time
 
+        self.windows = []
         # Set the initial value
         self.window_index = mp.Value('i', 0)
-        self.collector = None
-        
+
         # Adding specific function class from the message
         self.subclass_message_to_functions.update({
             'WINDOW_INDEX': self.set_window_index
         })
+
+    def __len__(self):
+        """Get the size of the global timetrack."""
+        return len(self.global_timetrack)
+
+    @classmethod
+    def empty(cls):
+        """Construct an empty ``Collector``."""
+        return cls(empty=True)
 
     def set_window_index(self, window_index:int):
         """message_to function to set the window index.
@@ -87,8 +102,10 @@ class Reader(Process):
 
         """
         # Set the time window
-        self.window_index.value = window_index
-         
+        with self.window_index.get_lock:
+            self.window_index.value = window_index
+
+
     def message_timetrack_update(self):
         """message_from function to provide updated timetrack info."""
         # Create the message
@@ -97,17 +114,17 @@ class Reader(Process):
             'body': {
                 'type': 'TIMETRACK',
                 'content': {
-                    'timetrack': self.collector.global_timetrack.copy(),
-                    'windows': self.collector.windows
+                    'timetrack': self.global_timetrack.copy(),
+                    'windows': self.windows
                 }
             }
         }
-
         # Send the message
         try:
             self.message_out_queue.put(collector_construction_message.copy(), timeout=0.5)
         except queue.Full:
             logger.debug("Timetrack update message failed to send!")
+
 
     def message_finished_reading(self):
         """message_from function to inform that the reading is complete."""
@@ -134,27 +151,110 @@ class Reader(Process):
 
     def setup(self) -> None:
 
-        self.windows = get_windows(pd.Timedelta(seconds=0), pd.Timedelta(seconds=10), pd.Timedelta(seconds=1))
+        # Construct a global timetrack
+        self.construct_global_timetrack()
+        # Apply triming if start_time or end_time has been selected
+        if type(self.start_time) != type(None) and isinstance(self.start_time, pd.Timedelta):
+            self.set_start_time(self.start_time)
+        if type(self.end_time) != type(None) and isinstance(self.end_time, pd.Timedelta):
+            self.set_end_time(self.end_time)
+    
+        # Determine the number of windows
+        self.windows = get_windows(self.start_time, self.end_time, self.time_window)
         
-        # Ignore SIGINT signal
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # Starting up the datastreams
+        logger.debug(f"Collector: Starting datasets")
+        for dss in self.users_data_streams.values():
+            for ds in dss:
+                ds.startup(self.windows)
+                ds.start()
+
+
+    def construct_global_timetrack(self):
+        """Construct the global timetrack.
+
+        The method for constructing the global timetrack is by using the
+        timelines of each data streams. A pd.TimedeltaIndex column 
+        with labelled ``time`` is used to sort the multimodal data. 
+
+        """
+        dss_times= []
+        for group_name, ds_list in self.users_data_streams.items():
+            for ds in ds_list:
+
+                # Obtaining each ds's timetrack and adding an ds_type 
+                # identifier to know which data stream
+                time_series = ds.timetrack.copy()
+                time_series['group'] = group_name
+                time_series['ds_type'] = ds.name
+                time_series['ds_index'] = [x for x in range(len(time_series))]
+
+                # Storing the dataframe with all the other streams
+                dss_times.append(time_series)
+
+        # Converging the data streams tags to a global timetrack
+        self.global_timetrack: pd.DataFrame = pd.concat(dss_times, axis=0)
+
+        # Ensuring that the ds_index column is an integer
+        self.global_timetrack['ds_index'] = self.global_timetrack['ds_index'].astype(int)
+        self.global_timetrack.sort_values(by='time', inplace=True)
+        self.global_timetrack.reset_index(inplace=True)
+        self.global_timetrack = self.global_timetrack.drop(columns=['index'])
         
-        # read the data streams and create the Collector
-        self.collector = Collector(
-            data_streams_groups=self.users_data_streams,
-            time_window=self.time_window,
-            start_time=self.start_time,
-            end_time=self.end_time,
-        )
+        # Split samples based on the time window size
+        self.start_time = self.global_timetrack['time'][0]
+        self.end_time = self.global_timetrack['time'][len(self.global_timetrack)-1]
 
-        # Get information about the collector's windows
-        self.windows = self.collector.windows
+        # For debugging purposes, save the timetrack to csv to debug
+        # self.global_timetrack.to_csv('global_timetrack.csv', index=False)
+        
+    def set_start_time(self, time:pd.Timedelta):
+        """Set the start time, clipping previous time in the global timetrack.
 
-        # Sending the global timetrack to the Manager
-        # self.message_timetrack_update()
+        Args:
+            time (pd.Timedelta): start time clipping.
 
-    def step(self, index:int=None) -> Optional[Dict[str, Any]]:
-        """Single step in the Reader loop where data is readed and put."""
+        """
+        assert time < self.end_time, "start_time cannot be greater than end_time."
+        self.start_time = time
+
+    def set_end_time(self, time:pd.Timedelta):
+        """Set the end time, clipping after time in the global timetrack.
+
+        Args:
+            time (pd.Timedelta): end time clipping.
+
+        """
+        assert time > self.start_time, "end_time cannot be smaller than start_time."
+        self.end_time = time
+
+    def set_loading_queue(self, loading_queue:queue.Queue):
+        """Setting the loading queue to the ``Collector``.
+
+        Args:
+            loading_queue (queue.Queue): The loading queue to put data.
+
+        """
+        assert isinstance(loading_queue, queue.Queue), "loading_queue must be a queue.Queue."
+        self.loading_queue = loading_queue
+
+    def get(self, timeout:float=None):
+        # this calls the self.step() function to get the data_chunk
+        data_chunk = super().get(timeout)
+        if data_chunk is None:
+            return data_chunk
+
+        self.memory_manager.remove(data_chunk)
+        return data_chunk
+
+    def step(self) -> Dict[str, Dict[str, pd.DataFrame]]:
+        """Getting data from all data streams.
+
+        Obtain the data samples from all data streams given the 
+        window start and end time. Additionally, we are tracking the 
+        average memory consumed per-group samples. 
+
+        """
 
         # Before anything, check that there is enough memory
         logger.debug(f"Reader: {self.memory_manager.total_memory_used()}")
@@ -162,40 +262,54 @@ class Reader(Process):
             logger.info("Reader: consumed all memory")
             return None
 
-        # Get the window information of the window to read to queue
-        if not index:
-            window = self.windows[self.window_index.value]
-        else:
-            window = self.windows[index]
+        all_samples = collections.defaultdict(dict)
+        # Iterating over all groups (like users) and their corresponding
+        # data streams.
+        for group_name, ds_list in self.users_data_streams.items():
+            any_empty = any(ds.out_queue.qsize() <= 0 for ds in ds_list)
+            if any_empty:
+                continue
 
-        # Extract the start and end time from window
-        start, end = window.start, window.end 
+            for ds in ds_list:
+                # Obtaining the sample and storing it
+                sample: pd.DataFrame = ds.get(timeout=0.1)
+                all_samples[group_name][ds.name] = sample
 
-        # Get the data
-        data = self.collector.get(start, end)
-
-        # Creating data chunk with uuid
         data_chunk = {
-            'uuid': uuid.uuid4(),
-            'data': data,
+            'uuid': str(uuid.uuid4()),
+            'data': all_samples,
             'window_index': self.window_index.value
         }
+
         self.memory_manager.add(data_chunk, which='reader')
-        return data_chunk
+        with self.window_index.get_lock():
+            self.window_index.value += 1
 
-    def get(self, timeout:float=None):
+        return all_samples
 
-        # Get the data chunk and record that in the memory manager
-        data_chunk = super().get(timeout)
-        self.memory_manager.remove(data_chunk)
+    def get_timetrack(
+            self, 
+            start_time: pd.Timedelta, 
+            end_time: pd.Timedelta
+        ) -> pd.DataFrame:
+        """Get the timetrack that ranges from start to end time.
 
-        # Return it as well
-        return data_chunk
+        Args:
+            start_time (pd.Timedelta): Start of time window.
+            end_time (pd.Timedelta): End of time window.
 
-    def teardown(self):
-        # Closing the collector
-        if type(self.collector) != type(None):
-            self.collector.close()
+        Returns:
+            pd.DataFrame: The global timetrack from that range.
 
-        super().teardown()
-        
+        """
+        return self.global_timetrack[(self.global_timetrack['time'] >= start_time) & (self.global_timetrack['time'] < end_time)]
+
+    def shutdown(self):
+        # Prepare the DataStreams by startup them!
+        for _, dss in self.users_data_streams.items():
+            for ds in dss:
+                ds.close()
+                ds.shutdown()
+
+        super().shutdown()
+

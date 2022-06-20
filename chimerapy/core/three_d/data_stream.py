@@ -101,7 +101,7 @@ class PointCloudDataStream(DataStream):
 
         return pcd
 
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+    def get_start_end(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         assert end_time > start_time, "``end_time`` should be greater than ``start_time``."
         assert self.mode == "reading", "``get`` currently works in ``reading`` mode."
 

@@ -1,7 +1,6 @@
 # Built-in Imports
 from typing import Optional, List, Dict, Literal, Any
 import multiprocessing as mp
-import threading
 import queue
 import time
 import logging
@@ -10,10 +9,22 @@ import logging
 import pandas as pd
 
 # ChimeraPy Imports
-from chimerapy.utils.tools import threaded, PortableQueue, clear_queue
+from chimerapy.utils.tools import threaded, PortableQueue
 
 # Logging
+import logging
 logger = logging.getLogger(__name__)
+
+
+"""
+bug while starting with following message:
+_pickle.PicklingError: Can't pickle <function Process.check_messages at 0x115f70f70>: it's not the same object as chimerapy.core.process.Process.check_messages
+/usr/local/Cellar/python@3.9/3.9.13_1/Frameworks/Python.framework/Versions/3.9/lib/python3.9/multiprocessing/reduction.py:60: PicklingError
+
+This is because python multiprocessing uses spawn as default start method starting from 3.8, we change this to fork to make it work
+"""
+mp.set_start_method("fork")
+
 
 # Resource:
 # https://stackoverflow.com/questions/8489684/python-subclassing-multiprocessing-process
@@ -30,7 +41,6 @@ class Process(mp.Process):
             self, 
             name:str,
             inputs:Optional[List],
-            run_type:Literal['producer', 'consumer']='consumer',
             verbose:bool=False
         ):
         # mp.Process __init__
@@ -39,7 +49,6 @@ class Process(mp.Process):
         # Storing meta data
         self.name = name
         self.inputs = inputs
-        self.run_type = run_type
         self.verbose = verbose
 
         # Storing the data queues
@@ -59,9 +68,8 @@ class Process(mp.Process):
         ]
        
         # Process state information
-        self.to_shutdown = mp.Value('i', False)
+        self.running = mp.Value('i', False)
         self.paused = mp.Value('i', False)
-        self.is_running = mp.Value('i', False)
 
         # Create a mapping to messages and their respective functions
         self.message_to_functions = {
@@ -94,13 +102,24 @@ class Process(mp.Process):
         return self.__repr__()
 
     # Get and Set methods (necessory for shared memory multiprocessing
-    def get_shutdown(self):
-        return self.to_shutdown.value
+    def get_running(self):
+        return self.running.value
 
     def shutdown(self):
-        logger.debug(f'{self.__class__.__name__} - shutdown')
-        self.to_shutdown.value = True
-    
+        # Logging 
+        logger.debug(f"{self.__class__.__name__}: teardown")
+        
+        # Notify other methods that teardown is ongoing
+        self.running.value = False
+        
+        # Then ensure that the thread stops
+        # self.check_messages_thread.join()
+
+        # First, clear out all the queues
+        for i, queue in enumerate(self.queues):
+            logger.debug(f"{self.__class__.__name__}: clearing queue {i}")
+            queue.destroy()
+
     def pause(self):
         """Pausing the main ``run`` routine of the process.
     
@@ -136,9 +155,10 @@ class Process(mp.Process):
     def get(self, timeout:float=None):
         
         # Logging
-        logger.debug(f"{self.__class__.__name__}: get")
-
+        logger.debug(f"{self.__class__.__name__}: get -> queue size: {self.out_queue.qsize()}")
         # Obtain the message from the from_queue
+        if self.out_queue.qsize() <= 0:
+            return None
         return self.out_queue.get(timeout=timeout)
 
     def put_message(self, message:Dict):
@@ -154,22 +174,6 @@ class Process(mp.Process):
     def setup(self):
         """Setup function is inteded to be overwritten for custom setup."""
         ...
-
-    def teardown(self):
-
-        # Logging 
-        logger.debug(f"{self.__class__.__name__}: teardown")
-        
-        # Notify other methods that teardown is ongoing
-        self.to_shutdown.value = True
-        
-        # Then ensure that the thread stops
-        # self.check_messages_thread.join()
-
-        # First, clear out all the queues
-        for i, queue in enumerate(self.queues):
-            logger.debug(f"{self.__class__.__name__}: clearing queue {i}")
-            queue.destroy()
  
     def step(self, *args, **kwargs):
         """Apply process onto data sample.
@@ -189,11 +193,11 @@ class Process(mp.Process):
         message = None
         
         # Constantly check for messages
-        while not self.to_shutdown.value:
+        while self.running.value:
 
             # Prevent blocking, as we need to check if the thread_exist
             # is set.
-            while not self.to_shutdown.value:
+            while self.running.value:
                 try:
                     message = self.message_in_queue.get(timeout=1)
                     new_message = True
@@ -229,49 +233,33 @@ class Process(mp.Process):
 
         # logger.debug("run!")
         logger.debug('RUN!')
-
-        # Change the state of the process
-        self.is_running.value = True
        
         # Run the setup
         self.setup()
 
         # Continously execute the following steps
-        while not self.to_shutdown.value:
+        while self.running.value:
 
-            logger.debug(f"while loop - {self.to_shutdown.value}")
-
-            # Check if the loading is halted
+            logger.debug(f"while loop - {self.running.value}")
             if self.paused.value:
                 time.sleep(0.5)
                 continue
-
-            if self.run_type == 'consumer': # consumer
-
-                # Execute the step, keep trying every 0.1 second apart
+            
+            data_chunk = None
+            if self.in_queue: 
                 try:
                     data_chunk = self.in_queue.get(timeout=1)
                 except queue.Empty:
                     time.sleep(0.1)
                     continue
- 
-                # If we got a message, step through it
-                output = self.step(data_chunk)
 
-            elif self.run_type == 'producer': # producer
-                
-                # If we got a message, step through it
-                output = self.step()
-
-            else:
-                raise RuntimeError("Invalid `run_type`")
+            output = self.step(data_chunk)
                 
             # If we got an output, pass it to the queue
             if type(output) != type(None):
-
                 # Keep trying to put the output into the output queue,
                 # but prevent locking if shutdown
-                while not self.to_shutdown.value:
+                while self.running.value:
                     try:
                         self.out_queue.put(output, timeout=1)
                         break
@@ -279,10 +267,9 @@ class Process(mp.Process):
                         time.sleep(0.1)
 
         # Execute teardown
-        self.teardown()
+        self.shutdown()
 
     def join(self):
-
         # Only join if the process is running
         if self.is_alive():
             super().join()

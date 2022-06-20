@@ -4,11 +4,19 @@ __package__ = 'chimerapy'
 # Built-in Imports
 
 # Third Party Imports
+import multiprocessing as mp
 import pandas as pd
 
-# Internal Imports
+from chimerapy.core.process import Process
+from chimerapy.utils.tools import PortableQueue
 
-class DataStream:
+# Internal Imports
+# Logging
+import logging
+logger = logging.getLogger(__name__)
+
+
+class DataStream(Process):
     """Generic data stream for processing. 
 
     ``DataStream`` is intended to be inherented and its __getitem__ \
@@ -37,13 +45,26 @@ class DataStream:
             where timestamps are provided for each data point.
 
         """
+        super().__init__(
+            name=self.__class__.__name__,
+            inputs=None,
+        )
+        # this makes sure that there is no inqueue in the data
+        self.in_queue = None
+        self.out_queue = PortableQueue(maxsize=10)
+
         self.name = name
         self.index = 0
         self.before_trim_time = None
         self.after_trim_time = None
-        
+        # initialize with a negative value first.
+        # the collector/user of data_strem must run startup with appropriate time_window
+        self.current_window = mp.Value("i", 0)
+        self.windows = None
+
         # Creating timetrack from timeline
         self.make_timetrack(timeline)
+
     
     def __repr__(self) -> str:
         """Representation of ``DataStream``.
@@ -77,7 +98,10 @@ class DataStream:
             return False
         else:
             return self.name == other.name
-    
+        
+    def __hash__(self):
+        return hash("hashvaluefor-{self.name}")
+
     def set_before_trim_time(self, trim_time:pd.Timedelta):
         """Setting the time where anything before is removed.
 
@@ -95,7 +119,7 @@ class DataStream:
         """
         self.after_trim_time = trim_time
 
-    def startup(self):
+    def startup(self, windows):
         """Start the data stream by applying the before and after trims."""
 
         # Assuming that the timetrack has been already created
@@ -104,6 +128,9 @@ class DataStream:
 
         if isinstance(self.after_trim_time, pd.Timedelta):
             self.trim_after(self.after_trim_time)
+        
+        self.windows = windows
+        logger.debug(f"DataStream: Starting ...")
 
     def make_timetrack(self, timeline: pd.TimedeltaIndex):
         """Convert the data stream's timeline to a timetrack.
@@ -119,28 +146,23 @@ class DataStream:
             'ds_index': [x for x in range(len(timeline))]
         })
 
-    def get(
-        self, 
-        start_time: pd.Timedelta, 
-        end_time: pd.Timedelta
-        ) -> pd.DataFrame:
-        """Get the data samples from the time window.
-
-        Args:
-            start_time (pd.Timedelta): The start time where the time \
-                window is loaded from.
-            end_time (pd.Timedelta): The end time where the time window \
-                is loaded from.
-
-        Raises: 
-            NotImplementedError: ``get`` needs to be implemented in a \
-                concrete child of the ``DataStream``.
-
-        Returns:
-            pd.DataFrame: The data frame containing all data samples \
-                found within the time window.
-        """
+    def get_start_end(self, *args, **kwargs):
         raise NotImplementedError
+
+    def step(self, *args, **kwargs):
+        # this method runs the process and every step in the process.
+        # this is something that is implemented in the child classes
+        if self.windows is None:
+            raise NotImplementedError("self.window was not initialized. Check if setup was called")
+
+        start, end = self.windows[self.current_window.value]
+        with self.current_window.get_lock():
+            self.current_window.value += 1
+        
+        logger.debug(f"{self.__class__.__name__}: {len(self.windows)}, {self.current_window.value}: Run")
+
+        data = self.get_start_end(start, end)
+        return data
 
     def trim_before(self, trim_time: pd.Timedelta) -> None:
         """Remove data points before the trim_time timestamp.

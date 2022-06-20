@@ -2,6 +2,7 @@
 __package__ = 'video'
 
 # Built-in Imports
+import os
 from typing import Union, Tuple, Optional
 import multiprocessing as mp
 import pathlib
@@ -14,6 +15,14 @@ import numpy as np
 
 # Internal imports
 from chimerapy.core.data_stream import DataStream
+
+
+
+# Internal Imports
+# Logging
+import logging
+logger = logging.getLogger(__name__)
+
 
 class VideoDataStream(DataStream):
     """Implementation of DataStream focused on Video data.
@@ -53,11 +62,13 @@ class VideoDataStream(DataStream):
         self.fps = fps
         self.size = size
         self.color_mode = color_mode
-        self.has_startup = False
+        self.has_startup = mp.Value("i", False)
         
         # Setting the index is necessary for video, even before __iter__
         self.index = 0
         self.data_index = 0
+
+        logger.debug(f"video path is {video_path}")
 
         # First determine if this video is a path or an empty stream
         if self.video_path:
@@ -83,9 +94,6 @@ class VideoDataStream(DataStream):
         # Apply the super constructor
         super().__init__(name, self.timeline)
 
-        # If starting now, then load the video
-        if startup_now:
-            self.startup()
 
     @classmethod
     def empty(
@@ -120,11 +128,8 @@ class VideoDataStream(DataStream):
             startup_now=startup_now
         )
 
-    def startup(self):
-
-        # This is for the reading mode only!
+    def initialize_video(self):
         if self.mode == "reading":
-
             # Create the cv2 object now since it cannot be seralized and 
             # therefore be passed to a process. We have to create it inside
             # the ``run`` method of the process.
@@ -135,22 +140,27 @@ class VideoDataStream(DataStream):
             if type(self.fps) == type(None):
                 self.fps = self.video.get(cv2.CAP_PROP_FPS)
 
-            # Now that we have video len size, we can update the video
-            # data stream's timetrack
-            self.update_timetrack()
-
         # Else, its for the writing mode
         else:
-
             # Then open the writer
             self.video = cv2.VideoWriter()
             self.nb_frames = 0
 
+    def startup(self, *args, **kwargs):
+        
+        logger.debug(f"mode is is {self.mode}")
+        # This is for the reading mode only!
+  
+        self.initialize_video()
+        # Now that we have video len size, we can update the video
+        # data stream's timetrack
+        self.update_timetrack()
+        # os.nice(0)
         # After creating the timetrack, we need to apply the trim
-        super().startup()
+        super().startup(*args, **kwargs)
 
         # Update the flag variable
-        self.has_startup = True
+        self.has_startup.value = True
 
     def __len__(self):
         return self.nb_frames
@@ -178,6 +188,10 @@ class VideoDataStream(DataStream):
         # Converting timeline to timetrack
         super().make_timetrack(self.timeline)
 
+    def run(self, *args, **kwargs):
+        self.initialize_video()
+        super().run(*args, **kwargs)
+
     def open_writer(
         self, 
         video_path:Union[pathlib.Path, str],
@@ -187,7 +201,7 @@ class VideoDataStream(DataStream):
         ) -> None:
         """Set the video writer by opening with the filepath."""
         assert self.mode == 'writing'
-        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``open_writer`` before calling ``startup``."
+        assert self.has_startup.value == True, f"{self.__class__.__name__} cannot execute ``open_writer`` before calling ``startup``."
 
         # Storing information
         self.video_path = video_path
@@ -225,7 +239,7 @@ class VideoDataStream(DataStream):
             size (Tuple[int, int]): The frame's width and height.
 
         """
-        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``get_frame_size`` before calling ``startup``."
+        assert self.has_startup.value == True, f"{self.__class__.__name__} cannot execute ``get_frame_size`` before calling ``startup``."
 
         if isinstance(self.video, (cv2.VideoCapture, cv2.VideoWriter)):
             w = int(self.video.get(3))
@@ -235,7 +249,7 @@ class VideoDataStream(DataStream):
 
         return (w, h)
 
-    def get(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
+    def get_start_end(self, start_time: pd.Timedelta, end_time: pd.Timedelta) -> pd.DataFrame:
         """Get video data from ``start_time`` to ``end_time``.
 
         Args:
@@ -248,8 +262,9 @@ class VideoDataStream(DataStream):
         """
         assert end_time > start_time, "``end_time`` should be greater than ``start_time``."
         assert self.mode == "reading", "``get`` currently works in ``reading`` mode."
-        assert self.has_startup == True, f"{self.__class__.__name__} cannot execute ``get`` before calling ``startup``."
+        assert self.has_startup.value == True, f"{self.__class__.__name__} cannot execute ``get`` before calling ``startup``."
         
+        # logger.debug("getting start end")
         # Generate mask for the window data
         after_start_time = self.timetrack['time'] >= start_time
         before_end_time = self.timetrack['time'] < end_time
@@ -265,6 +280,7 @@ class VideoDataStream(DataStream):
                 'frames':[]}
             )
        
+        # logger.debug("getting start end1")
         # Getting the start and end indx to get the frames
         start_data_index = min(data_idx.ds_index)
         end_data_index = max(data_idx.ds_index)
@@ -273,13 +289,17 @@ class VideoDataStream(DataStream):
         # Ensure that the video is in the right location
         self.set_index(start_data_index)
 
+        # logger.debug("getting start end2")
         # Get all the samples
         times = data_idx['time'].tolist()
+        # logger.debug(f"getting start end3 {len(times)}, {start_data_index}, {end_data_index}")
         frames = []
-        for i in range(start_data_index, end_data_index+1):
+        logger.debug(type(self.video))
+        for i in range(start_data_index, end_data_index + 1):
             res, frame = self.video.read()
             frames.append(frame)
 
+        # logger.debug(f"getting start end4, {self.color_mode}")
         # Convert the data depending on the RGB type
         if self.color_mode == "RGB":
 
@@ -294,6 +314,7 @@ class VideoDataStream(DataStream):
         elif self.color_mode == "BGR":
             pass
 
+        # logger.debug("getting start end5")
         # Update the data index record
         # very important to update - as this keeps track of the video's 
         # location
@@ -313,7 +334,7 @@ class VideoDataStream(DataStream):
             if self.mode == "reading":
 
                 # Set the new location for the video
-                self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index-1)
+                self.video.set(cv2.CAP_PROP_POS_FRAMES, new_data_index - 1)
                 self.data_index = new_data_index
 
     def append(

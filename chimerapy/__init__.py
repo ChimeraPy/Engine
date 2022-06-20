@@ -42,27 +42,29 @@ LOGGING_CONFIG = {
 # Setup the logging configuration
 logging.config.dictConfig(LOGGING_CONFIG)
 
-# Level 2 imports
-from chimerapy.core import Process, Pipeline, DataSource,\
-    Sensor, Api, Reader, Writer, Collector, Session
+# # Level 2 imports
+# from chimerapy.core import (
+#     Process,
+#     Pipeline,
+#     Reader,
+#     Writer,
+#     Collector
+# )
 
-import chimerapy.utils as utils
+# # import chimerapy.utils as utils
 
-# Level 3 imports
-from chimerapy.core.tabular import TabularDataStream
-from chimerapy.core.video import VideoDataStream
+# # Level 3 imports
+# from chimerapy.core.tabular import TabularDataStream
+# from chimerapy.core.video import VideoDataStream
 
-# For Sphinx docs
-__all__ = [
-    'TabularDataStream', 
-    'VideoDataStream', 
-    'Pipeline', 
-    'Reader',
-    'Writer',
-    'Collector',
-    'Session',
-    'DataSource',
-    'Process',
-    'Sensor',
-    'utils',
-]
+# # For Sphinx docs
+# __all__ = [
+#     'TabularDataStream', 
+#     'VideoDataStream', 
+#     'Pipeline', 
+#     'Reader',
+#     'Writer',
+#     'Collector',
+#     'Process',
+#     'utils',
+# ]

@@ -100,7 +100,7 @@ def test_process_shutdown():
     p1 = cp.Process(name='test', inputs=None)
 
     # Print the original memory value
-    assert p1.get_shutdown() == False
+    assert p1.get_running() == False
 
     # Start the process
     p1.start()
@@ -111,8 +111,8 @@ def test_process_shutdown():
     # Wait until the process stops
     p1.join()
     
-    # assert p1.get_shutdown() == True
-    assert p1.get_shutdown() == True
+    # assert p1.get_running() == True
+    assert p1.get_running() == True
 
 def test_forwarding():
 

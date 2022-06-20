@@ -62,8 +62,9 @@ class MemoryManager:
 
         # Extract the important information
         uuid = data_chunk['uuid']
+        print("getting memory data usage", data_chunk)
         data_memory_usage = get_memory_data_size(data_chunk)
-
+        print("gets memory data usage")
         self.add_uuid(uuid, data_memory_usage, which)
    
     def remove_uuid(self, uuid:str) -> bool:
