@@ -93,7 +93,7 @@ class Pipeline(metaclass=NewInitCaller):
         self.name = name
         self.inputs = inputs
         self.pipelines = []
-        self.dss = collections.defaultdict(list) # data streams
+        self.dss = collections.defaultdict(DataStream) # data streams
  
         # Pipeline state information
         self.setup_executed = mp.Value('i', False)
@@ -115,7 +115,7 @@ class Pipeline(metaclass=NewInitCaller):
             # If data stream, this becomes the source
             if isinstance(ins, DataStream):
                 self.graph.add_node(ins.name, item=ins)
-                self.dss[self.name].append(ins)
+                self.dss[ins.name] = ins
 
             # If it is another pipeline, we have to add it to the current
             # pipeline's graph and know all of its the previous content
@@ -395,7 +395,7 @@ class Pipeline(metaclass=NewInitCaller):
     
     def init_reader(
             self, 
-            users_data_streams:Dict[str, Sequence[DataStream]],
+            data_streams:Dict[str, DataStream],
             memory_manager:MemoryManager,
             time_window:pd.Timedelta,
             start_time:Optional[pd.Timedelta],
@@ -422,7 +422,7 @@ class Pipeline(metaclass=NewInitCaller):
 
         # Create the Reader with the specific parameters
         self.reader = Reader(
-            users_data_streams=users_data_streams,
+            data_streams=data_streams,
             memory_manager=memory_manager,
             time_window=time_window,
             start_time=start_time,

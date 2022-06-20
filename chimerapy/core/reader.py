@@ -35,7 +35,7 @@ class Reader(Process):
 
     def __init__(
             self,
-            users_data_streams:Dict[str, Sequence[DataStream]],
+            data_streams:Dict[str, DataStream],
             memory_manager:MemoryManager,
             time_window:pd.Timedelta=pd.Timedelta(seconds=3),
             start_time:Optional[pd.Timedelta]=None,
@@ -45,7 +45,7 @@ class Reader(Process):
 
         Args:
 
-            users_data_streams (Dict[str, Sequence[DataStream]]): The \
+            data_streams (Dict[str, DataStream]): The \
                 datastreams to be synchronized and readed from by the \
                 ``Collector`` instance.
 
@@ -69,7 +69,7 @@ class Reader(Process):
         self.out_queue = PortableQueue(maxsize=10)
 
         # Constructing the data stream dictionary
-        self.users_data_streams = users_data_streams
+        self.data_streams = data_streams
         self.time_window = time_window
         self.memory_manager = memory_manager
         self.time_window = time_window
@@ -151,6 +151,11 @@ class Reader(Process):
 
     def setup(self) -> None:
 
+        # Starting up the datastreams
+        logger.debug(f"Collector: Starting datasets")
+        for ds in self.data_streams.values():
+            ds.startup(self.windows)
+
         # Construct a global timetrack
         self.construct_global_timetrack()
         # Apply triming if start_time or end_time has been selected
@@ -162,13 +167,9 @@ class Reader(Process):
         # Determine the number of windows
         self.windows = get_windows(self.start_time, self.end_time, self.time_window)
         
-        # Starting up the datastreams
-        logger.debug(f"Collector: Starting datasets")
-        for dss in self.users_data_streams.values():
-            for ds in dss:
-                ds.startup(self.windows)
-                ds.start()
-
+        # start the data_stream fetches
+        for ds in self.data_streams.values():
+            ds.start()
 
     def construct_global_timetrack(self):
         """Construct the global timetrack.
@@ -179,18 +180,16 @@ class Reader(Process):
 
         """
         dss_times= []
-        for group_name, ds_list in self.users_data_streams.items():
-            for ds in ds_list:
+        for name, ds in self.data_streams.items():
+            # Obtaining each ds's timetrack and adding an ds_type 
+            # identifier to know which data stream
+            time_series = ds.timetrack.copy()
+            time_series['group'] = name
+            time_series['ds_type'] = ds.name
+            time_series['ds_index'] = [x for x in range(len(time_series))]
 
-                # Obtaining each ds's timetrack and adding an ds_type 
-                # identifier to know which data stream
-                time_series = ds.timetrack.copy()
-                time_series['group'] = group_name
-                time_series['ds_type'] = ds.name
-                time_series['ds_index'] = [x for x in range(len(time_series))]
-
-                # Storing the dataframe with all the other streams
-                dss_times.append(time_series)
+            # Storing the dataframe with all the other streams
+            dss_times.append(time_series)
 
         # Converging the data streams tags to a global timetrack
         self.global_timetrack: pd.DataFrame = pd.concat(dss_times, axis=0)
@@ -241,10 +240,8 @@ class Reader(Process):
     def get(self, timeout:float=None):
         # this calls the self.step() function to get the data_chunk
         data_chunk = super().get(timeout)
-        if data_chunk is None:
-            return data_chunk
-
-        self.memory_manager.remove(data_chunk)
+        if data_chunk:
+            self.memory_manager.remove(data_chunk)
         return data_chunk
 
     def step(self) -> Dict[str, Dict[str, pd.DataFrame]]:
@@ -262,18 +259,17 @@ class Reader(Process):
             logger.info("Reader: consumed all memory")
             return None
 
-        all_samples = collections.defaultdict(dict)
         # Iterating over all groups (like users) and their corresponding
         # data streams.
-        for group_name, ds_list in self.users_data_streams.items():
-            any_empty = any(ds.out_queue.qsize() <= 0 for ds in ds_list)
-            if any_empty:
-                continue
+        any_empty = any(ds.out_queue.qsize() <= 0 for ds in self.data_streams.values())
+        if any_empty:
+            return False
 
-            for ds in ds_list:
-                # Obtaining the sample and storing it
-                sample: pd.DataFrame = ds.get(timeout=0.1)
-                all_samples[group_name][ds.name] = sample
+        all_samples = collections.defaultdict(pd.DataFrame)
+        for ds in self.data_streams.values():
+            # Obtaining the sample and storing it
+            sample: pd.DataFrame = ds.get(timeout=0.1)
+            all_samples[ds.name] = sample
 
         data_chunk = {
             'uuid': str(uuid.uuid4()),
@@ -306,10 +302,9 @@ class Reader(Process):
 
     def shutdown(self):
         # Prepare the DataStreams by startup them!
-        for _, dss in self.users_data_streams.items():
-            for ds in dss:
-                ds.close()
-                ds.shutdown()
+        for ds in self.data_streams.values():
+            ds.close()
+            ds.shutdown()
 
         super().shutdown()
 
