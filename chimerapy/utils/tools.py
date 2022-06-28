@@ -15,6 +15,7 @@ from PIL import Image
 import numpy as np
 import pandas as pd
 import psutil
+import types
 
 # Helper Classes
 Window = collections.namedtuple("Window", ['start', 'end'])
@@ -46,102 +47,6 @@ class SharedCounter(object):
     def value(self):
         """ Return the value of the counter """
         return self.count.value
-
-class PortableQueue(Queue):
-    """ A portable implementation of multiprocessing.Queue.
-    Because of multithreading / multiprocessing semantics, Queue.qsize() may
-    raise the NotImplementedError exception on Unix platforms like Mac OS X
-    where sem_getvalue() is not implemented. This subclass addresses this
-    problem by using a synchronized shared counter (initialized to zero) and
-    increasing / decreasing its value every time the put() and get() methods
-    are called, respectively. This not only prevents NotImplementedError from
-    being raised, but also allows us to implement a reliable version of both
-    qsize() and empty().
-
-    Code acquired from: 
-    https://github.com/vterron/lemon/blob/d60576bec2ad5d1d5043bcb3111dff1fcb58a8d6/methods.py#L536-L573
-
-    According to the StackOver post here:
-    https://stackoverflow.com/questions/65609529/python-multiprocessing-queue-notimplementederror-macos
-    
-    Fixing the `size` not an attribute of Queue can be found here:
-    https://stackoverflow.com/questions/69897765/cannot-access-property-of-subclass-of-multiprocessing-queues-queue-in-multiproce
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, ctx=mp.get_context())
-        self.size = SharedCounter(0)
-        self.alive = mp.Value('i', True)
-    
-    def __getstate__(self):
-        return super().__getstate__() + (self.size,)
-
-    def __setstate__(self, state):
-        super().__setstate__(state[:-1])
-        self.size = state[-1]
-
-    def put(self, *args, **kwargs):
-        # raise RuntimeError(f"{self.__class__.__name__}")
-        if not self.alive.value:
-            return None
-
-        # Have to account for timeout to make this implementation
-        # faithful to the complete mp.Queue implementation.
-        try:
-            super().put(*args, **kwargs)
-            self.size.increment(1)
-        except queue.Full:
-            raise queue.Full
-
-    def get(self, *args, **kwargs):
-        
-        # Have to account for timeout to make this implementation
-        # faithful to the complete mp.Queue implementation.
-        try:
-            data = super().get(*args, **kwargs)
-            self.size.increment(-1)
-            return data
-        except queue.Empty:
-            raise queue.Empty
-
-    def qsize(self):
-        """ Reliable implementation of multiprocessing.Queue.qsize() """
-        return self.size.value
-
-    def empty(self):
-        """ Reliable implementation of multiprocessing.Queue.empty() """
-        return not self.qsize()
-
-    def clear(self):
-        """ Remove all elements from the Queue. """
-        while not self.empty():
-            try:
-                logger.debug(f'{self.__class__.__name__}:clear, size={self.qsize()}')
-                self.get(timeout=0.1)
-            except queue.Empty:
-                logger.debug(f'{self.__class__.__name__}:clear, empty!')
-                return
-            except EOFError:
-                logger.warning("Queue EOFError --- data corruption")
-                return 
-
-    def destroy(self):
-        self.clear()
-        self.alive.value = False
-
-# class PointCloudTransmissionFormat:
-
-#     def __init__(self, pointcloud: o3d.geometry.PointCloud):
-#         self.points = np.array(pointcloud.points)
-#         self.colors = np.array(pointcloud.colors)
-#         self.normals = np.array(pointcloud.normals)
-
-#     def create_pointcloud(self) -> o3d.geometry.PointCloud:
-#         pointcloud = o3d.geometry.PointCloud()
-#         pointcloud.points = o3d.utility.Vector3dVector(self.points)
-#         pointcloud.colors = o3d.utility.Vector3dVector(self.colors)
-#         pointcloud.normals = o3d.utility.Vector3dVector(self.normals)
-#         return pointcloud
 
 def threaded(fn):
     """Decorator for class methods to be spawn new thread.
@@ -264,3 +169,24 @@ def get_threads_cpu_percent(p:psutil.Process, interval:float=0.1) -> List:
         return []
 
     return [total_percent * ((t.system_time + t.user_time)/total_time) for t in p.threads()]
+
+
+def Proxy(target):
+    """
+        Create a derived NamespaceProxy class for `target`.
+        Exposes every attribute of the target in the proxy
+    """
+    def __getattr__(self, key):
+        result = self._callmethod('__getattribute__', (key,))
+        if isinstance(result, types.MethodType):
+            def wrapper(*args, **kwargs):
+                return self._callmethod(key, args, kwargs)
+            return wrapper
+        return result
+
+    dic = {'types': types, '__getattr__': __getattr__}
+    proxy_name = target.__name__ + "Proxy"
+    ProxyType = type(proxy_name, (mp.managers.NamespaceProxy,), dic)  # Create subclass.
+    ProxyType._exposed_ = tuple(dir(target))
+
+    return ProxyType

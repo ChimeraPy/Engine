@@ -14,7 +14,8 @@ import signal
 # Third-party imports
 
 # ChimeraPy Library
-from chimerapy.utils.tools import PortableQueue, threaded
+from chimerapy.utils.tools import threaded
+from chimerapy.core.queue import PortableQueue
 from chimerapy.utils.memory_manager import MemoryManager
 from chimerapy.core.video import VideoEntry
 from chimerapy.core.tabular import TabularEntry, ImageEntry

@@ -50,7 +50,7 @@ class MemoryManager:
     
     def add_uuid(self, uuid:str, data_memory_usage:int, which:Literal['reader', 'pipeline', 'writer']) -> None:
 
-        logger.debug(f"MemoryManager: added uuid {uuid}")
+        # logger.debug(f"MemoryManager: added uuid {uuid}")
 
         # Keep track if it is in the reader or the logging queues
         self.memory_chunks[uuid] = {
@@ -61,16 +61,11 @@ class MemoryManager:
     def add(self, data_chunk:Dict, which:Literal['reader', 'pipeline', 'writer']) -> None:
 
         # Extract the important information
-        uuid = data_chunk['uuid']
-        print("getting memory data usage", data_chunk)
+        uuid = data_chunk.id
         data_memory_usage = get_memory_data_size(data_chunk)
-        print("gets memory data usage")
         self.add_uuid(uuid, data_memory_usage, which)
    
     def remove_uuid(self, uuid:str) -> bool:
-
-        logger.debug(f"MemoryManager: removing uuid {uuid}")
-
         # Remove the data
         if uuid in self.memory_chunks.keys():
             del self.memory_chunks[uuid]
@@ -81,7 +76,7 @@ class MemoryManager:
     def remove(self, data_chunk:Dict) -> bool:
         
         # Extract the important information
-        uuid = data_chunk['uuid']
+        uuid = data_chunk.id
 
         # Remove
         return self.remove_uuid(uuid)

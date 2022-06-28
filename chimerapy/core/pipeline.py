@@ -247,6 +247,12 @@ class Pipeline(metaclass=NewInitCaller):
             i += 1
 
         return None
+
+    def add_graph_node(self, node:Process):
+        self.graph.add_node(node)
+    
+    def add_graph_edge(self, from_node:Process, to_node:Process):
+        self.graph.add_edge(from_node, to_node)
     
     def safe_merge(self, other:'Pipeline'):
 
@@ -428,9 +434,6 @@ class Pipeline(metaclass=NewInitCaller):
             start_time=start_time,
             end_time=end_time,
         )
-        
-        # Handling keyboard interrupt
-        # signal.signal(signal.SIGINT, self.sigint_handler)
 
     def init_writer(
             self,
@@ -448,12 +451,7 @@ class Pipeline(metaclass=NewInitCaller):
             logdir=self.logdir,
             experiment_name=self.name,
         )
-
-        # Handling keyboard interrupt
-        # signal.signal(signal.SIGINT, self.sigint_handler)
-
-    # def sigint_handler(self, signal, frame):
-        # self.running.value = True
+        
 
     def setup(self) -> None:
         """Setup the ``Runner``'s run.
@@ -577,7 +575,7 @@ class Pipeline(metaclass=NewInitCaller):
 
         return True
 
-    def main_while_loop(self):
+    def pipeline_loop(self):
         """Main routine for loading and processing data chunks.
 
         This routine acts as the base routine for ``get``ting data 
@@ -704,7 +702,7 @@ class Pipeline(metaclass=NewInitCaller):
             tui_thread.start()
 
         # Execute the processing in the main thread
-        self.main_while_loop()
+        self.pipeline_loop()
         
         # Then fully shutting down the subprocesses and threads
         self.shutdown()

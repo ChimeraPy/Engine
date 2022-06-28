@@ -8,7 +8,7 @@ import multiprocessing as mp
 import pandas as pd
 
 from chimerapy.core.process import Process
-from chimerapy.utils.tools import PortableQueue
+from chimerapy.core.queue import PortableQueue
 
 # Internal Imports
 # Logging

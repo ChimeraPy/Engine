@@ -1,4 +1,5 @@
 # Built-in Imports
+from socket import timeout
 from typing import Optional, List, Dict, Literal, Any
 import multiprocessing as mp
 import queue
@@ -7,9 +8,11 @@ import logging
 
 # Third-party Imports
 import pandas as pd
+from chimerapy.core.data_chunk import DataChunk
 
 # ChimeraPy Imports
-from chimerapy.utils.tools import threaded, PortableQueue
+from chimerapy.utils.tools import threaded
+from chimerapy.core.queue import PortableQueue
 
 # Logging
 import logging
@@ -34,26 +37,21 @@ mp.set_start_method("fork")
 # https://superfastpython.com/share-process-attributes/
 
 class Process(mp.Process):
-    
-    inputs = []
-
     def __init__(
             self, 
             name:str,
-            inputs:Optional[List],
-            verbose:bool=False
+            verbose:bool=False,
         ):
         # mp.Process __init__
         super().__init__()
 
         # Storing meta data
         self.name = name
-        self.inputs = inputs
         self.verbose = verbose
 
-        # Storing the data queues
-        self.in_queue = PortableQueue(maxsize=1000)
-        self.out_queue = PortableQueue(maxsize=1000)
+        # the graph modules populates the in_queues and out_queues
+        self.in_queues = []
+        self.out_queues = []
 
         # Storing the message queues
         self.message_in_queue = PortableQueue(maxsize=1000)
@@ -61,15 +59,17 @@ class Process(mp.Process):
 
         # Store all the queues in a container to later refer to all queues
         self.queues = [
-            self.in_queue,
-            self.out_queue,
             self.message_in_queue,
             self.message_out_queue
         ]
        
         # Process state information
-        self.running = mp.Value('i', False)
+        self.running = mp.Value('i', True)
         self.paused = mp.Value('i', False)
+        self.setup_run = mp.Value('i', False)
+        
+        # note: this is not shared amongst other processes and only is used by this process
+        self._time_stamp = 0
 
         # Create a mapping to messages and their respective functions
         self.message_to_functions = {
@@ -107,18 +107,18 @@ class Process(mp.Process):
 
     def shutdown(self):
         # Logging 
-        logger.debug(f"{self.__class__.__name__}: teardown")
+        # # logger.debug(f"{self.__class__.__name__}: teardown")
         
         # Notify other methods that teardown is ongoing
         self.running.value = False
-        
-        # Then ensure that the thread stops
-        # self.check_messages_thread.join()
 
-        # First, clear out all the queues
-        for i, queue in enumerate(self.queues):
-            logger.debug(f"{self.__class__.__name__}: clearing queue {i}")
+        # First, clear out the in_queues. in_queues because no data will be transmitted from inques any further
+        for i, queue in enumerate(self.in_queues):
+            # # logger.debug(f"{self.__class__.__name__}: clearing queue {i}")
             queue.destroy()
+        
+        # Execute teardown
+        self.join()
 
     def pause(self):
         """Pausing the main ``run`` routine of the process.
@@ -131,7 +131,7 @@ class Process(mp.Process):
         self.paused.value = True
 
         # Logging
-        logger.debug(f"{self.__class__.__name__}: paused")
+        # # logger.debug(f"{self.__class__.__name__}: paused")
 
     def resume(self):
         """Resuming the main ``run`` routine of the process.
@@ -144,22 +144,42 @@ class Process(mp.Process):
         # Clearing the thread pause event
         self.paused.value = False
 
-    def put(self, data_chunk:Any):
+    def is_put_ready(self):
+        # make sure all out queues are ready
+        ready = all(que.is_put_ready() for que in self.out_queues)
+        # # logger.debug(f"Process {self.name} is put ready {ready} (y)")
+        return ready
+    
+    def is_get_ready(self):
+        # make sure all out queues are ready
+        # since all the in_queues can only be accessed by this process exclusively,
+        # we won't have to deal with mutual exclusion
+        if len(self.in_queues) == 0:
+            return True
 
+        ready = all(que.is_get_ready() for que in self.in_queues)
+        return ready
+
+    def put(self, data_chunk:DataChunk):
         # Forward the data_chunk to the queue
-        self.in_queue.put(data_chunk)
-        
+        # # logger.debug(f"{self.name} is putting {data_chunk.data}")
+        for que in self.out_queues:
+            que.put(data_chunk, timeout=0.1)
+
         # Logging
-        logger.debug(f"{self.__class__.__name__}: put")
+        # # logger.debug(f"{self.__class__.__name__}: put")
+        return True
 
     def get(self, timeout:float=None):
-        
-        # Logging
-        logger.debug(f"{self.__class__.__name__}: get -> queue size: {self.out_queue.qsize()}")
-        # Obtain the message from the from_queue
-        if self.out_queue.qsize() <= 0:
-            return None
-        return self.out_queue.get(timeout=timeout)
+        # Obtain the message from the in_queues
+        values = []
+        for que in self.in_queues:
+            # logger.debug(f"RUNNING!! {self.name}, {que} getting data")
+            data = que.get(timeout=timeout)
+            # logger.debug(f"RUNNING!! {self.name}, {que} got data, {data}")
+            values.append(data)
+
+        return values
 
     def put_message(self, message:Dict):
 
@@ -173,7 +193,7 @@ class Process(mp.Process):
 
     def setup(self):
         """Setup function is inteded to be overwritten for custom setup."""
-        ...
+        self.setup_run.value = True
  
     def step(self, *args, **kwargs):
         """Apply process onto data sample.
@@ -191,7 +211,7 @@ class Process(mp.Process):
         # Set the flag to check if new message
         new_message = False
         message = None
-        
+
         # Constantly check for messages
         while self.running.value:
 
@@ -199,7 +219,7 @@ class Process(mp.Process):
             # is set.
             while self.running.value:
                 try:
-                    message = self.message_in_queue.get(timeout=1)
+                    message = self.message_in_queue.get(timeout=0.1)
                     new_message = True
                     break
                 except queue.Empty:
@@ -215,13 +235,10 @@ class Process(mp.Process):
 
                 # META --> General
                 if message['header'] == 'META':
-
                     # Determine the type of message and interpret it
                     func = self.message_to_functions[message['body']['type']]
-
                 # else --> Specific on the process
                 else:
-
                     # Determing the type of message by the subclasses's 
                     # mapping
                     func = self.subclass_message_to_functions[message['body']['type']]
@@ -230,46 +247,50 @@ class Process(mp.Process):
                 func(**message['body']['content'])
 
     def run(self):
-
-        # logger.debug("run!")
-        logger.debug('RUN!')
-       
+        # # logger.debug(f"RUNNING!! {self.name}")
         # Run the setup
-        self.setup()
+        if not self.setup_run.value:
+            self.setup()
 
         # Continously execute the following steps
         while self.running.value:
-
-            logger.debug(f"while loop - {self.running.value}")
+            # # logger.debug(f"while loop - {self.running.value}")
             if self.paused.value:
                 time.sleep(0.5)
                 continue
-            
-            data_chunk = None
-            if self.in_queue: 
-                try:
-                    data_chunk = self.in_queue.get(timeout=1)
-                except queue.Empty:
-                    time.sleep(0.1)
+
+            data_chunks = [DataChunk(self.name, None)]
+            if len(self.in_queues) > 0:
+                while not self.is_get_ready():
+                    time.sleep(0.01)
                     continue
+                data_chunks = self.get(timeout=0.1)
 
-            output = self.step(data_chunk)
+            if all(chunk.data == "END" for chunk in data_chunks):
+                output = "END"
+            else:
+                output = self.step(data_chunks)
+
+            # # logger.debug(f"RUNNING!! {self.name} got output, {output}")
+            if output is None:
+                continue
+            
+            if len(self.out_queues) > 0:
+                while not self.is_put_ready():
+                    time.sleep(0.01)
+                    continue
                 
-            # If we got an output, pass it to the queue
-            if type(output) != type(None):
-                # Keep trying to put the output into the output queue,
-                # but prevent locking if shutdown
-                while self.running.value:
-                    try:
-                        self.out_queue.put(output, timeout=1)
-                        break
-                    except queue.Full:
-                        time.sleep(0.1)
-
-        # Execute teardown
-        self.shutdown()
+                # # logger.debug(f"{self.name} is put ready (y)")
+                self._time_stamp += 1
+                output = DataChunk(self.name, output, self._time_stamp)
+                # # logger.debug(f"{self.name} is putting output")
+                
+                self.put(output)
+                # # logger.debug(f"RUNNING!! {self.name} wrote output")
+                if output.data == "END":
+                    self.running.value = False
 
     def join(self):
         # Only join if the process is running
         if self.is_alive():
-            super().join()
+            super().join(timeout=0.1)

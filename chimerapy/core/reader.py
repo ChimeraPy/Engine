@@ -12,8 +12,9 @@ import logging
 
 # Internal Imports
 from chimerapy.core.process import Process
+from chimerapy.core.queue import PortableQueue
 from chimerapy.core.data_stream import DataStream
-from chimerapy.utils.tools import get_windows, PortableQueue
+from chimerapy.utils.tools import get_windows
 from chimerapy.utils.memory_manager import MemoryManager
 
 # Third-party imports
@@ -64,10 +65,6 @@ class Reader(Process):
             name=self.__class__.__name__,
             inputs=None,
         )
-        # this makes sure that there is no inqueue in the data
-        self.in_queue = None
-        self.out_queue = PortableQueue(maxsize=10)
-
         # Constructing the data stream dictionary
         self.data_streams = data_streams
         self.time_window = time_window
