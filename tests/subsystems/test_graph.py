@@ -58,16 +58,17 @@ class Reducer(Process):
 class SimpleWriter(Process):
     def setup(self):
         logger.debug("Running writer setup")
-        out_file = open("test.txt", "w")
-        out_file.close()
-        super().setup()
+        self.out_file = open("test.txt", "a")
 
     def step(self, data_chunks: List[DataChunk]):
         value = sum(chunk.data for chunk in data_chunks)
         logger.debug(f"from writer {value} <- {[(chunk.owner, chunk.data) for chunk in data_chunks]}")
-        self.open_file = open("test.txt", "a")
-        self.open_file.write(f"{value} ")
-        self.open_file.close()
+        self.out_file.write(f"{value} ")
+
+    def wrapup(self):
+        logger.debug("wrapup called")
+        self.out_file.close()
+
 
 
 def test_graph_run():
@@ -109,6 +110,7 @@ def test_graph_run():
     graph.start()
     time.sleep(5)
     graph.shutdown()
+
     with open("test.txt", "r") as in_file:
         assert in_file.read() == "8 16 24 32 40 48 56 64 72 "
 

@@ -66,7 +66,6 @@ class Process(mp.Process):
         # Process state information
         self.running = mp.Value('i', True)
         self.paused = mp.Value('i', False)
-        self.setup_run = mp.Value('i', False)
         
         # note: this is not shared amongst other processes and only is used by this process
         self._time_stamp = 0
@@ -193,7 +192,7 @@ class Process(mp.Process):
 
     def setup(self):
         """Setup function is inteded to be overwritten for custom setup."""
-        self.setup_run.value = True
+        pass
  
     def step(self, *args, **kwargs):
         """Apply process onto data sample.
@@ -249,8 +248,7 @@ class Process(mp.Process):
     def run(self):
         # # logger.debug(f"RUNNING!! {self.name}")
         # Run the setup
-        if not self.setup_run.value:
-            self.setup()
+        self.setup()
 
         # Continously execute the following steps
         while self.running.value:
@@ -271,10 +269,8 @@ class Process(mp.Process):
             else:
                 output = self.step(data_chunks)
 
+            output = DataChunk(self.name, output, self._time_stamp)
             # # logger.debug(f"RUNNING!! {self.name} got output, {output}")
-            if output is None:
-                continue
-            
             if len(self.out_queues) > 0:
                 while not self.is_put_ready():
                     time.sleep(0.01)
@@ -282,15 +278,25 @@ class Process(mp.Process):
                 
                 # # logger.debug(f"{self.name} is put ready (y)")
                 self._time_stamp += 1
-                output = DataChunk(self.name, output, self._time_stamp)
                 # # logger.debug(f"{self.name} is putting output")
                 
                 self.put(output)
-                # # logger.debug(f"RUNNING!! {self.name} wrote output")
-                if output.data == "END":
-                    self.running.value = False
+
+            # # logger.debug(f"RUNNING!! {self.name} wrote output")
+            if output.data == "END":
+                self.running.value = False
+            
+
+        self.wrapup()
+
+    def wrapup(self):
+        """
+        Executed after the process has finished running
+        """
+        pass
 
     def join(self):
         # Only join if the process is running
         if self.is_alive():
             super().join(timeout=0.1)
+
