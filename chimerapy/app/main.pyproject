@@ -1,3 +1,0 @@
-{
-    "files": ["main.qml","qml/pages/homePage.qml","qml/delegates/VideoDelegate.qml","qml/delegates/ImageDelegate.qml","main.py","RunnerModel.py","pymmdt_gui_lib/DiagramMode.py"]
-}

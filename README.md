@@ -1,22 +1,13 @@
-# ChimeraPy
+![logo](docs/_static/chimerapy_logo_with_name.png)
+
+# ChimeraPy: A Distributed Computing Framework for Multimodal Data Collection
 
 [Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy) | [PyPI](https://pypi.org/project/chimerapy/)
 
-ChimeraPy is a package that focus on temporal multimodal data analytics 
-and visualization. It is build on top of pandas and multiprocessing to
-provide a simple yet efficient approach to data processing. ChimeraDash
-is also provided as a visualization tool for multimodal data streams.
-
-ChimeraPy Main Features:
- - Time alignment of multiple data streams
- - Modular and flexible data pipeline architecture 
- - Video, CSV, and other modality toolkits
- - Synchronized Multimodal Session Player
-
-Roadmap: 
- - Online Processing
- - Autoloading to ChimeraDash
- - CPU, memory, and speed optimizations
+We propose the development of ChimeraPy, a distributed computing framework for
+multimodal data collection. We focus on four key features that are important for multimodal
+learning analytics purposes: free and open-source code; distributed computing capabilities; the use
+of python as a programming language; and time-alignment capabilities.
 
 ## Installation
 
@@ -33,6 +24,29 @@ git clone https://github.com/oele-isis-vanderbilt/ChimeraPy
 cd ChimeraPy
 pip install .
 ```
+
+## Development
+
+To create a development environment, use instead the following command:
+
+```
+pip install '.[test]'
+```
+
+With this command, the necessary dependencies for testing will be automatically
+installed.
+
+To execute the test, use the following command (located within the root
+GitHub repository folder).
+
+```
+pytest
+```
+
+In this project, we use the `pre-commit` library to verify every commit
+follows certain standards. This dependency is automatically included in
+the test dependency installation. [Here](https://pre-commit.com) is 
+information in how its used and advantages.
 
 ## License
 

@@ -12,11 +12,11 @@ on:
 jobs:
   test:
 
-    runs-on: [ubuntu-latest]
+    runs-on: ubuntu-22.04
 
     # The process
     steps:
-      - name: Set up Python 
+      - name: Set up Python
         uses: actions/setup-python@v2
 
       - uses: actions/checkout@v2
@@ -24,28 +24,10 @@ jobs:
       - name: Install dependencies locally
         run: |
           sudo apt-get update
-          sudo apt-get install ffmpeg libsm6 libxext6 -y
 
       - name: Install ChimeraPy
         run: |
-          python3 -m pip install .
-          python3 -m pip install pytest
-
-      - name: Setup DVC
-        uses: iterative/setup-dvc@v1
-
-      - name: Create credentials
-        id: create-json
-        uses: jsdaniell/create-json@1.1.2
-        with:
-          name: "service_account_secret.json"
-          json: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-
-      - name: Download Test data
-        run: |
-          dvc remote modify myremote --local gdrive_use_service_account true
-          dvc remote modify myremote --local gdrive_service_account_json_file_path service_account_secret.json 
-          dvc pull --run-cache
+          python3 -m pip install '.[test]'
 
       - name: PyTest
         run: |

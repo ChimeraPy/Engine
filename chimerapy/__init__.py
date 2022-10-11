@@ -1,32 +1,45 @@
-# Adding the path of ChimeraPy to PATH
-import os
-import sys
+# Setup the logging for the library
+# References:
+# https://docs.python-guide.org/writing/logging/
+# https://stackoverflow.com/questions/13649664/how-to-use-logging-with-pythons-fileconfig-and-configure-the-logfile-filename
+import logging.config
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "default": {
+            "level": "DEBUG",
+            "formatter": "standard",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",  # Default is stderr
+        },
+    },
+    "loggers": {
+        "": {  # root logger
+            "handlers": ["default"],
+            "level": "DEBUG",
+            "propagate": False,
+        }
+    },
+}
 
-# Level 1 imports
-from .runner import SingleRunner, GroupRunner
-from .loader import Loader
-from .logger import Logger
-from .sorter import Sorter
+# Setup the logging configuration
+logging.config.dictConfig(LOGGING_CONFIG)
 
-# Level 2 imports
-from .core import DataStream, Process, Collector, Pipeline, Session, DataSource,\
-    Sensor, Api, tools
+# Interal Imports
+from .manager import Manager
+from .node import Node
+from .worker import Worker
+from .graph import Graph
 
-# Level 3 imports
-from .core.tabular import TabularDataStream, TabularEntry, ImageEntry, IdentityProcess
-from .core.video import VideoDataStream, VideoEntry
-
-# For Sphinx docs
-__all__ = [
-    'TabularDataStream', 
-    'VideoDataStream', 
-    'Pipeline', 
-    'DataSource',
-    'Process',
-    'SingleRunner',
-    'GroupRunner',
-    'Sensor',
-    'tools',
-]
+from .client import Client
+from .server import Server
+from .enums import *
+from .utils import log

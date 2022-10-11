@@ -3,8 +3,8 @@
 /.vscode
 
 # Ignore the test data - sensitivie
-tests/data/
-tests/test_output/
+test/data/
+test/test_output/
 *.csv
 
 # Ignoring the documentation site
