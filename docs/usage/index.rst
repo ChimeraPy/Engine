@@ -14,3 +14,4 @@ This section covers the essential features of ChimeraPy:
 
    basics
    intro_tutorial
+   defining_pipeline

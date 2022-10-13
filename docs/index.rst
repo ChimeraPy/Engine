@@ -3,33 +3,31 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to ChimeraPy's documentation!
+.. image:: _static/chimerapy_logo_with_name_theme_blue.png
+  :width: 90%
+  :alt: ChimeraPy Logo 
+
+|coverage| |test| |license| |style|
+
+.. |coverage| image:: https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)
+   :alt: coverage
+
+.. |test| image:: https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test
+   :alt: test
+
+.. |license| image:: https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy
+   :alt: license
+
+.. |style| image:: https://img.shields.io/badge/style-black-black
+   :alt: style
+
+Welcome!
 =====================================
 
-ChimeraPy is a package that focus on temporal multimodal data analytics 
-and visualization. It is build on top of pandas and multiprocessing to
-provide a simple yet efficient approach to data processing. ChimeraDash
-is also provided as a visualization tool for multimodal data streams.
-
-ChimeraPy Main Features:
- - Time alignment of multiple data streams
- - Modular and flexible data pipeline architecture 
- - Video, CSV, and other modality toolkits
- - Synchronized Multimodal Session Player
-
-Roadmap: 
- - Online Processing
- - Autoloading to ChimeraDash
- - CPU, memory, and speed optimizations
+We propose the development of ChimeraPy, a distributed computing framework for multimodal data collection. We focus on four key features that are important for multimodal learning analytics purposes: free and open-source code; distributed computing capabilities; the use of python as a programming language; and time-alignment capabilities.
 
 Contents
 --------
-
-.. toctree::
-   :maxdepth: 3
-   :includehidden:
-
-   framework/index
 
 .. toctree::
    :maxdepth: 3
@@ -42,13 +40,19 @@ Contents
    :maxdepth: 3
    :includehidden:
 
+   framework/index
+
+.. toctree::
+   :maxdepth: 3
+   :includehidden:
+
    api/index
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
    :includehidden:
 
-   contributing/index
+   developer/index
    authors
 
 Indices and tables

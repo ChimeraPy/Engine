@@ -1,43 +1,31 @@
 =================
-API documentation
+API Reference
 =================
 
-Data Streams
+Node
 ------------
 
-.. toctree::
-   :maxdepth: 2
-   :includehidden:
-   
-   ./data_streams/tabular.rst
-   ./data_streams/video.rst
+.. autoclass:: chimerapy.Node
+   :members: __init__, prep, step, teardown
 
-Pipeline and Processes
-----------------------
+Manager
+------------
 
-.. toctree::
-   :maxdepth: 2
-   :includehidden:
+.. autoclass:: chimerapy.Manager
+   :members: __init__, register_graph, map_graph, commit_graph, step, start, stop, shutdown
+   :undoc-members: __init__, register_graph, map_graph, commit_graph, step, start, stop, shutdown
 
-   pipeline.rst
-   process.rst
+Worker
+------------
 
-Runners
--------
+.. autoclass:: chimerapy.Worker
+   :members: __init__, connect, step, shutdown
+   :undoc-members: __init__, connect, step, shutdown
 
-.. toctree::
-   :maxdepth: 2
-   :includehidden:
+Graph
+------------
 
-   ./runners/single_runner.rst
-   ./runners/group_runner.rst
+.. autoclass:: chimerapy.Graph
+   :undoc-members:
+   :members:
 
-
-Tools
------
-
-.. toctree::
-   :maxdepth: 2
-   :includehidden:
-   
-   ./tools/tobii.rst
