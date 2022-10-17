@@ -55,7 +55,13 @@ def client(server):
         connect_timeout=2,
         sender_msg_type=cp.WORKER_MESSAGE,
         accepted_msg_type=cp.MANAGER_MESSAGE,
-        handlers={"echo": echo, "image": show_image, "SHUTDOWN": echo},
+        handlers={
+            "echo": echo,
+            "image": show_image,
+            "SHUTDOWN": echo,
+            "MANAGER_BROADCAST_NODE_SERVER_DATA": echo,
+            "MANAGER_REQUEST_NODE_SERVER_DATA": echo,
+        },
     )
     _client.start()
     yield _client
@@ -144,3 +150,27 @@ def test_server_broadcast_to_multiple_clients(server):
 
     for _client in clients:
         _client.shutdown()
+
+
+@pytest.mark.repeat(10)
+def test_server_compression_decompression_not_missing_data(server, client):
+
+    # Information that is causing an issue
+    # nodes_server_table = {'screen': {'host': '127.0.1.1', 'port': 5000}, 'combine': {'host': '127.0.1.1', 'port': 5010}, 'web': {'host': '127.0.1.1', 'port': 5020}}
+    # msg = {'signal': 'MANAGER_BROADCAST_NODE_SERVER_DATA', 'data': {'screen': {'host': '127.0.1.1', 'port': 5000}, 'combine': {'host': '127.0.1.1', 'port': 5010}, 'web': {'host': '127.0.1.1', 'port': 5020}}}
+
+    # msg_bytes = b'\x1f\x8b\x08\x00j(Gc\x02\xff\x8d\x8c\xbb\x0e\x82@\x10E\x7f\x85l-d\x16%>\xbaU\x88\x15\x98\x80\xb1%\xb3\x0f\x95(\x8f\xc0\x12c\x0c\xff\xee\x8e\x95%\xc9\x14\xf7\x9e93\x1ff\xdf\x9da;\x8f\xa5"\x13\xc7$/\xd3\xa4(\\`\x0b\x8f\r\xd5\xad\xc1\xe7\xffr\x9f\x9fD|\x10\xc5\xb9\xccNqR\x16I~q4\x16gA\xbe\xadj3X\xac;:\x81\x1d\xd0\x10\x1f\xc7J\x13\xda*\xe0:\x02\xe5\xab\xe5U\xfb+\x89k_\x9a\x8d\xf2Q\xca\x10\xb4\x94K\x8c\x90|\x8d\x16\x9d\xffa\x83\xea\x8di~\xf1\xde\x0e\x96~\xf0p\x1d@\xc0\x03Nb\xd7\xf6\x04#\x00\x98\\Um-\xab\xc6\xcc\xf0\xf9\xcf\x7f\x199\xc3\ra"\x19\xd5\xc3U\x98\xbe\xd6\xe8\xbbr2\x01\x00\x00'
+
+    # server.broadcast(
+    #     {
+    #         "signal": cp.enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
+    #         "data": nodes_server_table,
+    #     }
+    # )
+
+    server.broadcast(
+        {
+            "signal": cp.enums.MANAGER_REQUEST_NODE_SERVER_DATA,
+            "data": {},
+        }
+    )

@@ -2,14 +2,11 @@
 
 # ChimeraPy: A Distributed Computing Framework for Multimodal Data Collection
 
-[![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
+[![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
 
 [Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy) | [PyPI](https://pypi.org/project/chimerapy/)
 
-We propose the development of ChimeraPy, a distributed computing framework for
-multimodal data collection. We focus on four key features that are important for multimodal
-learning analytics purposes: free and open-source code; distributed computing capabilities; the use
-of python as a programming language; and time-alignment capabilities.
+We propose the development of ChimeraPy, a distributed computing framework for multimodal data collection. We focus on four key features that are important for multimodal learning analytics purposes: free and open-source code; distributed computing capabilities; the use of python as a programming language; and time-alignment capabilities.
 
 ## Installation
 
@@ -47,7 +44,7 @@ pytest
 
 In this project, we use the `pre-commit` library to verify every commit
 follows certain standards. This dependency is automatically included in
-the test dependency installation. [Here](https://pre-commit.com) is 
+the test dependency installation. [Here](https://pre-commit.com) is
 information in how its used and advantages.
 
 ## License

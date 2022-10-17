@@ -1,4 +1,4 @@
-Utilities 
+Utilities
 =========
 
 .. automodule:: chimerapy.utils

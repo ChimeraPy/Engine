@@ -24,14 +24,11 @@ class Node(mp.Process):
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0}
 
-
     def __repr__(self):
         return f"<Node {self.name}>"
 
-
     def __str__(self):
         return self.__repr__()
-
 
     def config(self, host: str, port: int, in_bound: List[str], out_bound: List[str]):
 
@@ -49,6 +46,7 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: finished config")
 
+    @log
     def _prep(self):
 
         # Create container for p2p clients
@@ -60,7 +58,7 @@ class Node(mp.Process):
 
         # Create the queues for each in-bound connection
         self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
-        self.in_bound_data = {x: None for x in self.p2p_info['in_bound']}
+        self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
         self.all_inputs_ready = False
 
         # Create the threads that manager the incoming and outgoing
@@ -96,7 +94,9 @@ class Node(mp.Process):
             accepted_msg_type=enums.WORKER_MESSAGE,
             handlers=self.to_worker_handlers,
         )
+        logger.debug(f"{self}: Node creating Client to connect to Worker")
         self.client.start()
+        logger.debug(f"{self}: connected to Worker")
         self.connected_to_worker = True
         self.worker_signal_start = 0
 
@@ -126,7 +126,6 @@ class Node(mp.Process):
             }
         )
 
-    
     def process_node_server_data(self, msg: Dict):
 
         # We determine all the out bound nodes
@@ -166,9 +165,8 @@ class Node(mp.Process):
             }
         )
 
-    
     def received_data(self, msg: Dict, client_socket: socket.socket):
-    
+
         queue_info = {n: x.qsize() for n, x in self.in_bound_queues.items()}
         # logger.debug(f"queue size: {queue_info}")
 
@@ -177,13 +175,13 @@ class Node(mp.Process):
 
         # Sort the given data into their corresponding queue
         # self.in_bound_queues[msg["data"]["sent_from"]].put(coupled_data["data"])
-        self.in_bound_data[msg['data']['sent_from']] = coupled_data['data']
+        self.in_bound_data[msg["data"]["sent_from"]] = coupled_data["data"]
 
         # Check if we have one for each input to group them together
         # for queue in self.in_bound_queues.values():
         #     if queue.qsize() == 0:
         #         return
-        
+
         if not all([type(x) != type(None) for x in self.in_bound_data.values()]):
             return None
         else:
@@ -198,16 +196,13 @@ class Node(mp.Process):
         # self.in_queue.put(all_data)
         # self.in_queue.put(self.in_bound_data)
 
-    
     def conn_confirmation(self, msg: Dict, client_socket: socket.socket):
         ...
 
-    
     def prep(self):
         """User-define method"""
         ...
 
-    
     def ready(self):
 
         # Notify to the worker that the node is fully READY
@@ -222,7 +217,6 @@ class Node(mp.Process):
             }
         )
 
-    
     def waiting(self):
 
         while self.running.value:
@@ -232,16 +226,13 @@ class Node(mp.Process):
             else:
                 time.sleep(0.1)
 
-    
     def start_node(self, msg: Dict):
         self.worker_signal_start = True
         logger.debug(f"{self}: start")
 
-    
     def stop_node(self, msg: Dict):
         self.running.value = False
 
-    
     def forward(self, msg: Dict):
 
         # If no in_bound, just send data
@@ -279,24 +270,20 @@ class Node(mp.Process):
         # Update the counter
         self.step_id += 1
 
-    
     def step(self, data_dict: Optional[Dict[str, Any]] = None):
         """User-define method"""
         ...
-    
-    
+
     def main(self):
         """User-possible overwritten method"""
 
         while self.running.value:
             self.forward({})
 
-    
     def teardown(self):
         """User-define method"""
         ...
 
-    
     def _teardown(self):
 
         # Clear out the queues
@@ -312,7 +299,6 @@ class Node(mp.Process):
         # Shutdown the server
         self.server.shutdown()
 
- 
     def run(self):
 
         logger.debug(f"{self}: initialized")
@@ -335,7 +321,7 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: is running")
 
-        self.main() 
+        self.main()
 
         logger.debug(f"{self}: is exiting")
 
@@ -344,7 +330,6 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: finished teardown")
 
-    
     def shutdown(self):
 
         self.running.value = False

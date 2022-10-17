@@ -33,7 +33,7 @@ def test_worker_create_node(worker, gen_node):
 
 @pytest.mark.repeat(100)
 def test_worker_create_multiple_nodes_stress(worker):
-   
+
     to_be_created_nodes = []
     for i in range(5):
 
@@ -42,7 +42,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         new_node2 = ConsumeNode(name=f"Con{i}")
         to_be_created_nodes.append(new_node.name)
         to_be_created_nodes.append(new_node2.name)
-        
+
         # Simple single node without connection
         msg = {
             "data": {
@@ -52,7 +52,7 @@ def test_worker_create_multiple_nodes_stress(worker):
                 "out_bound": [],
             }
         }
-        
+
         msg2 = {
             "data": {
                 "node_name": new_node2.name,
@@ -149,12 +149,12 @@ def test_starting_node(worker, gen_node):
 
 
 def test_manager_directing_worker_to_create_node(manager, worker):
-   
+
     # Create original containers
     simple_graph = cp.Graph()
     new_node = GenNode(name=f"Gen1")
     simple_graph.add_nodes_from([new_node])
-    mapping = {worker.name:[new_node.name]}
+    mapping = {worker.name: [new_node.name]}
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
@@ -164,19 +164,19 @@ def test_manager_directing_worker_to_create_node(manager, worker):
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)
-   
+
     # Request node creation
-    manager.request_node_creation(worker_name=worker.name, node_name='Gen1')
-    manager.wait_until_node_creation_complete(worker_name=worker.name, node_name='Gen1')
+    manager.request_node_creation(worker_name=worker.name, node_name="Gen1")
+    manager.wait_until_node_creation_complete(worker_name=worker.name, node_name="Gen1")
 
 
-@pytest.mark.repeat(10)
+# @pytest.mark.repeat(100)
 def test_stress_manager_directing_worker_to_create_node(manager, worker):
-   
+
     # Create original containers
     simple_graph = cp.Graph()
     to_be_created_nodes = []
-    mapping = {worker.name:[]}
+    mapping = {worker.name: []}
 
     for i in range(5):
 
@@ -185,7 +185,7 @@ def test_stress_manager_directing_worker_to_create_node(manager, worker):
         new_node2 = ConsumeNode(name=f"Con{i}")
         to_be_created_nodes.append(new_node.name)
         to_be_created_nodes.append(new_node2.name)
-        
+
         # Simple single node without connection
         simple_graph.add_nodes_from([new_node, new_node2])
 
@@ -201,8 +201,10 @@ def test_stress_manager_directing_worker_to_create_node(manager, worker):
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)
-   
+
     # Request node creation
     for node_name in to_be_created_nodes:
         manager.request_node_creation(worker_name=worker.name, node_name=node_name)
-        manager.wait_until_node_creation_complete(worker_name=worker.name, node_name=node_name)
+        manager.wait_until_node_creation_complete(
+            worker_name=worker.name, node_name=node_name
+        )

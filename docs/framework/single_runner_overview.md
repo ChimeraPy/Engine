@@ -15,7 +15,7 @@ process that spawns the ``Loader`` and the ``Logger``).
 
 The ``Loader`` and its attribute ``Collector`` load and sync the data
 that will be processed further down the process. In the ``SingleRunner``
-case, all the data streams pertain to a single pipeline and are 
+case, all the data streams pertain to a single pipeline and are
 therefore stored together in a dictionary. Here is an example dictionary:
 
 ```python
@@ -26,23 +26,23 @@ data_samples = {
 }
 ```
 
-The data loaded by the ``Loader`` is then placed in the loading queue, 
+The data loaded by the ``Loader`` is then placed in the loading queue,
 waiting for the ``SingleRunner`` to later forward propagate through the
 pipeline.
 
 ## Individual Pipeline
 
-The generated dictionary by the ``Loader`` is then forward propagated 
-through the individual pipeline (that was passed to the ``SingleRunner`` 
+The generated dictionary by the ``Loader`` is then forward propagated
+through the individual pipeline (that was passed to the ``SingleRunner``
 during its construction). The pipeline is defined by the user to handle
-their own special use case. Through the use of multiple modularized 
+their own special use case. Through the use of multiple modularized
 ``Process``, the desired output of the pipeline can be achieved.
 
 ### Processes
 
 The user-defined processes are modular compartments that store the logic
-intended to perform an operation on the data streams. NOTE: currently 
-processes are run purely serially, there is current development to 
+intended to perform an operation on the data streams. NOTE: currently
+processes are run purely serially, there is current development to
 parallelize these process to improve time effiency.
 
 ## Logging

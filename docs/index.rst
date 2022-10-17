@@ -5,7 +5,7 @@
 
 .. image:: _static/chimerapy_logo_with_name_theme_blue.png
   :width: 90%
-  :alt: ChimeraPy Logo 
+  :alt: ChimeraPy Logo
 
 |coverage| |test| |license| |style|
 

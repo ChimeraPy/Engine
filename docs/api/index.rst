@@ -28,4 +28,3 @@ Graph
 .. autoclass:: chimerapy.Graph
    :undoc-members:
    :members:
-

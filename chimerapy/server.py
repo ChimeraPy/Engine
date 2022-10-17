@@ -13,7 +13,6 @@ import threading
 import ast
 import time
 
-import lz4.block
 from .utils import threaded, create_payload, log, get_open_port, decode_payload
 from . import enums
 
@@ -52,14 +51,11 @@ class Server(threading.Thread):
         # Keeping track of client threads
         self.client_comms = {}
 
-
     def __repr__(self):
         return f"<Server {self.name} {self.sender_msg_type}->{self.accepted_msg_type}>"
 
-
     def __str__(self):
         return self.__repr__()
-
 
     def run(self):
 
@@ -81,7 +77,6 @@ class Server(threading.Thread):
             # Saving new client thread
             self.client_comms[s] = {"thread": thread, "acks": collections.deque([], 10)}
 
-    
     def process_msg(self, msg: Dict, s: socket.socket):
 
         # Check that it is from a client
@@ -130,7 +125,11 @@ class Server(threading.Thread):
             # Get message while not blocking
             try:
                 # Get the data
-                bs = s.recv(8)
+                try:
+                    bs = s.recv(8)
+                except ConnectionResetError:
+                    logger.warning(f"{self}: connection lost, shutting down")
+                    break
 
                 # If null, skip
                 if bs == b"":
@@ -175,17 +174,13 @@ class Server(threading.Thread):
         msg_uuid = str(uuid.uuid4())
 
         # Convert msg data to bytes
-        try:
-            msg_bytes, msg_length = create_payload(
-                type=self.sender_msg_type,
-                signal=msg["signal"],
-                data=msg["data"],
-                provided_uuid=msg_uuid,
-                ack=ack,
-            )
-        except lz4.block.LZ4BlockError:
-            logger.error(f"lz4 failed, msg failed {msg['signal']}")
-            return
+        msg_bytes, msg_length = create_payload(
+            type=self.sender_msg_type,
+            signal=msg["signal"],
+            data=msg["data"],
+            provided_uuid=msg_uuid,
+            ack=ack,
+        )
 
         # Sending message
         try:
@@ -193,10 +188,12 @@ class Server(threading.Thread):
             s.sendall(msg_bytes)
             logger.debug(f"{self}: send {msg['signal']}")
         except socket.timeout:
-            logger.error(f"{self}: Socket Timeout: skipping")
+            logger.warning(f"{self}: Socket Timeout: skipping")
             return
         except:
-            logger.error(f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True)
+            logger.warning(
+                f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
+            )
             return
 
         # If ACK requested, wait
@@ -205,6 +202,7 @@ class Server(threading.Thread):
             # Wait for an ACK message that changes client's ACK status
             miss_counter = 0
             while self.is_running:
+                time.sleep(0.1)
                 if msg_uuid in self.client_comms[s]["acks"]:
                     logger.debug(f"Server received ACK")
                     break
@@ -212,7 +210,6 @@ class Server(threading.Thread):
                     logger.debug(
                         f"Waiting for ACK for msg: {(msg['signal'], msg_uuid)} from s: {s}, ack: {self.client_comms[s]['acks']}"
                     )
-                    time.sleep(0.1)
 
                     if miss_counter >= 20:
                         raise RuntimeError(f"Server ACK timeout for {msg}")

@@ -55,7 +55,6 @@ class Manager:
         # Updating the manager's port to the found available port
         self.port = self.server.port
 
-    
     def register_worker(self, msg: Dict, worker_socket: socket.socket):
         self.workers[msg["data"]["name"]] = {
             "addr": msg["data"]["addr"],
@@ -66,12 +65,10 @@ class Manager:
             "nodes_status": {},
         }
 
-    
     def deregister_worker(self, msg: Dict, worker_socket: socket.socket):
         worker_socket.close()
         del self.workers[msg["data"]["name"]]
 
-    
     def node_server_data(self, msg: Dict, worker_socket: socket.socket):
 
         # And then updating the node server data
@@ -80,19 +77,17 @@ class Manager:
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["reported_nodes_server_data"] = True
 
-    
     def update_nodes_status(self, msg: Dict, worker_socket: socket.socket):
 
         # Updating nodes status
         self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
+        logger.info(f"{self}: Nodes status update to: {self.workers}")
 
-    
     def complete_worker_broadcast(self, msg: Dict, worker_socket: socket.socket):
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
 
-    
     def register_graph(self, graph: Graph):
 
         # First, check if graph is valid
@@ -138,12 +133,11 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
-
-    def request_node_creation(self, worker_name:str, node_name:str):
+    def request_node_creation(self, worker_name: str, node_name: str):
 
         if isinstance(self.worker_graph_map, nx.Graph):
             logger.warning(f"Cannot create Node {node_name} with Worker {worker_name}")
-            return 
+            return
 
         # Send for the creation of the node
         self.server.send(
@@ -162,11 +156,12 @@ class Manager:
             },
         )
 
-
-    def wait_until_node_creation_complete(self, worker_name:str, node_name:str):
+    def wait_until_node_creation_complete(self, worker_name: str, node_name: str):
 
         miss_counter = 0
         while True:
+            time.sleep(0.1)
+
             if (
                 node_name in self.workers[worker_name]["nodes_status"]
                 and self.workers[worker_name]["nodes_status"][node_name]["INIT"]
@@ -174,14 +169,19 @@ class Manager:
                 break
             else:
                 logger.debug(f"Waiting for INIT of {node_name}: {self.workers}")
-                time.sleep(0.1)
                 if miss_counter > 10:
                     raise RuntimeError(
                         f"Manager waiting for {node_name} not sending INIT"
                     )
                 miss_counter += 1
 
-    
+        # Perform health check on the worker
+        self.server.send(
+            self.workers[worker_name]["socket"],
+            {"signal": enums.MANAGER_HEALTH_CHECK, "data": {}},
+            ack=True,
+        )
+
     def create_p2p_network(self):
 
         # Send the message to each worker
@@ -202,7 +202,6 @@ class Manager:
 
                 logger.debug(f"Creation of Node {node_name} successful")
 
-    
     def setup_p2p_connections(self):
 
         # After all nodes have been created, get the entire graphs
@@ -233,9 +232,10 @@ class Manager:
         )
 
         # Wail until all workers have claimed that their nodes are ready
-        self.wait_until_all_workers_responded(attribute="served_nodes_server_data", timeout=5)
+        self.wait_until_all_workers_responded(
+            attribute="served_nodes_server_data", timeout=5
+        )
 
-    
     def commit_graph(self):
 
         # First, check that the graph has been cleared
@@ -249,13 +249,11 @@ class Manager:
         # Then setup the p2p connections between nodes
         self.setup_p2p_connections()
 
-    
     def mark_response_as_false_for_workers(self):
 
         for worker_name in self.workers:
             self.workers[worker_name]["response"] = False
 
-    
     def wait_until_all_workers_responded(
         self, attribute: str, timeout: Optional[float] = None, delay: float = 0.1
     ):
@@ -273,14 +271,15 @@ class Manager:
 
                 time.sleep(delay)
 
-                if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
+                if (
+                    isinstance(timeout, (float, int))
+                    and miss_counter * delay >= timeout
+                ):
                     logger.error(f"{self}: stuck")
-                    pdb.set_trace()
                     raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
 
                 miss_counter += 1
 
-    
     def check_all_nodes_ready(self):
 
         logger.debug(f"Checking node ready: {self.workers}")
@@ -304,7 +303,6 @@ class Manager:
         else:
             return False
 
-    
     def wait_until_all_nodes_ready(
         self, timeout: Optional[float] = None, delay: float = 0.1
     ):
@@ -320,7 +318,6 @@ class Manager:
 
             miss_counter += 1
 
-    
     def step(self):
 
         # First, the step should only be possible after a graph has
@@ -333,15 +330,12 @@ class Manager:
         # step
         self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}})
 
-    
     def start(self):
         self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
 
-    
     def stop(self):
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
 
-    
     def shutdown(self):
 
         # First, shutdown server

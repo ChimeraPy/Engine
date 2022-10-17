@@ -19,7 +19,7 @@ class WebcamNode(Node):
         self.vid = cv2.VideoCapture(0)
 
     def step(self):
-        time.sleep(1/30)
+        time.sleep(1 / 30)
         ret, frame = self.vid.read()
 
         return imutils.resize(frame, width=400)
@@ -34,7 +34,7 @@ class ScreenCapture(Node):
         self.monitor = self.sct.monitors[0]
 
     def step(self):
-        time.sleep(1/10)
+        time.sleep(1 / 10)
         frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)
         return imutils.resize(frame, width=400)
 

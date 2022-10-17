@@ -2,9 +2,9 @@
 Usage
 =====
 
-As much as we try to make ChimeraPy intuitive, here we provide some 
+As much as we try to make ChimeraPy intuitive, here we provide some
 basic examples and descriptions to help elaborate on how ChimeraPy
-works. 
+works.
 
 This section covers the essential features of ChimeraPy:
 

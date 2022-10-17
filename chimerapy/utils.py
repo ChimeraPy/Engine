@@ -9,7 +9,9 @@ import functools
 import struct
 
 import jsonpickle
-import lz4.block
+
+# import lz4.block
+import gzip
 
 logger = logging.getLogger("chimerapy")
 
@@ -37,7 +39,7 @@ def log(func):
         kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]
         signature = ", ".join(args_repr + kwargs_repr)
         # logger.debug(f"function {func.__name__} called with args {signature}")
-        logger.debug(f"function {func.__name__}")
+        logger.debug(f"{args_repr[0]}: function {func.__name__}")
         try:
             result = func(*args, **kwargs)
             return result
@@ -91,7 +93,8 @@ def create_payload(
     }
 
     jsonpickle_payload = jsonpickle.encode(payload)
-    compressed_bytes_payload = lz4.block.compress(jsonpickle_payload.encode(), mode="fast")
+    # compressed_bytes_payload = lz4.block.compress(jsonpickle_payload.encode(), mode="fast")
+    compressed_bytes_payload = gzip.compress(jsonpickle_payload.encode())
 
     finished_payload = compressed_bytes_payload
     # finished_payload = jsonpickle_payload.encode()
@@ -101,9 +104,10 @@ def create_payload(
 
 def decode_payload(data: bytes) -> Dict:
 
-    bytes_payload = lz4.block.decompress(data)
+    # bytes_payload = lz4.block.decompress(data)
+    bytes_payload = gzip.decompress(data)
     payload: Dict = jsonpickle.decode(bytes_payload)
-    
+
     # payload: Dict = jsonpickle.decode(data)
 
     return payload

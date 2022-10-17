@@ -5,8 +5,8 @@ Overview
 .. _framework:
 
 The ChimeraPy project includes various components to provide the utility
-and features needed to perform multimodal analysis. In this section, we 
-go over main concepts surrounding ChimeraPy and how it works. Below is 
+and features needed to perform multimodal analysis. In this section, we
+go over main concepts surrounding ChimeraPy and how it works. Below is
 the list of content:
 
 .. toctree::

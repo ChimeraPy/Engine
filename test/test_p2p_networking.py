@@ -106,19 +106,20 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
 
     return manager
 
-@pytest.mark.repeat(100)
+
+@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
     [
-        # (lazy_fixture("single_node_no_connections_manager"), {"local": ["Gen1"]}),
+        (lazy_fixture("single_node_no_connections_manager"), {"local": ["Gen1"]}),
         (
             lazy_fixture("multiple_nodes_one_worker_manager"),
             {"local": ["Gen1", "Con1"]},
         ),
-        # (
-        #     lazy_fixture("multiple_nodes_multiple_workers_manager"),
-        #     {"local": ["Gen1"], "local2": ["Con1"]},
-        # ),
+        (
+            lazy_fixture("multiple_nodes_multiple_workers_manager"),
+            {"local": ["Gen1"], "local2": ["Con1"]},
+        ),
     ],
 )
 def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
@@ -150,7 +151,7 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
     assert all([config_manager.graph.has_node_by_name(x) for x in nodes_names])
 
 
-# @pytest.mark.skip(reason="Testing only node Creation")
+@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager",
     [

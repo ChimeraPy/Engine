@@ -19,21 +19,22 @@ class SaveHandler(threading.Thread):
         # Save input parameters
         self.logdir = logdir
         self.save_queue = save_queue
-        
+
         # Saving thread state information
         self.is_running = threading.Event()
         self.is_running.set()
 
     def run(self):
-        
+
         # Continue checking for messages from client until not running
         while self.is_running.is_set():
             ...
-    
+
     def shutdown(self):
 
         # First, indicate the end
         self.is_running.clear()
+
 
 class OutputsHandler(threading.Thread):
     def __init__(

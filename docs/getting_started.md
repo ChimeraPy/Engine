@@ -23,13 +23,13 @@ To confirm that the installation went smoothly, you can test importing
 the package.
 
 ```bash
-$ python 
+$ python
 >>> import chimerapy as cp
 ```
 
 ## Next Steps
 
-Now that you have ChimeraPy installed in your Python environment, you 
+Now that you have ChimeraPy installed in your Python environment, you
 are ready to head to [Basic Usage](./usage/basics.md). Additionally, to
 better understand the underlying framework, you can checkout
 [Overview](./framework/index.rst).

@@ -30,6 +30,7 @@ class Worker:
         # Indicating which function to response
         self.to_manager_handlers = {
             enums.SHUTDOWN: self.shutdown,
+            enums.MANAGER_HEALTH_CHECK: self.health_check,
             enums.MANAGER_CREATE_NODE: self.create_node,
             enums.MANAGER_REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
             enums.MANAGER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -54,14 +55,11 @@ class Worker:
         self.host, self.port = self.server.host, self.server.port
         self.server.start()
 
-    
     def __repr__(self):
         return f"<Worker {self.name}>"
 
-
     def __str__(self):
         return self.__repr__()
-
 
     def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
 
@@ -93,9 +91,19 @@ class Worker:
         self.connected_to_manager = True
         logger.info(f"{self}: connected to Manager")
 
-    
+    def health_check(self, msg: Dict):
+        ...
+
+        # if self.connected_to_manager:
+        #     self.client.send(
+        #         {
+        #             "signal": enums.WORKER_REPORT_HEALTH,
+        #             "data": {"alive": True},
+        #         },
+        #     )
+
     def create_node(self, msg: Dict):
-        
+
         # Saving name to track it for now
         node_name = msg["data"]["node_name"]
         logger.info(f"{self}: received request for Node {node_name} creation: {msg}")
@@ -132,7 +140,6 @@ class Worker:
             else:
 
                 if miss_counter > 10:
-                    pdb.set_trace()
                     raise RuntimeError(f"{self.name} for {node_name} is not starting!")
 
                 miss_counter += 1
@@ -150,7 +157,7 @@ class Worker:
                 {
                     "signal": enums.WORKER_REPORT_NODES_STATUS,
                     "data": nodes_status_data,
-                }
+                },
             )
 
     def create_node_server_data(self):
@@ -165,7 +172,6 @@ class Worker:
 
         return node_server_data
 
-    
     def report_node_server_data(self, msg: Dict):
 
         node_server_data = self.create_node_server_data()
@@ -179,9 +185,8 @@ class Worker:
                 }
             )
 
-    
     def process_node_server_data(self, msg: Dict):
-        
+
         logger.debug(f"{self}: processing node server data")
 
         self.server.broadcast(
@@ -204,9 +209,11 @@ class Worker:
                     break
                 else:
                     time.sleep(delay)
-                    
+
                     if miss_counter * delay > timeout:
-                        raise RuntimeError(f"{self}: timeout waiting for CONNECTED msg from {node_name}")
+                        raise RuntimeError(
+                            f"{self}: timeout waiting for CONNECTED msg from {node_name}"
+                        )
 
                     miss_counter += 1
 
@@ -228,15 +235,17 @@ class Worker:
                 {
                     "signal": enums.WORKER_REPORT_NODES_STATUS,
                     "data": nodes_status_data,
-                }
+                },
             )
+
+            # Required for clearing sockets
+            time.sleep(0.5)
 
             # Then confirm that all the node server data has been distributed
             self.client.send(
                 {"signal": enums.WORKER_COMPLETE_BROADCAST, "data": {"name": self.name}}
             )
 
-    
     def node_status_update(self, msg: Dict, s: socket.socket):
 
         # Saving name to track it for now
@@ -263,25 +272,21 @@ class Worker:
                 }
             )
 
-    
     def step(self, msg: Dict):
 
         # Worker tell all nodes to take a step
         self.server.broadcast({"signal": enums.WORKER_REQUEST_STEP, "data": {}})
 
-    
     def start_nodes(self, msg: Dict):
 
         # Send message to nodes to start
         self.server.broadcast({"signal": enums.WORKER_START_NODES, "data": {}})
 
-    
     def stop_nodes(self, msg: Dict):
 
         # Send message to nodes to start
         self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}})
 
-    
     def shutdown(self, msg: Dict = {}):
 
         # Shutdown the Worker 2 Node server
