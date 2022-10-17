@@ -8,6 +8,8 @@ import jsonpickle
 
 import chimerapy as cp
 
+from .conftest import GenNode, ConsumeNode
+
 
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
@@ -27,6 +29,45 @@ def test_worker_create_node(worker, gen_node):
 
     logger.debug("Finishied creating nodes")
     assert gen_node.name in worker.nodes
+
+
+@pytest.mark.repeat(100)
+def test_worker_create_multiple_nodes_stress(worker):
+   
+    to_be_created_nodes = []
+    for i in range(5):
+
+        # Create node and save name for later comparison
+        new_node = GenNode(name=f"Gen{i}")
+        new_node2 = ConsumeNode(name=f"Con{i}")
+        to_be_created_nodes.append(new_node.name)
+        to_be_created_nodes.append(new_node2.name)
+        
+        # Simple single node without connection
+        msg = {
+            "data": {
+                "node_name": new_node.name,
+                "node_object": jsonpickle.dumps(new_node),
+                "in_bound": [],
+                "out_bound": [],
+            }
+        }
+        
+        msg2 = {
+            "data": {
+                "node_name": new_node2.name,
+                "node_object": jsonpickle.dumps(new_node2),
+                "in_bound": [],
+                "out_bound": [],
+            }
+        }
+
+        worker.create_node(msg)
+        worker.create_node(msg2)
+
+    # Confirm that the node was created
+    for node_name in to_be_created_nodes:
+        assert node_name in worker.nodes
 
 
 def test_step_single_node(worker, gen_node):
@@ -105,3 +146,63 @@ def test_starting_node(worker, gen_node):
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
+
+
+def test_manager_directing_worker_to_create_node(manager, worker):
+   
+    # Create original containers
+    simple_graph = cp.Graph()
+    new_node = GenNode(name=f"Gen1")
+    simple_graph.add_nodes_from([new_node])
+    mapping = {worker.name:[new_node.name]}
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    manager.register_graph(simple_graph)
+
+    # Specify what nodes to what worker
+    manager.map_graph(mapping)
+   
+    # Request node creation
+    manager.request_node_creation(worker_name=worker.name, node_name='Gen1')
+    manager.wait_until_node_creation_complete(worker_name=worker.name, node_name='Gen1')
+
+
+@pytest.mark.repeat(10)
+def test_stress_manager_directing_worker_to_create_node(manager, worker):
+   
+    # Create original containers
+    simple_graph = cp.Graph()
+    to_be_created_nodes = []
+    mapping = {worker.name:[]}
+
+    for i in range(5):
+
+        # Create node and save name for later comparison
+        new_node = GenNode(name=f"Gen{i}")
+        new_node2 = ConsumeNode(name=f"Con{i}")
+        to_be_created_nodes.append(new_node.name)
+        to_be_created_nodes.append(new_node2.name)
+        
+        # Simple single node without connection
+        simple_graph.add_nodes_from([new_node, new_node2])
+
+        # Create mapping
+        mapping[worker.name].append(new_node.name)
+        mapping[worker.name].append(new_node2.name)
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    manager.register_graph(simple_graph)
+
+    # Specify what nodes to what worker
+    manager.map_graph(mapping)
+   
+    # Request node creation
+    for node_name in to_be_created_nodes:
+        manager.request_node_creation(worker_name=worker.name, node_name=node_name)
+        manager.wait_until_node_creation_complete(worker_name=worker.name, node_name=node_name)

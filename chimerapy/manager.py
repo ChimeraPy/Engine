@@ -7,6 +7,8 @@ import jsonpickle
 
 logger = logging.getLogger("chimerapy")
 
+import networkx as nx
+
 from .server import Server
 from .graph import Graph
 from .utils import log
@@ -136,6 +138,49 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
+
+    def request_node_creation(self, worker_name:str, node_name:str):
+
+        if isinstance(self.worker_graph_map, nx.Graph):
+            logger.warning(f"Cannot create Node {node_name} with Worker {worker_name}")
+            return 
+
+        # Send for the creation of the node
+        self.server.send(
+            self.workers[worker_name]["socket"],
+            {
+                "signal": enums.MANAGER_CREATE_NODE,
+                "data": {
+                    "worker_name": worker_name,
+                    "node_name": node_name,
+                    "node_object": jsonpickle.encode(
+                        self.graph.G.nodes[node_name]["object"]
+                    ),
+                    "in_bound": list(self.graph.G.predecessors(node_name)),
+                    "out_bound": list(self.graph.G.successors(node_name)),
+                },
+            },
+        )
+
+
+    def wait_until_node_creation_complete(self, worker_name:str, node_name:str):
+
+        miss_counter = 0
+        while True:
+            if (
+                node_name in self.workers[worker_name]["nodes_status"]
+                and self.workers[worker_name]["nodes_status"][node_name]["INIT"]
+            ):
+                break
+            else:
+                logger.debug(f"Waiting for INIT of {node_name}: {self.workers}")
+                time.sleep(0.1)
+                if miss_counter > 10:
+                    raise RuntimeError(
+                        f"Manager waiting for {node_name} not sending INIT"
+                    )
+                miss_counter += 1
+
     
     def create_p2p_network(self):
 
@@ -145,41 +190,12 @@ class Manager:
             # Send each node that needs to be constructed
             for node_name in self.worker_graph_map[worker_name]:
 
-                # Send for the creation of the node
-                self.server.send(
-                    self.workers[worker_name]["socket"],
-                    {
-                        "signal": enums.MANAGER_CREATE_NODE,
-                        "data": {
-                            "worker_name": worker_name,
-                            "node_name": node_name,
-                            "node_object": jsonpickle.encode(
-                                self.graph.G.nodes[node_name]["object"],
-                                unpicklable=True,
-                            ),
-                            "in_bound": list(self.graph.G.predecessors(node_name)),
-                            "out_bound": list(self.graph.G.successors(node_name)),
-                        },
-                    },
-                )
+                # Send request to create node
+                self.request_node_creation(worker_name, node_name)
 
                 # Wait until the node has been created and connected
                 # to the corresponding worker
-                miss_counter = 0
-                while True:
-                    if (
-                        node_name in self.workers[worker_name]["nodes_status"]
-                        and self.workers[worker_name]["nodes_status"][node_name]["INIT"]
-                    ):
-                        break
-                    else:
-                        logger.debug(f"Waiting for INIT of {node_name}: {self.workers}")
-                        time.sleep(0.1)
-                        if miss_counter > 10:
-                            raise RuntimeError(
-                                f"Manager waiting for {node_name} not sending INIT"
-                            )
-                        miss_counter += 1
+                self.wait_until_node_creation_complete(worker_name, node_name)
 
                 # Mark the response as false, since it is not used
                 self.mark_response_as_false_for_workers()

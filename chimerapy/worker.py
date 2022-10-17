@@ -98,7 +98,7 @@ class Worker:
         
         # Saving name to track it for now
         node_name = msg["data"]["node_name"]
-        logger.info(f"{self}: received request for Node {node_name} creation")
+        logger.info(f"{self}: received request for Node {node_name} creation: {msg}")
 
         # Saving the node data
         self.nodes[node_name] = {
@@ -125,15 +125,14 @@ class Worker:
         # Wait until the node has informed us that it has been initialized
         miss_counter = 0
         while True:
+            time.sleep(0.1)
+
             if self.nodes[node_name]["status"]["INIT"]:
                 break
             else:
-                # logger.debug(
-                #     f"{self}: waiting on {node_name} for INIT, {self.nodes[node_name]['node_object'].exitcode} {self.nodes[node_name]['node_object'].is_alive()}"
-                # )
-                time.sleep(0.1)
 
                 if miss_counter > 10:
+                    pdb.set_trace()
                     raise RuntimeError(f"{self.name} for {node_name} is not starting!")
 
                 miss_counter += 1
