@@ -241,7 +241,7 @@ def test_manager_start(config_manager):
 
     # Commiting the graph by sending it to the workers
     config_manager.commit_graph()
-    config_manager.wait_until_all_nodes_ready()
+    config_manager.wait_until_all_nodes_ready(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()

@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import socket
 import logging
 import pdb
@@ -99,7 +99,7 @@ class Manager:
         self.graph = graph
         self.commitable_graph = False
 
-    def map_graph(self, worker_graph_map: Dict[str, str]):
+    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
 
         # Tracking valid inputs
         checks = []
@@ -312,7 +312,7 @@ class Manager:
             logger.debug("Waiting for nodes to be ready")
             time.sleep(delay)
 
-            if isinstance(timeout, float) and miss_counter * delay >= 10:
+            if isinstance(timeout, float) and miss_counter * delay >= timeout:
                 logger.error("Node ready timeout")
                 raise RuntimeError("Node ready timeout")
 
