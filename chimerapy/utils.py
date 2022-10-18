@@ -95,6 +95,8 @@ def create_payload(
     jsonpickle_payload = jsonpickle.encode(payload)
     # compressed_bytes_payload = lz4.block.compress(jsonpickle_payload.encode(), mode="fast")
     compressed_bytes_payload = gzip.compress(jsonpickle_payload.encode())
+    decompressed_bytes_payload = gzip.decompress(compressed_bytes_payload)
+    assert decompressed_bytes_payload == jsonpickle_payload.encode()
 
     finished_payload = compressed_bytes_payload
     # finished_payload = jsonpickle_payload.encode()

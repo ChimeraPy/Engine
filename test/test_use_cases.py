@@ -51,16 +51,17 @@ class ShowWindow(Node):
         else:
             return None
 
-        cv2.imshow("frame", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("frame", frame)
+        # cv2.waitKey(1)
 
-    def teardown(self):
-        cv2.destroyAllWindows()
+    # def teardown(self):
+    #     cv2.destroyAllWindows()
 
 
 class CombineAndShow(Node):
     def prep(self):
-        cv2.namedWindow("frame", cv2.WINDOW_NORMAL)
+        # cv2.namedWindow("frame", cv2.WINDOW_NORMAL)
+        ...
 
     def step(self, data: Dict[str, Any]):
 
@@ -72,11 +73,11 @@ class CombineAndShow(Node):
         web_frame = cv2.resize(web_frame, dim, interpolation=cv2.INTER_AREA)
         frame = np.concatenate((web_frame, screen_frame), axis=0)
 
-        cv2.imshow("frame", frame)
-        cv2.waitKey(1)
+        # cv2.imshow("frame", frame)
+        # cv2.waitKey(1)
 
-    def teardown(self):
-        cv2.destroyAllWindows()
+    # def teardown(self):
+    #     cv2.destroyAllWindows()
 
 
 @pytest.fixture
@@ -144,5 +145,5 @@ def test_use_case_graph(manager, worker, graph, mapping):
 
     # Take a single step and see if the system crashes and burns
     manager.start()
-    time.sleep(10)
+    time.sleep(5)
     manager.stop()

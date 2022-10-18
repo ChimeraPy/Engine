@@ -97,8 +97,7 @@ class Server(threading.Thread):
                     )
 
                     # Send ACK
-                    s.sendall(msg_length)
-                    s.sendall(msg_bytes)
+                    s.sendall(msg_length + msg_bytes)
 
                 # Obtain the fn to execute
                 fn = self.handlers[msg["signal"]]
@@ -184,8 +183,7 @@ class Server(threading.Thread):
 
         # Sending message
         try:
-            s.sendall(msg_length)
-            s.sendall(msg_bytes)
+            s.sendall(msg_length + msg_bytes)
             logger.debug(f"{self}: send {msg['signal']}")
         except socket.timeout:
             logger.warning(f"{self}: Socket Timeout: skipping")

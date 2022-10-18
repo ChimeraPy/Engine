@@ -238,9 +238,6 @@ class Worker:
                 },
             )
 
-            # Required for clearing sockets
-            time.sleep(0.5)
-
             # Then confirm that all the node server data has been distributed
             self.client.send(
                 {"signal": enums.WORKER_COMPLETE_BROADCAST, "data": {"name": self.name}}
