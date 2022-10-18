@@ -1,4 +1,5 @@
-![logo](docs/_static/chimerapy_logo_with_name.png)
+![logo](docs/_static/chimerapy_logo_with_name.png#gh-dark-mode-only)
+![logo](docs/_static/chimerapy_logo_with_name_theme_blue.png#gh-white-mode-only)
 
 # ChimeraPy: A Distributed Computing Framework for Multimodal Data Collection
 

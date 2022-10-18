@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union
 import socket
 import logging
 import pdb
@@ -304,7 +304,7 @@ class Manager:
             return False
 
     def wait_until_all_nodes_ready(
-        self, timeout: Optional[float] = None, delay: float = 0.1
+        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
     ):
 
         miss_counter = 0
@@ -312,7 +312,7 @@ class Manager:
             logger.debug("Waiting for nodes to be ready")
             time.sleep(delay)
 
-            if isinstance(timeout, float) and miss_counter * delay >= timeout:
+            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
                 logger.error("Node ready timeout")
                 raise RuntimeError("Node ready timeout")
 

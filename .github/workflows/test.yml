@@ -12,7 +12,7 @@ on:
 jobs:
   test:
 
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     # The process
     steps:
@@ -25,8 +25,15 @@ jobs:
         run: |
           sudo apt-get update
 
-      - name: Install ChimeraPy
+      - name: Install dependencies and ChimeraPy
         run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get update
+            # sudo apt-get install -y python3-opencv
+            sudo apt-get install ffmpeg libsm6 libxext6 -y
+          fi
+          # All need to run the following
+          python3 -m pip install --upgrade pip
           python3 -m pip install '.[test]'
 
       - name: PyTest

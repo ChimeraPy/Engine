@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import imutils
 import mss
+import os
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
@@ -30,13 +31,21 @@ class WebcamNode(Node):
 
 class ScreenCapture(Node):
     def prep(self):
-        self.sct = mss.mss()
-        self.monitor = self.sct.monitors[0]
+
+        # https://stackoverflow.com/questions/8257385/automatic-detection-of-display-availability-with-matplotlib
+        if "DISPLAY" not in os.environ:
+            self.monitor = None
+        else:
+            self.sct = mss.mss()
+            self.monitor = self.sct.monitors[0]
 
     def step(self):
         time.sleep(1 / 10)
-        frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)
-        return imutils.resize(frame, width=400)
+        if self.monitor:
+            frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)
+            return imutils.resize(frame, width=400)
+        else:
+            return np.ones((400, 400))
 
 
 class ShowWindow(Node):
@@ -59,10 +68,6 @@ class ShowWindow(Node):
 
 
 class CombineAndShow(Node):
-    def prep(self):
-        # cv2.namedWindow("frame", cv2.WINDOW_NORMAL)
-        ...
-
     def step(self, data: Dict[str, Any]):
 
         web_frame = data["web"]
@@ -124,8 +129,8 @@ def combine_videos_graph():
 @pytest.mark.parametrize(
     "graph, mapping",
     [
-        # (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
-        # (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
+        (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
+        (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
         (lazy_fixture("combine_videos_graph"), {"local": ["screen", "combine", "web"]}),
     ],
 )
@@ -141,7 +146,7 @@ def test_use_case_graph(manager, worker, graph, mapping):
     manager.map_graph(mapping)
 
     manager.commit_graph()
-    manager.wait_until_all_nodes_ready()
+    manager.wait_until_all_nodes_ready(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     manager.start()
