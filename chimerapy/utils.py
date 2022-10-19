@@ -10,8 +10,9 @@ import struct
 
 import jsonpickle
 
-# import lz4.block
-import gzip
+import lz4.block
+
+# import gzip
 
 logger = logging.getLogger("chimerapy")
 
@@ -93,10 +94,12 @@ def create_payload(
     }
 
     jsonpickle_payload = jsonpickle.encode(payload)
-    # compressed_bytes_payload = lz4.block.compress(jsonpickle_payload.encode(), mode="fast")
-    compressed_bytes_payload = gzip.compress(jsonpickle_payload.encode())
-    decompressed_bytes_payload = gzip.decompress(compressed_bytes_payload)
-    assert decompressed_bytes_payload == jsonpickle_payload.encode()
+    compressed_bytes_payload = lz4.block.compress(
+        jsonpickle_payload.encode(), mode="fast"
+    )
+    # compressed_bytes_payload = gzip.compress(jsonpickle_payload.encode())
+    # decompressed_bytes_payload = gzip.decompress(compressed_bytes_payload)
+    # assert decompressed_bytes_payload == jsonpickle_payload.encode()
 
     finished_payload = compressed_bytes_payload
     # finished_payload = jsonpickle_payload.encode()
@@ -106,8 +109,8 @@ def create_payload(
 
 def decode_payload(data: bytes) -> Dict:
 
-    # bytes_payload = lz4.block.decompress(data)
-    bytes_payload = gzip.decompress(data)
+    bytes_payload = lz4.block.decompress(data)
+    # bytes_payload = gzip.decompress(data)
     payload: Dict = jsonpickle.decode(bytes_payload)
 
     # payload: Dict = jsonpickle.decode(data)
