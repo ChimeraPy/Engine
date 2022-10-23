@@ -62,7 +62,6 @@ def get_open_port(start_port: int) -> socket.socket:
     while True:
         try:
             current_attempt_port = start_port + offset
-            # s.bind((host, current_attempt_port))
             s.bind(("", current_attempt_port))
             break
         except socket.error as e:
