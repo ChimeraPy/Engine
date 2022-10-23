@@ -33,7 +33,6 @@ def show_image(msg: Dict, s: socket.socket = None):
 @pytest.fixture
 def server():
     _server = cp.Server(
-        host=socket.gethostbyname(socket.gethostname()),
         port=9000,
         name="test",
         max_num_of_clients=10,

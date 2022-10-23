@@ -102,7 +102,6 @@ class Node(mp.Process):
 
         # Create server
         self.server = Server(
-            host=socket.gethostbyname(socket.gethostname()),
             port=5000,
             name=f"Node {self.name}",
             max_num_of_clients=len(self.p2p_info["out_bound"]),

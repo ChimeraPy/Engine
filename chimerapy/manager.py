@@ -19,7 +19,7 @@ class Manager:
     def __init__(self, port: int = 9000, max_num_of_workers: int = 50):
 
         # Saving input parameters
-        self.host = socket.gethostbyname(socket.gethostname())
+        # self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.max_num_of_workers = max_num_of_workers
 
@@ -41,7 +41,6 @@ class Manager:
 
         # Create server
         self.server = Server(
-            host=self.host,
             port=self.port,
             name="Manager",
             max_num_of_clients=self.max_num_of_workers,
@@ -53,7 +52,7 @@ class Manager:
         logger.info(f"Server started at Port {self.server.port}")
 
         # Updating the manager's port to the found available port
-        self.port = self.server.port
+        self.host, self.port = self.server.host, self.server.port
 
     def register_worker(self, msg: Dict, worker_socket: socket.socket):
         self.workers[msg["data"]["name"]] = {

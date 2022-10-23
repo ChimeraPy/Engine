@@ -42,7 +42,6 @@ class Worker:
 
         # Create server
         self.server = Server(
-            host=socket.gethostbyname(socket.gethostname()),
             port=8000,
             name=f"Worker {self.name}",
             max_num_of_clients=self.max_num_of_nodes,
@@ -126,6 +125,9 @@ class Worker:
             self.nodes[node_name]["in_bound"],
             self.nodes[node_name]["out_bound"],
         )
+
+        # Before starting, over write the pid
+        self.nodes[node_name]["node_object"]._parent_pid == os.getpid()
 
         # Start the node
         self.nodes[node_name]["node_object"].start()
@@ -318,4 +320,4 @@ class Worker:
 
             # Shutdown client
             self.client.shutdown()
-            self.client.join()
+            # self.client.join()

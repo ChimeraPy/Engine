@@ -8,6 +8,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy import Worker, Graph, Node
+from .mock import DockeredWorker
 
 
 @pytest.fixture
@@ -107,6 +108,30 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
     return manager
 
 
+@pytest.fixture
+def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_node):
+
+    # Define graph
+    simple_graph = Graph()
+    simple_graph.add_nodes_from([gen_node])
+
+    # Connect to the manager
+    dockered_worker.connect(host=manager.host, port=manager.port)
+    time.sleep(0.5)
+
+    # Then register graph to Manager
+    manager.register_graph(simple_graph)
+
+    # Specify what nodes to what worker
+    manager.map_graph(
+        {
+            "local": ["Gen1"],
+        }
+    )
+
+    return manager
+
+
 @pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
@@ -120,6 +145,7 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
             lazy_fixture("multiple_nodes_multiple_workers_manager"),
             {"local": ["Gen1"], "local2": ["Con1"]},
         ),
+        # (lazy_fixture("dockered_single_node_no_connections_manager"), {"local": ["Gen1"]})
     ],
 )
 def test_p2p_network_creation(config_manager, expected_worker_to_nodes):

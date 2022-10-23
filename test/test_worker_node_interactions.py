@@ -9,6 +9,7 @@ import jsonpickle
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode
+from pytest_lazyfixture import lazy_fixture
 
 
 @pytest.mark.repeat(3)
@@ -31,7 +32,7 @@ def test_worker_create_node(worker, gen_node):
     assert gen_node.name in worker.nodes
 
 
-@pytest.mark.repeat(100)
+@pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
     to_be_created_nodes = []
@@ -148,26 +149,35 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
 
-def test_manager_directing_worker_to_create_node(manager, worker):
+@pytest.mark.parametrize(
+    "_manager,_worker",
+    [
+        (lazy_fixture("manager"), lazy_fixture("worker")),
+        # (lazy_fixture('manager'), lazy_fixture("dockered_worker"))
+    ],
+)
+def test_manager_directing_worker_to_create_node(_manager, _worker):
 
     # Create original containers
     simple_graph = cp.Graph()
     new_node = GenNode(name=f"Gen1")
     simple_graph.add_nodes_from([new_node])
-    mapping = {worker.name: [new_node.name]}
+    mapping = {_worker.name: [new_node.name]}
 
     # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
+    _worker.connect(host=_manager.host, port=_manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(simple_graph)
+    _manager.register_graph(simple_graph)
 
     # Specify what nodes to what worker
-    manager.map_graph(mapping)
+    _manager.map_graph(mapping)
 
     # Request node creation
-    manager.request_node_creation(worker_name=worker.name, node_name="Gen1")
-    manager.wait_until_node_creation_complete(worker_name=worker.name, node_name="Gen1")
+    _manager.request_node_creation(worker_name=_worker.name, node_name="Gen1")
+    _manager.wait_until_node_creation_complete(
+        worker_name=_worker.name, node_name="Gen1"
+    )
 
 
 # @pytest.mark.repeat(100)

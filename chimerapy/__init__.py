@@ -43,3 +43,6 @@ from .client import Client
 from .server import Server
 from .enums import *
 from .utils import log
+
+# Then define the entry points
+from . import entry
