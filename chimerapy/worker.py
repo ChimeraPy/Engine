@@ -127,7 +127,7 @@ class Worker:
         )
 
         # Before starting, over write the pid
-        self.nodes[node_name]["node_object"]._parent_pid == os.getpid()
+        self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
 
         # Start the node
         self.nodes[node_name]["node_object"].start()

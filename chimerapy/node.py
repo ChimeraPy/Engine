@@ -70,6 +70,7 @@ class Node(mp.Process):
 
         # Defining protocol responses
         self.to_worker_handlers = {
+            enums.SHUTDOWN: self.shutdown,
             enums.WORKER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
             enums.WORKER_REQUEST_STEP: self.forward,
             enums.WORKER_START_NODES: self.start_node,
@@ -329,6 +330,6 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: finished teardown")
 
-    def shutdown(self):
+    def shutdown(self, msg: Dict = {}):
 
         self.running.value = False
