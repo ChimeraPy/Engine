@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-
+    timeout-minutes: 30
     runs-on: ubuntu-latest
 
     # The process
@@ -35,6 +35,10 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[test]'
 
+      - name: Build ChimeraPy Docker Image to spin up VM mocking Workers
+        run: |
+          sudo docker build -t chimerapy .
+
       - name: Perform tests
         run: |
           # python -m pytest --cov=chimerapy --cov-report=xml
@@ -53,6 +57,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     container: python:3-slim
+    if: github.ref == 'refs/heads/main'
     steps:
     - name: Finished
       run: |

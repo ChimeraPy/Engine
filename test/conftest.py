@@ -4,8 +4,11 @@ import logging
 
 logger = logging.getLogger("chimerapy")
 
+import docker
 import pytest
+
 from chimerapy import Manager, Worker, Graph, Node
+from .mock import DockeredWorker
 
 
 @pytest.fixture(autouse=True)
@@ -26,6 +29,19 @@ def worker():
     worker = Worker(name="local")
     yield worker
     worker.shutdown()
+
+
+@pytest.fixture
+def docker_client():
+    c = docker.DockerClient(base_url="unix://var/run/docker.sock")
+    return c
+
+
+@pytest.fixture
+def dockered_worker(docker_client):
+    dockered_worker = DockeredWorker(docker_client, name="test")
+    yield dockered_worker
+    dockered_worker.shutdown()
 
 
 class GenNode(Node):

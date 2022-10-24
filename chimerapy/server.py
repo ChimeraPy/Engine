@@ -20,7 +20,6 @@ from . import enums
 class Server(threading.Thread):
     def __init__(
         self,
-        host: str,
         port: int,
         name: str,
         max_num_of_clients: int,
@@ -31,8 +30,6 @@ class Server(threading.Thread):
         super().__init__()
 
         # Saving input parameters
-        self.host = host
-        self.port = port
         self.name = name
         self.max_num_of_clients = max_num_of_clients
         self.sender_msg_type = sender_msg_type
@@ -40,7 +37,8 @@ class Server(threading.Thread):
         self.handlers = handlers
 
         # Create listening socket
-        self.socket, self.port = get_open_port(host, port)
+        self.socket = get_open_port(port)
+        self.host, self.port = self.socket.getsockname()
         self.socket.listen(self.max_num_of_clients)
         self.socket.settimeout(0.2)
 

@@ -53,7 +53,7 @@ def log(func):
     return wrapper
 
 
-def get_open_port(host: str, start_port: int) -> Tuple[socket.socket, int]:
+def get_open_port(start_port: int) -> socket.socket:
 
     # Creating socket to connect
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -62,7 +62,7 @@ def get_open_port(host: str, start_port: int) -> Tuple[socket.socket, int]:
     while True:
         try:
             current_attempt_port = start_port + offset
-            s.bind((host, current_attempt_port))
+            s.bind(("", current_attempt_port))
             break
         except socket.error as e:
             offset += 10
@@ -72,7 +72,7 @@ def get_open_port(host: str, start_port: int) -> Tuple[socket.socket, int]:
                 logger.error("Unknown socket error", exc_info=True)
                 raise e
 
-    return s, current_attempt_port
+    return s
 
 
 def create_payload(
