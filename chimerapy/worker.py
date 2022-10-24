@@ -34,11 +34,15 @@ class Worker:
             enums.MANAGER_CREATE_NODE: self.create_node,
             enums.MANAGER_REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
             enums.MANAGER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+            enums.MANAGER_REQUEST_GATHER: self.report_node_gather,
             enums.MANAGER_REQUEST_STEP: self.step,
             enums.MANAGER_START_NODES: self.start_nodes,
             enums.MANAGER_STOP_NODES: self.stop_nodes,
         }
-        self.from_node_handlers = {enums.NODE_STATUS: self.node_status_update}
+        self.from_node_handlers = {
+            enums.NODE_STATUS: self.node_status_update,
+            enums.NODE_REPORT_GATHER: self.node_report_gather,
+        }
 
         # Create server
         self.server = Server(
@@ -90,6 +94,40 @@ class Worker:
         self.connected_to_manager = True
         logger.info(f"{self}: connected to Manager")
 
+    def mark_response_as_false_for_node(self, node_name: str):
+        self.nodes[node_name]["response"] = False
+
+    def mark_all_response_as_false_for_nodes(self):
+
+        for node_name in self.nodes:
+            self.mark_response_as_false_for_node(node_name)
+
+    def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
+
+        # Wait until the node has informed us that it has been initialized
+        miss_counter = 0
+        delay = 0.1
+
+        # Constantly check
+        while True:
+            time.sleep(delay)
+
+            if self.nodes[node_name]["response"]:
+                break
+            else:
+
+                # Handling timeout
+                if miss_counter * delay > timeout:
+                    raise RuntimeError(f"{self}: {node_name} not responding!")
+
+                # Update miss counter
+                miss_counter += 1
+
+    def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):
+
+        for node_name in self.nodes:
+            self.wait_until_node_response(node_name, timeout)
+
     def health_check(self, msg: Dict):
         ...
 
@@ -112,6 +150,8 @@ class Worker:
             k: v for k, v in msg["data"].items() if k != "node_name"
         }
         self.nodes[node_name]["status"] = {"INIT": 0, "CONNECTED": 0, "READY": 0}
+        self.nodes[node_name]["response"] = False
+        self.nodes[node_name]["gather"] = None
 
         # Decode the node object
         self.nodes[node_name]["node_object"] = jsonpickle.decode(
@@ -132,20 +172,8 @@ class Worker:
         # Start the node
         self.nodes[node_name]["node_object"].start()
 
-        # Wait until the node has informed us that it has been initialized
-        miss_counter = 0
-        while True:
-            time.sleep(0.1)
-
-            if self.nodes[node_name]["status"]["INIT"]:
-                break
-            else:
-
-                if miss_counter > 10:
-                    raise RuntimeError(f"{self.name} for {node_name} is not starting!")
-
-                miss_counter += 1
-
+        # Wait until response from node
+        self.wait_until_node_response(node_name)
         logger.debug(f"{self}: completed node creation: {self.nodes}")
 
         # Update the manager with the most up-to-date status of the nodes
@@ -199,28 +227,7 @@ class Worker:
         )
 
         # Now wait until all nodes have responded as CONNECTED
-        for node_name in self.nodes:
-
-            miss_counter = 0
-            delay = 0.1
-            timeout = 1
-            logger.debug(f"{self}: waiting for CONNECTED msg from {node_name}")
-
-            while True:
-                if self.nodes[node_name]["status"]["CONNECTED"]:
-                    break
-                else:
-                    time.sleep(delay)
-
-                    if miss_counter * delay > timeout:
-                        raise RuntimeError(
-                            f"{self}: timeout waiting for CONNECTED msg from {node_name}"
-                        )
-
-                    miss_counter += 1
-
-            logger.debug(f"{self}: received CONNECTED msg from {node_name}")
-
+        self.wait_until_all_nodes_responded()
         logger.debug(f"{self}: Nodes have been connected.")
 
         # After all nodes have been connected, inform the Manager
@@ -245,6 +252,38 @@ class Worker:
                 {"signal": enums.WORKER_COMPLETE_BROADCAST, "data": {"name": self.name}}
             )
 
+    def node_report_gather(self, msg: Dict, node_socket: socket.socket):
+
+        # Saving name to track it for now
+        node_name = msg["data"]["node_name"]
+        self.nodes[node_name]["response"] = True
+        self.nodes[node_name]["gather"] = msg["data"]["latest_value"]
+
+    def report_node_gather(self, msg: Dict):
+
+        logger.debug(f"{self}: reporting to Manager gather request")
+
+        # Marking as all false
+        self.mark_all_response_as_false_for_nodes()
+
+        # Request gather from Worker to Nodes
+        self.server.broadcast(
+            {
+                "signal": enums.WORKER_REQUEST_GATHER,
+                "data": {},
+            }
+        )
+
+        self.wait_until_all_nodes_responded(timeout=5)
+
+        # Gather the data from the nodes!
+        gather_data = {"name": self.name, "node_data": {}}
+        for node_name, node_data in self.nodes.items():
+            gather_data["node_data"][node_name] = node_data["gather"]
+
+        # Send it back to the Manager
+        self.client.send({"signal": enums.WORKER_REPORT_GATHER, "data": gather_data})
+
     def node_status_update(self, msg: Dict, s: socket.socket):
 
         # Saving name to track it for now
@@ -255,6 +294,7 @@ class Worker:
         self.nodes[node_name].update(
             {k: v for k, v in msg["data"].items() if k != "node_name"}
         )
+        self.nodes[node_name]["response"] = True
 
         # Construct information of all the nodes to be send to the Manager
         nodes_status_data = {

@@ -44,6 +44,9 @@ class Node(mp.Process):
         self.connected_to_worker = False
         self.connected_to_other_nodes = False
 
+        # Creating initial values
+        self.latest_value = None
+
         logger.debug(f"{self}: finished config")
 
     @log
@@ -73,6 +76,7 @@ class Node(mp.Process):
             enums.SHUTDOWN: self.shutdown,
             enums.WORKER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
             enums.WORKER_REQUEST_STEP: self.forward,
+            enums.WORKER_REQUEST_GATHER: self.provide_gather,
             enums.WORKER_START_NODES: self.start_node,
             enums.WORKER_STOP_NODES: self.stop_node,
         }
@@ -196,6 +200,15 @@ class Node(mp.Process):
         # self.in_queue.put(all_data)
         # self.in_queue.put(self.in_bound_data)
 
+    def provide_gather(self, msg: Dict):
+
+        self.client.send(
+            {
+                "signal": enums.NODE_REPORT_GATHER,
+                "data": {"node_name": self.name, "latest_value": self.latest_value},
+            }
+        )
+
     def conn_confirmation(self, msg: Dict, client_socket: socket.socket):
         ...
 
@@ -264,8 +277,13 @@ class Node(mp.Process):
 
         # If output generated, send it!
         if type(output) != type(None):
+
+            # Send out the output to the OutputsHandler
             logger.debug(f"{self}: placed data to out_queue")
             self.out_queue.put({"step_id": self.step_id, "data": output})
+
+            # And then save the latest value
+            self.latest_value = output
 
         # Update the counter
         self.step_id += 1

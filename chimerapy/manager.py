@@ -37,6 +37,7 @@ class Manager:
             enums.WORKER_REPORT_NODE_SERVER_DATA: self.node_server_data,
             enums.WORKER_REPORT_NODES_STATUS: self.update_nodes_status,
             enums.WORKER_COMPLETE_BROADCAST: self.complete_worker_broadcast,
+            enums.WORKER_REPORT_GATHER: self.get_gather,
         }
 
         # Create server
@@ -59,9 +60,11 @@ class Manager:
             "addr": msg["data"]["addr"],
             "socket": worker_socket,
             "ack": True,
+            "response": False,
             "reported_nodes_server_data": False,
             "served_nodes_server_data": False,
             "nodes_status": {},
+            "gather": {},
         }
 
     def deregister_worker(self, msg: Dict, worker_socket: socket.socket):
@@ -75,17 +78,21 @@ class Manager:
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["reported_nodes_server_data"] = True
+        self.workers[msg["data"]["name"]]["response"] = True
 
     def update_nodes_status(self, msg: Dict, worker_socket: socket.socket):
 
         # Updating nodes status
         self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
+        self.workers[msg["data"]["name"]]["response"] = True
+
         logger.info(f"{self}: Nodes status update to: {self.workers}")
 
     def complete_worker_broadcast(self, msg: Dict, worker_socket: socket.socket):
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
+        self.workers[msg["data"]["name"]]["response"] = True
 
     def register_graph(self, graph: Graph):
 
@@ -265,7 +272,7 @@ class Manager:
             while True:
 
                 # IF the worker responded, then break
-                if self.workers[worker_name][attribute]:
+                if self.workers[worker_name]["response"]:
                     break
 
                 time.sleep(delay)
@@ -328,6 +335,33 @@ class Manager:
         # Send message for workers to inform all nodes to take a single
         # step
         self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}})
+
+    def get_gather(self, msg: Dict, worker_socket: socket.socket):
+
+        self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
+        self.workers[msg["data"]["name"]]["response"] = True
+
+    def gather(self) -> Dict:
+
+        # First, the step should only be possible after a graph has
+        # been commited
+        assert self.check_all_nodes_ready(), "Manager cannot gather if Nodes not ready"
+
+        # Mark workers as not responded yet
+        self.mark_response_as_false_for_workers()
+
+        # Request gathering the latest value of each node
+        self.server.broadcast({"signal": enums.MANAGER_REQUEST_GATHER, "data": {}})
+
+        # Wail until all workers have responded with their node server data
+        self.wait_until_all_workers_responded(attribute="gather", timeout=5)
+
+        # Extract the gather data
+        gather_data = {}
+        for worker_data in self.workers.values():
+            gather_data.update(worker_data["gather"])
+
+        return gather_data
 
     def start(self):
         self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})

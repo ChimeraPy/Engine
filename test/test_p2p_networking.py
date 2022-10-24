@@ -139,6 +139,7 @@ def dockered_multiple_nodes_one_worker_manager(
     # Define graph
     simple_graph = Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
+    simple_graph.add_edge(gen_node, con_node)
 
     # Connect to the manager
     dockered_worker.connect(host=manager.host, port=manager.port)
@@ -296,18 +297,27 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
 
 
 @pytest.mark.parametrize(
-    "config_manager",
+    "config_manager,expected_output",
     [
-        (lazy_fixture("single_node_no_connections_manager")),
-        (lazy_fixture("multiple_nodes_one_worker_manager")),
-        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        (lazy_fixture("slow_single_node_single_worker_manager")),
-        (lazy_fixture("dockered_single_node_no_connections_manager")),
-        (lazy_fixture("dockered_multiple_nodes_one_worker_manager")),
-        (lazy_fixture("dockered_multiple_nodes_multiple_workers_manager")),
+        (lazy_fixture("single_node_no_connections_manager"), {"Gen1": 2}),
+        (lazy_fixture("multiple_nodes_one_worker_manager"), {"Gen1": 2, "Con1": 6}),
+        (
+            lazy_fixture("multiple_nodes_multiple_workers_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
+        (lazy_fixture("slow_single_node_single_worker_manager"), {"Slo1": 5}),
+        (lazy_fixture("dockered_single_node_no_connections_manager"), {"Gen1": 2}),
+        (
+            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
+        (
+            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
     ],
 )
-def test_manager_single_step_after_commit_graph(config_manager):
+def test_manager_single_step_after_commit_graph(config_manager, expected_output):
 
     # Commiting the graph by sending it to the workers
     config_manager.commit_graph()
@@ -317,20 +327,36 @@ def test_manager_single_step_after_commit_graph(config_manager):
     config_manager.step()
     time.sleep(2)
 
+    # Then request gather and confirm that the data is valid
+    latest_data_values = config_manager.gather()
+
+    # Assert
+    for k, v in expected_output.items():
+        assert k in latest_data_values and latest_data_values[k] == v
+
 
 @pytest.mark.parametrize(
-    "config_manager",
+    "config_manager,expected_output",
     [
-        (lazy_fixture("single_node_no_connections_manager")),
-        (lazy_fixture("multiple_nodes_one_worker_manager")),
-        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        (lazy_fixture("slow_single_node_single_worker_manager")),
-        (lazy_fixture("dockered_single_node_no_connections_manager")),
-        (lazy_fixture("dockered_multiple_nodes_one_worker_manager")),
-        (lazy_fixture("dockered_multiple_nodes_multiple_workers_manager")),
+        (lazy_fixture("single_node_no_connections_manager"), {"Gen1": 2}),
+        (lazy_fixture("multiple_nodes_one_worker_manager"), {"Gen1": 2, "Con1": 6}),
+        (
+            lazy_fixture("multiple_nodes_multiple_workers_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
+        (lazy_fixture("slow_single_node_single_worker_manager"), {"Slo1": 5}),
+        (lazy_fixture("dockered_single_node_no_connections_manager"), {"Gen1": 2}),
+        (
+            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
+        (
+            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+            {"Gen1": 2, "Con1": 6},
+        ),
     ],
 )
-def test_manager_start(config_manager):
+def test_manager_start(config_manager, expected_output):
 
     # Commiting the graph by sending it to the workers
     config_manager.commit_graph()
@@ -340,3 +366,10 @@ def test_manager_start(config_manager):
     config_manager.start()
     time.sleep(2)
     config_manager.stop()
+
+    # Then request gather and confirm that the data is valid
+    latest_data_values = config_manager.gather()
+
+    # Assert
+    for k, v in expected_output.items():
+        assert k in latest_data_values and latest_data_values[k] == v
