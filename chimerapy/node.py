@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 import multiprocessing as mp
+from multiprocessing.process import AuthenticationString
 import time
 import socket
 import logging
@@ -29,6 +30,21 @@ class Node(mp.Process):
 
     def __str__(self):
         return self.__repr__()
+
+    def __getstate__(self):
+        """called when pickling - this hack allows subprocesses to
+        be spawned without the AuthenticationString raising an error"""
+        state = self.__dict__.copy()
+        conf = state["_config"]
+        if "authkey" in conf:
+            # del conf['authkey']
+            conf["authkey"] = bytes(conf["authkey"])
+        return state
+
+    def __setstate__(self, state):
+        """for unpickling"""
+        state["_config"]["authkey"] = AuthenticationString(state["_config"]["authkey"])
+        self.__dict__.update(state)
 
     def config(self, host: str, port: int, in_bound: List[str], out_bound: List[str]):
 

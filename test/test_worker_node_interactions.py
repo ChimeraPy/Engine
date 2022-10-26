@@ -1,10 +1,11 @@
 import time
 import logging
+import pickle
 
 logger = logging.getLogger("chimerapy")
 
 import pytest
-import jsonpickle
+import dill
 
 import chimerapy as cp
 
@@ -19,7 +20,7 @@ def test_worker_create_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": jsonpickle.dumps(gen_node),
+            "node_object": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }
@@ -30,6 +31,33 @@ def test_worker_create_node(worker, gen_node):
 
     logger.debug("Finishied creating nodes")
     assert gen_node.name in worker.nodes
+    assert isinstance(worker.nodes[gen_node.name]["node_object"], cp.Node)
+
+
+def test_worker_create_unknown_node(worker):
+    class UnknownNode(cp.Node):
+        def step(self):
+            return 2
+
+    node = UnknownNode(name="Unk1")
+
+    # Simple single node without connection
+    msg = {
+        "data": {
+            "node_name": node.name,
+            "node_object": dill.dumps(node),
+            "in_bound": [],
+            "out_bound": [],
+        }
+    }
+    del UnknownNode
+
+    logger.debug("Create nodes")
+    worker.create_node(msg)
+
+    logger.debug("Finishied creating nodes")
+    assert node.name in worker.nodes
+    assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
 @pytest.mark.repeat(10)
@@ -48,7 +76,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         msg = {
             "data": {
                 "node_name": new_node.name,
-                "node_object": jsonpickle.dumps(new_node),
+                "node_object": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
             }
@@ -57,7 +85,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         msg2 = {
             "data": {
                 "node_name": new_node2.name,
-                "node_object": jsonpickle.dumps(new_node2),
+                "node_object": dill.dumps(new_node2),
                 "in_bound": [],
                 "out_bound": [],
             }
@@ -77,7 +105,7 @@ def test_step_single_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": jsonpickle.dumps(gen_node),
+            "node_object": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }
@@ -99,7 +127,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": jsonpickle.dumps(gen_node),
+            "node_object": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [con_node.name],
         }
@@ -109,7 +137,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     msg2 = {
         "data": {
             "node_name": con_node.name,
-            "node_object": jsonpickle.dumps(con_node),
+            "node_object": dill.dumps(con_node),
             "in_bound": [gen_node.name],
             "out_bound": [],
         }
@@ -130,7 +158,7 @@ def test_starting_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": jsonpickle.dumps(gen_node),
+            "node_object": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }

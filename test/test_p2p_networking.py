@@ -178,6 +178,34 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.shutdown()
 
 
+# @pytest.fixture
+# def dockered_unknown_node_manager(dockered_worker, manager):
+
+#     # Create a node that was defined during runtime and therefore not possible
+#     # for the docker to have it
+#     node_code = "import chimerapy as cp\nclass UnknownNode(cp.Node):\n\tdef step(self):\n\t\treturn 2"
+#     exec(node_code, globals())
+#     node = UnknownNode(name="Unk1")
+
+#     # Define graph
+#     simple_graph = Graph()
+#     simple_graph.add_nodes_from([node])
+
+#     # Connect to the manager
+#     dockered_worker.connect(host=manager.host, port=manager.port)
+
+#     # Then register graph to Manager
+#     manager.register_graph(simple_graph)
+
+#     # Specify what nodes to what worker
+#     manager.map_graph(
+#         {
+#             dockered_worker.name: ["Unk1"],
+#         }
+#     )
+
+#     return manager
+
 # @pytest.mark.repeat(3)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
@@ -203,6 +231,10 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"local": ["Gen1"], "local2": ["Con1"]},
         ),
+        # (
+        #     lazy_fixture("dockered_unknown_node_manager"),
+        #     {"test": ["Unk1"]}
+        # )
     ],
 )
 def test_p2p_network_creation(config_manager, expected_worker_to_nodes):

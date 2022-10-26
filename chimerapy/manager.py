@@ -3,7 +3,9 @@ import socket
 import logging
 import pdb
 import time
+
 import jsonpickle
+import dill
 
 logger = logging.getLogger("chimerapy")
 
@@ -153,9 +155,7 @@ class Manager:
                 "data": {
                     "worker_name": worker_name,
                     "node_name": node_name,
-                    "node_object": jsonpickle.encode(
-                        self.graph.G.nodes[node_name]["object"]
-                    ),
+                    "node_object": dill.dumps(self.graph.G.nodes[node_name]["object"]),
                     "in_bound": list(self.graph.G.predecessors(node_name)),
                     "out_bound": list(self.graph.G.successors(node_name)),
                 },

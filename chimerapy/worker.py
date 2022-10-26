@@ -5,7 +5,9 @@ import logging
 import os
 import time
 import pdb
+
 import jsonpickle
+import dill
 
 logger = logging.getLogger("chimerapy")
 
@@ -154,7 +156,7 @@ class Worker:
         self.nodes[node_name]["gather"] = None
 
         # Decode the node object
-        self.nodes[node_name]["node_object"] = jsonpickle.decode(
+        self.nodes[node_name]["node_object"] = dill.loads(
             self.nodes[node_name]["node_object"]
         )
 
@@ -360,4 +362,3 @@ class Worker:
 
             # Shutdown client
             self.client.shutdown()
-            # self.client.join()

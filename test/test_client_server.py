@@ -4,9 +4,7 @@ import socket
 import logging
 
 import pytest
-import jsonpickle
 import numpy as np
-import cv2
 
 import pdb
 
