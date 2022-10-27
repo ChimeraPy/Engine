@@ -32,7 +32,6 @@ class Worker:
         # Indicating which function to response
         self.to_manager_handlers = {
             enums.SHUTDOWN: self.shutdown,
-            enums.MANAGER_HEALTH_CHECK: self.health_check,
             enums.MANAGER_CREATE_NODE: self.create_node,
             enums.MANAGER_REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
             enums.MANAGER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -120,8 +119,6 @@ class Worker:
 
                 # Handling timeout
                 if miss_counter * delay > timeout:
-                    logger.debug(f"{self}: {node_name} not responding!")
-                    pdb.set_trace()
                     raise RuntimeError(f"{self}: {node_name} not responding!")
 
                 # Update miss counter
@@ -131,17 +128,6 @@ class Worker:
 
         for node_name in self.nodes:
             self.wait_until_node_response(node_name, timeout)
-
-    def health_check(self, msg: Dict):
-        time.sleep(0.5)
-
-    #         if self.connected_to_manager:
-    #             self.client.send(
-    #                 {
-    #                     "signal": enums.WORKER_REPORT_HEALTH,
-    #                     "data": {"alive": True},
-    #                 },
-    #             )
 
     def create_node(self, msg: Dict):
 
@@ -157,27 +143,51 @@ class Worker:
         self.nodes[node_name]["response"] = False
         self.nodes[node_name]["gather"] = None
 
-        # Decode the node object
-        self.nodes[node_name]["node_object"] = dill.loads(
-            self.nodes[node_name]["node_object"]
-        )
+        # Keep trying to start a process until success
+        fail_attempts = 0
+        while True:
 
-        # Provide configuration information to the node once in the client
-        self.nodes[node_name]["node_object"].config(
-            self.host,
-            self.port,
-            self.nodes[node_name]["in_bound"],
-            self.nodes[node_name]["out_bound"],
-        )
+            # If too many attempts, just give up :(
+            if fail_attempts > 5:
+                raise RuntimeError("Could not create Node")
 
-        # Before starting, over write the pid
-        self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
+            # Decode the node object
+            self.nodes[node_name]["node_object"] = dill.loads(
+                self.nodes[node_name]["pickled"]
+            )
 
-        # Start the node
-        self.nodes[node_name]["node_object"].start()
+            # Provide configuration information to the node once in the client
+            self.nodes[node_name]["node_object"].config(
+                self.host,
+                self.port,
+                self.nodes[node_name]["in_bound"],
+                self.nodes[node_name]["out_bound"],
+            )
 
-        # Wait until response from node
-        self.wait_until_node_response(node_name)
+            # Before starting, over write the pid
+            self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
+
+            # Start the node
+            self.nodes[node_name]["node_object"].start()
+
+            # Wait until response from node
+            try:
+                self.wait_until_node_response(node_name, timeout=1)
+                break
+            except RuntimeError:
+
+                # Handle failure
+                self.nodes[node_name]["node_object"].shutdown()
+                self.nodes[node_name]["node_object"].terminate()
+                fail_attempts += 1
+                logger.warning(
+                    f"{node_name} failed to start, retrying for {fail_attempts} time."
+                )
+
+                # Try again
+                continue
+
+        # Mark success
         logger.debug(f"{self}: completed node creation: {self.nodes}")
 
         # Update the manager with the most up-to-date status of the nodes

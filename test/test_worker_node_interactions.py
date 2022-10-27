@@ -1,6 +1,8 @@
 import time
 import logging
-import pickle
+import threading
+import multiprocessing as mp
+import queue
 
 logger = logging.getLogger("chimerapy")
 
@@ -13,6 +15,91 @@ from .conftest import GenNode, ConsumeNode
 from pytest_lazyfixture import lazy_fixture
 
 
+def target_function(q):
+    time.sleep(1)
+    q.put(1)
+
+
+def test_multiple_process():
+
+    NUM = 100
+    ps = []
+    q = mp.Queue()
+    for i in range(NUM):
+        p = mp.Process(target=target_function, args=(q,))
+        p.start()
+        ps.append(p)
+
+    for p in ps:
+        p.join()
+
+    assert q.qsize() == NUM
+
+
+def test_multiple_threads():
+
+    NUM = 100
+    ts = []
+    q = queue.Queue()
+    for i in range(NUM):
+        t = threading.Thread(target=target_function, args=(q,))
+        t.start()
+        ts.append(t)
+
+    for t in ts:
+        t.join()
+
+    assert q.qsize() == NUM
+
+
+def test_create_multiple_nodes():
+
+    ns = []
+    for i in range(10):
+        n = GenNode(name=f"G{i}")
+        n.config("0.0.0.0", 9000, [], [], networking=False)
+        n.start()
+        ns.append(n)
+
+    time.sleep(1)
+
+    for n in ns:
+        n.shutdown()
+        n.join()
+        assert n.exitcode == 0
+
+
+def test_create_multiple_nodes_after_pickling():
+
+    ns = []
+    for i in range(10):
+        n = GenNode(name=f"G{i}")
+        pkl_n = dill.dumps(n)
+        nn = dill.loads(pkl_n)
+        nn.config("0.0.0.0", 9000, [], [], networking=False)
+        nn.start()
+        ns.append(nn)
+
+    for n in ns:
+        n.shutdown()
+        n.join()
+        assert n.exitcode == 0
+
+
+def test_create_multiple_workers():
+
+    workers = []
+
+    for i in range(10):
+        worker = cp.Worker(name=f"{i}")
+        workers.append(worker)
+
+    time.sleep(5)
+
+    for worker in workers:
+        worker.shutdown()
+
+
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 
@@ -20,7 +107,7 @@ def test_worker_create_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": dill.dumps(gen_node),
+            "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }
@@ -45,7 +132,7 @@ def test_worker_create_unknown_node(worker):
     msg = {
         "data": {
             "node_name": node.name,
-            "node_object": dill.dumps(node),
+            "pickled": dill.dumps(node),
             "in_bound": [],
             "out_bound": [],
         }
@@ -58,6 +145,31 @@ def test_worker_create_unknown_node(worker):
     logger.debug("Finishied creating nodes")
     assert node.name in worker.nodes
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
+
+
+def test_worker_create_nodes(worker):
+
+    to_be_created_nodes = []
+    for i in range(100):
+
+        # Create node and save name for later comparison
+        new_node = GenNode(name=f"Gen{i}")
+        to_be_created_nodes.append(new_node.name)
+
+        # Simple single node without connection
+        msg = {
+            "data": {
+                "node_name": new_node.name,
+                "pickled": dill.dumps(new_node),
+                "in_bound": [],
+                "out_bound": [],
+            }
+        }
+
+        try:
+            worker.create_node(msg)
+        except OSError:
+            continue
 
 
 @pytest.mark.repeat(10)
@@ -76,7 +188,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         msg = {
             "data": {
                 "node_name": new_node.name,
-                "node_object": dill.dumps(new_node),
+                "pickled": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
             }
@@ -85,7 +197,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         msg2 = {
             "data": {
                 "node_name": new_node2.name,
-                "node_object": dill.dumps(new_node2),
+                "pickled": dill.dumps(new_node2),
                 "in_bound": [],
                 "out_bound": [],
             }
@@ -105,7 +217,7 @@ def test_step_single_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": dill.dumps(gen_node),
+            "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }
@@ -127,7 +239,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": dill.dumps(gen_node),
+            "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [con_node.name],
         }
@@ -137,7 +249,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     msg2 = {
         "data": {
             "node_name": con_node.name,
-            "node_object": dill.dumps(con_node),
+            "pickled": dill.dumps(con_node),
             "in_bound": [gen_node.name],
             "out_bound": [],
         }
@@ -158,7 +270,7 @@ def test_starting_node(worker, gen_node):
     msg = {
         "data": {
             "node_name": gen_node.name,
-            "node_object": dill.dumps(gen_node),
+            "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
         }

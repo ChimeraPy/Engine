@@ -1,12 +1,10 @@
 # Built-in Imports
-import sys
 import logging
 import time
-import threading
+import platform
 
 # Third-party Imports
 import pytest
-import docker
 
 # Test Import
 from .mock import DockeredWorker
@@ -14,6 +12,10 @@ from .mock import DockeredWorker
 logger = logging.getLogger("chimerapy")
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux",
+    reason="Docker only supported in Linux in GitHub Actions",
+)
 def test_worker_entrypoint_connect(manager, dockered_worker):
 
     # Create docker container to simulate Worker computer
@@ -26,6 +28,10 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
     logger.info("Manager shutting down")
 
 
+@pytest.mark.skipif(
+    platform.system() != "Linux",
+    reason="Docker only supported in Linux in GitHub Actions",
+)
 def test_multiple_workers_connect(manager, docker_client):
 
     workers = []
