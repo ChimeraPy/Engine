@@ -120,6 +120,8 @@ class Worker:
 
                 # Handling timeout
                 if miss_counter * delay > timeout:
+                    logger.debug(f"{self}: {node_name} not responding!")
+                    pdb.set_trace()
                     raise RuntimeError(f"{self}: {node_name} not responding!")
 
                 # Update miss counter
@@ -131,15 +133,15 @@ class Worker:
             self.wait_until_node_response(node_name, timeout)
 
     def health_check(self, msg: Dict):
-        ...
+        time.sleep(0.5)
 
-        # if self.connected_to_manager:
-        #     self.client.send(
-        #         {
-        #             "signal": enums.WORKER_REPORT_HEALTH,
-        #             "data": {"alive": True},
-        #         },
-        #     )
+    #         if self.connected_to_manager:
+    #             self.client.send(
+    #                 {
+    #                     "signal": enums.WORKER_REPORT_HEALTH,
+    #                     "data": {"alive": True},
+    #                 },
+    #             )
 
     def create_node(self, msg: Dict):
 

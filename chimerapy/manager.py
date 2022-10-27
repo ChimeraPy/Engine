@@ -162,11 +162,14 @@ class Manager:
             },
         )
 
-    def wait_until_node_creation_complete(self, worker_name: str, node_name: str):
+    def wait_until_node_creation_complete(
+        self, worker_name: str, node_name: str, timeout: Union[int, float] = 10
+    ):
 
+        delay = 0.1
         miss_counter = 0
         while True:
-            time.sleep(0.1)
+            time.sleep(delay)
 
             if (
                 node_name in self.workers[worker_name]["nodes_status"]
@@ -174,19 +177,19 @@ class Manager:
             ):
                 break
             else:
-                logger.debug(f"Waiting for INIT of {node_name}: {self.workers}")
-                if miss_counter > 10:
-                    raise RuntimeError(
-                        f"Manager waiting for {node_name} not sending INIT"
-                    )
+                if delay * miss_counter > timeout:
+                    ...
+                    # raise RuntimeError(
+                    #     f"Manager waiting for {node_name} not sending INIT"
+                    # )
                 miss_counter += 1
 
         # Perform health check on the worker
-        self.server.send(
-            self.workers[worker_name]["socket"],
-            {"signal": enums.MANAGER_HEALTH_CHECK, "data": {}},
-            ack=True,
-        )
+        # self.server.send(
+        #     self.workers[worker_name]["socket"],
+        #     {"signal": enums.MANAGER_HEALTH_CHECK, "data": {}},
+        #     ack=True,
+        # )
 
     def create_p2p_network(self):
 
