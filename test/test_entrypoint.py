@@ -13,7 +13,7 @@ logger = logging.getLogger("chimerapy")
 
 
 @pytest.mark.skipif(
-    platform.system() != "Linux",
+    "platform.system() != 'Linux'",
     reason="Docker only supported in Linux in GitHub Actions",
 )
 def test_worker_entrypoint_connect(manager, dockered_worker):
@@ -29,7 +29,7 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
 
 
 @pytest.mark.skipif(
-    platform.system() != "Linux",
+    "platform.system() != 'Linux'",
     reason="Docker only supported in Linux in GitHub Actions",
 )
 def test_multiple_workers_connect(manager, docker_client):

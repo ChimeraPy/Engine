@@ -1,6 +1,7 @@
 from typing import Dict, Any
 import time
 import logging
+import platform
 
 logger = logging.getLogger("chimerapy")
 
@@ -33,6 +34,7 @@ def worker():
 
 @pytest.fixture
 def docker_client():
+    assert platform.system() == "Linux", "Cannot create Docker client in other OS"
     c = docker.DockerClient(base_url="unix://var/run/docker.sock")
     return c
 
