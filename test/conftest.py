@@ -41,6 +41,7 @@ def docker_client():
 
 @pytest.fixture
 def dockered_worker(docker_client):
+    assert platform.system() == "Linux", "Cannot create Docker client in other OS"
     dockered_worker = DockeredWorker(docker_client, name="test")
     yield dockered_worker
     dockered_worker.shutdown()

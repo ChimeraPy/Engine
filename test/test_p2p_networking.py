@@ -1,4 +1,5 @@
 import time
+import sys
 import pdb
 import logging
 import platform
@@ -196,21 +197,21 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
             lazy_fixture("dockered_single_node_no_connections_manager"),
             {"test": ["Gen1"]},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"test": ["Gen1", "Con1"]},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"local": ["Gen1"], "local2": ["Con1"]},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
     ],
@@ -256,19 +257,19 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
         pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
     ],
@@ -278,8 +279,6 @@ def test_p2p_network_connections(config_manager):
     # Commiting the graph by sending it to the workers
     config_manager.create_p2p_network()
     config_manager.setup_p2p_connections()
-
-    time.sleep(1)
 
     # Extract all the nodes
     nodes_names = []
@@ -304,19 +303,19 @@ def test_p2p_network_connections(config_manager):
         pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
     ],
@@ -355,21 +354,21 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
             lazy_fixture("dockered_single_node_no_connections_manager"),
             {"Gen1": 2},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"Gen1": 2, "Con1": 6},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
     ],
@@ -406,21 +405,21 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
             lazy_fixture("dockered_single_node_no_connections_manager"),
             {"Gen1": 2},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"Gen1": 2, "Con1": 6},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
             marks=pytest.mark.skipif(
-                "platform.system() != 'Linux'", reason="Docker only works on Linux"
+                sys.platform != "linux", reason="Docker only works on Linux"
             ),
         ),
     ],

@@ -1,5 +1,5 @@
 import logging
-import platform
+import sys
 
 import pytest
 
@@ -10,7 +10,7 @@ logger = logging.getLogger("chimerapy")
 
 
 @pytest.mark.skipif(
-    platform.system() != "Linux",
+    sys.platform != "linux",
     reason="Docker only supported in Linux in GitHub Actions",
 )
 def test_get_easy_docker_example_going(docker_client):
@@ -19,7 +19,7 @@ def test_get_easy_docker_example_going(docker_client):
 
 
 @pytest.mark.skipif(
-    platform.system() != "Linux",
+    sys.platform != "linux",
     reason="Docker only supported in Linux in GitHub Actions",
 )
 def test_create_container_and_make_it_execute_commands(docker_client):
@@ -38,7 +38,7 @@ def test_create_container_and_make_it_execute_commands(docker_client):
 
 
 @pytest.mark.skipif(
-    platform.system() != "Linux",
+    sys.platform != "linux",
     reason="Docker only supported in Linux in GitHub Actions",
 )
 def test_use_custom_docker_image(docker_client):
