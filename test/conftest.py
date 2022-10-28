@@ -34,17 +34,23 @@ def worker():
 
 @pytest.fixture
 def docker_client():
-    assert platform.system() == "Linux", "Cannot create Docker client in other OS"
-    c = docker.DockerClient(base_url="unix://var/run/docker.sock")
-    return c
+    if platform.system() != "Linux":
+        pytest.skip(reason="This fixture should only be created when used in Linux")
+        return None
+    else:
+        c = docker.DockerClient(base_url="unix://var/run/docker.sock")
+        return c
 
 
 @pytest.fixture
 def dockered_worker(docker_client):
-    assert platform.system() == "Linux", "Cannot create Docker client in other OS"
-    dockered_worker = DockeredWorker(docker_client, name="test")
-    yield dockered_worker
-    dockered_worker.shutdown()
+    if platform.system() != "Linux":
+        pytest.skip(reason="This fixture should only be created when used in Linux")
+        return None
+    else:
+        dockered_worker = DockeredWorker(docker_client, name="test")
+        yield dockered_worker
+        dockered_worker.shutdown()
 
 
 class GenNode(Node):
