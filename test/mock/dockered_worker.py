@@ -35,7 +35,7 @@ class DockeredWorker:
             auto_remove=False,
             stdin_open=True,
             detach=True,
-            network_mode="host",
+            # network_mode="host", # Not realistic
         )
         self.name = name
 

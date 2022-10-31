@@ -119,6 +119,7 @@ def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_no
 
     # Connect to the manager
     dockered_worker.connect(host=manager.host, port=manager.port)
+    # dockered_worker.connect(host='10.0.0.153', port=manager.port)
 
     # Then register graph to Manager
     manager.register_graph(simple_graph)

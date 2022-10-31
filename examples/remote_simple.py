@@ -1,3 +1,4 @@
+
 from typing import Dict, Any
 import time
 
@@ -7,45 +8,39 @@ import imutils
 import chimerapy as cp
 
 
-class WebcamNode(cp.Node):
-    # def prep(self):
-    #     self.vid = cv2.VideoCapture(0)
+class Producer(cp.Node):
+    def prep(self):
+        self.counter = 0
 
     def step(self):
         import time
-        import numpy as np
-        time.sleep(1 / 30)
-        return np.random.rand(200, 200, 3)
-        # ret, frame = self.vid.read()
-        # return imutils.resize(frame, width=400)
-
-    # def teardown(self):
-    #     self.vid.release()
+        time.sleep(1)
+        current_counter = self.counter
+        self.counter += 1
+        return current_counter
 
 
-class ShowWindow(cp.Node):
+class Consumer(cp.Node):
     def step(self, data: Dict[str, Any]):
-        import cv2
-        frame = data["web"]
-        cv2.imshow("frame", frame)
-        cv2.waitKey(1)
+        d = data["prod"]
+        print("Consumer got data: ", d)
 
 
-class RemoteCameraGraph(cp.Graph):
+class SimpleGraph(cp.Graph):
     def __init__(self):
         super().__init__()
-        web = WebcamNode(name="web")
-        show = ShowWindow(name="show")
+        prod = Producer(name="prod")
+        cons= Consumer(name="cons")
 
-        self.add_nodes_from([web, show])
-        self.add_edge(src=web, dst=show)
+        self.add_nodes_from([prod, cons])
+        self.add_edge(src=prod, dst=cons)
 
 
 if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cp.Manager()
-    graph = RemoteCameraGraph()
+    graph = SimpleGraph()
     worker = cp.Worker(name="local")
     # worker2 = cp.Worker(name="remote")
 
@@ -61,7 +56,7 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {"remote": ["web"], "local": ["show"]}
+    mapping = {"remote": ["prod"], "local": ["cons"]}
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)

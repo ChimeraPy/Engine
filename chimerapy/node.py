@@ -87,6 +87,7 @@ class Node(mp.Process):
         self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
         self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
         self.all_inputs_ready = False
+        self.new_data_available = False
 
         # Create the threads that manager the incoming and outgoing
         # data chunks
@@ -192,13 +193,16 @@ class Node(mp.Process):
         )
 
     def received_data(self, msg: Dict, client_socket: socket.socket):
+        
+        # Mark that new data was received
+        self.new_data_available = True
 
         # Extract the data from the pickle
         coupled_data: Dict = msg["data"]["outputs"]
 
         # Sort the given data into their corresponding queue
         self.in_bound_data[msg["data"]["sent_from"]] = coupled_data["data"]
-
+        
         if not all([type(x) != type(None) for x in self.in_bound_data.values()]):
             return None
         else:
@@ -262,16 +266,11 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while True:
 
-                # logger.debug(f"{self}: checking for inputs")
-
-                # Try to get the inputs
-                # try:
-                #     inputs = self.in_queue.get(timeout=1)
-                # except queue.Empty:
-                #     continue
-                if self.all_inputs_ready:
+                if self.all_inputs_ready and self.new_data_available:
                     inputs = self.in_bound_data.copy()
+                    self.new_data_available = False
                 else:
+                    time.sleep(1/100) # Required to allow threads to execute
                     continue
 
                 logger.debug(f"{self}: got inputs")
