@@ -42,6 +42,7 @@ def worker():
 
 @pytest.fixture
 def docker_client():
+    logger.info(f"DOCKER CLIENT: platform.system() = {platform.system()}")
     if platform.system() != "Linux":
         pytest.skip(reason="This fixture should only be created when used in Linux")
         return None
@@ -52,6 +53,7 @@ def docker_client():
 
 @pytest.fixture
 def dockered_worker(docker_client):
+    logger.info(f"DOCKER WORKER: platform.system() = {platform.system()}")
     if platform.system() != "Linux":
         pytest.skip(reason="This fixture should only be created when used in Linux")
         return None

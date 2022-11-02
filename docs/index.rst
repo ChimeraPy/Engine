@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. image:: _static/chimerapy_logo_with_name_theme_blue.png
+.. image:: _static/logo/chimerapy_logo_with_name_theme_blue.png
   :width: 90%
   :alt: ChimeraPy Logo
 
