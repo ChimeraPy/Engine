@@ -210,8 +210,11 @@ def test_worker_create_multiple_nodes_stress(worker):
             }
         }
 
-        worker.create_node(msg)
-        worker.create_node(msg2)
+        try:
+            worker.create_node(msg)
+            worker.create_node(msg2)
+        except OSError:
+            continue
 
     # Confirm that the node was created
     for node_name in to_be_created_nodes:

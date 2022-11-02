@@ -9,7 +9,6 @@ import mss
 import cv2
 import numpy as np
 import imutils
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
@@ -25,7 +24,6 @@ class WebcamNode(Node):
     def step(self):
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
-
         return imutils.resize(frame, width=400)
 
     def teardown(self):
@@ -127,6 +125,7 @@ def combine_videos_graph():
     graph.add_edge(src=web, dst=combine)
 
     return graph
+
 
 
 @pytest.mark.skipif(
