@@ -14,8 +14,10 @@ from chimerapy import Manager, Worker, Graph, Node
 from .mock import DockeredWorker
 
 # Try to get Github Actions environment variable
-current_platform = os.getenv("RUNNER_OS") or platform.system()
-
+try:
+    current_platform = os.environ["MANUAL_OS_SET"]
+except:
+    current_platform = platform.system()
 
 linux_run_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test only can run on Linux"
