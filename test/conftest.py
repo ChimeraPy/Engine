@@ -12,6 +12,14 @@ from chimerapy import Manager, Worker, Graph, Node
 from .mock import DockeredWorker
 
 
+linux_run_only = pytest.mark.skipif(
+    platform.system() != "Linux", reason="Test only can run on Linux"
+)
+linux_expected_only = pytest.mark.skipif(
+    platform.system() != "Linux", reason="Test expected to only pass on Linux"
+)
+
+
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
     yield

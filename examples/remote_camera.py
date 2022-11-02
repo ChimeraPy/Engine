@@ -1,6 +1,7 @@
 from typing import Dict, Any
 import time
 
+import numpy as np
 import cv2
 import imutils
 
@@ -8,25 +9,33 @@ import chimerapy as cp
 
 
 class WebcamNode(cp.Node):
-    # def prep(self):
-    #     self.vid = cv2.VideoCapture(0)
+    def prep(self):
+        import cv2
+
+        self.vid = cv2.VideoCapture(0)
 
     def step(self):
         import time
         import numpy as np
-        time.sleep(1 / 30)
-        return np.random.rand(200, 200, 3)
-        # ret, frame = self.vid.read()
-        # return imutils.resize(frame, width=400)
+        import imutils
 
-    # def teardown(self):
-    #     self.vid.release()
+        time.sleep(1 / 30)
+        ret, frame = self.vid.read()
+        return imutils.resize(frame, width=100)
+
+    def teardown(self):
+        self.vid.release()
 
 
 class ShowWindow(cp.Node):
     def step(self, data: Dict[str, Any]):
         import cv2
+        import numpy as np
+
         frame = data["web"]
+        if not isinstance(frame, np.ndarray):
+            return
+        frame = imutils.resize(frame, width=500)
         cv2.imshow("frame", frame)
         cv2.waitKey(1)
 

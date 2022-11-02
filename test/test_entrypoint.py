@@ -8,14 +8,12 @@ import pytest
 
 # Test Import
 from .mock import DockeredWorker
+from .conftest import linux_run_only
 
 logger = logging.getLogger("chimerapy")
 
 
-@pytest.mark.skipif(
-    sys.platform != "linux",
-    reason="Docker only supported in Linux in GitHub Actions",
-)
+@linux_run_only
 def test_worker_entrypoint_connect(manager, dockered_worker):
 
     if dockered_worker:
@@ -32,10 +30,7 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
         logger.debug("Skipped test")
 
 
-@pytest.mark.skipif(
-    sys.platform != "linux",
-    reason="Docker only supported in Linux in GitHub Actions",
-)
+@linux_run_only
 def test_multiple_workers_connect(manager, docker_client):
 
     if docker_client:

@@ -2,11 +2,14 @@
 import threading
 import queue
 import logging
+import platform
 
 logger = logging.getLogger("chimerapy")
 
 # Third-party
-import docker
+# Only import if linux
+if platform.system() == "Linux":
+    import docker
 
 
 class LogThread(threading.Thread):

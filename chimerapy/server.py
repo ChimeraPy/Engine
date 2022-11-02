@@ -13,7 +13,14 @@ import threading
 import ast
 import time
 
-from .utils import threaded, create_payload, log, get_open_port, decode_payload, get_ip_address
+from .utils import (
+    threaded,
+    create_payload,
+    log,
+    get_open_port,
+    decode_payload,
+    get_ip_address,
+)
 from . import enums
 
 

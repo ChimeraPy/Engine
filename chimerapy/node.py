@@ -193,7 +193,7 @@ class Node(mp.Process):
         )
 
     def received_data(self, msg: Dict, client_socket: socket.socket):
-        
+
         # Mark that new data was received
         self.new_data_available = True
 
@@ -202,7 +202,7 @@ class Node(mp.Process):
 
         # Sort the given data into their corresponding queue
         self.in_bound_data[msg["data"]["sent_from"]] = coupled_data["data"]
-        
+
         if not all([type(x) != type(None) for x in self.in_bound_data.values()]):
             return None
         else:
@@ -270,7 +270,7 @@ class Node(mp.Process):
                     inputs = self.in_bound_data.copy()
                     self.new_data_available = False
                 else:
-                    time.sleep(1/100) # Required to allow threads to execute
+                    time.sleep(1 / 100)  # Required to allow threads to execute
                     continue
 
                 logger.debug(f"{self}: got inputs")

@@ -77,13 +77,13 @@ def get_open_port(start_port: int) -> socket.socket:
 
 
 def get_ip_address() -> str:
-    
+
     # Get gateway of the network
     gws = ni.gateways()
-    default_gw_name = gws['default'][ni.AF_INET][1]
+    default_gw_name = gws["default"][ni.AF_INET][1]
 
     # Get the ip in the default gateway
-    ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]['addr']
+    ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
     return ip
 
 

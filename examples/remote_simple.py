@@ -1,4 +1,3 @@
-
 from typing import Dict, Any
 import time
 
@@ -14,6 +13,7 @@ class Producer(cp.Node):
 
     def step(self):
         import time
+
         time.sleep(1)
         current_counter = self.counter
         self.counter += 1
@@ -30,7 +30,7 @@ class SimpleGraph(cp.Graph):
     def __init__(self):
         super().__init__()
         prod = Producer(name="prod")
-        cons= Consumer(name="cons")
+        cons = Consumer(name="cons")
 
         self.add_nodes_from([prod, cons])
         self.add_edge(src=prod, dst=cons)

@@ -1,7 +1,7 @@
 Docker
 ======
 
-To test distributed systems within a single host machine, Docker was used to spin up virtual machines that would simulate local computers. 
+To test distributed systems within a single host machine, Docker was used to spin up virtual machines that would simulate local computers.
 
 .. warning::
     Must of the Docker development was done in Linux (Ubuntu 22.04). Mileage will vary when testing, developing, and using Docker components in other operating systems.
