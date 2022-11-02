@@ -1,13 +1,14 @@
 from typing import Dict, Any
 import time
 import logging
+import os
+import sys
+import multiprocessing as mp
+
+import mss
 import cv2
 import numpy as np
 import imutils
-import mss
-import os
-import multiprocessing as mp
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
@@ -126,12 +127,19 @@ def combine_videos_graph():
     return graph
 
 
+
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="Camera restrictions that require GUI"
+)
 def test_open_camera():
     cap = cv2.VideoCapture(0)
     ret, frame = cap.read()
     assert isinstance(ret, bool)
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="Camera restrictions that require GUI"
+)
 def test_open_camera_in_another_process():
 
     p = mp.Process(target=test_open_camera)
@@ -139,6 +147,9 @@ def test_open_camera_in_another_process():
     p.join()
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="Camera restrictions that require GUI"
+)
 @pytest.mark.parametrize(
     "graph, mapping",
     [

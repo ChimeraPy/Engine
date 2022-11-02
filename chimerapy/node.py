@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 import multiprocessing as mp
+from multiprocessing.process import AuthenticationString
 import time
 import socket
 import logging
@@ -30,7 +31,29 @@ class Node(mp.Process):
     def __str__(self):
         return self.__repr__()
 
-    def config(self, host: str, port: int, in_bound: List[str], out_bound: List[str]):
+    def __getstate__(self):
+        """called when pickling - this hack allows subprocesses to
+        be spawned without the AuthenticationString raising an error"""
+        state = self.__dict__.copy()
+        conf = state["_config"]
+        if "authkey" in conf:
+            # del conf['authkey']
+            conf["authkey"] = bytes(conf["authkey"])
+        return state
+
+    def __setstate__(self, state):
+        """for unpickling"""
+        state["_config"]["authkey"] = AuthenticationString(state["_config"]["authkey"])
+        self.__dict__.update(state)
+
+    def config(
+        self,
+        host: str,
+        port: int,
+        in_bound: List[str],
+        out_bound: List[str],
+        networking: bool = True,
+    ):
 
         # Obtaining worker information
         self.worker_host = host
@@ -41,8 +64,9 @@ class Node(mp.Process):
 
         # Keeping track of the node's state
         self.running = mp.Value("i", True)
-        self.connected_to_worker = False
-        self.connected_to_other_nodes = False
+
+        # Saving other parameters
+        self.networking = networking
 
         # Creating initial values
         self.latest_value = None
@@ -63,6 +87,7 @@ class Node(mp.Process):
         self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
         self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
         self.all_inputs_ready = False
+        self.new_data_available = False
 
         # Create the threads that manager the incoming and outgoing
         # data chunks
@@ -82,53 +107,54 @@ class Node(mp.Process):
         }
         self.from_node_handlers = {
             enums.NODE_DATA_TRANSFER: self.received_data,
-            enums.NODE_CONN_MESSAGE: self.conn_confirmation,
         }
         self.to_node_handlers = {}
 
-        # Keeping track step id
+        # Keeping parameters
         self.step_id = 0
-
-        # Create client to the Worker
-        self.client = Client(
-            host=self.worker_host,
-            port=self.worker_port,
-            name=f"Node {self.name}",
-            connect_timeout=5.0,
-            sender_msg_type=enums.NODE_MESSAGE,
-            accepted_msg_type=enums.WORKER_MESSAGE,
-            handlers=self.to_worker_handlers,
-        )
-        logger.debug(f"{self}: Node creating Client to connect to Worker")
-        self.client.start()
-        logger.debug(f"{self}: connected to Worker")
-        self.connected_to_worker = True
         self.worker_signal_start = 0
-
-        # Create server
-        self.server = Server(
-            port=5000,
-            name=f"Node {self.name}",
-            max_num_of_clients=len(self.p2p_info["out_bound"]),
-            sender_msg_type=enums.NODE_MESSAGE,
-            accepted_msg_type=enums.NODE_MESSAGE,
-            handlers=self.from_node_handlers,
-        )
-        self.server.start()
-
-        # Inform client that Node is INITIALIZED!
         self.status["INIT"] = 1
-        self.client.send(
-            {
-                "signal": enums.NODE_STATUS,
-                "data": {
-                    "node_name": self.name,
-                    "status": self.status,
-                    "host": self.server.host,
-                    "port": self.server.port,
-                },
-            }
-        )
+
+        if self.networking:
+
+            # Create client to the Worker
+            self.client = Client(
+                host=self.worker_host,
+                port=self.worker_port,
+                name=f"Node {self.name}",
+                connect_timeout=5.0,
+                sender_msg_type=enums.NODE_MESSAGE,
+                accepted_msg_type=enums.WORKER_MESSAGE,
+                handlers=self.to_worker_handlers,
+            )
+            logger.debug(f"{self}: Node creating Client to connect to Worker")
+
+            self.client.start()
+            logger.debug(f"{self}: connected to Worker")
+
+            # Create server
+            self.server = Server(
+                port=5000,
+                name=f"Node {self.name}",
+                max_num_of_clients=len(self.p2p_info["out_bound"]),
+                sender_msg_type=enums.NODE_MESSAGE,
+                accepted_msg_type=enums.NODE_MESSAGE,
+                handlers=self.from_node_handlers,
+            )
+            self.server.start()
+
+            # Inform client that Node is INITIALIZED!
+            self.client.send(
+                {
+                    "signal": enums.NODE_STATUS,
+                    "data": {
+                        "node_name": self.name,
+                        "status": self.status,
+                        "host": self.server.host,
+                        "port": self.server.port,
+                    },
+                }
+            )
 
     def process_node_server_data(self, msg: Dict):
 
@@ -151,9 +177,6 @@ class Node(mp.Process):
                 handlers=self.to_node_handlers,
             )
 
-            # Send information
-            p2p_client.send({"signal": enums.NODE_CONN_MESSAGE, "data": {}})
-
             # # Save the client
             self.p2p_clients[out_bound_name] = p2p_client
 
@@ -171,34 +194,19 @@ class Node(mp.Process):
 
     def received_data(self, msg: Dict, client_socket: socket.socket):
 
-        queue_info = {n: x.qsize() for n, x in self.in_bound_queues.items()}
-        # logger.debug(f"queue size: {queue_info}")
+        # Mark that new data was received
+        self.new_data_available = True
 
         # Extract the data from the pickle
         coupled_data: Dict = msg["data"]["outputs"]
 
         # Sort the given data into their corresponding queue
-        # self.in_bound_queues[msg["data"]["sent_from"]].put(coupled_data["data"])
         self.in_bound_data[msg["data"]["sent_from"]] = coupled_data["data"]
-
-        # Check if we have one for each input to group them together
-        # for queue in self.in_bound_queues.values():
-        #     if queue.qsize() == 0:
-        #         return
 
         if not all([type(x) != type(None) for x in self.in_bound_data.values()]):
             return None
         else:
             self.all_inputs_ready = True
-
-        # Create a collective sample
-        # all_data = {}
-        # for in_bound_name, queue in self.in_bound_queues.items():
-        #     all_data[in_bound_name] = queue.get(block=True)
-
-        # Pass the chunk of data to the process to use
-        # self.in_queue.put(all_data)
-        # self.in_queue.put(self.in_bound_data)
 
     def provide_gather(self, msg: Dict):
 
@@ -209,9 +217,6 @@ class Node(mp.Process):
             }
         )
 
-    def conn_confirmation(self, msg: Dict, client_socket: socket.socket):
-        ...
-
     def prep(self):
         """User-define method"""
         ...
@@ -220,24 +225,28 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully READY
         self.status["READY"] = 1
-        self.client.send(
-            {
-                "signal": enums.NODE_STATUS,
-                "data": {
-                    "node_name": self.name,
-                    "status": self.status,
-                },
-            }
-        )
+        if self.networking:
+            self.client.send(
+                {
+                    "signal": enums.NODE_STATUS,
+                    "data": {
+                        "node_name": self.name,
+                        "status": self.status,
+                    },
+                }
+            )
 
     def waiting(self):
 
-        while self.running.value:
-            # logger.debug(f"{self}: is waiting")
-            if self.worker_signal_start:
-                break
-            else:
-                time.sleep(0.1)
+        # Only wait if connected to Worker
+        if self.networking:
+
+            # Wait until worker says to start
+            while self.running.value:
+                if self.worker_signal_start:
+                    break
+                else:
+                    time.sleep(0.1)
 
     def start_node(self, msg: Dict):
         self.worker_signal_start = True
@@ -257,16 +266,11 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while True:
 
-                # logger.debug(f"{self}: checking for inputs")
-
-                # Try to get the inputs
-                # try:
-                #     inputs = self.in_queue.get(timeout=1)
-                # except queue.Empty:
-                #     continue
-                if self.all_inputs_ready:
+                if self.all_inputs_ready and self.new_data_available:
                     inputs = self.in_bound_data.copy()
+                    self.new_data_available = False
                 else:
+                    time.sleep(1 / 100)  # Required to allow threads to execute
                     continue
 
                 logger.debug(f"{self}: got inputs")
@@ -311,11 +315,13 @@ class Node(mp.Process):
         # Shutdown the inputs and outputs threads
         self.outputs_handler.shutdown()
 
-        # Shutdown the client
-        self.client.shutdown()
+        # Shutting down networking
+        if self.networking:
+            # Shutdown the client
+            self.client.shutdown()
 
-        # Shutdown the server
-        self.server.shutdown()
+            # Shutdown the server
+            self.server.shutdown()
 
     def run(self):
 

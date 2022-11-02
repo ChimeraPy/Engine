@@ -3,7 +3,9 @@ import socket
 import logging
 import pdb
 import time
+
 import jsonpickle
+import dill
 
 logger = logging.getLogger("chimerapy")
 
@@ -78,7 +80,6 @@ class Manager:
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["reported_nodes_server_data"] = True
-        self.workers[msg["data"]["name"]]["response"] = True
 
     def update_nodes_status(self, msg: Dict, worker_socket: socket.socket):
 
@@ -92,7 +93,6 @@ class Manager:
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
-        self.workers[msg["data"]["name"]]["response"] = True
 
     def register_graph(self, graph: Graph):
 
@@ -153,20 +153,21 @@ class Manager:
                 "data": {
                     "worker_name": worker_name,
                     "node_name": node_name,
-                    "node_object": jsonpickle.encode(
-                        self.graph.G.nodes[node_name]["object"]
-                    ),
+                    "pickled": dill.dumps(self.graph.G.nodes[node_name]["object"]),
                     "in_bound": list(self.graph.G.predecessors(node_name)),
                     "out_bound": list(self.graph.G.successors(node_name)),
                 },
             },
         )
 
-    def wait_until_node_creation_complete(self, worker_name: str, node_name: str):
+    def wait_until_node_creation_complete(
+        self, worker_name: str, node_name: str, timeout: Union[int, float] = 20
+    ):
 
+        delay = 0.1
         miss_counter = 0
         while True:
-            time.sleep(0.1)
+            time.sleep(delay)
 
             if (
                 node_name in self.workers[worker_name]["nodes_status"]
@@ -174,19 +175,11 @@ class Manager:
             ):
                 break
             else:
-                logger.debug(f"Waiting for INIT of {node_name}: {self.workers}")
-                if miss_counter > 10:
+                if delay * miss_counter > timeout:
                     raise RuntimeError(
                         f"Manager waiting for {node_name} not sending INIT"
                     )
                 miss_counter += 1
-
-        # Perform health check on the worker
-        self.server.send(
-            self.workers[worker_name]["socket"],
-            {"signal": enums.MANAGER_HEALTH_CHECK, "data": {}},
-            ack=True,
-        )
 
     def create_p2p_network(self):
 
@@ -196,17 +189,107 @@ class Manager:
             # Send each node that needs to be constructed
             for node_name in self.worker_graph_map[worker_name]:
 
-                # Send request to create node
-                self.request_node_creation(worker_name, node_name)
+                fail_attempts = 0
+                while True:
 
-                # Wait until the node has been created and connected
-                # to the corresponding worker
-                self.wait_until_node_creation_complete(worker_name, node_name)
+                    # If fail too many times, give up :(
+                    if fail_attempts > 10:
+                        raise RuntimeError(
+                            f"Couldn't create {node_name} after multiple tries"
+                        )
 
-                # Mark the response as false, since it is not used
-                self.mark_response_as_false_for_workers()
+                    # Send request to create node
+                    self.request_node_creation(worker_name, node_name)
+
+                    # Wait until the node has been created and connected
+                    # to the corresponding worker
+                    try:
+                        self.wait_until_node_creation_complete(worker_name, node_name)
+                        break
+                    except RuntimeError:
+                        fail_attempts += 1
+                        logger.warning(
+                            f"Node creation failed: {worker_name}:{node_name}, attempt {fail_attempts}"
+                        )
 
                 logger.debug(f"Creation of Node {node_name} successful")
+
+    def request_node_server_data(self):
+
+        # Reset responses
+        self.mark_response_as_false_for_workers()
+
+        # Send the message to each worker and wait
+        for worker_name in self.worker_graph_map:
+
+            fail_attempts = 0
+            while True:
+
+                # If too many attempts, give up :(
+                if fail_attempts > 10:
+                    raise RuntimeError(
+                        "Worker: {worker_name} not responsive after multiple attempts"
+                    )
+
+                # Send the request to each worker
+                self.server.send(
+                    self.workers[worker_name]["socket"],
+                    {"signal": enums.MANAGER_REQUEST_NODE_SERVER_DATA, "data": {}},
+                )
+
+                # Wait until response
+                try:
+                    self.wait_until_worker_respond(
+                        worker_name, attribute="reported_nodes_server_data"
+                    )
+                    break
+                except:
+                    fail_attempts += 1
+                    logger.warning(
+                        f"Failed to receive Worker's node server request: attempt {fail_attempts}"
+                    )
+
+        logger.debug("Node data server gathering successful")
+
+    def request_connection_creation(self):
+
+        # Reset responses
+        self.mark_response_as_false_for_workers()
+
+        # Send the message to each worker and wait
+        for worker_name in self.worker_graph_map:
+
+            fail_attempts = 0
+            while True:
+
+                # If too many attempts, give up :(
+                if fail_attempts > 10:
+                    raise RuntimeError(
+                        "Worker: {worker_name} not responsive after multiple attempts"
+                    )
+
+                # Send the request to each worker
+                self.server.send(
+                    self.workers[worker_name]["socket"],
+                    {
+                        "signal": enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
+                        "data": self.nodes_server_table,
+                    },
+                )
+
+                # Wait until response
+                try:
+                    self.wait_until_worker_respond(
+                        worker_name, attribute="served_nodes_server_data"
+                    )
+                    break
+                except:
+                    fail_attempts += 1
+                    logger.warning(
+                        f"Failed to receive Worker's node server request: attempt {fail_attempts}"
+                    )
+
+        logger.debug("Graph connections successful")
 
     def setup_p2p_connections(self):
 
@@ -215,32 +298,10 @@ class Manager:
         self.nodes_server_table = {}
 
         # Broadcast request for node server data
-        self.mark_response_as_false_for_workers()
-        self.server.broadcast(
-            {
-                "signal": enums.MANAGER_REQUEST_NODE_SERVER_DATA,
-                "data": {},
-            }
-        )
-
-        # Wail until all workers have responded with their node server data
-        self.wait_until_all_workers_responded(
-            attribute="reported_nodes_server_data", timeout=5
-        )
+        self.request_node_server_data()
 
         # Distribute the entire graph's information to all the Workers
-        self.mark_response_as_false_for_workers()
-        self.server.broadcast(
-            {
-                "signal": enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
-                "data": self.nodes_server_table,
-            }
-        )
-
-        # Wail until all workers have claimed that their nodes are ready
-        self.wait_until_all_workers_responded(
-            attribute="served_nodes_server_data", timeout=5
-        )
+        self.request_connection_creation()
 
     def commit_graph(self):
 
@@ -260,31 +321,37 @@ class Manager:
         for worker_name in self.workers:
             self.workers[worker_name]["response"] = False
 
+    def wait_until_worker_respond(
+        self,
+        worker_name: str,
+        attribute: str = "response",
+        timeout: Union[int, float] = 10,
+        delay: float = 0.1,
+    ):
+
+        miss_counter = 0
+        while True:
+
+            # IF the worker responded, then break
+            if self.workers[worker_name][attribute]:
+                break
+
+            time.sleep(delay)
+
+            if delay * miss_counter > timeout:
+                logger.error(f"{self}: stuck")
+                raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
+
+            miss_counter += 1
+
     def wait_until_all_workers_responded(
-        self, attribute: str, timeout: Optional[float] = None, delay: float = 0.1
+        self, attribute: str, timeout: Union[float, int] = 10, delay: float = 0.1
     ):
 
         # Waiting until every worker has responded and provided their
         # data
         for worker_name in self.workers:
-
-            miss_counter = 0
-            while True:
-
-                # IF the worker responded, then break
-                if self.workers[worker_name]["response"]:
-                    break
-
-                time.sleep(delay)
-
-                if (
-                    isinstance(timeout, (float, int))
-                    and miss_counter * delay >= timeout
-                ):
-                    logger.error(f"{self}: stuck")
-                    raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
-
-                miss_counter += 1
+            self.wait_until_worker_respond(worker_name, attribute, timeout, delay)
 
     def check_all_nodes_ready(self):
 

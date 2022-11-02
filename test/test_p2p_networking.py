@@ -1,6 +1,8 @@
 import time
+import sys
 import pdb
 import logging
+import platform
 
 logger = logging.getLogger("chimerapy")
 
@@ -8,6 +10,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy import Worker, Graph, Node
+from .conftest import linux_run_only, linux_expected_only
 from .mock import DockeredWorker
 
 
@@ -117,6 +120,7 @@ def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_no
 
     # Connect to the manager
     dockered_worker.connect(host=manager.host, port=manager.port)
+    # dockered_worker.connect(host='10.0.0.153', port=manager.port)
 
     # Then register graph to Manager
     manager.register_graph(simple_graph)
@@ -178,7 +182,7 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.shutdown()
 
 
-# @pytest.mark.repeat(3)
+@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
     [
@@ -191,17 +195,20 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
             lazy_fixture("multiple_nodes_multiple_workers_manager"),
             {"local": ["Gen1"], "local2": ["Con1"]},
         ),
-        (
+        pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
             {"test": ["Gen1"]},
+            marks=linux_run_only,
         ),
-        (
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"test": ["Gen1", "Con1"]},
+            marks=linux_run_only,
         ),
-        (
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"local": ["Gen1"], "local2": ["Con1"]},
+            marks=linux_run_only,
         ),
     ],
 )
@@ -209,6 +216,8 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
 
     # Commiting the graph by sending it to the workers
     config_manager.create_p2p_network()
+
+    logger.info(config_manager.workers)
 
     # Extract all the nodes
     nodes_names = []
@@ -234,16 +243,25 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
     assert all([config_manager.graph.has_node_by_name(x) for x in nodes_names])
 
 
-# @pytest.mark.repeat(3)
+@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager",
     [
         (lazy_fixture("single_node_no_connections_manager")),
         (lazy_fixture("multiple_nodes_one_worker_manager")),
         (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        (lazy_fixture("dockered_single_node_no_connections_manager")),
-        (lazy_fixture("dockered_multiple_nodes_one_worker_manager")),
-        (lazy_fixture("dockered_multiple_nodes_multiple_workers_manager")),
+        pytest.param(
+            lazy_fixture("dockered_single_node_no_connections_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_p2p_network_connections(config_manager):
@@ -272,9 +290,18 @@ def test_p2p_network_connections(config_manager):
         (lazy_fixture("multiple_nodes_one_worker_manager")),
         (lazy_fixture("multiple_nodes_multiple_workers_manager")),
         (lazy_fixture("slow_single_node_single_worker_manager")),
-        (lazy_fixture("dockered_single_node_no_connections_manager")),
-        (lazy_fixture("dockered_multiple_nodes_one_worker_manager")),
-        (lazy_fixture("dockered_multiple_nodes_multiple_workers_manager")),
+        pytest.param(
+            lazy_fixture("dockered_single_node_no_connections_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_detecting_when_all_nodes_are_ready(config_manager):
@@ -296,6 +323,7 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
     assert all([x in config_manager.nodes_server_table for x in nodes_names])
 
 
+# @pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager,expected_output",
     [
@@ -306,14 +334,20 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
             {"Gen1": 2, "Con1": 6},
         ),
         (lazy_fixture("slow_single_node_single_worker_manager"), {"Slo1": 5}),
-        (lazy_fixture("dockered_single_node_no_connections_manager"), {"Gen1": 2}),
-        (
+        pytest.param(
+            lazy_fixture("dockered_single_node_no_connections_manager"),
+            {"Gen1": 2},
+            marks=linux_run_only,
+        ),
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"Gen1": 2, "Con1": 6},
+            marks=linux_run_only,
         ),
-        (
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
+            marks=linux_run_only,
         ),
     ],
 )
@@ -345,14 +379,20 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
             {"Gen1": 2, "Con1": 6},
         ),
         (lazy_fixture("slow_single_node_single_worker_manager"), {"Slo1": 5}),
-        (lazy_fixture("dockered_single_node_no_connections_manager"), {"Gen1": 2}),
-        (
+        pytest.param(
+            lazy_fixture("dockered_single_node_no_connections_manager"),
+            {"Gen1": 2},
+            marks=linux_run_only,
+        ),
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"Gen1": 2, "Con1": 6},
+            marks=linux_run_only,
         ),
-        (
+        pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
+            marks=linux_run_only,
         ),
     ],
 )

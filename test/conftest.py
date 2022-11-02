@@ -1,6 +1,9 @@
 from typing import Dict, Any
 import time
 import logging
+import sys
+import os
+import platform
 
 logger = logging.getLogger("chimerapy")
 
@@ -9,6 +12,19 @@ import pytest
 
 from chimerapy import Manager, Worker, Graph, Node
 from .mock import DockeredWorker
+
+# Try to get Github Actions environment variable
+try:
+    current_platform = os.environ["MANUAL_OS_SET"]
+except:
+    current_platform = platform.system()
+
+linux_run_only = pytest.mark.skipif(
+    current_platform != "Linux", reason="Test only can run on Linux"
+)
+linux_expected_only = pytest.mark.skipif(
+    current_platform != "Linux", reason="Test expected to only pass on Linux"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -33,12 +49,14 @@ def worker():
 
 @pytest.fixture
 def docker_client():
+    logger.info(f"DOCKER CLIENT: {current_platform}")
     c = docker.DockerClient(base_url="unix://var/run/docker.sock")
     return c
 
 
 @pytest.fixture
 def dockered_worker(docker_client):
+    logger.info(f"DOCKER WORKER: {current_platform}")
     dockered_worker = DockeredWorker(docker_client, name="test")
     yield dockered_worker
     dockered_worker.shutdown()

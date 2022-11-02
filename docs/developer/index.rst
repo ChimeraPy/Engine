@@ -36,3 +36,4 @@ methods, and modules used by ChimeraPy.
    communication.rst
    actors.rst
    utils.rst
+   docker.rst

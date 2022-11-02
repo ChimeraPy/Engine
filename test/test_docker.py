@@ -1,19 +1,23 @@
-import os
 import logging
+import sys
 
-import docker
+import pytest
 
 logger = logging.getLogger("chimerapy")
+
+from .conftest import linux_run_only
 
 # Resources: https://docker-py.readthedocs.io/en/stable/containers.html#docker.models.containers.Container
 # https://stackoverflow.com/questions/61763684/following-the-exec-run-output-from-docker-py-in-realtime
 
 
+@linux_run_only
 def test_get_easy_docker_example_going(docker_client):
     output = docker_client.containers.run("ubuntu", "echo $PATH")
     logger.info(output)
 
 
+@linux_run_only
 def test_create_container_and_make_it_execute_commands(docker_client):
 
     # Create the docker container
@@ -29,6 +33,7 @@ def test_create_container_and_make_it_execute_commands(docker_client):
     logger.info(output)
 
 
+@linux_run_only
 def test_use_custom_docker_image(docker_client):
 
     # Create the docker container

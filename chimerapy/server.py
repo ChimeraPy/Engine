@@ -13,7 +13,14 @@ import threading
 import ast
 import time
 
-from .utils import threaded, create_payload, log, get_open_port, decode_payload
+from .utils import (
+    threaded,
+    create_payload,
+    log,
+    get_open_port,
+    decode_payload,
+    get_ip_address,
+)
 from . import enums
 
 
@@ -38,7 +45,8 @@ class Server(threading.Thread):
 
         # Create listening socket
         self.socket = get_open_port(port)
-        self.host, self.port = self.socket.getsockname()
+        self.host = get_ip_address()
+        _, self.port = self.socket.getsockname()
         self.socket.listen(self.max_num_of_clients)
         self.socket.settimeout(0.2)
 

@@ -14,34 +14,46 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
     # The process
     steps:
       - name: Set up Python
         uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
 
       - uses: actions/checkout@v2
 
-      - name: Install dependencies locally
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-
-      - name: Install dependencies and ChimeraPy
-        run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get update
-            sudo apt-get install ffmpeg libsm6 libxext6 -y
-          fi
-
+          sudo apt-get install ffmpeg libsm6 libxext6 -y
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[test]'
+          docker build -t chimerapy .
+          echo "MANUAL_OS_SET=Linux" >> $GITHUB_ENV
 
-      - name: Build ChimeraPy Docker Image to spin up VM mocking Workers
+      - name: Install MacOS dependencies
+        if: matrix.os == 'macos-latest'
         run: |
-          sudo docker build -t chimerapy .
+          python3 -m pip install --upgrade pip
+          python3 -m pip install '.[test]'
+          echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
+
+      - name: Install Windows dependencies
+        if: matrix.os == 'windows-latest'
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install .[test]
+          echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform tests
         run: |
-          # python -m pytest --cov=chimerapy --cov-report=xml
           coverage run --source=chimerapy -m pytest test/
 
       - name: Upload coverage data to coveralls.io

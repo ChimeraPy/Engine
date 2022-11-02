@@ -1,19 +1,19 @@
 # Built-in Imports
-import sys
 import logging
 import time
-import threading
+import sys
 
 # Third-party Imports
 import pytest
-import docker
 
 # Test Import
 from .mock import DockeredWorker
+from .conftest import linux_run_only
 
 logger = logging.getLogger("chimerapy")
 
 
+@linux_run_only
 def test_worker_entrypoint_connect(manager, dockered_worker):
 
     # Create docker container to simulate Worker computer
@@ -26,6 +26,7 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
     logger.info("Manager shutting down")
 
 
+@linux_run_only
 def test_multiple_workers_connect(manager, docker_client):
 
     workers = []
