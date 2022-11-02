@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import time
 import logging
-import platform
+import sys
 
 logger = logging.getLogger("chimerapy")
 
@@ -13,10 +13,10 @@ from .mock import DockeredWorker
 
 
 linux_run_only = pytest.mark.skipif(
-    platform.system() != "Linux", reason="Test only can run on Linux"
+    not sys.platform.startswith("linux"), reason="Test only can run on Linux"
 )
 linux_expected_only = pytest.mark.skipif(
-    platform.system() != "Linux", reason="Test expected to only pass on Linux"
+    not sys.platform.startswith("linux"), reason="Test expected to only pass on Linux"
 )
 
 
@@ -42,25 +42,17 @@ def worker():
 
 @pytest.fixture
 def docker_client():
-    logger.info(f"DOCKER CLIENT: platform.system() = {platform.system()}")
-    if platform.system() != "Linux":
-        pytest.skip(reason="This fixture should only be created when used in Linux")
-        return None
-    else:
-        c = docker.DockerClient(base_url="unix://var/run/docker.sock")
-        return c
+    logger.info(f"DOCKER CLIENT: sys.platform = {sys.platform}")
+    c = docker.DockerClient(base_url="unix://var/run/docker.sock")
+    return c
 
 
 @pytest.fixture
 def dockered_worker(docker_client):
-    logger.info(f"DOCKER WORKER: platform.system() = {platform.system()}")
-    if platform.system() != "Linux":
-        pytest.skip(reason="This fixture should only be created when used in Linux")
-        return None
-    else:
-        dockered_worker = DockeredWorker(docker_client, name="test")
-        yield dockered_worker
-        dockered_worker.shutdown()
+    logger.info(f"DOCKER WORKER: sys.platform = {sys.platform}")
+    dockered_worker = DockeredWorker(docker_client, name="test")
+    yield dockered_worker
+    dockered_worker.shutdown()
 
 
 class GenNode(Node):
