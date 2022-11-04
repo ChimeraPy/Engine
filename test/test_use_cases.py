@@ -12,9 +12,9 @@ import imutils
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-logger = logging.getLogger("chimerapy")
-
 from chimerapy import Node, Graph
+
+logger = logging.getLogger("chimerapy")
 
 
 class WebcamNode(Node):
@@ -125,7 +125,6 @@ def combine_videos_graph():
     graph.add_edge(src=web, dst=combine)
 
     return graph
-
 
 
 @pytest.mark.skipif(

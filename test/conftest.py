@@ -5,13 +5,13 @@ import sys
 import os
 import platform
 
-logger = logging.getLogger("chimerapy")
-
 import docker
 import pytest
 
 from chimerapy import Manager, Worker, Graph, Node
 from .mock import DockeredWorker
+
+logger = logging.getLogger("chimerapy")
 
 # Try to get Github Actions environment variable
 try:

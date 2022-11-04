@@ -1,17 +1,22 @@
 ![logo](docs/_static/logo/chimerapy_logo_with_name.png#gh-dark-mode-only)
 ![logo](docs/_static/logo/chimerapy_logo_with_name_theme_blue.png#gh-light-mode-only)
 
-# ChimeraPy: A Distributed Computing Framework for Multimodal Data Collection
+![PyPI](https://img.shields.io/pypi/v/chimerapy) [![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
+* [Docs](https://oele-isis-vanderbilt.github.io/ChimeraPy)
 
-[![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
+<!-- Summary -->
+ChimeraPy is a distributed computing framework for multimodal data dollection, processing, and feedback. It's a real-time streaming tool that leverages from a distributed cluster to empower AI-driven applications.
 
-[Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy) | [PyPI](https://pypi.org/project/chimerapy/)
+1. **Collect** your data in real-time from any computer and time aligned it to the rest of your data streams.
+2. **Process** data as soon as it comes, providing a service to your users.
+3. **Archive** your outputs and later retrieve them in a single main data archive for later careful post-hoc analysis.
+4. **Monitor** the executing of your distributed cluster, view live outputs, and verify that you collected clean data.
 
-We propose the development of ChimeraPy, a distributed computing framework for multimodal data collection. We focus on four key features that are important for multimodal learning analytics purposes: free and open-source code; distributed computing capabilities; the use of python as a programming language; and time-alignment capabilities.
+## :package: Installation
 
-## Installation
+> :warning: Currently, only Linux and MacOS are supported. A stable Windows version is in the works. More details can be found in [#45](https://github.com/oele-isis-vanderbilt/ChimeraPy/issues/45).
 
-You can install the package through PIPY with the following command.
+You can install the package with the following command.
 
 ```
 pip install chimerapy
@@ -25,29 +30,10 @@ cd ChimeraPy
 pip install .
 ```
 
-## Development
+## :earth_americas: Contributing
 
-To create a development environment, use instead the following command:
+Contributions are welcomed! Our [Developer Documentation](https://oele-isis-vanderbilt.github.io/ChimeraPy/developer/index.html) should provide more details in how ChimeraPy works and what is in current development.
 
-```
-pip install '.[test]'
-```
-
-With this command, the necessary dependencies for testing will be automatically
-installed.
-
-To execute the test, use the following command (located within the root
-GitHub repository folder).
-
-```
-pytest
-```
-
-In this project, we use the `pre-commit` library to verify every commit
-follows certain standards. This dependency is automatically included in
-the test dependency installation. [Here](https://pre-commit.com) is
-information in how its used and advantages.
-
-## License
+## :scroll: License
 
 ChimeraPy uses the GNU GENERAL PUBLIC LICENSE, as found in [LICENSE](https://oele-isis-vanderbilt/ChimeraPy/blob/main/LICENSE) file.

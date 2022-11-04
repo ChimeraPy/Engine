@@ -19,20 +19,13 @@ LOGGING_CONFIG = {
             "formatter": "standard",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",  # Default is stderr
-        },
-        "file": {
-            "level": "DEBUG",
-            "formatter": "standard",
-            "class": "logging.FileHandler",
-            "encoding": "utf-8",
-            "filename": "chimerapy.log",
-        },
+        }
     },
     "loggers": {
-        "": {  # root logger
-            "handlers": ["console", "file"],
+        "chimerapy": {
+            "handlers": ["console"],
             "level": "DEBUG",
-            "propagate": False,
+            "propagate": True,
         }
     },
 }
