@@ -8,7 +8,7 @@ works.
 This section covers the following:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :includehidden:
 
    basics

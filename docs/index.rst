@@ -39,26 +39,26 @@ Contents
 --------
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :includehidden:
 
    getting_started
    usage/index
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
    :includehidden:
 
    framework/index
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :includehidden:
 
    api/index
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 6
    :includehidden:
 
    developer/index
