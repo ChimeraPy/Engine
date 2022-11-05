@@ -7,13 +7,15 @@
   :width: 90%
   :alt: ChimeraPy Logo
 
-|pipy| |coverage| |test| |license| |style|
+|pipy|_ |coverage|_ |test| |license| |style|
 
 .. |pipy| image:: https://img.shields.io/pypi/v/chimerapy
    :alt: PyPI
+.. _pipy: https://pypi.org/project/chimerapy/
 
 .. |coverage| image:: https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main
    :alt: coverage
+.. _coverage: https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main
 
 .. |test| image:: https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test
    :alt: test
@@ -52,13 +54,13 @@ Contents
    framework/index
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :includehidden:
 
    api/index
 
 .. toctree::
-   :maxdepth: 6
+   :maxdepth: 3
    :includehidden:
 
    developer/index
