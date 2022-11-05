@@ -26,6 +26,20 @@ linux_expected_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test expected to only pass on Linux"
 )
 
+disable_loggers = [
+    "matplotlib",
+    "chardet.charsetprober",
+    "matplotlib.font_manager",
+    "PIL.PngImagePlugin",
+]
+
+
+def pytest_configure():
+    for logger_name in disable_loggers:
+        logger = logging.getLogger(logger_name)
+        logger.disabled = True
+        logger.propagate = False
+
 
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
