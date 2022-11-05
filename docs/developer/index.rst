@@ -28,7 +28,7 @@ Below is the developer documentation, which includes all the classes,
 methods, and modules used by ChimeraPy.
 
 .. toctree::
-   :maxdepth: 5
+   :maxdepth: 2
    :includehidden:
 
    communication.rst
