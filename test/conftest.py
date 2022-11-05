@@ -5,13 +5,13 @@ import sys
 import os
 import platform
 
-logger = logging.getLogger("chimerapy")
-
 import docker
 import pytest
 
 from chimerapy import Manager, Worker, Graph, Node
 from .mock import DockeredWorker
+
+logger = logging.getLogger("chimerapy")
 
 # Try to get Github Actions environment variable
 try:
@@ -25,6 +25,20 @@ linux_run_only = pytest.mark.skipif(
 linux_expected_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test expected to only pass on Linux"
 )
+
+disable_loggers = [
+    "matplotlib",
+    "chardet.charsetprober",
+    "matplotlib.font_manager",
+    "PIL.PngImagePlugin",
+]
+
+
+def pytest_configure():
+    for logger_name in disable_loggers:
+        logger = logging.getLogger(logger_name)
+        logger.disabled = True
+        logger.propagate = False
 
 
 @pytest.fixture(autouse=True)

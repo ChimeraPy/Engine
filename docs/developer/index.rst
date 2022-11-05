@@ -7,30 +7,28 @@ Hello! Glad that you are interested in contributing to this open-source project.
 Environment Setup
 =======================
 
-To create a development environment, use instead the following command:
+To create a development environment, use instead the following command::
 
-``pip install '.[test]'``
+    pip install '.[test]'
 
-With this command, the necessary dependencies for testing will be automatically
-installed.
+With this command, the necessary dependencies for testing will be automatically installed.
 
-To execute the test, use the following command (located within the root
-GitHub repository folder).
+To execute the test, use the following command (located within the root GitHub repository folder)::
 
-``pytest``
+    pytest
 
-In this project, we use the ``pre-commit`` library to verify every commit
-follows certain standards. This dependency is automatically included in
-the test dependency installation. `The pre-commit homepage <https://pre-commit.com>` provides information in how its used and advantages.
+In this project, we use the ``pre-commit`` library to verify every commit follows certain standards. This dependency is automatically included in the test dependency installation. `The pre-commit homepage <https://pre-commit.com>`_ provides information in how its used and advantages.
 
 Documentation
-=======================
+=============
+
+.. _developerdocs:
 
 Below is the developer documentation, which includes all the classes,
 methods, and modules used by ChimeraPy.
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 5
    :includehidden:
 
    communication.rst

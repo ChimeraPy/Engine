@@ -8,9 +8,9 @@ import numpy as np
 
 import pdb
 
-logger = logging.getLogger("chimerapy")
-
 import chimerapy as cp
+
+logger = logging.getLogger("chimerapy")
 
 # Constants
 IMG_SIZE = 400

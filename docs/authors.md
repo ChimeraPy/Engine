@@ -1,3 +1,4 @@
-# Authors
+# Contributors
 
- - Eduardo Davalos (eduardo.davalos.anaya@vanderbilt.edu)
+ - Eduardo Davalos (eduardo.davalos.anaya at vanderbilt.edu)
+ - Yike Zhang (yike.zhange at vanderbilt.edu)

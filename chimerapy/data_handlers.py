@@ -3,13 +3,9 @@ import pathlib
 import logging
 import threading
 import queue
-import socket
-import time
-import cProfile
 
 logger = logging.getLogger("chimerapy")
 
-from .utils import log
 from . import enums
 
 

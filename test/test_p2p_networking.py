@@ -4,14 +4,14 @@ import pdb
 import logging
 import platform
 
-logger = logging.getLogger("chimerapy")
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy import Worker, Graph, Node
 from .conftest import linux_run_only, linux_expected_only
 from .mock import DockeredWorker
+
+logger = logging.getLogger("chimerapy")
 
 
 @pytest.fixture

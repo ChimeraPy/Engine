@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple, Optional
+from typing import Any, Dict, Tuple
 import socket
 import queue
 import errno
@@ -12,8 +12,6 @@ import jsonpickle
 import netifaces as ni
 
 import lz4.block
-
-# import gzip
 
 logger = logging.getLogger("chimerapy")
 

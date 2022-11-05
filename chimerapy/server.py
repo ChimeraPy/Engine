@@ -10,7 +10,6 @@ logger = logging.getLogger("chimerapy")
 
 import socket
 import threading
-import ast
 import time
 
 from .utils import (

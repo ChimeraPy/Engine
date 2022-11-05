@@ -4,7 +4,6 @@ import logging
 import pdb
 import time
 
-import jsonpickle
 import dill
 
 logger = logging.getLogger("chimerapy")
@@ -13,13 +12,23 @@ import networkx as nx
 
 from .server import Server
 from .graph import Graph
-from .utils import log
 from . import enums
 
 
 class Manager:
     def __init__(self, port: int = 9000, max_num_of_workers: int = 50):
+        """Create ``Manager``, the controller of the cluster.
 
+        The ``Manager`` is the director of the cluster, such as adding
+        new computers, providing roles, starting and stopping data
+        collection, and shutting down the system.
+
+        Args:
+            port (int): Referred port, might return a different one based\
+            on availablity.
+            max_num_of_workers (int): max_num_of_workers
+
+        """
         # Saving input parameters
         # self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
@@ -95,7 +104,16 @@ class Manager:
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
 
     def register_graph(self, graph: Graph):
+        """Verifying that a Graph is valid, that is a DAG.
 
+        In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
+        Registering the graph is the first step to setting up the data
+        pipeline in  the cluster.
+
+        Args:
+            graph (Graph): A directed acyclic graph.
+
+        """
         # First, check if graph is valid
         if not graph.is_valid():
             logger.error("Invalid Graph - rejected!")
@@ -106,7 +124,18 @@ class Manager:
         self.commitable_graph = False
 
     def map_graph(self, worker_graph_map: Dict[str, List[str]]):
+        """Mapping ``Node`` from graph to ``Worker`` from cluster.
 
+        The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
+        going to execute which ``Node``s.
+
+        Args:
+            worker_graph_map (Dict[str, List[str]]): The keys are the \
+            ``Worker``'s name and the values should be a list of \
+            the ``Node``'s names that will be executed within its corresponding\
+            ``Worker`` key.
+
+        """
         # Tracking valid inputs
         checks = []
 
@@ -304,7 +333,25 @@ class Manager:
         self.request_connection_creation()
 
     def commit_graph(self):
+        """Committing ``Graph`` to the cluster.
 
+        Committing refers to how the graph itself (with its nodes and edges)
+        and the mapping is distributed to the cluster. The whole routine
+        is two steps: peer creation and peer-to-peer connection setup.
+
+        In peer creation, the ``Manager`` messages each ``Worker`` with
+        the ``Nodes`` they need to execute. The ``Workers`` configure
+        the ``Nodes``, by giving them network information. The ``Nodes``
+        are then started and report back to the ``Workers``.
+
+        With the successful creation of the ``Nodes``, the ``Manager``
+        request the ``Nodes`` servers' ip address and port numbers to
+        create an address table for all the ``Nodes``. Then this table
+        is used to inform each ``Node`` where their in-bound and out-bound
+        ``Nodes`` are located; thereby establishing the edges between
+        ``Nodes``.
+
+        """
         # First, check that the graph has been cleared
         assert self.commitable_graph, logger.error(
             "Tried to commit graph that hasn't been confirmed or ready"
@@ -392,7 +439,13 @@ class Manager:
             miss_counter += 1
 
     def step(self):
+        """Cluster step execution for offline operation.
 
+        The ``step`` function is for careful but slow operation of the
+        cluster. For online execution, ``start`` and ``stop`` are the
+        methods to be used.
+
+        """
         # First, the step should only be possible after a graph has
         # been commited
         assert (
@@ -431,12 +484,34 @@ class Manager:
         return gather_data
 
     def start(self):
+        """Start the executiong of the cluster.
+
+        Before starting, make sure that you have perform the following
+        steps:
+
+        - Create ``Nodes``
+        - Create ``DAG`` with ``Nodes`` and their edges
+        - Connect ``Workers`` (must be before committing ``Graph``)
+        - Register, map, and commit ``Graph``
+
+        """
         self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
 
     def stop(self):
+        """Stop the executiong of the cluster.
+
+        Do not forget that you still need to execute ``shutdown`` to
+        properly shutdown processes, threads, and queues.
+
+        """
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
 
     def shutdown(self):
+        """Proper shutting down ChimeraPy cluster.
 
+        Through this method, the ``Manager`` broadcast to all ``Workers``
+        to shutdown, in which they will stop their processes and threads safely.
+
+        """
         # First, shutdown server
         self.server.shutdown()

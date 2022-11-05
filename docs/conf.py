@@ -15,9 +15,6 @@ import sys
 
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("./chimerapy/"))
-sys.path.insert(0, os.path.abspath("./chimerapy/core"))
-sys.path.insert(0, os.path.abspath("./chimerapy/core/tabular"))
-sys.path.insert(0, os.path.abspath("./chimerapy/core/video"))
 sys.path.insert(0, os.path.abspath("./source/"))
 
 # As recommended by SO form:

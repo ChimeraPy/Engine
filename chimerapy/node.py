@@ -6,19 +6,32 @@ import socket
 import logging
 import queue
 
-# mp.set_start_method("fork")
-
 logger = logging.getLogger("chimerapy")
 
 from .client import Client
 from .server import Server
 from .data_handlers import OutputsHandler
 from . import enums
-from .utils import log, clear_queue
+from .utils import clear_queue
 
 
 class Node(mp.Process):
     def __init__(self, name: str):
+        """Create a basic unit of computation in ChimeraPy.
+
+        A node has three main functions that can be overwritten to add
+        desired behavior: ``prep``, ``step``, and ``teardown``. You don't
+        require them all if not necessary. The ``step`` function is executed
+        within a while loop, when new inputs are available (if inputs are
+        specified in the graph).
+
+        If the ``step`` function is too restrictive, the ``main``
+        (containing the while loop) can be overwritten instead.
+
+        Args:
+            name (str): The name that will later used to refer to the Node.
+
+        """
         super().__init__(daemon=True)
 
         # Saving input parameters
@@ -32,8 +45,12 @@ class Node(mp.Process):
         return self.__repr__()
 
     def __getstate__(self):
-        """called when pickling - this hack allows subprocesses to
-        be spawned without the AuthenticationString raising an error"""
+        """called when pickling
+
+        this hack allows subprocesses to be spawned without the
+        AuthenticationString raising an error
+
+        """
         state = self.__dict__.copy()
         conf = state["_config"]
         if "authkey" in conf:
@@ -54,7 +71,23 @@ class Node(mp.Process):
         out_bound: List[str],
         networking: bool = True,
     ):
+        """Configuring the ``Node``'s networking and meta data.
 
+        This function does not create the connections between the ``Node``
+        and the ``Worker``, as that is done in the ``_prep`` method. It
+        just inplants the networking meta from the ``Worker`` to the
+        ``Node``. This is because we have to instantiate the ``Server``,
+        ``Client``, and other components of the ``Node`` inside the ``run``
+        method.
+
+        Args:
+            host (str): Worker's host
+            port (int): Worker's port
+            in_bound (List[str]): List of node names that will be inputs
+            out_bound (List[str]): List of node names that will be sent the output
+            networking (bool): Optional deselect networking setup (used in testing)
+
+        """
         # Obtaining worker information
         self.worker_host = host
         self.worker_port = port
@@ -73,9 +106,13 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: finished config")
 
-    @log
     def _prep(self):
+        """Establishes the connection between ``Node`` and ``Worker``
 
+        The client that connects the ``Node`` to the ``Worker`` is created
+        within this function, along with ``Node`` meta data.
+
+        """
         # Create container for p2p clients
         self.p2p_clients = {}
 
@@ -218,7 +255,13 @@ class Node(mp.Process):
         )
 
     def prep(self):
-        """User-define method"""
+        """User-defined method for ``Node`` setup.
+
+        In this method, the setup logic of the ``Node`` is executed. This
+        would include opening files, creating connections to sensors, and
+        calibrating sensors.
+
+        """
         ...
 
     def ready(self):
@@ -293,17 +336,49 @@ class Node(mp.Process):
         self.step_id += 1
 
     def step(self, data_dict: Optional[Dict[str, Any]] = None):
-        """User-define method"""
+        """User-define method.
+
+        In this method, the logic that is executed within the ``Node``'s
+        while loop. For data sources (no inputs), the ``step`` method
+        will execute as fast as possible; therefore, it is important to
+        add ``time.sleep`` to specify the sampling rate.
+
+        For a ``Node`` that have inputs, these will be executed when new
+        data is received.
+
+        Args:
+            data_dict (Optional[Dict[str, Any]]): For source nodes, this \
+            parameter should not be considered (as they don't have inputs).\
+            For step and sink nodes, the ``data_dict`` must be included\
+            to avoid an error. The variable is a dictionary, where the\
+            key is the in-bound ``Node``'s name and the value is the\
+            output of the in-bound ``Node``'s ``step`` function.
+
+        """
         ...
 
     def main(self):
-        """User-possible overwritten method"""
+        """User-possible overwritten method.
 
+        This method can also be overwritten, through it is recommend to
+        do so carefully. If overwritten, the handling of inputs will have
+        to be implemented as well.
+
+        One can have access to this information from ``self.in_bound_data``,
+        and ``self.new_data_available`` attributes.
+
+        """
         while self.running.value:
             self.forward({})
 
     def teardown(self):
-        """User-define method"""
+        """User-define method.
+
+        This method provides a convienient way to shutdown services, such
+        as closing files, signaling to sensors to stop, and making any
+        last minute corrections to the data.
+
+        """
         ...
 
     def _teardown(self):
@@ -324,7 +399,15 @@ class Node(mp.Process):
             self.server.shutdown()
 
     def run(self):
+        """The actual method that is executed in the new process.
 
+        When working with ``multiprocessing.Process``, it should be
+        considered that the creation of a new process can yield
+        unexpected behavior if not carefull. It is recommend that one
+        reads the ``mutliprocessing`` documentation to understand the
+        implications.
+
+        """
         logger.debug(f"{self}: initialized")
 
         # Performing preparation for the while loop

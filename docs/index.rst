@@ -7,9 +7,12 @@
   :width: 90%
   :alt: ChimeraPy Logo
 
-|coverage| |test| |license| |style|
+|pipy| |coverage| |test| |license| |style|
 
-.. |coverage| image:: https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)
+.. |pipy| image:: https://img.shields.io/pypi/v/chimerapy
+   :alt: PyPI
+
+.. |coverage| image:: https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main
    :alt: coverage
 
 .. |test| image:: https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test
@@ -22,22 +25,28 @@
    :alt: style
 
 Welcome!
-=====================================
+========
 
-We propose the development of ChimeraPy, a distributed computing framework for multimodal data collection. We focus on four key features that are important for multimodal learning analytics purposes: free and open-source code; distributed computing capabilities; the use of python as a programming language; and time-alignment capabilities.
+ChimeraPy is a distributed computing framework for multimodal data dollection, processing, and feedback. It's a real-time streaming tool that leverages from a distributed cluster to empower AI-driven applications.
+
+#. **Collect** your data in real-time from any computer and time aligned it to the rest of your data streams.
+#. **Process** data as soon as it comes, providing a service to your users.
+#. **Archive** your outputs and later retrieve them in a single main data archive for later careful post-hoc analysis.
+#. **Monitor** the executing of your distributed cluster, view live outputs, and verify that you collected clean data.
+
 
 Contents
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :includehidden:
 
    getting_started
    usage/index
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
    :includehidden:
 
    framework/index
@@ -49,7 +58,7 @@ Contents
    api/index
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 6
    :includehidden:
 
    developer/index

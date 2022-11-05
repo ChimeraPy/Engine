@@ -6,19 +6,35 @@ import os
 import time
 import pdb
 
-import jsonpickle
 import dill
 
 logger = logging.getLogger("chimerapy")
 
 from .server import Server
 from .client import Client
-from .utils import log
 from . import enums
 
 
 class Worker:
     def __init__(self, name: str, max_num_of_nodes: int = 10):
+        """Create a local Worker.
+
+        To execute ``Nodes`` within the main computer that is also housing
+        the ``Manager``, it will require a ``Worker`` as well. Therefore,
+        it is common to create a ``Worker`` and a ``Manager`` within the
+        same computer.
+
+        To create a worker in another machine, you will have to use the
+        following command (in the other machine's terminal):
+
+        >>> cp-worker --ip <manager's IP> --port <manager's port> --name <name>
+
+        Args:
+            name (str): The name for the ``Worker`` that will be used \
+            as reference.
+            max_num_of_nodes (int): Maximum number of ``Nodes`` supported\
+            by the constructed ``Worker``.
+        """
 
         # Saving parameters
         self.name = name
@@ -66,7 +82,20 @@ class Worker:
         return self.__repr__()
 
     def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
+        """Connect ``Worker`` to ``Manager``.
 
+        This establish server-client connections between ``Worker`` and
+        ``Manager``. To ensure that the connections are close correctly,
+        either the ``Manager`` or ``Worker`` should shutdown before
+        stopping your program to avoid processes and threads that do
+        not shutdown.
+
+        Args:
+            host (str): The ``Manager``'s IP address.
+            port (int): The ``Manager``'s port number
+            timeout (Union[int, float]): Set timeout for the connection.
+
+        """
         # Create client
         self.client = Client(
             host=host,
@@ -341,7 +370,17 @@ class Worker:
         self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}})
 
     def shutdown(self, msg: Dict = {}):
+        """Shutdown ``Worker`` safely.
 
+        The ``Worker`` needs to shutdown its server, client and ``Nodes``
+        in a safe manner, such as setting flag variables and clearing
+        out queues.
+
+        Args:
+            msg (Dict): Leave empty, required to work when ``Manager`` sends\
+            shutdown message to ``Worker``.
+
+        """
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
 

@@ -5,8 +5,6 @@ import multiprocessing as mp
 import queue
 import sys
 
-logger = logging.getLogger("chimerapy")
-
 import pytest
 import dill
 
@@ -14,6 +12,8 @@ import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
 from pytest_lazyfixture import lazy_fixture
+
+logger = logging.getLogger("chimerapy")
 
 
 def target_function(q):

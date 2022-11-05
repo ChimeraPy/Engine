@@ -2,16 +2,15 @@
 Usage
 =====
 
-As much as we try to make ChimeraPy intuitive, here we provide some
-basic examples and descriptions to help elaborate on how ChimeraPy
+As much as we try to make ChimeraPy intuitive, here we provide some basic examples and descriptions to help elaborate on how ChimeraPy
 works.
 
-This section covers the essential features of ChimeraPy:
+This section covers the following:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :includehidden:
 
    basics
-   intro_tutorial
    defining_pipeline
+   intro_tutorial
