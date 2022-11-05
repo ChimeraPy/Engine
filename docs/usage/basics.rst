@@ -40,7 +40,7 @@ For this example, the ``RandomNode`` is a source node. Step and sink have a ``st
 Creating a DAG
 **************
 
-The creation of a DAG is done through the :class:`Graph<chimerapy.Graph>` class. The :class:`Graph<chimerapy.Graph>` is a subclass of `NetworkX <https://networkx.org>`_ `DiGraph <https://networkx.org/documentation/stable/reference/classes/digraph.html>`_. To start, we create the Nodes we are interested in putting into our DAG and then, by re-using `nx.DiGraph` API, we can add nodes and edges. An example is shown below:::
+The creation of a DAG is done through the :class:`Graph<chimerapy.Graph>` class. The :class:`Graph<chimerapy.Graph>` is a subclass of `NetworkX <https://networkx.org>`_ `DiGraph <https://networkx.org/documentation/stable/reference/classes/digraph.html>`_. To start, we create the Nodes we are interested in putting into our DAG and then, by re-using `nx.DiGraph` API, we can add nodes and edges. An example is shown below::
 
     import chimerapy as cp
 
@@ -86,7 +86,7 @@ During our cluster setup, we have the many options and configurations to establi
 Manager-Worker Connection
 =========================
 
-For a local cluster, we can create the :class:`Worker<chimerapy.Worker>` instance within the local machine. This is how it works:::
+For a local cluster, we can create the :class:`Worker<chimerapy.Worker>` instance within the local machine. This is how it works::
 
     import chimerapy as cp
 
@@ -97,19 +97,19 @@ For a local cluster, we can create the :class:`Worker<chimerapy.Worker>` instanc
     # Connect
     worker.connect(host=manager.host, port=manager.port)
 
-For a distributed cluster, the connection setup requires more work. First, we start the :class:`Manager<chimerapy.Manager>` in the main computer.::
+For a distributed cluster, the connection setup requires more work. First, we start the :class:`Manager<chimerapy.Manager>` in the main computer::
 
     $ python
     >>> import chimerapy as cp
     >>> manager = cp.Manager()
     2022-11-03 22:37:55 [INFO] chimerapy: Server started at Port 9000
 
-Once the :class:`Manager<chimerapy.Manager>` started, the next step is to access the worker computers and use the ChimeraPy :class:`Worker<chimerapy.Worker>` connect entrypoint to establish the connection. With the following command, we can connect the worker computer:::
+Once the :class:`Manager<chimerapy.Manager>` started, the next step is to access the worker computers and use the ChimeraPy :class:`Worker<chimerapy.Worker>` connect entrypoint to establish the connection. With the following command, we can connect the worker computer::
 
     $ # You will have to obtain your Manager's IP address (ifconfig)
     $ cp-worker --port 10.0.0.153 --port 9000 --name remote
 
-With the correct networking information (change ``10.0.0.153`` with the ip address of your computer hosting the :class:`Manager<chimerapy.Manager>`, the :class:`Worker<chimerapy.Worker>` should connect and the :class:`Manager<chimerapy.Manager>` should report the :class:`Worker<chimerapy.Worker>` as registered:::
+With the correct networking information (change ``10.0.0.153`` with the ip address of your computer hosting the :class:`Manager<chimerapy.Manager>`, the :class:`Worker<chimerapy.Worker>` should connect and the :class:`Manager<chimerapy.Manager>` should report the :class:`Worker<chimerapy.Worker>` as registered::
 
     2022-11-03 22:42:05 [INFO] chimerapy: <Server Manager MANAGER_MESSAGE->WORKER_MESSAGE>: Got connection from ('10.0.0.171', 44326)
 
@@ -118,7 +118,7 @@ This message informs us that the :class:`Worker<chimerapy.Worker>` connected suc
 Worker-Node Mapping
 ===================
 
-After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>` to the :class:`Workers<chimerapy.Worker>`. First, you register the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>` to verify a valid graph. Then, through a dictionary mapping, where the keys are the workers' names and the values are list of the nodes' names, we can specify which workers will perform which node tasks. Here is an example:::
+After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>` to the :class:`Workers<chimerapy.Worker>`. First, you register the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>` to verify a valid graph. Then, through a dictionary mapping, where the keys are the workers' names and the values are list of the nodes' names, we can specify which workers will perform which node tasks. Here is an example::
 
     # Then register graph to Manager
     manager.register_graph(graph)

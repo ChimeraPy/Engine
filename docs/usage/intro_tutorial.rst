@@ -118,7 +118,7 @@ With our DAG complete, the next step is configuring the network configuration an
         manager.stop()
         manager.shutdown()
 
-In this main code, we have the option to run this between two computers (the Distributed Cluster Option), in which we would have to connect another computer through the entrypoint, as the following:::
+In this main code, we have the option to run this between two computers (the Distributed Cluster Option), in which we would have to connect another computer through the entrypoint, as the following::
 
     $ cp-worker --ip <manager's ip> --port <manager's port> --name remote
 

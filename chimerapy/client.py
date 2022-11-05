@@ -9,9 +9,7 @@ logger = logging.getLogger("chimerapy")
 
 import socket
 import threading
-import ast
 import time
-import lz4.block
 
 from .utils import create_payload, decode_payload
 from . import enums

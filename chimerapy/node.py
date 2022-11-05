@@ -6,15 +6,13 @@ import socket
 import logging
 import queue
 
-# mp.set_start_method("fork")
-
 logger = logging.getLogger("chimerapy")
 
 from .client import Client
 from .server import Server
 from .data_handlers import OutputsHandler
 from . import enums
-from .utils import log, clear_queue
+from .utils import clear_queue
 
 
 class Node(mp.Process):
@@ -23,7 +21,7 @@ class Node(mp.Process):
 
         A node has three main functions that can be overwritten to add
         desired behavior: ``prep``, ``step``, and ``teardown``. You don't
-        require them all if not necessary. The step function is executed
+        require them all if not necessary. The ``step`` function is executed
         within a while loop, when new inputs are available (if inputs are
         specified in the graph).
 
@@ -108,7 +106,6 @@ class Node(mp.Process):
 
         logger.debug(f"{self}: finished config")
 
-    @log
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``
 

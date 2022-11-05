@@ -37,6 +37,7 @@ class Graph:
         self.G.add_edges_from(list_of_edges_with_names)
 
     def is_valid(self):
+        """Checks if ``Graph`` is a true DAG."""
         return nx.is_directed_acyclic_graph(self.G)
 
     def get_layers_and_pos(self):
@@ -61,6 +62,15 @@ class Graph:
         return layers, pos
 
     def plot(self, font_size: int = 30, node_size: int = 5000):
+        """Plotting the ``Graph`` to visualize data pipeline.
+
+        This visualization tool uses ``matplotlib`` and ``networkx`` to
+        show the ``Nodes`` and their edges.
+
+        Args:
+            font_size (int): Font size
+            node_size (int): Node size
+        """
 
         # Then get the position of the nodes
         layers, pos = self.get_layers_and_pos()

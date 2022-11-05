@@ -22,7 +22,7 @@ For now we are just going to use empty :class:`Node<chimerapy.Node>` for illustr
 Add Nodes to Graph
 ******************
 
-After creating the :class:`Nodes<chimerapy.Node>`, we add them to the :class:`Graph<chimerapy.Graph>`, like this:::
+After creating the :class:`Nodes<chimerapy.Node>`, we add them to the :class:`Graph<chimerapy.Graph>`, like this::
 
     graph = cp.Graph()
     graph.add_nodes_from([a,b,c,d,e,f])
@@ -31,7 +31,7 @@ After creating the :class:`Nodes<chimerapy.Node>`, we add them to the :class:`Gr
 Check Graph
 ***********
 
-With the graph configuration complete, we can visually confirm that the DAG is constructed correctly, by using the following command:::
+With the graph configuration complete, we can visually confirm that the DAG is constructed correctly, by using the following command::
 
     # Should create a matplotlib figure
     graph.plot()

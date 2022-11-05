@@ -7,13 +7,13 @@ Hello! Glad that you are interested in contributing to this open-source project.
 Environment Setup
 =======================
 
-To create a development environment, use instead the following command:::
+To create a development environment, use instead the following command::
 
     pip install '.[test]'
 
 With this command, the necessary dependencies for testing will be automatically installed.
 
-To execute the test, use the following command (located within the root GitHub repository folder).::
+To execute the test, use the following command (located within the root GitHub repository folder)::
 
     pytest
 
