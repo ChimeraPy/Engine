@@ -1,10 +1,12 @@
 Tutorial
 ########
-
 During this tutorial, we will be using an example, specifically ``remote_camera.py`` provided within the ``examples`` folder of the ChimeraPy's GitHub repository. This example streams a video from one computer to another and displays the resulting webcam image.
 
 .. warning::
    This example might not work if your camera permissions do not allow you to access your webcam through OpenCV's ``VideoCapture``. It is recommend that you first try the Local cluster option to test instead of Distributed, as it is easier to debug.
+
+Data Sources and Process as Nodes
+*********************************
 
 The first step to executing a data pipeline with ChimeraPy is to design your :class:`Node<chimerapy.Node>` implementations. In this situation, we have the ``WebcamNode`` that pulls images from the webcam through OpenCV. The receiving node, ``ShowWindow`` displays the webcam video through an OpenCV display. Here are the :class:`Node<chimerapy.Node>` definitions::
 
@@ -49,6 +51,10 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
             cv2.imshow("frame", frame)
             cv2.waitKey(1)
 
+
+An Elegent Approach: Subclassing Graph
+**************************************
+
 Now we have to define our :class:`Graph<chimerapy.Graph>`. There two main ways to achieve this: create a :class:`Graph<chimerapy.Graph>` instance and then add the connections, or create a custom :class:`Graph<chimerapy.Graph>` subclass that defines the connections. In the `Basics<basics>`, we show the first approach, therefore we will use the latter in this tutorial. Below is the ``RemoteCameraGraph``::
 
     class RemoteCameraGraph(cp.Graph):
@@ -59,6 +65,9 @@ Now we have to define our :class:`Graph<chimerapy.Graph>`. There two main ways t
 
             self.add_nodes_from([web, show])
             self.add_edge(src=web, dst=show)
+
+Controlling your Cluster
+************************
 
 With our DAG complete, the next step is configuring the network configuration and controlling the cluster to start and stop. Make sure, because of mulitprocessing's start methods, to wrap your main code within a ``if __name__ == "__main__"`` to avoid issues, as done below::
 

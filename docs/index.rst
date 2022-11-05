@@ -34,12 +34,15 @@ ChimeraPy is a distributed computing framework for multimodal data dollection, p
 #. **Archive** your outputs and later retrieve them in a single main data archive for later careful post-hoc analysis.
 #. **Monitor** the executing of your distributed cluster, view live outputs, and verify that you collected clean data.
 
+Why Another Distributed Framework!?
+###################################
+
 
 Contents
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
    :includehidden:
 
    getting_started

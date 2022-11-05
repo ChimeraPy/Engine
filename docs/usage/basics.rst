@@ -1,7 +1,7 @@
-.. _basics:
-
 Basics
 ######
+
+.. _basics:
 
 For the basics, we start with the smallest component of the system, the :class:`Node<chimerapy.Node>`. The :class:`Node<chimerapy.Node>` provides the container for logic in how to collect, process, and return data within the ChimeraPy framework. Then, we will discuss how to incorporate a :class:`Node<chimerapy.Node>` into the directed acyclic graph (DAG) pipeline through the :class:`Graph<chimerapy.Graph>`. We will finish the setup with configuring our local or distributed cluster with :class:`Manager<chimerapy.Manager>` and :class:`Worker<chimerapy.Worker>`. Once all setup is complete, we can execut the system and control the cluster.
 
@@ -106,9 +106,10 @@ For a distributed cluster, the connection setup requires more work. First, we st
 
 Once the :class:`Manager<chimerapy.Manager>` started, the next step is to access the worker computers and use the ChimeraPy :class:`Worker<chimerapy.Worker>` connect entrypoint to establish the connection. With the following command, we can connect the worker computer:::
 
+    $ # You will have to obtain your Manager's IP address (ifconfig)
     $ cp-worker --port 10.0.0.153 --port 9000 --name remote
 
-With the correct networking information, the :class:`Worker<chimerapy.Worker>` should connect and the :class:`Manager<chimerapy.Manager>` should report the :class:`Worker<chimerapy.Worker>` as registered:::
+With the correct networking information (change ``10.0.0.153`` with the ip address of your computer hosting the :class:`Manager<chimerapy.Manager>`, the :class:`Worker<chimerapy.Worker>` should connect and the :class:`Manager<chimerapy.Manager>` should report the :class:`Worker<chimerapy.Worker>` as registered:::
 
     2022-11-03 22:42:05 [INFO] chimerapy: <Server Manager MANAGER_MESSAGE->WORKER_MESSAGE>: Got connection from ('10.0.0.171', 44326)
 
