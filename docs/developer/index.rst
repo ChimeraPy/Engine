@@ -31,6 +31,7 @@ methods, and modules used by ChimeraPy.
    :maxdepth: 2
    :includehidden:
 
+   changelog.rst
    communication.rst
    actors.rst
    utils.rst
