@@ -19,14 +19,22 @@ LOGGING_CONFIG = {
             "formatter": "standard",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",  # Default is stderr
-        }
+        },
+        "datagram": {
+            "level": "DEBUG",
+            "formatter": "standard",
+            "class": "logging.handlers.DatagramHandler",
+            "host": "127.0.0.1",
+            "port": 5555,
+        },
     },
     "loggers": {
-        "chimerapy": {
+        "": {
             "handlers": ["console"],
             "level": "DEBUG",
             "propagate": True,
-        }
+        },
+        "subprocess": {"handlers": ["datagram"], "level": "DEBUG", "propagate": True},
     },
 }
 

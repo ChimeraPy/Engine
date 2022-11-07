@@ -8,6 +8,9 @@ import sys
 import pytest
 import dill
 
+# For testing windows or mac quickly
+# mp.set_start_method("spawn")
+
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
@@ -21,7 +24,7 @@ def target_function(q):
     q.put(1)
 
 
-def test_multiple_process():
+def test_multiple_fork_process():
 
     NUM = 100
     ps = []
@@ -53,11 +56,11 @@ def test_multiple_threads():
     assert q.qsize() == NUM
 
 
-@linux_expected_only
-def test_create_multiple_nodes():
+# @linux_expected_only
+def test_create_multiple_nodes(logreceiver):
 
     ns = []
-    for i in range(10):
+    for i in range(3):
         n = GenNode(name=f"G{i}")
         n.config("0.0.0.0", 9000, [], [], networking=False)
         n.start()
@@ -71,7 +74,7 @@ def test_create_multiple_nodes():
         assert n.exitcode == 0
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_create_multiple_nodes_after_pickling():
 
     ns = []
@@ -103,7 +106,7 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-@linux_expected_only
+# @linux_expected_only
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 
@@ -125,7 +128,7 @@ def test_worker_create_node(worker, gen_node):
     assert isinstance(worker.nodes[gen_node.name]["node_object"], cp.Node)
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_worker_create_unknown_node(worker):
     class UnknownNode(cp.Node):
         def step(self):
@@ -152,11 +155,11 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_worker_create_nodes(worker):
 
     to_be_created_nodes = []
-    for i in range(100):
+    for i in range(10):
 
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")

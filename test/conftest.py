@@ -4,6 +4,9 @@ import logging
 import sys
 import os
 import platform
+import socket
+import pickle
+import threading
 
 import docker
 import pytest
@@ -39,6 +42,52 @@ def pytest_configure():
         logger = logging.getLogger(logger_name)
         logger.disabled = True
         logger.propagate = False
+
+
+@pytest.fixture
+def logreceiver():
+    def listener():
+
+        # Create server and logger to relay messages
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(("127.0.0.1", 5555))
+        logger = logging.getLogger("")
+
+        # Continue listening until signaled to stop
+        while True:
+
+            # Listen for information
+            data = s.recv(4096)
+            if data == b"die":
+                break
+
+            # Dont forget to skip over the 32-bit length prepended
+            logrec = pickle.loads(data[4:])
+            rec = logging.LogRecord(
+                name=logrec["name"],
+                level=logrec["levelno"],
+                pathname=logrec["pathname"],
+                lineno=logrec["lineno"],
+                msg=logrec["msg"],
+                args=logrec["args"],
+                exc_info=logrec["exc_info"],
+                func=logrec["funcName"],
+            )
+            logger.handle(rec)
+
+        # Safely shutdown socket
+        s.close()
+
+    # Start relaying thread
+    receiver_thread = threading.Thread(target=listener)
+    receiver_thread.start()
+
+    yield
+
+    # Shutting down thread
+    t = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    t.sendto(b"die", ("127.0.0.1", 5555))
+    receiver_thread.join()
 
 
 @pytest.fixture(autouse=True)
