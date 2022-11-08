@@ -19,8 +19,6 @@ ChimeraPy is a distributed computing framework for multimodal data dollection, p
 
 ## Installation
 
-> Warning: currently, only Linux and MacOS are supported. A stable Windows version is in the works. More details can be found in [#45](https://github.com/oele-isis-vanderbilt/ChimeraPy/issues/45).
-
 You can install the package with the following command.
 
 ```
