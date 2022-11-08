@@ -70,8 +70,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show"]}
+    mapping = {"remote": ["web"], "local": ["show"]}
+    # mapping = {"local": ["web", "show"]}
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)
