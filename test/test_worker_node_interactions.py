@@ -8,6 +8,9 @@ import sys
 import pytest
 import dill
 
+# For testing windows or mac quickly
+# mp.set_start_method("spawn")
+
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
@@ -21,9 +24,9 @@ def target_function(q):
     q.put(1)
 
 
-def test_multiple_process():
+def test_multiple_fork_process():
 
-    NUM = 100
+    NUM = 10
     ps = []
     q = mp.Queue()
     for i in range(NUM):
@@ -53,11 +56,11 @@ def test_multiple_threads():
     assert q.qsize() == NUM
 
 
-@linux_expected_only
-def test_create_multiple_nodes():
+# @linux_expected_only
+def test_create_multiple_nodes(logreceiver):
 
     ns = []
-    for i in range(10):
+    for i in range(3):
         n = GenNode(name=f"G{i}")
         n.config("0.0.0.0", 9000, [], [], networking=False)
         n.start()
@@ -71,7 +74,7 @@ def test_create_multiple_nodes():
         assert n.exitcode == 0
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_create_multiple_nodes_after_pickling():
 
     ns = []
@@ -103,7 +106,7 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-@linux_expected_only
+# @linux_expected_only
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 
@@ -152,11 +155,11 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_worker_create_nodes(worker):
 
     to_be_created_nodes = []
-    for i in range(100):
+    for i in range(10):
 
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")
@@ -178,7 +181,7 @@ def test_worker_create_nodes(worker):
             continue
 
 
-@linux_expected_only
+# @linux_expected_only
 @pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
@@ -221,7 +224,7 @@ def test_worker_create_multiple_nodes_stress(worker):
         assert node_name in worker.nodes
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_step_single_node(worker, gen_node):
 
     # Simple single node without connection
@@ -244,7 +247,7 @@ def test_step_single_node(worker, gen_node):
     time.sleep(2)
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_two_nodes_connect(worker, gen_node, con_node):
 
     # Simple single node without connection
@@ -276,7 +279,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     worker.process_node_server_data({"data": node_server_data["nodes"]})
 
 
-@linux_expected_only
+# @linux_expected_only
 def test_starting_node(worker, gen_node):
 
     # Simple single node without connection
@@ -302,7 +305,7 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
 
-@linux_expected_only
+# @linux_expected_only
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
@@ -338,7 +341,7 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     )
 
 
-@linux_expected_only
+# @linux_expected_only
 @pytest.mark.parametrize(
     "_manager,_worker",
     [

@@ -7,10 +7,7 @@ import platform
 logger = logging.getLogger("chimerapy")
 
 # Third-party
-# Only import if linux
-if platform.system() == "Linux":
-    import docker
-
+import docker
 
 class LogThread(threading.Thread):
     def __init__(self, name: str, stream, output_queue: queue.Queue):

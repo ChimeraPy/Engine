@@ -21,7 +21,7 @@ class WebcamNode(cp.Node):
 
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
-        return imutils.resize(frame, width=100)
+        return frame
 
     def teardown(self):
         self.vid.release()
@@ -35,7 +35,7 @@ class ShowWindow(cp.Node):
         frame = data["web"]
         if not isinstance(frame, np.ndarray):
             return
-        frame = imutils.resize(frame, width=500)
+
         cv2.imshow("frame", frame)
         cv2.waitKey(1)
 

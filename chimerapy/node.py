@@ -1,12 +1,11 @@
 from typing import Dict, List, Any, Optional
-import multiprocessing as mp
 from multiprocessing.process import AuthenticationString
+import multiprocess as mp
 import time
 import socket
 import logging
 import queue
-
-logger = logging.getLogger("chimerapy")
+import pdb
 
 from .client import Client
 from .server import Server
@@ -35,6 +34,7 @@ class Node(mp.Process):
         super().__init__(daemon=True)
 
         # Saving input parameters
+        self._context = mp.get_start_method()
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0}
 
@@ -62,6 +62,18 @@ class Node(mp.Process):
         """for unpickling"""
         state["_config"]["authkey"] = AuthenticationString(state["_config"]["authkey"])
         self.__dict__.update(state)
+
+    def get_logger(self) -> logging.Logger:
+
+        # Depending on the type of process, get the self.logger
+        if self._context == "spawn":
+            self.logger = logging.getLogger("subprocess")
+        elif self._context == "fork":
+            self.logger = logging.getLogger("")
+        else:
+            raise RuntimeError("Invalid multiprocessing spawn method.")
+
+        return self.logger
 
     def config(
         self,
@@ -103,8 +115,6 @@ class Node(mp.Process):
 
         # Creating initial values
         self.latest_value = None
-
-        logger.debug(f"{self}: finished config")
 
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``
@@ -164,10 +174,7 @@ class Node(mp.Process):
                 accepted_msg_type=enums.WORKER_MESSAGE,
                 handlers=self.to_worker_handlers,
             )
-            logger.debug(f"{self}: Node creating Client to connect to Worker")
-
             self.client.start()
-            logger.debug(f"{self}: connected to Worker")
 
             # Create server
             self.server = Server(
@@ -198,7 +205,7 @@ class Node(mp.Process):
         # We determine all the out bound nodes
         for out_bound_name in self.p2p_info["out_bound"]:
 
-            logger.debug(f"{self}: Setting up clients: {self.name}: {msg}")
+            self.logger.debug(f"{self}: Setting up clients: {self.name}: {msg}")
 
             # Determine the host and port information
             out_bound_info = msg["data"][out_bound_name]
@@ -293,7 +300,7 @@ class Node(mp.Process):
 
     def start_node(self, msg: Dict):
         self.worker_signal_start = True
-        logger.debug(f"{self}: start")
+        self.logger.debug(f"{self}: start")
 
     def stop_node(self, msg: Dict):
         self.running.value = False
@@ -316,7 +323,7 @@ class Node(mp.Process):
                     time.sleep(1 / 100)  # Required to allow threads to execute
                     continue
 
-                logger.debug(f"{self}: got inputs")
+                self.logger.debug(f"{self}: got inputs")
 
                 # Once we get them, pass them through!
                 output = self.step(inputs)
@@ -326,7 +333,7 @@ class Node(mp.Process):
         if type(output) != type(None):
 
             # Send out the output to the OutputsHandler
-            logger.debug(f"{self}: placed data to out_queue")
+            self.logger.debug(f"{self}: placed data to out_queue")
             self.out_queue.put({"step_id": self.step_id, "data": output})
 
             # And then save the latest value
@@ -408,34 +415,34 @@ class Node(mp.Process):
         implications.
 
         """
-        logger.debug(f"{self}: initialized")
+        self.logger = self.get_logger()
+        self.logger.debug(f"{self}: initialized with context -> {self._context}")
 
         # Performing preparation for the while loop
         self._prep()
         self.prep()
 
         assert isinstance(self.in_queue, queue.Queue)
-
-        logger.debug(f"{self}: finished prep")
+        self.logger.debug(f"{self}: finished prep")
 
         # Signal that Node is ready
         self.ready()
 
-        logger.debug(f"{self}: is ready")
+        self.logger.debug(f"{self}: is ready")
 
         # Now waiting for the Worker to inform the node to execute
         self.waiting()
 
-        logger.debug(f"{self}: is running")
+        self.logger.debug(f"{self}: is running")
 
         self.main()
 
-        logger.debug(f"{self}: is exiting")
+        self.logger.debug(f"{self}: is exiting")
 
         self.teardown()
         self._teardown()
 
-        logger.debug(f"{self}: finished teardown")
+        self.logger.debug(f"{self}: finished teardown")
 
     def shutdown(self, msg: Dict = {}):
 
