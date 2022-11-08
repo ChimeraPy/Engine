@@ -55,7 +55,6 @@ def complex_graph():
     return graph
 
 
-@pytest.mark.skip(reason="need to automate matplotlib test")
 @pytest.mark.parametrize(
     "graph, expected_layers, expected_pos",
     [
@@ -93,7 +92,7 @@ def test_graph_pos_simple(graph, expected_layers, expected_pos):
             np.isclose(expected_pos[node_name], pos[node_name])
         ).all(), f"Node {node_name} is incorrect"
 
-
+@pytest.mark.skip(reason="need to automate matplotlib test")
 @pytest.mark.parametrize(
     "graph",
     [
