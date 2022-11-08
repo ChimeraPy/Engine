@@ -8,9 +8,6 @@ import sys
 import pytest
 import dill
 
-# For testing windows or mac quickly
-# mp.set_start_method("spawn")
-
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
