@@ -7,8 +7,8 @@ import threading
 import logging
 import functools
 import struct
+import pickle
 
-import jsonpickle
 import netifaces as ni
 
 import lz4.block
@@ -103,16 +103,10 @@ def create_payload(
         "ack": int(ack),
     }
 
-    jsonpickle_payload = jsonpickle.encode(payload)
-    compressed_bytes_payload = lz4.block.compress(
-        jsonpickle_payload.encode(), mode="fast"
-    )
-    # compressed_bytes_payload = gzip.compress(jsonpickle_payload.encode())
-    # decompressed_bytes_payload = gzip.decompress(compressed_bytes_payload)
-    # assert decompressed_bytes_payload == jsonpickle_payload.encode()
+    b_payload = pickle.dumps(payload)
+    compressed_bytes_payload = lz4.block.compress(b_payload)
 
     finished_payload = compressed_bytes_payload
-    # finished_payload = jsonpickle_payload.encode()
 
     return finished_payload, struct.pack(">Q", len(finished_payload))
 
@@ -121,9 +115,7 @@ def decode_payload(data: bytes) -> Dict:
 
     bytes_payload = lz4.block.decompress(data)
     # bytes_payload = gzip.decompress(data)
-    payload: Dict = jsonpickle.decode(bytes_payload)
-
-    # payload: Dict = jsonpickle.decode(data)
+    payload: Dict = pickle.loads(bytes_payload)
 
     return payload
 
