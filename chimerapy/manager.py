@@ -61,7 +61,7 @@ class Manager:
             handlers=self.handlers,
         )
         self.server.start()
-        logger.info(f"Server started at Port {self.server.port}")
+        logger.info(f"Manager started at {self.server.host}:{self.server.port}")
 
         # Updating the manager's port to the found available port
         self.host, self.port = self.server.host, self.server.port
@@ -77,9 +77,15 @@ class Manager:
             "nodes_status": {},
             "gather": {},
         }
+        logger.info(
+            f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
+        )
 
     def deregister_worker(self, msg: Dict, worker_socket: socket.socket):
         worker_socket.close()
+        logger.info(
+            f"Manager deregistered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
+        )
         del self.workers[msg["data"]["name"]]
 
     def node_server_data(self, msg: Dict, worker_socket: socket.socket):
@@ -96,7 +102,7 @@ class Manager:
         self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
         self.workers[msg["data"]["name"]]["response"] = True
 
-        logger.info(f"{self}: Nodes status update to: {self.workers}")
+        logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
     def complete_worker_broadcast(self, msg: Dict, worker_socket: socket.socket):
 
@@ -185,6 +191,7 @@ class Manager:
                     "pickled": dill.dumps(self.graph.G.nodes[node_name]["object"]),
                     "in_bound": list(self.graph.G.predecessors(node_name)),
                     "out_bound": list(self.graph.G.successors(node_name)),
+                    "follow": self.graph.G.nodes[node_name]["follow"],
                 },
             },
         )

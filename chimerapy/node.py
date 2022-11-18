@@ -47,7 +47,7 @@ class Node(mp.Process):
     def __getstate__(self):
         """called when pickling
 
-        this hack allows subprocesses to be spawned without the
+        This hack allows subprocesses to be spawned without the
         AuthenticationString raising an error
 
         """
@@ -81,6 +81,7 @@ class Node(mp.Process):
         port: int,
         in_bound: List[str],
         out_bound: List[str],
+        follow: Optional[bool] = None,
         networking: bool = True,
     ):
         """Configuring the ``Node``'s networking and meta data.
@@ -106,6 +107,7 @@ class Node(mp.Process):
 
         # Storing p2p information
         self.p2p_info = {"in_bound": in_bound, "out_bound": out_bound}
+        self.follow = follow
 
         # Keeping track of the node's state
         self.running = mp.Value("i", True)
@@ -238,8 +240,10 @@ class Node(mp.Process):
 
     def received_data(self, msg: Dict, client_socket: socket.socket):
 
-        # Mark that new data was received
-        self.new_data_available = True
+        # Mark that new data was received, only if its is the Node to
+        # be followed
+        if msg["data"]["sent_from"] == self.follow:
+            self.new_data_available = True
 
         # Extract the data from the pickle
         coupled_data: Dict = msg["data"]["outputs"]

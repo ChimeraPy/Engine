@@ -4,8 +4,6 @@ import collections
 import uuid
 import struct
 
-import pdb
-
 logger = logging.getLogger("chimerapy")
 
 import socket
@@ -72,7 +70,7 @@ class Server(threading.Thread):
                 continue
 
             # Logging and configuring socket
-            logger.info(f"{self}: Got connection from {addr}")
+            logger.debug(f"{self}: Got connection from {addr}")
             s.settimeout(0.2)
 
             # Start thread for new client
@@ -158,7 +156,7 @@ class Server(threading.Thread):
             # Decode the message so we can process it
             msg = decode_payload(data)
 
-            logger.info(f"{self} msg received, content: {msg['signal']}")
+            logger.debug(f"{self} msg received, content: {msg['signal']}")
 
             # Process the msg
             self.process_msg(msg, s)

@@ -20,21 +20,18 @@ class Graph:
         return self.G.has_node(node_name)
 
     def add_node(self, node: Node):
-        self.G.add_node(node.name, object=node)
+        self.G.add_node(node.name, object=node, follow=None)
 
     def add_nodes_from(self, nodes: Sequence[Node]):
-        self.G.add_nodes_from([(n.name, {"object": n}) for n in nodes])
+        self.G.add_nodes_from([(n.name, {"object": n, "follow": None}) for n in nodes])
 
-    def add_edge(self, src: Node, dst: Node):
+    def add_edge(self, src: Node, dst: Node, follow: bool = False):
         self.G.add_edge(src.name, dst.name)
 
-    def add_edges_from(self, list_of_edges: Sequence[Sequence[Node]]):
-        # Reconstruct the list as node names
-        list_of_edges_with_names = []
-        for edge in list_of_edges:
-            list_of_edges_with_names.append([edge[0].name, edge[1].name])
-
-        self.G.add_edges_from(list_of_edges_with_names)
+        # If the first edge, use that as the default follow parameter
+        if len(self.G.in_edges(dst.name)) == 1 or follow:
+            follow_attr = {dst.name: {"follow": src.name}}
+            nx.set_node_attributes(self.G, follow_attr)
 
     def is_valid(self):
         """Checks if ``Graph`` is a true DAG."""

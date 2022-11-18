@@ -1,3 +1,4 @@
+from typing import Dict
 import time
 import sys
 import pdb
@@ -216,8 +217,6 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
 
     # Commiting the graph by sending it to the workers
     config_manager.create_p2p_network()
-
-    logger.info(config_manager.workers)
 
     # Extract all the nodes
     nodes_names = []

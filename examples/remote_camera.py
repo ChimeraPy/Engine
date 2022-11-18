@@ -15,9 +15,9 @@ class WebcamNode(cp.Node):
         self.vid = cv2.VideoCapture(0)
 
     def step(self):
-        import time
-        import numpy as np
-        import imutils
+        # import time
+        # import numpy as np
+        # import imutils
 
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
@@ -29,8 +29,8 @@ class WebcamNode(cp.Node):
 
 class ShowWindow(cp.Node):
     def step(self, data: Dict[str, Any]):
-        import cv2
-        import numpy as np
+        # import cv2
+        # import numpy as np
 
         frame = data["web"]
         if not isinstance(frame, np.ndarray):
@@ -70,8 +70,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show"]}
+    mapping = {"remote": ["web"], "local": ["show"]}
+    # mapping = {"local": ["web", "show"]}
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)

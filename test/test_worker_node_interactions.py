@@ -114,6 +114,7 @@ def test_worker_create_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -140,6 +141,7 @@ def test_worker_create_unknown_node(worker):
             "pickled": dill.dumps(node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
     del UnknownNode
@@ -169,6 +171,7 @@ def test_worker_create_nodes(worker):
                 "pickled": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -198,6 +201,7 @@ def test_worker_create_multiple_nodes_stress(worker):
                 "pickled": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -207,6 +211,7 @@ def test_worker_create_multiple_nodes_stress(worker):
                 "pickled": dill.dumps(new_node2),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -231,6 +236,7 @@ def test_step_single_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -254,6 +260,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [con_node.name],
+            "follow": None,
         }
     }
 
@@ -264,6 +271,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
             "pickled": dill.dumps(con_node),
             "in_bound": [gen_node.name],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -286,6 +294,7 @@ def test_starting_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 

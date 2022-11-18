@@ -122,7 +122,9 @@ class Worker:
 
         # Tracking client state change
         self.connected_to_manager = True
-        logger.info(f"{self}: connected to Manager")
+        logger.info(
+            f"{self}: connection successful to Manager located at {host}:{port}."
+        )
 
     def mark_response_as_false_for_node(self, node_name: str):
         self.nodes[node_name]["response"] = False
@@ -162,7 +164,7 @@ class Worker:
 
         # Saving name to track it for now
         node_name = msg["data"]["node_name"]
-        logger.info(f"{self}: received request for Node {node_name} creation: {msg}")
+        logger.debug(f"{self}: received request for Node {node_name} creation: {msg}")
 
         # Saving the node data
         self.nodes[node_name] = {
@@ -191,6 +193,7 @@ class Worker:
                 self.port,
                 self.nodes[node_name]["in_bound"],
                 self.nodes[node_name]["out_bound"],
+                self.nodes[node_name]["follow"],
             )
 
             # Before starting, over write the pid
