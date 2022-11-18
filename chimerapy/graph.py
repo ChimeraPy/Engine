@@ -33,6 +33,11 @@ class Graph:
             follow_attr = {dst.name: {"follow": src.name}}
             nx.set_node_attributes(self.G, follow_attr)
 
+    def add_edges_from(self, list_of_edges: Sequence[Sequence[Node]]):
+        # Reconstruct the list as node names
+        for edge in list_of_edges:
+            self.add_edge(src=edge[0], dst=edge[1])
+
     def is_valid(self):
         """Checks if ``Graph`` is a true DAG."""
         return nx.is_directed_acyclic_graph(self.G)
