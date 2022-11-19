@@ -9,6 +9,7 @@ logger = logging.getLogger("chimerapy")
 # Third-party
 import docker
 
+
 class LogThread(threading.Thread):
     def __init__(self, name: str, stream, output_queue: queue.Queue):
         super().__init__()
@@ -59,7 +60,7 @@ class DockeredWorker:
             except queue.Empty:
                 raise RuntimeError("Connection failed")
 
-            if "connected to Manager" in data:
+            if "connection successful to Manager" in data:
                 break
 
     def shutdown(self):

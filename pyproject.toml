@@ -13,4 +13,4 @@ log_cli_format = "%(asctime)s.%(msecs)03d [%(levelname)8s] %(message)s (%(filena
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 # Timeout
-faulthandler_timeout=30
+faulthandler_timeout=120
