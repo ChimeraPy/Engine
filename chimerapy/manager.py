@@ -188,7 +188,9 @@ class Manager:
                 "data": {
                     "worker_name": worker_name,
                     "node_name": node_name,
-                    "pickled": dill.dumps(self.graph.G.nodes[node_name]["object"]),
+                    "pickled": dill.dumps(
+                        self.graph.G.nodes[node_name]["object"], recurse=True
+                    ),
                     "in_bound": list(self.graph.G.predecessors(node_name)),
                     "out_bound": list(self.graph.G.successors(node_name)),
                     "follow": self.graph.G.nodes[node_name]["follow"],
