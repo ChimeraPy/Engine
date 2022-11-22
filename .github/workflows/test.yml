@@ -54,7 +54,8 @@ jobs:
 
       - name: Perform tests
         run: |
-          coverage run --source=chimerapy -m pytest test/
+          coverage run --concurrency=multiprocessing --source=chimerapy -m pytest test/
+          coverage combine
 
       - name: Upload coverage data to coveralls.io
         run: coveralls --service=github
