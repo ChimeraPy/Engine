@@ -34,8 +34,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install ffmpeg libsm6 libxext6 -y
           sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[test]'
+          pip install --upgrade pip
+          pip install '.[test]'
           docker build -t chimerapy .
           echo "MANUAL_OS_SET=Linux" >> $GITHUB_ENV
 
@@ -47,24 +47,22 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install portaudio
-          conda install -c anaconda pyaudio
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[test]'
+          conda install pyaudio -y
+          pip install --upgrade pip
+          pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
 
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install pipwin
-          conda install -c anaconda pyaudio
-          python3 -m pipwin install pyaudio
-          python3 -m pip install .[test]
+          pip install --upgrade pip
+          conda install pyaudio -y
+          pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform tests
         run: |
-          echo "RUNNING_ON_GA=1" >> $GITHUB_ENV
+          echo "RUNNING_ON_GA=GA" >> $GITHUB_ENV
           coverage run --source=chimerapy -m pytest test/
           coverage combine
 
