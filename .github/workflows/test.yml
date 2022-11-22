@@ -39,6 +39,10 @@ jobs:
           docker build -t chimerapy .
           echo "MANUAL_OS_SET=Linux" >> $GITHUB_ENV
 
+      - name: Install HomeBrew for MacOS
+        if: matrix.os == 'macos-latest'
+        uses: Homebrew/actions/setup-homebrew@master
+
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
@@ -52,13 +56,13 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install pipwin
-          python3 -m pip install pyaudio
+          pipwin install pyaudio
           python3 -m pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform tests
         run: |
-          coverage run --concurrency=multiprocessing --source=chimerapy -m pytest test/
+          coverage run --source=chimerapy -m pytest test/
           coverage combine
 
       - name: Upload coverage data to coveralls.io
