@@ -3,7 +3,6 @@
 /.vscode
 
 # Ignore the test data - sensitivie
-test/data/
 test/logs/
 test/test_output/
 *.csv

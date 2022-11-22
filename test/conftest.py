@@ -19,14 +19,21 @@ logger = logging.getLogger("chimerapy")
 # Try to get Github Actions environment variable
 try:
     current_platform = os.environ["MANUAL_OS_SET"]
+    running_on_github_actions = os.environ["RUNNING_ON_GA"]
 except:
     current_platform = platform.system()
+    running_on_github_actions = 0
 
+# Skip marks
 linux_run_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test only can run on Linux"
 )
 linux_expected_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test expected to only pass on Linux"
+)
+not_github_actions = pytest.mark.skipif(
+    running_on_github_actions == 1,
+    reason="Certain test require hardware to execute that is not available in GA",
 )
 
 disable_loggers = [

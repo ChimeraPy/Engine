@@ -1,8 +1,9 @@
 import logging
 import pathlib
 import os
-
 import time
+
+import pytest
 import wave
 import pyaudio
 import numpy as np
@@ -11,6 +12,8 @@ import cv2
 import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
+
+from ..conftest import not_github_actions
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -22,6 +25,16 @@ A_OUTPUT_FILE = TEST_DATA_DIR / "a.wav"
 AV_OUTPUT_FILE = TEST_DATA_DIR / "va.mp4"
 
 
+class RandomGenerator:
+    def read(self):
+        return True, np.uint8(np.random.rand(200, 300, 3) * 255)
+
+    def release(self):
+        ...
+
+
+@pytest.mark.dependency()
+@not_github_actions
 def test_write_audio():
     # References:
     # https://python-ffmpegio.github.io/python-ffmpegio/quick.html#stream-read-write
@@ -62,15 +75,22 @@ def test_write_audio():
     wf.close()
 
 
+@pytest.mark.order(after="test_write_audio")
+@pytest.mark.dependency()
+@not_github_actions
 def test_write_video():
 
     # Constants
     FPS = 15
 
     # Video
-    cap = cv2.VideoCapture(0)
-    ret, frame = cap.read()
-    assert isinstance(frame, np.ndarray)
+    try:
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        assert isinstance(frame, np.ndarray)
+    except:
+        cap = RandomGenerator()
+        ret, frame = cap.read()
 
     h, w = frame.shape[:2]
     writer = cv2.VideoWriter(
@@ -95,6 +115,9 @@ def test_write_video():
     writer.release()
 
 
+@pytest.mark.order(after="test_write_video")
+@pytest.mark.dependency(depends=["test_write_video", "test_write_audio"])
+@not_github_actions
 def test_combine_video_and_audio():
 
     assert V_OUTPUT_FILE.exists()
