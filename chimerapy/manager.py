@@ -2,6 +2,8 @@ from typing import Dict, Optional, List, Union
 import socket
 import logging
 import pdb
+import pathlib
+import os
 import time
 
 import dill
@@ -16,7 +18,12 @@ from . import enums
 
 
 class Manager:
-    def __init__(self, port: int = 9000, max_num_of_workers: int = 50):
+    def __init__(
+        self,
+        port: int = 9000,
+        max_num_of_workers: int = 50,
+        logdir: pathlib.Path = pathlib.Path.cwd() / "runs",
+    ):
         """Create ``Manager``, the controller of the cluster.
 
         The ``Manager`` is the director of the cluster, such as adding
@@ -33,6 +40,10 @@ class Manager:
         # self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.max_num_of_workers = max_num_of_workers
+        self.logdir = logdir
+
+        # Create a logging directory "runs"
+        os.makedirs(self.logdir, exist_ok=True)
 
         # Instance variables
         self.workers: Dict = {}

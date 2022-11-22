@@ -5,6 +5,10 @@ import logging
 import os
 import time
 import pdb
+import platform
+import tempfile
+import pathlib
+import datetime
 
 import dill
 
@@ -60,6 +64,14 @@ class Worker:
             enums.NODE_STATUS: self.node_status_update,
             enums.NODE_REPORT_GATHER: self.node_report_gather,
         }
+
+        # Create temporary data folder
+        tempdir = pathlib.Path(
+            "/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()
+        )
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.logdir = tempdir / f"chimerapy_{timestamp}"
+        os.makedirs(self.logdir, exist_ok=True)
 
         # Create server
         self.server = Server(
@@ -191,6 +203,7 @@ class Worker:
             self.nodes[node_name]["node_object"].config(
                 self.host,
                 self.port,
+                self.logdir,
                 self.nodes[node_name]["in_bound"],
                 self.nodes[node_name]["out_bound"],
                 self.nodes[node_name]["follow"],

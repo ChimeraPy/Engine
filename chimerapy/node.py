@@ -1,15 +1,21 @@
 from typing import Dict, List, Any, Optional
 from multiprocessing.process import AuthenticationString
-import multiprocess as mp
 import time
 import socket
 import logging
 import queue
-import pdb
+import uuid
+import pathlib
+import os
 
+# Third-party Imports
+import multiprocess as mp
+import numpy as np
+
+# Internal Imports
 from .client import Client
 from .server import Server
-from .data_handlers import OutputsHandler
+from .data_handlers import OutputsHandler, SaveHandler
 from . import enums
 from .utils import clear_queue
 
@@ -79,9 +85,10 @@ class Node(mp.Process):
         self,
         host: str,
         port: int,
+        logdir: pathlib.Path,
         in_bound: List[str],
         out_bound: List[str],
-        follow: Optional[bool] = None,
+        follow: Optional[bool],
         networking: bool = True,
     ):
         """Configuring the ``Node``'s networking and meta data.
@@ -104,6 +111,8 @@ class Node(mp.Process):
         # Obtaining worker information
         self.worker_host = host
         self.worker_port = port
+        self.logdir = logdir / self.name
+        os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
         self.p2p_info = {"in_bound": in_bound, "out_bound": out_bound}
@@ -118,89 +127,9 @@ class Node(mp.Process):
         # Creating initial values
         self.latest_value = None
 
-    def _prep(self):
-        """Establishes the connection between ``Node`` and ``Worker``
-
-        The client that connects the ``Node`` to the ``Worker`` is created
-        within this function, along with ``Node`` meta data.
-
-        """
-        # Create container for p2p clients
-        self.p2p_clients = {}
-
-        # Create input and output queue
-        self.in_queue = queue.Queue()
-        self.out_queue = queue.Queue()
-
-        # Create the queues for each in-bound connection
-        self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
-        self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
-        self.all_inputs_ready = False
-        self.new_data_available = False
-
-        # Create the threads that manager the incoming and outgoing
-        # data chunks
-        self.outputs_handler = OutputsHandler(
-            self.name, self.out_queue, self.p2p_info["out_bound"], self.p2p_clients
-        )
-        self.outputs_handler.start()
-
-        # Defining protocol responses
-        self.to_worker_handlers = {
-            enums.SHUTDOWN: self.shutdown,
-            enums.WORKER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
-            enums.WORKER_REQUEST_STEP: self.forward,
-            enums.WORKER_REQUEST_GATHER: self.provide_gather,
-            enums.WORKER_START_NODES: self.start_node,
-            enums.WORKER_STOP_NODES: self.stop_node,
-        }
-        self.from_node_handlers = {
-            enums.NODE_DATA_TRANSFER: self.received_data,
-        }
-        self.to_node_handlers = {}
-
-        # Keeping parameters
-        self.step_id = 0
-        self.worker_signal_start = 0
-        self.status["INIT"] = 1
-
-        if self.networking:
-
-            # Create client to the Worker
-            self.client = Client(
-                host=self.worker_host,
-                port=self.worker_port,
-                name=f"Node {self.name}",
-                connect_timeout=5.0,
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.WORKER_MESSAGE,
-                handlers=self.to_worker_handlers,
-            )
-            self.client.start()
-
-            # Create server
-            self.server = Server(
-                port=5000,
-                name=f"Node {self.name}",
-                max_num_of_clients=len(self.p2p_info["out_bound"]),
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.NODE_MESSAGE,
-                handlers=self.from_node_handlers,
-            )
-            self.server.start()
-
-            # Inform client that Node is INITIALIZED!
-            self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                        "host": self.server.host,
-                        "port": self.server.port,
-                    },
-                }
-            )
+    ####################################################################
+    ## Message Reactivity API
+    ####################################################################
 
     def process_node_server_data(self, msg: Dict):
 
@@ -265,6 +194,120 @@ class Node(mp.Process):
             }
         )
 
+    def start_node(self, msg: Dict):
+        self.worker_signal_start = True
+        self.logger.debug(f"{self}: start")
+
+    def stop_node(self, msg: Dict):
+        self.running.value = False
+
+    ####################################################################
+    ## Saving Data Stream API
+    ####################################################################
+
+    def save_video(self, name: str, data: np.ndarray, fps: int):
+        video_chunk = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "video",
+            "fps": fps,
+        }
+        self.save_queue.put(video_chunk)
+
+    ####################################################################
+    ## Node LifeCycle API
+    ####################################################################
+
+    def _prep(self):
+        """Establishes the connection between ``Node`` and ``Worker``
+
+        The client that connects the ``Node`` to the ``Worker`` is created
+        within this function, along with ``Node`` meta data.
+
+        """
+        # Create container for p2p clients
+        self.p2p_clients = {}
+
+        # Create input and output queue
+        self.in_queue = queue.Queue()
+        self.out_queue = queue.Queue()
+        self.save_queue = queue.Queue()
+
+        # Create the queues for each in-bound connection
+        self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
+        self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
+        self.all_inputs_ready = False
+        self.new_data_available = False
+
+        # Create the threads that manager the incoming and outgoing
+        # data chunks
+        self.outputs_handler = OutputsHandler(
+            self.name, self.out_queue, self.p2p_info["out_bound"], self.p2p_clients
+        )
+        self.outputs_handler.start()
+
+        # Creating thread for saving incoming data
+        self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
+        self.save_handler.start()
+
+        # Defining protocol responses
+        self.to_worker_handlers = {
+            enums.SHUTDOWN: self.shutdown,
+            enums.WORKER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+            enums.WORKER_REQUEST_STEP: self.forward,
+            enums.WORKER_REQUEST_GATHER: self.provide_gather,
+            enums.WORKER_START_NODES: self.start_node,
+            enums.WORKER_STOP_NODES: self.stop_node,
+        }
+        self.from_node_handlers = {
+            enums.NODE_DATA_TRANSFER: self.received_data,
+        }
+        self.to_node_handlers = {}
+
+        # Keeping parameters
+        self.step_id = 0
+        self.worker_signal_start = 0
+        self.status["INIT"] = 1
+
+        if self.networking:
+
+            # Create client to the Worker
+            self.client = Client(
+                host=self.worker_host,
+                port=self.worker_port,
+                name=f"Node {self.name}",
+                connect_timeout=5.0,
+                sender_msg_type=enums.NODE_MESSAGE,
+                accepted_msg_type=enums.WORKER_MESSAGE,
+                handlers=self.to_worker_handlers,
+            )
+            self.client.start()
+
+            # Create server
+            self.server = Server(
+                port=5000,
+                name=f"Node {self.name}",
+                max_num_of_clients=len(self.p2p_info["out_bound"]),
+                sender_msg_type=enums.NODE_MESSAGE,
+                accepted_msg_type=enums.NODE_MESSAGE,
+                handlers=self.from_node_handlers,
+            )
+            self.server.start()
+
+            # Inform client that Node is INITIALIZED!
+            self.client.send(
+                {
+                    "signal": enums.NODE_STATUS,
+                    "data": {
+                        "node_name": self.name,
+                        "status": self.status,
+                        "host": self.server.host,
+                        "port": self.server.port,
+                    },
+                }
+            )
+
     def prep(self):
         """User-defined method for ``Node`` setup.
 
@@ -301,13 +344,6 @@ class Node(mp.Process):
                     break
                 else:
                     time.sleep(0.1)
-
-    def start_node(self, msg: Dict):
-        self.worker_signal_start = True
-        self.logger.debug(f"{self}: start")
-
-    def stop_node(self, msg: Dict):
-        self.running.value = False
 
     def forward(self, msg: Dict):
 
@@ -400,6 +436,7 @@ class Node(mp.Process):
 
         # Shutdown the inputs and outputs threads
         self.outputs_handler.shutdown()
+        self.save_handler.shutdown()
 
         # Shutting down networking
         if self.networking:
