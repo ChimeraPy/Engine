@@ -33,6 +33,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install ffmpeg libsm6 libxext6 -y
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[test]'
           docker build -t chimerapy .
@@ -41,6 +42,7 @@ jobs:
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
+          brew install portaudio
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
@@ -49,6 +51,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           python3 -m pip install --upgrade pip
+          python3 -m pip install pipwin
+          python3 -m pip install pyaudio
           python3 -m pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
