@@ -22,7 +22,7 @@ try:
     running_on_github_actions = os.environ["RUNNING_ON_GA"]
 except:
     current_platform = platform.system()
-    running_on_github_actions = 0
+    running_on_github_actions = "Native"
 
 # Skip marks
 linux_run_only = pytest.mark.skipif(

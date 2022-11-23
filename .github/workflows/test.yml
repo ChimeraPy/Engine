@@ -9,6 +9,9 @@ name: Test
 on:
   push:
 
+env:
+  RUNNING_ON_GA: GA
+
 jobs:
   test:
     timeout-minutes: 30
@@ -46,8 +49,8 @@ jobs:
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          brew install portaudio
-          conda install pyaudio -y
+          sudo apt-get update
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
           pip install --upgrade pip
           pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
@@ -55,14 +58,14 @@ jobs:
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
+          sudo apt-get update
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
           pip install --upgrade pip
-          conda install pyaudio -y
           pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform tests
         run: |
-          echo "RUNNING_ON_GA=GA" >> $GITHUB_ENV
           coverage run --source=chimerapy -m pytest test/
           coverage combine
 
