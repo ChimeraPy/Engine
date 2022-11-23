@@ -20,6 +20,8 @@ class TabularRecord(Record):
             name (str): The name of the ``Record``.
 
         """
+        super().__init__()
+
         # Saving the Record attributes
         self.dir = dir
         self.name = name

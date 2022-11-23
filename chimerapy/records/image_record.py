@@ -12,6 +12,7 @@ class ImageRecord(Record):
         dir: pathlib.Path,
         name: str,
     ):
+        super().__init__()
 
         # Storing input parameters
         self.dir = dir

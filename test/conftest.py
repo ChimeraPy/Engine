@@ -1,20 +1,25 @@
 from typing import Dict, Any
 import time
 import logging
-import sys
+import pathlib
 import os
 import platform
 import socket
 import pickle
 import threading
+import queue
 
 import docker
 import pytest
 
-from chimerapy import Manager, Worker, Graph, Node
+import chimerapy as cp
 from .mock import DockeredWorker
 
 logger = logging.getLogger("chimerapy")
+
+# Constants
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DATA_DIR = TEST_DIR / "data"
 
 # Try to get Github Actions environment variable
 try:
@@ -105,14 +110,14 @@ def slow_interval_between_tests():
 
 @pytest.fixture
 def manager():
-    manager = Manager()
+    manager = cp.Manager()
     yield manager
     manager.shutdown()
 
 
 @pytest.fixture
 def worker():
-    worker = Worker(name="local")
+    worker = cp.Worker(name="local")
     yield worker
     worker.shutdown()
 
@@ -132,7 +137,7 @@ def dockered_worker(docker_client):
     dockered_worker.shutdown()
 
 
-class GenNode(Node):
+class GenNode(cp.Node):
     def prep(self):
         self.value = 2
 
@@ -142,7 +147,7 @@ class GenNode(Node):
         return self.value
 
 
-class ConsumeNode(Node):
+class ConsumeNode(cp.Node):
     def prep(self):
         self.coef = 3
 
@@ -153,7 +158,7 @@ class ConsumeNode(Node):
         return output
 
 
-class SlowPrepNode(Node):
+class SlowPrepNode(cp.Node):
     def prep(self):
         time.sleep(5)
         self.value = 5
@@ -177,3 +182,13 @@ def con_node():
 @pytest.fixture
 def slow_node():
     return SlowPrepNode(name="Slo1")
+
+
+@pytest.fixture
+def save_handler_and_queue():
+
+    save_queue = queue.Queue()
+    save_handler = cp.SaveHandler(logdir=TEST_DATA_DIR, save_queue=save_queue)
+    save_handler.start()
+
+    return (save_handler, save_queue)

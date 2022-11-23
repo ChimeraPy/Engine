@@ -28,16 +28,6 @@ class VideoNode(cp.Node):
 
 
 @pytest.fixture
-def save_handler_and_queue():
-
-    save_queue = queue.Queue()
-    save_handler = cp.SaveHandler(logdir=TEST_DATA_DIR, save_queue=save_queue)
-    save_handler.start()
-
-    return (save_handler, save_queue)
-
-
-@pytest.fixture
 def video_node():
 
     # Create a node
@@ -49,6 +39,13 @@ def video_node():
 
 
 def test_video_record():
+
+    # Check that the video was created
+    expected_video_path = TEST_DATA_DIR / "test.mp4"
+    try:
+        os.remove(expected_video_path)
+    except FileNotFoundError:
+        ...
 
     # Create the record
     vr = cp.records.VideoRecord(dir=TEST_DATA_DIR, name="test")
@@ -67,7 +64,6 @@ def test_video_record():
         vr.write(video_chunk)
 
     # Check that the video was created
-    expected_video_path = vr.dir / "test.mp4"
     assert expected_video_path.exists()
 
 
@@ -75,6 +71,13 @@ def test_save_handler_video(save_handler_and_queue):
 
     # Decoupling
     save_handler, save_queue = save_handler_and_queue
+
+    # Check that the video was created
+    expected_video_path = TEST_DATA_DIR / "test.mp4"
+    try:
+        os.remove(expected_video_path)
+    except FileNotFoundError:
+        ...
 
     # Place multiple random video
     fps = 30
@@ -95,11 +98,17 @@ def test_save_handler_video(save_handler_and_queue):
     save_handler.join()
 
     # Check that the video was created
-    expected_video_path = save_handler.logdir / "test.mp4"
     assert expected_video_path.exists()
 
 
 def test_node_save_video_single_step(video_node):
+
+    # Check that the video was created
+    expected_video_path = video_node.logdir / "test.mp4"
+    try:
+        os.remove(expected_video_path)
+    except FileNotFoundError:
+        ...
 
     fps = 30
     for i in range(fps * 5):
@@ -110,11 +119,17 @@ def test_node_save_video_single_step(video_node):
     video_node._teardown()
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
     assert expected_video_path.exists()
 
 
 def test_node_save_video_stream(video_node):
+
+    # Check that the video was created
+    expected_video_path = video_node.logdir / "test.mp4"
+    try:
+        os.remove(expected_video_path)
+    except FileNotFoundError:
+        ...
 
     # Stream
     video_node.start()
@@ -127,5 +142,4 @@ def test_node_save_video_stream(video_node):
     video_node.join()
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
     assert expected_video_path.exists()

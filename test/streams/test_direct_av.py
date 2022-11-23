@@ -1,8 +1,11 @@
+# Built-in Imports
 import logging
 import pathlib
 import os
 import time
+import pdb
 
+# Third-party Import
 import pytest
 import wave
 import pyaudio
@@ -13,6 +16,7 @@ import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
 
+# Interal Testing imports
 from ..conftest import not_github_actions
 
 # Constants

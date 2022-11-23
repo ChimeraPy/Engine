@@ -1,5 +1,5 @@
 # Built-in Imports
-from typing import Dict
+from typing import Dict, Any
 import pathlib
 import os
 
@@ -24,6 +24,8 @@ class VideoRecord(Record):
             name (str): The name of ``Record``.
 
         """
+        super().__init__()
+
         # Saving the Record attributes
         self.dir = dir
         self.name = name
@@ -32,7 +34,7 @@ class VideoRecord(Record):
         # self.video_fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         self.video_fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
 
-    def write(self, data_chunk: Dict):
+    def write(self, data_chunk: Dict[str, Any]):
         """Commit the unsaved changes to memory."""
 
         # Determine the size

@@ -215,6 +215,20 @@ class Node(mp.Process):
         }
         self.save_queue.put(video_chunk)
 
+    def save_audio(
+        self, name: str, data: np.ndarray, channels: int, format: int, rate: int
+    ):
+        audio_chunk = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "audio",
+            "channels": channels,
+            "format": format,
+            "rate": rate,
+        }
+        self.save_queue.put(audio_chunk)
+
     ####################################################################
     ## Node LifeCycle API
     ####################################################################
