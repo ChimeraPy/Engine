@@ -199,6 +199,15 @@ class Node(mp.Process):
         }
         self.save_queue.put(tabular_chunk)
 
+    def save_image(self, name: str, data: np.ndarray):
+        image_chunk = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "image",
+        }
+        self.save_queue.put(image_chunk)
+
     ####################################################################
     ## Node LifeCycle API
     ####################################################################
