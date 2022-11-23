@@ -1,8 +1,17 @@
+# Built-in Imports
 import time
+import pathlib
+import os
 
+# Third-party
 import pytest
 
+# Internal
 import chimerapy as cp
+
+# Constants
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DATA_DIR = TEST_DIR / "data"
 
 
 def test_manager_instance(manager):
@@ -54,7 +63,7 @@ def test_manager_shutting_down_workers_after_delay(manager):
 def test_manager_shutting_down_workers_to_close_all():
 
     # Create the actors
-    manager = cp.Manager()
+    manager = cp.Manager(logdir=TEST_DATA_DIR)
     worker = cp.Worker(name="local")
 
     # Connect to the Manager

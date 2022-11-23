@@ -5,6 +5,7 @@ import pdb
 import pathlib
 import os
 import time
+import datetime
 
 import dill
 
@@ -20,9 +21,9 @@ from . import enums
 class Manager:
     def __init__(
         self,
+        logdir: pathlib.Path,
         port: int = 9000,
         max_num_of_workers: int = 50,
-        logdir: pathlib.Path = pathlib.Path.cwd() / "runs",
     ):
         """Create ``Manager``, the controller of the cluster.
 
@@ -40,9 +41,12 @@ class Manager:
         # self.host = socket.gethostbyname(socket.gethostname())
         self.port = port
         self.max_num_of_workers = max_num_of_workers
-        self.logdir = logdir
 
-        # Create a logging directory "runs"
+        # Create log directory to store data
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.logdir = logdir / f"chimerapy_{timestamp}"
+
+        # Create a logging directory
         os.makedirs(self.logdir, exist_ok=True)
 
         # Instance variables

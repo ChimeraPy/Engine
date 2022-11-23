@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 from multiprocessing.process import AuthenticationString
 import time
 import socket
@@ -11,6 +11,7 @@ import os
 # Third-party Imports
 import multiprocess as mp
 import numpy as np
+import pandas as pd
 
 # Internal Imports
 from .client import Client
@@ -43,6 +44,10 @@ class Node(mp.Process):
         self._context = mp.get_start_method()
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0}
+
+    ####################################################################
+    ## Process Pickling Methods
+    ####################################################################
 
     def __repr__(self):
         return f"<Node {self.name}>"
@@ -80,52 +85,6 @@ class Node(mp.Process):
             raise RuntimeError("Invalid multiprocessing spawn method.")
 
         return self.logger
-
-    def config(
-        self,
-        host: str,
-        port: int,
-        logdir: pathlib.Path,
-        in_bound: List[str],
-        out_bound: List[str],
-        follow: Optional[bool],
-        networking: bool = True,
-    ):
-        """Configuring the ``Node``'s networking and meta data.
-
-        This function does not create the connections between the ``Node``
-        and the ``Worker``, as that is done in the ``_prep`` method. It
-        just inplants the networking meta from the ``Worker`` to the
-        ``Node``. This is because we have to instantiate the ``Server``,
-        ``Client``, and other components of the ``Node`` inside the ``run``
-        method.
-
-        Args:
-            host (str): Worker's host
-            port (int): Worker's port
-            in_bound (List[str]): List of node names that will be inputs
-            out_bound (List[str]): List of node names that will be sent the output
-            networking (bool): Optional deselect networking setup (used in testing)
-
-        """
-        # Obtaining worker information
-        self.worker_host = host
-        self.worker_port = port
-        self.logdir = logdir / self.name
-        os.makedirs(self.logdir, exist_ok=True)
-
-        # Storing p2p information
-        self.p2p_info = {"in_bound": in_bound, "out_bound": out_bound}
-        self.follow = follow
-
-        # Keeping track of the node's state
-        self.running = mp.Value("i", True)
-
-        # Saving other parameters
-        self.networking = networking
-
-        # Creating initial values
-        self.latest_value = None
 
     ####################################################################
     ## Message Reactivity API
@@ -229,9 +188,66 @@ class Node(mp.Process):
         }
         self.save_queue.put(audio_chunk)
 
+    def save_tabular(
+        self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
+    ):
+        tabular_chunk = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "tabular",
+        }
+        self.save_queue.put(tabular_chunk)
+
     ####################################################################
     ## Node LifeCycle API
     ####################################################################
+
+    def config(
+        self,
+        host: str,
+        port: int,
+        logdir: pathlib.Path,
+        in_bound: List[str],
+        out_bound: List[str],
+        follow: Optional[bool],
+        networking: bool = True,
+    ):
+        """Configuring the ``Node``'s networking and meta data.
+
+        This function does not create the connections between the ``Node``
+        and the ``Worker``, as that is done in the ``_prep`` method. It
+        just inplants the networking meta from the ``Worker`` to the
+        ``Node``. This is because we have to instantiate the ``Server``,
+        ``Client``, and other components of the ``Node`` inside the ``run``
+        method.
+
+        Args:
+            host (str): Worker's host
+            port (int): Worker's port
+            in_bound (List[str]): List of node names that will be inputs
+            out_bound (List[str]): List of node names that will be sent the output
+            networking (bool): Optional deselect networking setup (used in testing)
+
+        """
+        # Obtaining worker information
+        self.worker_host = host
+        self.worker_port = port
+        self.logdir = logdir / self.name
+        os.makedirs(self.logdir, exist_ok=True)
+
+        # Storing p2p information
+        self.p2p_info = {"in_bound": in_bound, "out_bound": out_bound}
+        self.follow = follow
+
+        # Keeping track of the node's state
+        self.running = mp.Value("i", True)
+
+        # Saving other parameters
+        self.networking = networking
+
+        # Creating initial values
+        self.latest_value = None
 
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``

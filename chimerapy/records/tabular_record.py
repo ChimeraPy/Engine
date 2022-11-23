@@ -1,8 +1,11 @@
 # Built-in Imports
-from typing import Dict
+from typing import Dict, Any
 import pathlib
-import os
 
+# Third-party Imports
+import pandas as pd
+
+# Internal Import
 from .record import Record
 
 
@@ -25,7 +28,27 @@ class TabularRecord(Record):
         # Saving the Record attributes
         self.dir = dir
         self.name = name
+        self.tabular_file_path = self.dir / f"{self.name}.csv"
 
-        # If the directory doesn't exists, create it
-        if not self.dir.exists():
-            os.mkdir(self.dir)
+    def write(self, data_chunk: Dict[str, Any]):
+
+        # Ensure that data is a pd.DataFrame
+        if isinstance(data_chunk["data"], pd.DataFrame):
+            df = data_chunk["data"]
+        elif isinstance(data_chunk["data"], pd.Series):
+            df = data_chunk["data"].to_frame().T
+        elif isinstance(data_chunk["data"], Dict):
+            df = pd.Series(data_chunk["data"]).to_frame().T
+        else:
+            raise RuntimeError("Invalid input data for Tabular Record.")
+
+        # Write to a csv
+        df.to_csv(
+            str(self.tabular_file_path),
+            mode="a",
+            header=not self.tabular_file_path.exists(),
+            index=False,
+        )
+
+    def close(self):
+        ...
