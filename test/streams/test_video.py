@@ -13,18 +13,13 @@ import numpy as np
 import pytest
 import chimerapy as cp
 
+# Internal Imports
 logger = logging.getLogger("chimerapy")
+from .data_nodes import VideoNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
 TEST_DATA_DIR = CWD / "data"
-
-
-class VideoNode(cp.Node):
-    def step(self):
-        time.sleep(1 / 30)
-        rand_frame = np.random.rand(200, 300, 3) * 255
-        self.save_video(name="test", data=rand_frame, fps=30)
 
 
 @pytest.fixture

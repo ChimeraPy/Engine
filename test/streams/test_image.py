@@ -8,20 +8,16 @@ import uuid
 # Third-party
 import numpy as np
 import pytest
+
+# Internal Imports
 import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
+from .data_nodes import ImageNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
 TEST_DATA_DIR = CWD / "data"
-
-
-class ImageNode(cp.Node):
-    def step(self):
-        time.sleep(1 / 30)
-        rand_frame = np.random.rand(200, 300, 3) * 255
-        self.save_image(name="test", data=rand_frame)
 
 
 @pytest.fixture

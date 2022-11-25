@@ -9,9 +9,13 @@ import time
 import numpy as np
 import pytest
 import pyaudio
+
+# Internal Imports
 import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
+
+from .data_nodes import AudioNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -23,21 +27,11 @@ RATE = 44100
 RECORD_SECONDS = 5
 
 
-class AudioNode(cp.Node):
-    def step(self):
-
-        time.sleep(1 / 20)
-        data = np.random.rand(CHUNK) * 2 - 1
-        self.save_audio(
-            name="test", data=data, channels=CHANNELS, format=FORMAT, rate=RATE
-        )
-
-
 @pytest.fixture
 def audio_node():
 
     # Create a node
-    an = AudioNode(name="an")
+    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE)
     an.config("", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
     an._prep()
 

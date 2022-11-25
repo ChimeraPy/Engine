@@ -11,27 +11,13 @@ import numpy as np
 import pytest
 import chimerapy as cp
 
+# Internal Imports
 logger = logging.getLogger("chimerapy")
+from .data_nodes import TabularNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
 TEST_DATA_DIR = CWD / "data"
-
-
-class TabularNode(cp.Node):
-    def step(self):
-
-        time.sleep(1 / 10)
-
-        # Testing different types
-        data = {"time": time.time(), "content": "HELLO"}
-        self.save_tabular(name="test", data=data)
-
-        data = pd.Series({"time": time.time(), "content": "GOODBYE"})
-        self.save_tabular(name="test", data=data)
-
-        data = pd.DataFrame({"time": [time.time()], "content": ["WAIT!"]})
-        self.save_tabular(name="test", data=data)
 
 
 @pytest.fixture

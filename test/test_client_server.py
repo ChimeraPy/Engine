@@ -2,6 +2,11 @@ from typing import Dict
 import time
 import socket
 import logging
+import pathlib
+import os
+import platform
+import tempfile
+import datetime
 
 import pytest
 import numpy as np
@@ -13,6 +18,7 @@ import chimerapy as cp
 logger = logging.getLogger("chimerapy")
 
 # Constants
+TEST_DIR = pathlib.Path(os.path.abspath(__file__))
 IMG_SIZE = 400
 
 
@@ -147,6 +153,22 @@ def test_server_broadcast_to_multiple_clients(server):
 
     for _client in clients:
         _client.shutdown()
+
+
+def test_client_sending_folder_to_server(server, client):
+
+    # The server places the content to the temp folder
+    tempdir = pathlib.Path(
+        "/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()
+    )
+
+    # Select the folder to send
+    test_folder = TEST_DIR / "mocks" / "data" / "simple_folder"
+
+    # Action
+    # client.send_folder(test_folder)
+
+    # Get the expected behavior
 
 
 @pytest.mark.repeat(10)
