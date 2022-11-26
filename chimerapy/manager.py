@@ -565,7 +565,7 @@ class Manager:
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
-        logger.info("Data collection complete!")
+        logger.info(f"{self}: data collection complete!")
 
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.
