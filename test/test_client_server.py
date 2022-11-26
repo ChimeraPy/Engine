@@ -6,9 +6,9 @@ import pathlib
 import os
 import platform
 import tempfile
-import datetime
 
 import pytest
+from pytest_lazyfixture import lazy_fixture
 import numpy as np
 
 import pdb
@@ -18,7 +18,7 @@ import chimerapy as cp
 logger = logging.getLogger("chimerapy")
 
 # Constants
-TEST_DIR = pathlib.Path(os.path.abspath(__file__))
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 IMG_SIZE = 400
 
 
@@ -155,20 +155,35 @@ def test_server_broadcast_to_multiple_clients(server):
         _client.shutdown()
 
 
-def test_client_sending_folder_to_server(server, client):
-
-    # The server places the content to the temp folder
-    tempdir = pathlib.Path(
-        "/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()
-    )
-
-    # Select the folder to send
-    test_folder = TEST_DIR / "mocks" / "data" / "simple_folder"
+@pytest.mark.parametrize(
+    "_server,_client,dir",
+    [
+        (
+            lazy_fixture("server"),
+            lazy_fixture("client"),
+            TEST_DIR / "mock" / "data" / "simple_folder",
+        ),
+        (
+            lazy_fixture("server"),
+            lazy_fixture("client"),
+            TEST_DIR / "mock" / "data" / "chimerapy_logs",
+        ),
+    ],
+)
+def test_client_sending_folder_to_server(_server, _client, dir):
 
     # Action
-    # client.send_folder(test_folder)
+    _client.send_folder("test", dir)
 
     # Get the expected behavior
+    miss_counter = 0
+    while len(_server.file_transfer_records.keys()) == 0:
+
+        miss_counter += 1
+        time.sleep(0.1)
+
+        if miss_counter > 100:
+            assert False, "File transfer failed after 10 second"
 
 
 @pytest.mark.repeat(10)

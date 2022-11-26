@@ -209,7 +209,7 @@ class Node(mp.Process):
         self.save_queue.put(image_chunk)
 
     ####################################################################
-    ## Node LifeCycle API
+    ## Node Lifecycle API
     ####################################################################
 
     def config(

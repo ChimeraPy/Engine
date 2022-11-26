@@ -5,7 +5,6 @@
 # Ignore the test data - sensitivie
 test/logs/
 test/test_output/
-*.csv
 
 # Ignoring the documentation site
 site/

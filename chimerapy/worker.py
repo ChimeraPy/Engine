@@ -9,6 +9,7 @@ import platform
 import tempfile
 import pathlib
 import datetime
+import shutil
 
 import dill
 
@@ -20,7 +21,7 @@ from . import enums
 
 
 class Worker:
-    def __init__(self, name: str, max_num_of_nodes: int = 10):
+    def __init__(self, name: str, max_num_of_nodes: int = 10, delete_temp: bool = True):
         """Create a local Worker.
 
         To execute ``Nodes`` within the main computer that is also housing
@@ -45,6 +46,7 @@ class Worker:
         self.max_num_of_nodes = max_num_of_nodes
 
         # Instance variables
+        self.has_shutdown: bool = False
         self.nodes: Dict = {}
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
@@ -59,6 +61,7 @@ class Worker:
             enums.MANAGER_REQUEST_STEP: self.step,
             enums.MANAGER_START_NODES: self.start_nodes,
             enums.MANAGER_STOP_NODES: self.stop_nodes,
+            enums.MANAGER_REQUEST_COLLECT: self.send_archive,
         }
         self.from_node_handlers = {
             enums.NODE_STATUS: self.node_status_update,
@@ -66,12 +69,8 @@ class Worker:
         }
 
         # Create temporary data folder
-        tempdir = pathlib.Path(
-            "/tmp" if platform.system() == "Darwin" else tempfile.gettempdir()
-        )
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        self.logdir = tempdir / f"chimerapy_{timestamp}"
-        os.makedirs(self.logdir, exist_ok=True)
+        self.delete_temp = delete_temp
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Create server
         self.server = Server(
@@ -93,84 +92,9 @@ class Worker:
     def __str__(self):
         return self.__repr__()
 
-    def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
-        """Connect ``Worker`` to ``Manager``.
-
-        This establish server-client connections between ``Worker`` and
-        ``Manager``. To ensure that the connections are close correctly,
-        either the ``Manager`` or ``Worker`` should shutdown before
-        stopping your program to avoid processes and threads that do
-        not shutdown.
-
-        Args:
-            host (str): The ``Manager``'s IP address.
-            port (int): The ``Manager``'s port number
-            timeout (Union[int, float]): Set timeout for the connection.
-
-        """
-        # Create client
-        self.client = Client(
-            host=host,
-            port=port,
-            name=f"Worker {self.name}",
-            connect_timeout=timeout,
-            sender_msg_type=enums.WORKER_MESSAGE,
-            accepted_msg_type=enums.MANAGER_MESSAGE,
-            handlers=self.to_manager_handlers,
-        )
-        self.client.start()
-
-        # Sending message to register
-        self.client.send(
-            msg={
-                "signal": enums.WORKER_REGISTER,
-                "data": {
-                    "name": self.name,
-                    "addr": socket.gethostbyname(socket.gethostname()),
-                },
-            },
-            ack=True,
-        )
-
-        # Tracking client state change
-        self.connected_to_manager = True
-        logger.info(
-            f"{self}: connection successful to Manager located at {host}:{port}."
-        )
-
-    def mark_response_as_false_for_node(self, node_name: str):
-        self.nodes[node_name]["response"] = False
-
-    def mark_all_response_as_false_for_nodes(self):
-
-        for node_name in self.nodes:
-            self.mark_response_as_false_for_node(node_name)
-
-    def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
-
-        # Wait until the node has informed us that it has been initialized
-        miss_counter = 0
-        delay = 0.1
-
-        # Constantly check
-        while True:
-            time.sleep(delay)
-
-            if self.nodes[node_name]["response"]:
-                break
-            else:
-
-                # Handling timeout
-                if miss_counter * delay > timeout:
-                    raise RuntimeError(f"{self}: {node_name} not responding!")
-
-                # Update miss counter
-                miss_counter += 1
-
-    def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):
-
-        for node_name in self.nodes:
-            self.wait_until_node_response(node_name, timeout)
+    ####################################################################
+    ## Message Reactivity API
+    ####################################################################
 
     def create_node(self, msg: Dict):
 
@@ -203,7 +127,7 @@ class Worker:
             self.nodes[node_name]["node_object"].config(
                 self.host,
                 self.port,
-                self.logdir,
+                self.tempfolder,
                 self.nodes[node_name]["in_bound"],
                 self.nodes[node_name]["out_bound"],
                 self.nodes[node_name]["follow"],
@@ -248,18 +172,6 @@ class Worker:
                     "data": nodes_status_data,
                 },
             )
-
-    def create_node_server_data(self):
-
-        # Construct simple data structure for Node to address information
-        node_server_data = {"name": self.name, "nodes": {}}
-        for node_name, node_data in self.nodes.items():
-            node_server_data["nodes"][node_name] = {
-                "host": node_data["host"],
-                "port": node_data["port"],
-            }
-
-        return node_server_data
 
     def report_node_server_data(self, msg: Dict):
 
@@ -370,6 +282,105 @@ class Worker:
                 }
             )
 
+    ####################################################################
+    ## Helper Methods
+    ####################################################################
+
+    def mark_response_as_false_for_node(self, node_name: str):
+        self.nodes[node_name]["response"] = False
+
+    def mark_all_response_as_false_for_nodes(self):
+
+        for node_name in self.nodes:
+            self.mark_response_as_false_for_node(node_name)
+
+    def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
+
+        # Wait until the node has informed us that it has been initialized
+        miss_counter = 0
+        delay = 0.1
+
+        # Constantly check
+        while True:
+            time.sleep(delay)
+
+            if self.nodes[node_name]["response"]:
+                break
+            else:
+
+                # Handling timeout
+                if miss_counter * delay > timeout:
+                    raise RuntimeError(f"{self}: {node_name} not responding!")
+
+                # Update miss counter
+                miss_counter += 1
+
+    def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):
+
+        for node_name in self.nodes:
+            self.wait_until_node_response(node_name, timeout)
+
+    def create_node_server_data(self):
+
+        # Construct simple data structure for Node to address information
+        node_server_data = {"name": self.name, "nodes": {}}
+        for node_name, node_data in self.nodes.items():
+            node_server_data["nodes"][node_name] = {
+                "host": node_data["host"],
+                "port": node_data["port"],
+            }
+
+        return node_server_data
+
+    ####################################################################
+    ## Node Lifecycle API
+    ####################################################################
+
+    def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
+        """Connect ``Worker`` to ``Manager``.
+
+        This establish server-client connections between ``Worker`` and
+        ``Manager``. To ensure that the connections are close correctly,
+        either the ``Manager`` or ``Worker`` should shutdown before
+        stopping your program to avoid processes and threads that do
+        not shutdown.
+
+        Args:
+            host (str): The ``Manager``'s IP address.
+            port (int): The ``Manager``'s port number
+            timeout (Union[int, float]): Set timeout for the connection.
+
+        """
+        # Create client
+        self.client = Client(
+            host=host,
+            port=port,
+            name=f"Worker {self.name}",
+            connect_timeout=timeout,
+            sender_msg_type=enums.WORKER_MESSAGE,
+            accepted_msg_type=enums.MANAGER_MESSAGE,
+            handlers=self.to_manager_handlers,
+        )
+        self.client.start()
+
+        # Sending message to register
+        self.client.send(
+            msg={
+                "signal": enums.WORKER_REGISTER,
+                "data": {
+                    "name": self.name,
+                    "addr": socket.gethostbyname(socket.gethostname()),
+                },
+            },
+            ack=True,
+        )
+
+        # Tracking client state change
+        self.connected_to_manager = True
+        logger.info(
+            f"{self}: connection successful to Manager located at {host}:{port}."
+        )
+
     def step(self, msg: Dict):
 
         # Worker tell all nodes to take a step
@@ -385,6 +396,19 @@ class Worker:
         # Send message to nodes to start
         self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}})
 
+    def send_archive(self, msg: Dict):
+
+        # Send the archive data to the manager
+        self.client.send_folder(self.name, self.tempfolder)
+
+        # After completion, let the Manager know
+        self.client.send(
+            {
+                "signal": enums.WORKER_TRANSFER_COMPLETE,
+                "data": {"name": self.name},
+            }
+        )
+
     def shutdown(self, msg: Dict = {}):
         """Shutdown ``Worker`` safely.
 
@@ -397,6 +421,11 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        # Check if shutdown has been called already
+        if self.has_shutdown:
+            logger.debug(f"{self}: requested to shutdown a second time.")
+            return
+
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
 
@@ -429,3 +458,16 @@ class Worker:
 
             # Shutdown client
             self.client.shutdown()
+
+        # Delete temp folder if requested
+        if self.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.tempfolder)
+
+        # Mark that the Worker has shutdown
+        self.has_shutdown = True
+
+    def __del__(self):
+
+        # Also good to shutdown anything that isn't
+        if not self.has_shutdown:
+            self.shutdown()

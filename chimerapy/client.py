@@ -1,18 +1,27 @@
+# Built-in Imports
 from typing import Literal, Callable, Dict
+import os
 import logging
 import collections
 import uuid
 import struct
 import pdb
-
-logger = logging.getLogger("chimerapy")
-
+import pathlib
+import platform
+import tempfile
+import shutil
 import socket
 import threading
 import time
+import math
 
+# Third-party Imports
+
+# Internal Imports
 from .utils import create_payload, decode_payload
 from . import enums
+
+logger = logging.getLogger("chimerapy")
 
 
 class Client(threading.Thread):
@@ -28,11 +37,24 @@ class Client(threading.Thread):
     ):
         super().__init__()
 
+        # State variables
+        self.has_shutdown = False
+
         # Saving input parameters
         self.name = name
         self.sender_msg_type = sender_msg_type
         self.accepted_msg_type = accepted_msg_type
         self.handlers = handlers
+
+        # Tracking of the uuids of ACKS
+        self.ack_uuids = collections.deque([], 10)
+
+        # Saving thread state information
+        self.is_running = threading.Event()
+        self.is_running.set()
+
+        # Creating tempfolder to host items
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Create the socket and connect
         try:
@@ -47,13 +69,6 @@ class Client(threading.Thread):
 
         # Modifying socket and signal information
         self.socket.settimeout(0.2)
-
-        # Tracking of the uuids of ACKS
-        self.ack_uuids = collections.deque([], 10)
-
-        # Saving thread state information
-        self.is_running = threading.Event()
-        self.is_running.set()
 
     def __repr__(self):
         return f"<Client {self.name} {self.sender_msg_type}->{self.accepted_msg_type}>"
@@ -183,7 +198,77 @@ class Client(threading.Thread):
 
                     miss_counter += 1
 
+    def send_folder(self, name: str, dir: pathlib.Path, buffersize: int = 4096):
+
+        assert (
+            dir.is_dir() and dir.exists()
+        ), f"Sending {dir} needs to be a folder that exists."
+
+        # First, we need to archive the folder into a zip file
+        format = "zip"
+        shutil.make_archive(str(dir), format, dir.parent, dir.name)
+        zip_file = dir.parent / f"{dir.name}.{format}"
+
+        # Relocate zip to the tempfolder
+        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
+        shutil.move(zip_file, temp_zip_file)
+
+        # Get information about the filesize
+        filesize = os.path.getsize(temp_zip_file)
+        max_num_steps = math.ceil(filesize / buffersize)
+
+        # Now start the process of sending content to the server
+        # First, we send the message inciting file transfer
+        init_msg = {
+            "type": enums.WORKER_MESSAGE,
+            "signal": enums.FILE_TRANSFER_START,
+            "data": {
+                "name": name,
+                "filename": f"{dir.name}.{format}",
+                "filesize": filesize,
+                "buffersize": buffersize,
+                "max_num_steps": max_num_steps,
+            },
+        }
+        self.send(init_msg)
+        logger.debug(f"{self}: sent file transfer initialization")
+
+        # Having counter tracking number of messages
+        msg_counter = 1
+
+        with open(temp_zip_file, "rb") as f:
+            while True:
+
+                # Read the data to be sent
+                data = f.read(buffersize)
+                if not data:
+                    break
+
+                logger.debug(
+                    f"{self}: file transfer, step {msg_counter}/{max_num_steps}"
+                )
+
+                # Send the data
+                self.socket.sendall(data)
+                msg_counter += 1
+
+        logger.debug(f"{self}: finished file transfer")
+
     def shutdown(self):
 
         # First, indicate the end
         self.is_running.clear()
+
+        # Delete temp folder if requested
+        if self.tempfolder.exists():
+            shutil.rmtree(self.tempfolder)
+
+        # Mark that the Server has shutdown
+        self.has_shutdown = True
+
+    def __del__(self):
+
+        # Also good to shutdown anything that isn't
+        if not self.has_shutdown:
+            self.shutdown()
+            self.join()
