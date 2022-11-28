@@ -4,6 +4,8 @@ import threading
 import multiprocessing as mp
 import queue
 import sys
+import os
+import pathlib
 
 import pytest
 import dill
@@ -14,6 +16,10 @@ from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
 from pytest_lazyfixture import lazy_fixture
 
 logger = logging.getLogger("chimerapy")
+
+# Constants
+CWD = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DATA_DIR = CWD / "data"
 
 
 def target_function(q):
@@ -59,7 +65,7 @@ def test_create_multiple_nodes(logreceiver):
     ns = []
     for i in range(3):
         n = GenNode(name=f"G{i}")
-        n.config("0.0.0.0", 9000, [], [], networking=False)
+        n.config("0.0.0.0", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
         n.start()
         ns.append(n)
 
@@ -79,7 +85,7 @@ def test_create_multiple_nodes_after_pickling():
         n = GenNode(name=f"G{i}")
         pkl_n = dill.dumps(n)
         nn = dill.loads(pkl_n)
-        nn.config("0.0.0.0", 9000, [], [], networking=False)
+        nn.config("0.0.0.0", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
         nn.start()
         ns.append(nn)
 
@@ -114,6 +120,7 @@ def test_worker_create_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -140,6 +147,7 @@ def test_worker_create_unknown_node(worker):
             "pickled": dill.dumps(node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
     del UnknownNode
@@ -169,6 +177,7 @@ def test_worker_create_nodes(worker):
                 "pickled": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -198,6 +207,7 @@ def test_worker_create_multiple_nodes_stress(worker):
                 "pickled": dill.dumps(new_node),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -207,6 +217,7 @@ def test_worker_create_multiple_nodes_stress(worker):
                 "pickled": dill.dumps(new_node2),
                 "in_bound": [],
                 "out_bound": [],
+                "follow": None,
             }
         }
 
@@ -231,6 +242,7 @@ def test_step_single_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -254,6 +266,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [con_node.name],
+            "follow": None,
         }
     }
 
@@ -264,6 +277,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
             "pickled": dill.dumps(con_node),
             "in_bound": [gen_node.name],
             "out_bound": [],
+            "follow": None,
         }
     }
 
@@ -286,6 +300,7 @@ def test_starting_node(worker, gen_node):
             "pickled": dill.dumps(gen_node),
             "in_bound": [],
             "out_bound": [],
+            "follow": None,
         }
     }
 

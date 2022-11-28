@@ -9,6 +9,9 @@ name: Test
 on:
   push:
 
+env:
+  RUNNING_ON_GA: GA
+
 jobs:
   test:
     timeout-minutes: 30
@@ -33,28 +36,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install ffmpeg libsm6 libxext6 -y
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[test]'
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
+          pip install --upgrade pip
+          pip install '.[test]'
           docker build -t chimerapy .
           echo "MANUAL_OS_SET=Linux" >> $GITHUB_ENV
+
+      - name: Install HomeBrew for MacOS
+        if: matrix.os == 'macos-latest'
+        uses: Homebrew/actions/setup-homebrew@master
 
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[test]'
+          sudo apt-get update
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
+          pip install --upgrade pip
+          pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
 
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install .[test]
+          sudo apt-get update
+          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
+          pip install --upgrade pip
+          pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform tests
         run: |
           coverage run --source=chimerapy -m pytest test/
+          coverage combine
 
       - name: Upload coverage data to coveralls.io
         run: coveralls --service=github

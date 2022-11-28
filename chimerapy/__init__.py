@@ -15,13 +15,13 @@ LOGGING_CONFIG = {
     },
     "handlers": {
         "console": {
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "standard",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",  # Default is stderr
         },
         "datagram": {
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "standard",
             "class": "logging.handlers.DatagramHandler",
             "host": "127.0.0.1",
@@ -29,12 +29,12 @@ LOGGING_CONFIG = {
         },
     },
     "loggers": {
-        "": {
+        "chimerapy": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": True,
         },
-        "subprocess": {"handlers": ["datagram"], "level": "DEBUG", "propagate": True},
+        "subprocess": {"handlers": ["datagram"], "level": "INFO", "propagate": True},
     },
 }
 
@@ -51,6 +51,10 @@ from .client import Client
 from .server import Server
 from .enums import *
 from .utils import log
+from .data_handlers import SaveHandler
+
+# Then define the records
+from . import records
 
 # Then define the entry points
 from . import entry

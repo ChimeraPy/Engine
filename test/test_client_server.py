@@ -2,8 +2,13 @@ from typing import Dict
 import time
 import socket
 import logging
+import pathlib
+import os
+import platform
+import tempfile
 
 import pytest
+from pytest_lazyfixture import lazy_fixture
 import numpy as np
 
 import pdb
@@ -13,6 +18,7 @@ import chimerapy as cp
 logger = logging.getLogger("chimerapy")
 
 # Constants
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 IMG_SIZE = 400
 
 
@@ -147,6 +153,37 @@ def test_server_broadcast_to_multiple_clients(server):
 
     for _client in clients:
         _client.shutdown()
+
+
+@pytest.mark.parametrize(
+    "_server,_client,dir",
+    [
+        (
+            lazy_fixture("server"),
+            lazy_fixture("client"),
+            TEST_DIR / "mock" / "data" / "simple_folder",
+        ),
+        (
+            lazy_fixture("server"),
+            lazy_fixture("client"),
+            TEST_DIR / "mock" / "data" / "chimerapy_logs",
+        ),
+    ],
+)
+def test_client_sending_folder_to_server(_server, _client, dir):
+
+    # Action
+    _client.send_folder("test", dir)
+
+    # Get the expected behavior
+    miss_counter = 0
+    while len(_server.file_transfer_records.keys()) == 0:
+
+        miss_counter += 1
+        time.sleep(0.1)
+
+        if miss_counter > 100:
+            assert False, "File transfer failed after 10 second"
 
 
 @pytest.mark.repeat(10)

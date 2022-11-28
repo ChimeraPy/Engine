@@ -1,7 +1,8 @@
 name: Generate changelog
 on:
-  release:
-    types: [created, edited]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   generate-changelog:

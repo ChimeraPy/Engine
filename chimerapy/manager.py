@@ -2,7 +2,11 @@ from typing import Dict, Optional, List, Union
 import socket
 import logging
 import pdb
+import pathlib
+import os
 import time
+import datetime
+import json
 
 import dill
 
@@ -16,7 +20,12 @@ from . import enums
 
 
 class Manager:
-    def __init__(self, port: int = 9000, max_num_of_workers: int = 50):
+    def __init__(
+        self,
+        logdir: pathlib.Path,
+        port: int = 9000,
+        max_num_of_workers: int = 50,
+    ):
         """Create ``Manager``, the controller of the cluster.
 
         The ``Manager`` is the director of the cluster, such as adding
@@ -34,12 +43,21 @@ class Manager:
         self.port = port
         self.max_num_of_workers = max_num_of_workers
 
+        # Create log directory to store data
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.logdir = logdir / f"chimerapy_{timestamp}"
+
+        # Create a logging directory
+        os.makedirs(self.logdir, exist_ok=True)
+
         # Instance variables
         self.workers: Dict = {}
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
         self.nodes_server_table: Dict = {}
+        self.start_time: Optional[datetime.datetime] = None
+        self.stop_time: Optional[datetime.datetime] = None
 
         # Specifying the handlers for worker2manager communication
         self.handlers = {
@@ -49,6 +67,7 @@ class Manager:
             enums.WORKER_REPORT_NODES_STATUS: self.update_nodes_status,
             enums.WORKER_COMPLETE_BROADCAST: self.complete_worker_broadcast,
             enums.WORKER_REPORT_GATHER: self.get_gather,
+            enums.WORKER_TRANSFER_COMPLETE: self.complete_worker_transfer,
         }
 
         # Create server
@@ -61,10 +80,14 @@ class Manager:
             handlers=self.handlers,
         )
         self.server.start()
-        logger.info(f"Server started at Port {self.server.port}")
+        logger.info(f"Manager started at {self.server.host}:{self.server.port}")
 
         # Updating the manager's port to the found available port
         self.host, self.port = self.server.host, self.server.port
+
+    ####################################################################
+    ## Message Reactivity API
+    ####################################################################
 
     def register_worker(self, msg: Dict, worker_socket: socket.socket):
         self.workers[msg["data"]["name"]] = {
@@ -76,10 +99,17 @@ class Manager:
             "served_nodes_server_data": False,
             "nodes_status": {},
             "gather": {},
+            "collection_complete": False,
         }
+        logger.info(
+            f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
+        )
 
     def deregister_worker(self, msg: Dict, worker_socket: socket.socket):
         worker_socket.close()
+        logger.info(
+            f"Manager deregistered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
+        )
         del self.workers[msg["data"]["name"]]
 
     def node_server_data(self, msg: Dict, worker_socket: socket.socket):
@@ -96,77 +126,89 @@ class Manager:
         self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
         self.workers[msg["data"]["name"]]["response"] = True
 
-        logger.info(f"{self}: Nodes status update to: {self.workers}")
+        logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
     def complete_worker_broadcast(self, msg: Dict, worker_socket: socket.socket):
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
 
-    def register_graph(self, graph: Graph):
-        """Verifying that a Graph is valid, that is a DAG.
+    def get_gather(self, msg: Dict, worker_socket: socket.socket):
 
-        In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
-        Registering the graph is the first step to setting up the data
-        pipeline in  the cluster.
+        self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
+        self.workers[msg["data"]["name"]]["response"] = True
 
-        Args:
-            graph (Graph): A directed acyclic graph.
+    def complete_worker_transfer(self, msg: Dict, worker_socket: socket.socket):
 
-        """
-        # First, check if graph is valid
-        if not graph.is_valid():
-            logger.error("Invalid Graph - rejected!")
-            return
+        self.workers[msg["data"]["name"]]["collection_complete"] = True
+        self.workers[msg["data"]["name"]]["response"] = True
 
-        # Else, let's save it
-        self.graph = graph
-        self.commitable_graph = False
+    ####################################################################
+    ## Helper Methods
+    ####################################################################
 
-    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
-        """Mapping ``Node`` from graph to ``Worker`` from cluster.
+    def save_meta(self):
 
-        The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
-        going to execute which ``Node``s.
-
-        Args:
-            worker_graph_map (Dict[str, List[str]]): The keys are the \
-            ``Worker``'s name and the values should be a list of \
-            the ``Node``'s names that will be executed within its corresponding\
-            ``Worker`` key.
-
-        """
-        # Tracking valid inputs
-        checks = []
-
-        # First, check if the mapping is valid!
-        for worker_name in worker_graph_map:
-
-            # First check if the worker is registered!
-            if worker_name not in self.workers:
-                logger.error(f"{worker_name} is not register to Manager.")
-                checks.append(False)
-                break
-            else:
-                checks.append(True)
-
-            # Then check if the node exists in the graph
-            for node_name in worker_graph_map[worker_name]:
-                if not self.graph.has_node_by_name(node_name):
-                    logger.error(f"{node_name} is not in Manager's graph.")
-                    checks.append(False)
-                    break
-                else:
-                    checks.append(True)
-
-        # If everything is okay, we are approved to commit the graph
-        if all(checks):
-            self.commitable_graph = True
+        # Get the times, handle Optional
+        if self.start_time:
+            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S")
         else:
-            self.commitable_graph = False
+            start_time = None
 
-        # Save the worker graph
-        self.worker_graph_map = worker_graph_map
+        if self.stop_time:
+            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S")
+        else:
+            stop_time = None
+
+        # Generate meta record
+        meta = {
+            "workers": list(self.workers.keys()),
+            "nodes": list(self.graph.G.nodes()),
+            "worker_graph_map": self.worker_graph_map,
+            "nodes_server_table": self.nodes_server_table,
+            "start_time": start_time,
+            "stop_time": stop_time,
+        }
+
+        with open(self.logdir / "meta.json", "w") as f:
+            json.dump(meta, f, indent=2)
+
+    def mark_response_as_false_for_workers(self):
+
+        for worker_name in self.workers:
+            self.workers[worker_name]["response"] = False
+
+    def wait_until_worker_respond(
+        self,
+        worker_name: str,
+        attribute: str = "response",
+        timeout: Union[int, float, None] = 10,
+        delay: float = 0.1,
+    ):
+
+        miss_counter = 0
+        while True:
+
+            # IF the worker responded, then break
+            if self.workers[worker_name][attribute]:
+                break
+
+            time.sleep(delay)
+
+            if timeout and delay * miss_counter > timeout:
+                logger.error(f"{self}: stuck")
+                raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
+
+            miss_counter += 1
+
+    def wait_until_all_workers_responded(
+        self, attribute: str, timeout: Union[float, int, None] = 10, delay: float = 0.1
+    ):
+
+        # Waiting until every worker has responded and provided their
+        # data
+        for worker_name in self.workers:
+            self.wait_until_worker_respond(worker_name, attribute, timeout, delay)
 
     def request_node_creation(self, worker_name: str, node_name: str):
 
@@ -182,9 +224,12 @@ class Manager:
                 "data": {
                     "worker_name": worker_name,
                     "node_name": node_name,
-                    "pickled": dill.dumps(self.graph.G.nodes[node_name]["object"]),
+                    "pickled": dill.dumps(
+                        self.graph.G.nodes[node_name]["object"], recurse=True
+                    ),
                     "in_bound": list(self.graph.G.predecessors(node_name)),
                     "out_bound": list(self.graph.G.successors(node_name)),
+                    "follow": self.graph.G.nodes[node_name]["follow"],
                 },
             },
         )
@@ -209,39 +254,6 @@ class Manager:
                         f"Manager waiting for {node_name} not sending INIT"
                     )
                 miss_counter += 1
-
-    def create_p2p_network(self):
-
-        # Send the message to each worker
-        for worker_name in self.worker_graph_map:
-
-            # Send each node that needs to be constructed
-            for node_name in self.worker_graph_map[worker_name]:
-
-                fail_attempts = 0
-                while True:
-
-                    # If fail too many times, give up :(
-                    if fail_attempts > 10:
-                        raise RuntimeError(
-                            f"Couldn't create {node_name} after multiple tries"
-                        )
-
-                    # Send request to create node
-                    self.request_node_creation(worker_name, node_name)
-
-                    # Wait until the node has been created and connected
-                    # to the corresponding worker
-                    try:
-                        self.wait_until_node_creation_complete(worker_name, node_name)
-                        break
-                    except RuntimeError:
-                        fail_attempts += 1
-                        logger.warning(
-                            f"Node creation failed: {worker_name}:{node_name}, attempt {fail_attempts}"
-                        )
-
-                logger.debug(f"Creation of Node {node_name} successful")
 
     def request_node_server_data(self):
 
@@ -320,6 +332,66 @@ class Manager:
 
         logger.debug("Graph connections successful")
 
+    def check_all_nodes_ready(self):
+
+        logger.debug(f"Checking node ready: {self.workers}")
+
+        # Tracking all results and avoiding a default True value
+        checks = []
+
+        # Iterate through all the workers
+        for worker_name in self.workers:
+
+            # Iterate through their nodes
+            for node_name in self.workers[worker_name]["nodes_status"]:
+                checks.append(
+                    self.workers[worker_name]["nodes_status"][node_name]["READY"]
+                )
+
+        # Only if all checks are True can we say the p2p network is ready
+        logger.debug(f"checks: {checks}")
+        if all(checks):
+            return True
+        else:
+            return False
+
+    ####################################################################
+    ## Cluster Setup, Control, and Monitor API
+    ####################################################################
+
+    def create_p2p_network(self):
+
+        # Send the message to each worker
+        for worker_name in self.worker_graph_map:
+
+            # Send each node that needs to be constructed
+            for node_name in self.worker_graph_map[worker_name]:
+
+                fail_attempts = 0
+                while True:
+
+                    # If fail too many times, give up :(
+                    if fail_attempts > 10:
+                        raise RuntimeError(
+                            f"Couldn't create {node_name} after multiple tries"
+                        )
+
+                    # Send request to create node
+                    self.request_node_creation(worker_name, node_name)
+
+                    # Wait until the node has been created and connected
+                    # to the corresponding worker
+                    try:
+                        self.wait_until_node_creation_complete(worker_name, node_name)
+                        break
+                    except RuntimeError:
+                        fail_attempts += 1
+                        logger.warning(
+                            f"Node creation failed: {worker_name}:{node_name}, attempt {fail_attempts}"
+                        )
+
+                logger.debug(f"Creation of Node {node_name} successful")
+
     def setup_p2p_connections(self):
 
         # After all nodes have been created, get the entire graphs
@@ -331,6 +403,75 @@ class Manager:
 
         # Distribute the entire graph's information to all the Workers
         self.request_connection_creation()
+
+    ####################################################################
+    ## User API
+    ####################################################################
+
+    def register_graph(self, graph: Graph):
+        """Verifying that a Graph is valid, that is a DAG.
+
+        In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
+        Registering the graph is the first step to setting up the data
+        pipeline in  the cluster.
+
+        Args:
+            graph (Graph): A directed acyclic graph.
+
+        """
+        # First, check if graph is valid
+        if not graph.is_valid():
+            logger.error("Invalid Graph - rejected!")
+            raise RuntimeError("Invalid Graph - rejected!")
+
+        # Else, let's save it
+        self.graph = graph
+        self.commitable_graph = False
+
+    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
+        """Mapping ``Node`` from graph to ``Worker`` from cluster.
+
+        The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
+        going to execute which ``Node``s.
+
+        Args:
+            worker_graph_map (Dict[str, List[str]]): The keys are the \
+            ``Worker``'s name and the values should be a list of \
+            the ``Node``'s names that will be executed within its corresponding\
+            ``Worker`` key.
+
+        """
+        # Tracking valid inputs
+        checks = []
+
+        # First, check if the mapping is valid!
+        for worker_name in worker_graph_map:
+
+            # First check if the worker is registered!
+            if worker_name not in self.workers:
+                logger.error(f"{worker_name} is not register to Manager.")
+                checks.append(False)
+                break
+            else:
+                checks.append(True)
+
+            # Then check if the node exists in the graph
+            for node_name in worker_graph_map[worker_name]:
+                if not self.graph.has_node_by_name(node_name):
+                    logger.error(f"{node_name} is not in Manager's graph.")
+                    checks.append(False)
+                    break
+                else:
+                    checks.append(True)
+
+        # If everything is okay, we are approved to commit the graph
+        if all(checks):
+            self.commitable_graph = True
+        else:
+            self.commitable_graph = False
+
+        # Save the worker graph
+        self.worker_graph_map = worker_graph_map
 
     def commit_graph(self):
         """Committing ``Graph`` to the cluster.
@@ -362,66 +503,6 @@ class Manager:
 
         # Then setup the p2p connections between nodes
         self.setup_p2p_connections()
-
-    def mark_response_as_false_for_workers(self):
-
-        for worker_name in self.workers:
-            self.workers[worker_name]["response"] = False
-
-    def wait_until_worker_respond(
-        self,
-        worker_name: str,
-        attribute: str = "response",
-        timeout: Union[int, float] = 10,
-        delay: float = 0.1,
-    ):
-
-        miss_counter = 0
-        while True:
-
-            # IF the worker responded, then break
-            if self.workers[worker_name][attribute]:
-                break
-
-            time.sleep(delay)
-
-            if delay * miss_counter > timeout:
-                logger.error(f"{self}: stuck")
-                raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
-
-            miss_counter += 1
-
-    def wait_until_all_workers_responded(
-        self, attribute: str, timeout: Union[float, int] = 10, delay: float = 0.1
-    ):
-
-        # Waiting until every worker has responded and provided their
-        # data
-        for worker_name in self.workers:
-            self.wait_until_worker_respond(worker_name, attribute, timeout, delay)
-
-    def check_all_nodes_ready(self):
-
-        logger.debug(f"Checking node ready: {self.workers}")
-
-        # Tracking all results and avoiding a default True value
-        checks = []
-
-        # Iterate through all the workers
-        for worker_name in self.workers:
-
-            # Iterate through their nodes
-            for node_name in self.workers[worker_name]["nodes_status"]:
-                checks.append(
-                    self.workers[worker_name]["nodes_status"][node_name]["READY"]
-                )
-
-        # Only if all checks are True can we say the p2p network is ready
-        logger.debug(f"checks: {checks}")
-        if all(checks):
-            return True
-        else:
-            return False
 
     def wait_until_all_nodes_ready(
         self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
@@ -455,11 +536,6 @@ class Manager:
         # Send message for workers to inform all nodes to take a single
         # step
         self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}})
-
-    def get_gather(self, msg: Dict, worker_socket: socket.socket):
-
-        self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
-        self.workers[msg["data"]["name"]]["response"] = True
 
     def gather(self) -> Dict:
 
@@ -495,6 +571,10 @@ class Manager:
         - Register, map, and commit ``Graph``
 
         """
+        # Mark the start time
+        self.start_time = datetime.datetime.now()
+
+        # Tell the cluster to start
         self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
 
     def stop(self):
@@ -504,7 +584,28 @@ class Manager:
         properly shutdown processes, threads, and queues.
 
         """
+        # Mark the start time
+        self.stop_time = datetime.datetime.now()
+
+        # Tell the cluster to stop
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
+
+    def collect(self, unzip: bool = True):
+        """Collect data archives across the cluster to the Manager's logs."""
+        # Request for archives to be send
+        self.server.broadcast({"signal": enums.MANAGER_REQUEST_COLLECT, "data": {}})
+
+        # Wail until all workers have responded with their node server data
+        self.wait_until_all_workers_responded(
+            attribute="collection_complete", timeout=None
+        )
+
+        # # Then move the tempfiles to the log runs and unzip
+        self.server.move_transfer_files(self.logdir, unzip)
+        logger.info(f"{self}: data collection complete!")
+
+        # Add the meta data to the archive
+        self.save_meta()
 
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.

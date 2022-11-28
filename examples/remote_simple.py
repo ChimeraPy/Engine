@@ -12,8 +12,6 @@ class Producer(cp.Node):
         self.counter = 0
 
     def step(self):
-        import time
-
         time.sleep(1)
         current_counter = self.counter
         self.counter += 1
