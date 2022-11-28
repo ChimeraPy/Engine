@@ -25,7 +25,7 @@ NAME_CLASS_MAP = {
     "tn": TabularNode,
     "an": AudioNode,
 }
-NUM_OF_WORKERS = 5
+NUM_OF_WORKERS = 3
 
 
 @pytest.fixture

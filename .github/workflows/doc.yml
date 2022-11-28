@@ -20,8 +20,11 @@ jobs:
 
     - name: Install System Requirements for Ubuntu
       run: |
-       sudo apt-get update
-       sudo apt-get install ffmpeg libsm6 libxext6 -y
+        sudo apt-get update
+        sudo apt-get install ffmpeg libsm6 libxext6 -y
+        sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
+        pip install --upgrade pip
+        pip install '.[test]'
 
     - name: Install ChimeraPy
       run: |
