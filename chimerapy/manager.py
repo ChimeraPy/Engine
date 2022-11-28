@@ -6,6 +6,7 @@ import pathlib
 import os
 import time
 import datetime
+import json
 
 import dill
 
@@ -55,6 +56,8 @@ class Manager:
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
         self.nodes_server_table: Dict = {}
+        self.start_time: Optional[datetime.datetime] = None
+        self.stop_time: Optional[datetime.datetime] = None
 
         # Specifying the handlers for worker2manager communication
         self.handlers = {
@@ -143,6 +146,32 @@ class Manager:
     ####################################################################
     ## Helper Methods
     ####################################################################
+
+    def save_meta(self):
+
+        # Get the times, handle Optional
+        if self.start_time:
+            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S")
+        else:
+            start_time = None
+
+        if self.stop_time:
+            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S")
+        else:
+            stop_time = None
+
+        # Generate meta record
+        meta = {
+            "workers": list(self.workers.keys()),
+            "nodes": list(self.graph.G.nodes()),
+            "worker_graph_map": self.worker_graph_map,
+            "nodes_server_table": self.nodes_server_table,
+            "start_time": start_time,
+            "stop_time": stop_time,
+        }
+
+        with open(self.logdir / "meta.json", "w") as f:
+            json.dump(meta, f, indent=2)
 
     def mark_response_as_false_for_workers(self):
 
@@ -542,6 +571,10 @@ class Manager:
         - Register, map, and commit ``Graph``
 
         """
+        # Mark the start time
+        self.start_time = datetime.datetime.now()
+
+        # Tell the cluster to start
         self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
 
     def stop(self):
@@ -551,6 +584,10 @@ class Manager:
         properly shutdown processes, threads, and queues.
 
         """
+        # Mark the start time
+        self.stop_time = datetime.datetime.now()
+
+        # Tell the cluster to stop
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
 
     def collect(self, unzip: bool = True):
@@ -566,6 +603,9 @@ class Manager:
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
         logger.info(f"{self}: data collection complete!")
+
+        # Add the meta data to the archive
+        self.save_meta()
 
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.

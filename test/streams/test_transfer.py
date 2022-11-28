@@ -109,6 +109,37 @@ def dockered_single_worker_manager(manager, docker_client):
     return manager
 
 
+@pytest.fixture
+def dockered_multiple_worker_manager(manager, docker_client):
+
+    # Construct graph
+    graph = cp.Graph()
+
+    workers = []
+    worker_node_map = collections.defaultdict(list)
+    for i in range(NUM_OF_WORKERS):
+        worker = DockeredWorker(docker_client, name=f"W{i}")
+        worker.connect(host=manager.host, port=manager.port)
+        workers.append(worker)
+
+        # For each worker, add all possible nodes
+        for node_name, node_class in NAME_CLASS_MAP.items():
+            node_worker_name = f"W{i}-{node_name}"
+            worker_node_map[f"W{i}"].append(node_worker_name)
+            graph.add_node(node_class(name=node_worker_name))
+
+    # Then register graph to Manager
+    manager.register_graph(graph)
+
+    # Specify what nodes to what worker
+    manager.map_graph(worker_node_map)
+
+    yield manager
+
+    for worker in workers:
+        worker.shutdown()
+
+
 def test_worker_data_archiving(worker):
 
     # Just for debugging
@@ -154,6 +185,11 @@ def test_worker_data_archiving(worker):
             1,
             marks=linux_run_only,
         ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_worker_manager"),
+            NUM_OF_WORKERS,
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):
@@ -171,4 +207,8 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     config_manager.collect()
 
     # Assert the behavior
-    assert len(list(config_manager.logdir.iterdir())) == expected_number_of_folders
+    assert (
+        len([x for x in config_manager.logdir.iterdir() if x.is_dir()])
+        == expected_number_of_folders
+    )
+    assert (config_manager.logdir / "meta.json").exists()
