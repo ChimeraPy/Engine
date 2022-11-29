@@ -25,7 +25,7 @@ NAME_CLASS_MAP = {
     "tn": TabularNode,
     "an": AudioNode,
 }
-NUM_OF_WORKERS = 3
+NUM_OF_WORKERS = 5
 
 
 @pytest.fixture
@@ -175,6 +175,7 @@ def test_worker_data_archiving(worker):
         assert (worker.tempfolder / node_name).exists()
 
 
+@pytest.mark.repeat(5)
 @pytest.mark.parametrize(
     "config_manager, expected_number_of_folders",
     [
@@ -195,8 +196,7 @@ def test_worker_data_archiving(worker):
 def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):
 
     # Commiting the graph by sending it to the workers
-    config_manager.commit_graph()
-    config_manager.wait_until_all_nodes_ready(timeout=10)
+    config_manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()
@@ -204,7 +204,7 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     config_manager.stop()
 
     # Transfer the files to the Manager's logs
-    config_manager.collect()
+    config_manager.collect(timeout=15)
 
     # Assert the behavior
     assert (
@@ -212,3 +212,8 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
         == expected_number_of_folders
     )
     assert (config_manager.logdir / "meta.json").exists()
+    for worker_name in config_manager.workers:
+        for node_name in config_manager.workers[worker_name]["nodes_status"]:
+            assert config_manager.workers[worker_name]["nodes_status"][node_name][
+                "FINISHED"
+            ]

@@ -7,6 +7,7 @@ import os
 import time
 import datetime
 import json
+import random
 
 import dill
 
@@ -44,8 +45,9 @@ class Manager:
         self.max_num_of_workers = max_num_of_workers
 
         # Create log directory to store data
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        self.logdir = logdir / f"chimerapy_{timestamp}"
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d:%H_%M_%S")
+        rand_num = random.randint(1000, 9999)
+        self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
 
         # Create a logging directory
         os.makedirs(self.logdir, exist_ok=True)
@@ -196,7 +198,9 @@ class Manager:
             time.sleep(delay)
 
             if timeout and delay * miss_counter > timeout:
-                logger.error(f"{self}: stuck")
+                logger.error(
+                    f"{self}: Worker {worker_name} did not respond: {attribute}"
+                )
                 raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
 
             miss_counter += 1
@@ -355,6 +359,59 @@ class Manager:
         else:
             return False
 
+    def check_all_nodes_saved(self):
+
+        logger.debug(f"Checking node ready: {self.workers}")
+
+        # Tracking all results and avoiding a default True value
+        checks = []
+
+        # Iterate through all the workers
+        for worker_name in self.workers:
+
+            # Iterate through their nodes
+            for node_name in self.workers[worker_name]["nodes_status"]:
+                checks.append(
+                    self.workers[worker_name]["nodes_status"][node_name]["FINISHED"]
+                )
+
+        # Only if all checks are True can we say the p2p network is ready
+        logger.debug(f"checks: {checks}")
+        if all(checks):
+            return True
+        else:
+            return False
+
+    def wait_until_all_nodes_ready(
+        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
+    ):
+
+        miss_counter = 0
+        while not self.check_all_nodes_ready():
+            logger.debug("Waiting for nodes to be ready")
+            time.sleep(delay)
+
+            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
+                logger.error("Node ready timeout")
+                raise RuntimeError("Node ready timeout")
+
+            miss_counter += 1
+
+    def wait_until_all_nodes_saved(
+        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
+    ):
+
+        miss_counter = 0
+        while not self.check_all_nodes_saved():
+            logger.debug("Waiting for nodes' data to be saved")
+            time.sleep(delay)
+
+            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
+                logger.error("Node save timeout")
+                raise RuntimeError("Node save timeout")
+
+            miss_counter += 1
+
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
@@ -473,7 +530,7 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
-    def commit_graph(self):
+    def commit_graph(self, timeout: Optional[Union[int, float]] = None):
         """Committing ``Graph`` to the cluster.
 
         Committing refers to how the graph itself (with its nodes and edges)
@@ -504,20 +561,8 @@ class Manager:
         # Then setup the p2p connections between nodes
         self.setup_p2p_connections()
 
-    def wait_until_all_nodes_ready(
-        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
-    ):
-
-        miss_counter = 0
-        while not self.check_all_nodes_ready():
-            logger.debug("Waiting for nodes to be ready")
-            time.sleep(delay)
-
-            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
-                logger.error("Node ready timeout")
-                raise RuntimeError("Node ready timeout")
-
-            miss_counter += 1
+        # Wait until the cluster has been setup
+        self.wait_until_all_nodes_ready()
 
     def step(self):
         """Cluster step execution for offline operation.
@@ -590,14 +635,17 @@ class Manager:
         # Tell the cluster to stop
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
 
-    def collect(self, unzip: bool = True):
+    def collect(self, timeout: Optional[Union[int, float]] = None, unzip: bool = True):
         """Collect data archives across the cluster to the Manager's logs."""
+        # Wait until the nodes first finished writing down the data
+        self.wait_until_all_nodes_saved(timeout=timeout)
+
         # Request for archives to be send
         self.server.broadcast({"signal": enums.MANAGER_REQUEST_COLLECT, "data": {}})
 
         # Wail until all workers have responded with their node server data
         self.wait_until_all_workers_responded(
-            attribute="collection_complete", timeout=None
+            attribute="collection_complete", timeout=timeout
         )
 
         # # Then move the tempfiles to the log runs and unzip
