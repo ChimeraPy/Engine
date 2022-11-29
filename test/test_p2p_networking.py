@@ -306,8 +306,7 @@ def test_p2p_network_connections(config_manager):
 def test_detecting_when_all_nodes_are_ready(config_manager):
 
     # Commiting the graph by sending it to the workers
-    config_manager.commit_graph()
-    config_manager.wait_until_all_nodes_ready(timeout=10)
+    config_manager.commit_graph(timeout=10)
 
     # Extract all the nodes
     nodes_names = []
@@ -353,8 +352,7 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
 def test_manager_single_step_after_commit_graph(config_manager, expected_output):
 
     # Commiting the graph by sending it to the workers
-    config_manager.commit_graph()
-    config_manager.wait_until_all_nodes_ready(timeout=10)
+    config_manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.step()
@@ -398,8 +396,7 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
 def test_manager_start(config_manager, expected_output):
 
     # Commiting the graph by sending it to the workers
-    config_manager.commit_graph()
-    config_manager.wait_until_all_nodes_ready(timeout=10)
+    config_manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()

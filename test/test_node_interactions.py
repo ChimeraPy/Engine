@@ -112,8 +112,7 @@ def test_node_frequency_execution(_manager, _worker, config_graph, follow):
     )
 
     # Commiting the graph by sending it to the _workers
-    _manager.commit_graph()
-    _manager.wait_until_all_nodes_ready(timeout=10)
+    _manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     _manager.start()

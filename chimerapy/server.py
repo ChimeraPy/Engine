@@ -13,7 +13,6 @@ import tempfile
 import shutil
 
 # Third-Party Imports
-import tqdm
 
 # Internal Imports
 from .utils import (
@@ -22,6 +21,7 @@ from .utils import (
     get_open_port,
     decode_payload,
     get_ip_address,
+    logging_tqdm,
 )
 from . import enums
 
@@ -145,7 +145,7 @@ class Server(threading.Thread):
                 try:
                     bs = s.recv(8)
                 except ConnectionResetError:
-                    logger.warning(f"{self}: connection lost, shutting down")
+                    logger.debug(f"{self}: connection lost, shutting down")
                     break
 
                 # If null, skip
@@ -182,7 +182,7 @@ class Server(threading.Thread):
 
         # Check first if the connection is alive
         if s.fileno() == -1:
-            logger.warning(
+            logger.debug(
                 f"Tried to send {msg} to dead client connection name: socket: {s}."
             )
             return
@@ -204,10 +204,10 @@ class Server(threading.Thread):
             s.sendall(msg_length + msg_bytes)
             logger.debug(f"{self}: send {msg['signal']}")
         except socket.timeout:
-            logger.warning(f"{self}: Socket Timeout: skipping")
+            logger.debug(f"{self}: Socket Timeout: skipping")
             return
         except:
-            logger.warning(
+            logger.debug(
                 f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
             )
             return
@@ -251,13 +251,7 @@ class Server(threading.Thread):
         # start receiving the file from the socket
         # and writing to the file stream
         total_bytes_read = 0
-        progress = tqdm.tqdm(
-            range(filesize),
-            f"Receiving {filename}",
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
-        )
+        progress = logging_tqdm(range(filesize))
 
         # Create the filepath to the tempfolder
         dst_filepath = self.tempfolder / filename
@@ -295,7 +289,7 @@ class Server(threading.Thread):
                 progress.update(len(data))
 
                 # Safety check
-                if msg_counter > max_num_steps + 5:
+                if msg_counter > max_num_steps * 2 + 5:
                     raise RuntimeError("File transfer took longer than expected!")
 
         logger.debug(f"{self}: finished file transfer")
@@ -332,7 +326,7 @@ class Server(threading.Thread):
             try:
                 self.send(client_socket, {"signal": enums.SHUTDOWN, "data": {}})
             except socket.error:
-                logger.warning("Socket send msg to broken pipe", exc_info=True)
+                logger.debug("Socket send msg to broken pipe", exc_info=True)
 
         # First, indicate the end
         self.is_running.clear()

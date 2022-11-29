@@ -43,7 +43,7 @@ class Node(mp.Process):
         # Saving input parameters
         self._context = mp.get_start_method()
         self.name = name
-        self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0}
+        self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
 
     ####################################################################
     ## Process Pickling Methods
@@ -479,6 +479,19 @@ class Node(mp.Process):
 
         # Shutting down networking
         if self.networking:
+
+            # Inform the worker that the Node has finished its saving of data
+            self.status["FINISHED"] = 1
+            self.client.send(
+                {
+                    "signal": enums.NODE_STATUS,
+                    "data": {
+                        "node_name": self.name,
+                        "status": self.status,
+                    },
+                }
+            )
+
             # Shutdown the client
             self.client.shutdown()
 

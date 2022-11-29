@@ -155,6 +155,7 @@ def test_server_broadcast_to_multiple_clients(server):
         _client.shutdown()
 
 
+@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "_server,_client,dir",
     [

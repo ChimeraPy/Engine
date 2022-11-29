@@ -37,7 +37,6 @@ class RandomGenerator:
         ...
 
 
-@pytest.mark.dependency()
 @not_github_actions
 def test_write_audio():
     # References:
@@ -80,7 +79,6 @@ def test_write_audio():
 
 
 @pytest.mark.order(after="test_write_audio")
-@pytest.mark.dependency()
 @not_github_actions
 def test_write_video():
 
@@ -120,7 +118,6 @@ def test_write_video():
 
 
 @pytest.mark.order(after="test_write_video")
-@pytest.mark.dependency(depends=["test_write_video", "test_write_audio"])
 @not_github_actions
 def test_combine_video_and_audio():
 

@@ -171,10 +171,10 @@ class Client(threading.Thread):
             self.socket.sendall(msg_length + msg_bytes)
             logger.debug(f"{self}: send {msg['signal']}")
         except socket.timeout:
-            logger.warning(f"{self}: Socket Timeout: skipping")
+            logger.debug(f"{self}: Socket Timeout: skipping")
             return
         except:
-            logger.warning(
+            logger.debug(
                 f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
             )
             return
@@ -271,4 +271,5 @@ class Client(threading.Thread):
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
-            self.join()
+            if self.is_alive():
+                self.join()

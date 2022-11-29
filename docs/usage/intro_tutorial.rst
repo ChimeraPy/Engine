@@ -98,8 +98,7 @@ With our DAG complete, the next step is configuring the network configuration an
         manager.map_graph(mapping)
 
         # Commit the graph
-        manager.commit_graph()
-        manager.wait_until_all_nodes_ready(timeout=10)
+        manager.commit_graph(timeout=10)
 
         # Wail until user stops
         while True:

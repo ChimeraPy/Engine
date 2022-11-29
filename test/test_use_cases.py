@@ -167,9 +167,7 @@ def test_use_case_graph(manager, worker, graph, mapping):
 
     # Specify what nodes to what worker
     manager.map_graph(mapping)
-
-    manager.commit_graph()
-    manager.wait_until_all_nodes_ready(timeout=10)
+    manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     manager.start()
