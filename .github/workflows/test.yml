@@ -70,6 +70,7 @@ jobs:
           coverage combine
 
       - name: Upload coverage data to coveralls.io
+        if : matrix.os == 'ubuntu-latest'
         run: coveralls --service=github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
