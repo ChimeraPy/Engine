@@ -45,7 +45,7 @@ class Manager:
         self.max_num_of_workers = max_num_of_workers
 
         # Create log directory to store data
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d:%H_%M_%S")
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         rand_num = random.randint(1000, 9999)
         self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
 
@@ -639,6 +639,7 @@ class Manager:
         """Collect data archives across the cluster to the Manager's logs."""
         # Wait until the nodes first finished writing down the data
         self.wait_until_all_nodes_saved(timeout=timeout)
+        time.sleep(1)
 
         # Request for archives to be send
         self.server.broadcast({"signal": enums.MANAGER_REQUEST_COLLECT, "data": {}})
