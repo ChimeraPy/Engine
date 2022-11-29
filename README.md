@@ -1,10 +1,4 @@
-<p align="center">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/40870026/200185752-14fa7ba1-26cc-483a-b307-7306326fbfe3.png">
-      <source media="(prefers-color-scheme: light)" srcset="https://user-images.githubusercontent.com/40870026/200185754-e145553b-3a87-4f97-92b2-ae12c0617f46.png">
-      <img alt="Shows a black logo in light color mode and a white one in dark color mode." src="https://user-images.githubusercontent.com/40870026/200185754-e145553b-3a87-4f97-92b2-ae12c0617f46.png">
-    </picture>
-</p>
+![Logo](docs/_static/logo/chimerapy_logo_with_name_theme_blue.png)
 
 [![PyPI](https://img.shields.io/pypi/v/chimerapy)](https://pypi.org/project/chimerapy/) [![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
 * [Docs](https://oele-isis-vanderbilt.github.io/ChimeraPy)
