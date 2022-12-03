@@ -109,7 +109,6 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-# @linux_expected_only
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 

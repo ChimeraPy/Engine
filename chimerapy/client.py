@@ -21,7 +21,7 @@ import math
 from .utils import create_payload, decode_payload
 from . import enums
 
-logger = logging.getLogger("chimerapy")
+logger = logging.getLogger("chimerapy-networking")
 
 
 class Client(threading.Thread):
@@ -235,6 +235,9 @@ class Client(threading.Thread):
 
         # Having counter tracking number of messages
         msg_counter = 1
+
+        # Modifying socket to longer
+        self.socket.settimeout(1)
 
         with open(temp_zip_file, "rb") as f:
             while True:

@@ -25,7 +25,7 @@ from .utils import (
 )
 from . import enums
 
-logger = logging.getLogger("chimerapy")
+logger = logging.getLogger("chimerapy-networking")
 
 
 class Server(threading.Thread):
