@@ -242,7 +242,13 @@ class Server(threading.Thread):
                 # and delete the zip file
                 else:
                     shutil.unpack_archive(filepath, named_dst)
-                    new_file = named_dst / filepath.stem.replace("_", "")
+
+                    # Handling if temp folder includes a _ in the beginning
+                    new_filename = filepath.stem
+                    if new_filename[0] == "_":
+                        new_filename = new_filename[1:]
+
+                    new_file = named_dst / new_filename
 
                     # Wait until file is ready
                     miss_counter = 0
@@ -252,7 +258,9 @@ class Server(threading.Thread):
                         time.sleep(delay)
                         miss_counter += 1
                         if timeout < delay * miss_counter:
-                            raise TimeoutError("File zip unpacking took too long!")
+                            raise TimeoutError(
+                                f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
+                            )
 
                     for file in new_file.iterdir():
                         shutil.move(file, named_dst)
