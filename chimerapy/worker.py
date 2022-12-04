@@ -5,11 +5,10 @@ import logging
 import os
 import time
 import pdb
-import platform
 import tempfile
 import pathlib
-import datetime
 import shutil
+import sys
 
 import dill
 
@@ -64,6 +63,7 @@ class Worker:
             enums.MANAGER_START_NODES: self.start_nodes,
             enums.MANAGER_STOP_NODES: self.stop_nodes,
             enums.MANAGER_REQUEST_COLLECT: self.send_archive,
+            enums.MANAGER_REQUEST_CODE_LOAD: self.load_sent_packages,
         }
         self.from_node_handlers = {
             enums.NODE_STATUS: self.node_status_update,
@@ -280,6 +280,17 @@ class Worker:
                     "data": nodes_status_data,
                 }
             )
+
+    def load_sent_packages(self, msg: Dict):
+
+        # For each package, extract it from the client's tempfolder
+        # and load it to the sys.path
+        for sent_package in msg["data"]["packages"]:
+            package_zip_path = self.client.file_transfer_records["Manager"][
+                f"{sent_package}.zip"
+            ]
+            assert package_zip_path.exists()
+            sys.path.insert(0, package_zip_path)
 
     def send_archive(self, msg: Dict):
 

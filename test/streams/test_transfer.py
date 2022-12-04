@@ -167,7 +167,7 @@ def test_worker_data_archiving(worker):
         assert (worker.tempfolder / node_name).exists()
 
 
-@pytest.mark.repeat(5)
+# @pytest.mark.repeat(5)
 @pytest.mark.parametrize(
     "config_manager, expected_number_of_folders",
     [

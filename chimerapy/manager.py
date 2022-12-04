@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List, Union, Any
 import socket
 import logging
 import pdb
@@ -8,6 +8,8 @@ import time
 import datetime
 import json
 import random
+import tempfile
+import zipfile
 
 import dill
 
@@ -49,6 +51,9 @@ class Manager:
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         rand_num = random.randint(1000, 9999)
         self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
+
+        # Also create a tempfolder to store any miscellaneous files and folders
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Create a logging directory
         os.makedirs(self.logdir, exist_ok=True)
@@ -525,6 +530,37 @@ class Manager:
         self.request_connection_creation()
 
     ####################################################################
+    ## Package and Dependency Management
+    ####################################################################
+
+    def distribute_packages(self, packages_meta: List[Dict[str, Any]]):
+
+        # For each package requested, send the packages to be used
+        # by the connected Workers.
+        for package_meta in packages_meta:
+            package_name = package_meta["name"]
+            package_path = package_meta["path"]
+
+            # We do so by sending compressed zip files of the packages
+            zip_package_dst = self.tempfolder / f"{package_name}.zip"
+            with zipfile.PyZipFile(str(zip_package_dst), mode="w") as zip_pkg:
+                zip_pkg.writepy(package_path)
+
+            # Send it to the workers and let them know to load the
+            # send package
+            for worker_name in self.workers:
+                self.server.send_file(name="Manager", filepath=zip_package_dst)
+
+        for worker_name in self.workers:
+            self.server.send(
+                self.workers[worker_name]["socket"],
+                {
+                    "signal": enums.MANAGER_REQUEST_CODE_LOAD,
+                    "data": {"packages": [x["name"] for x in packages_meta]},
+                },
+            )
+
+    ####################################################################
     ## User API
     ####################################################################
 
@@ -533,6 +569,7 @@ class Manager:
         graph: Graph,
         mapping: Dict[str, List[str]],
         timeout: Optional[Union[int, float]] = None,
+        send_packages: Optional[List[Dict[str, pathlib.Path]]] = None,
     ):
         """Committing ``Graph`` to the cluster.
 
@@ -556,6 +593,10 @@ class Manager:
         # First, test that the graph and the mapping are valid
         self.register_graph(graph)
         self.map_graph(mapping)
+
+        # Then send requested packages
+        if send_packages:
+            self.distribute_packages(send_packages)
 
         # First, create the network
         self.create_p2p_network()
