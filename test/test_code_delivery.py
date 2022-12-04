@@ -9,6 +9,7 @@ import chimerapy as cp
 
 # Internal Imports
 from .mock import test_package as tp
+from .conftest import linux_run_only
 
 # Constant
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
@@ -31,7 +32,13 @@ def packaged_node_graph():
 
 @pytest.mark.parametrize(
     "config_graph",
-    [(lazy_fixture("local_node_graph")), (lazy_fixture("packaged_node_graph"))],
+    [
+        (lazy_fixture("local_node_graph")),
+        pytest.param(
+            lazy_fixture("packaged_node_graph"),
+            marks=linux_run_only,
+        ),
+    ],
 )
 def test_sending_package(manager, dockered_worker, config_graph):
 
