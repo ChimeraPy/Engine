@@ -18,6 +18,7 @@ logger = logging.getLogger("chimerapy")
 from .server import Server
 from .client import Client
 from . import enums
+from .utils import get_ip_address
 
 
 class Worker:
@@ -50,6 +51,7 @@ class Worker:
         self.nodes: Dict = {}
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
+        self.manager_host = "0.0.0.0"
 
         # Indicating which function to response
         self.to_manager_handlers = {
@@ -116,7 +118,7 @@ class Worker:
 
             # If too many attempts, just give up :(
             if fail_attempts > 5:
-                raise RuntimeError("Could not create Node")
+                raise TimeoutError("Could not create Node")
 
             # Decode the node object
             self.nodes[node_name]["node_object"] = dill.loads(
@@ -141,9 +143,9 @@ class Worker:
 
             # Wait until response from node
             try:
-                self.wait_until_node_response(node_name, timeout=1)
+                self.wait_until_node_response(node_name, timeout=10)
                 break
-            except RuntimeError:
+            except TimeoutError:
 
                 # Handle failure
                 self.nodes[node_name]["node_object"].shutdown()
@@ -152,9 +154,6 @@ class Worker:
                 logger.warning(
                     f"{node_name} failed to start, retrying for {fail_attempts} time."
                 )
-
-                # Try again
-                continue
 
         # Mark success
         logger.debug(f"{self}: completed node creation: {self.nodes}")
@@ -282,6 +281,40 @@ class Worker:
                 }
             )
 
+    def send_archive(self, msg: Dict):
+
+        # Default value of success
+        success = False
+
+        # If located in the same computer, just move the data
+        if self.manager_host == get_ip_address():
+
+            # First rename and then move
+            new_folder_name = self.tempfolder.parent / self.name
+            os.rename(self.tempfolder, new_folder_name)
+            shutil.move(new_folder_name, msg["data"]["path"])
+
+        else:
+
+            # Else, send the archive data to the manager via network
+            try:
+                self.client.send_folder(self.name, self.tempfolder)
+                success = True
+            except (TimeoutError, SystemError) as error:
+                self.delete_temp = False
+                logger.exception(
+                    f"{self}: Failed to transmit files to Manager - {error}."
+                )
+                success = False
+
+        # After completion, let the Manager know
+        self.client.send(
+            {
+                "signal": enums.WORKER_TRANSFER_COMPLETE,
+                "data": {"name": self.name, "success": success},
+            }
+        )
+
     ####################################################################
     ## Helper Methods
     ####################################################################
@@ -310,7 +343,7 @@ class Worker:
 
                 # Handling timeout
                 if miss_counter * delay > timeout:
-                    raise RuntimeError(f"{self}: {node_name} not responding!")
+                    raise TimeoutError(f"{self}: {node_name} not responding!")
 
                 # Update miss counter
                 miss_counter += 1
@@ -377,6 +410,7 @@ class Worker:
 
         # Tracking client state change
         self.connected_to_manager = True
+        self.manager_host = host
         logger.info(
             f"{self}: connection successful to Manager located at {host}:{port}."
         )
@@ -395,19 +429,6 @@ class Worker:
 
         # Send message to nodes to start
         self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}})
-
-    def send_archive(self, msg: Dict):
-
-        # Send the archive data to the manager
-        self.client.send_folder(self.name, self.tempfolder)
-
-        # After completion, let the Manager know
-        self.client.send(
-            {
-                "signal": enums.WORKER_TRANSFER_COMPLETE,
-                "data": {"name": self.name},
-            }
-        )
 
     def shutdown(self, msg: Dict = {}):
         """Shutdown ``Worker`` safely.

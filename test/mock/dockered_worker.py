@@ -4,7 +4,7 @@ import queue
 import logging
 import platform
 
-logger = logging.getLogger("chimerapy")
+logger = logging.getLogger("chimerapy-networking")
 
 # Third-party
 import docker

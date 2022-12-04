@@ -37,13 +37,11 @@ def single_node_no_connections_manager(manager, worker, gen_node):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(simple_graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        simple_graph,
         {
             "local": ["Gen1"],
-        }
+        },
     )
 
     return manager
@@ -56,13 +54,11 @@ def multiple_nodes_one_worker_manager(manager, worker, graph):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        graph,
         {
             "local": ["Gen1", "Con1"],
-        }
+        },
     )
 
     return manager
@@ -78,10 +74,7 @@ def multiple_nodes_multiple_workers_manager(manager, graph):
     worker2.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph({"local": ["Gen1"], "local2": ["Con1"]})
+    manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
 
     yield manager
 
@@ -100,13 +93,11 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(simple_graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        simple_graph,
         {
             "local": ["Slo1"],
-        }
+        },
     )
 
     return manager
@@ -121,16 +112,13 @@ def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_no
 
     # Connect to the manager
     dockered_worker.connect(host=manager.host, port=manager.port)
-    # dockered_worker.connect(host='10.0.0.153', port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(simple_graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        simple_graph,
         {
             dockered_worker.name: ["Gen1"],
-        }
+        },
     )
 
     return manager
@@ -150,13 +138,11 @@ def dockered_multiple_nodes_one_worker_manager(
     dockered_worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(simple_graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        simple_graph,
         {
             dockered_worker.name: ["Gen1", "Con1"],
-        }
+        },
     )
 
     return manager
@@ -172,10 +158,7 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph({"local": ["Gen1"], "local2": ["Con1"]})
+    manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
 
     yield manager
 
@@ -183,7 +166,6 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.shutdown()
 
 
-@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
     [
@@ -213,10 +195,7 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
         ),
     ],
 )
-def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
-
-    # Commiting the graph by sending it to the workers
-    config_manager.create_p2p_network()
+def test_detecting_when_all_nodes_are_ready(config_manager, expected_worker_to_nodes):
 
     # Extract all the nodes
     nodes_names = []
@@ -241,34 +220,6 @@ def test_p2p_network_creation(config_manager, expected_worker_to_nodes):
     # The config manager should have all the nodes are registered
     assert all([config_manager.graph.has_node_by_name(x) for x in nodes_names])
 
-
-@pytest.mark.repeat(10)
-@pytest.mark.parametrize(
-    "config_manager",
-    [
-        (lazy_fixture("single_node_no_connections_manager")),
-        (lazy_fixture("multiple_nodes_one_worker_manager")),
-        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        pytest.param(
-            lazy_fixture("dockered_single_node_no_connections_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
-            marks=linux_run_only,
-        ),
-    ],
-)
-def test_p2p_network_connections(config_manager):
-
-    # Commiting the graph by sending it to the workers
-    config_manager.create_p2p_network()
-    config_manager.setup_p2p_connections()
-
     # Extract all the nodes
     nodes_names = []
     for worker_name in config_manager.workers:
@@ -280,33 +231,6 @@ def test_p2p_network_connections(config_manager):
 
     # The config manager should have all the nodes registered as CONNECTED
     assert all([x in config_manager.nodes_server_table for x in nodes_names])
-
-
-@pytest.mark.parametrize(
-    "config_manager",
-    [
-        (lazy_fixture("single_node_no_connections_manager")),
-        (lazy_fixture("multiple_nodes_one_worker_manager")),
-        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        (lazy_fixture("slow_single_node_single_worker_manager")),
-        pytest.param(
-            lazy_fixture("dockered_single_node_no_connections_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
-            marks=linux_run_only,
-        ),
-    ],
-)
-def test_detecting_when_all_nodes_are_ready(config_manager):
-
-    # Commiting the graph by sending it to the workers
-    config_manager.commit_graph(timeout=10)
 
     # Extract all the nodes
     nodes_names = []
@@ -351,9 +275,6 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
 )
 def test_manager_single_step_after_commit_graph(config_manager, expected_output):
 
-    # Commiting the graph by sending it to the workers
-    config_manager.commit_graph(timeout=10)
-
     # Take a single step and see if the system crashes and burns
     config_manager.step()
     time.sleep(2)
@@ -394,9 +315,6 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
     ],
 )
 def test_manager_start(config_manager, expected_output):
-
-    # Commiting the graph by sending it to the workers
-    config_manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()

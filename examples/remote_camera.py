@@ -1,11 +1,14 @@
 from typing import Dict, Any
 import time
+import pathlib
+import os
 
 import numpy as np
 import cv2
-import imutils
 
 import chimerapy as cp
+
+CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class WebcamNode(cp.Node):
@@ -31,6 +34,9 @@ class ShowWindow(cp.Node):
         cv2.imshow("frame", frame)
         cv2.waitKey(1)
 
+    def teardown(self):
+        cv2.destroyAllWindows()
+
 
 class RemoteCameraGraph(cp.Graph):
     def __init__(self):
@@ -45,15 +51,12 @@ class RemoteCameraGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager()
+    manager = cp.Manager(logdir=CWD / "runs")
     graph = RemoteCameraGraph()
     worker = cp.Worker(name="local")
-    # worker2 = cp.Worker(name="remote")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
-    # worker2.connect(host=manager.host, port=manager.port)
-    manager.register_graph(graph)
 
     # Wait until workers connect
     while True:
@@ -65,11 +68,8 @@ if __name__ == "__main__":
     mapping = {"remote": ["web"], "local": ["show"]}
     # mapping = {"local": ["web", "show"]}
 
-    # Specify what nodes to what worker
-    manager.map_graph(mapping)
-
     # Commit the graph
-    manager.commit_graph(timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
 
     # Wail until user stops
     while True:

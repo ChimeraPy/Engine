@@ -204,10 +204,24 @@ class Client(threading.Thread):
             dir.is_dir() and dir.exists()
         ), f"Sending {dir} needs to be a folder that exists."
 
+        # Having continuing trying to make zip folder
+        miss_counter = 0
+        delay = 1
+        zip_timeout = 10
+
         # First, we need to archive the folder into a zip file
-        format = "zip"
-        shutil.make_archive(str(dir), format, dir.parent, dir.name)
-        zip_file = dir.parent / f"{dir.name}.{format}"
+        while True:
+            try:
+                shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+                break
+            except:
+                time.sleep(delay)
+                miss_counter += 1
+
+                if zip_timeout < delay * miss_counter:
+                    raise SystemError("Temp folder couldn't be zipped.")
+
+        zip_file = dir.parent / f"{dir.name}.zip"
 
         # Relocate zip to the tempfolder
         temp_zip_file = self.tempfolder / f"_{zip_file.name}"
@@ -224,7 +238,7 @@ class Client(threading.Thread):
             "signal": enums.FILE_TRANSFER_START,
             "data": {
                 "name": name,
-                "filename": f"{dir.name}.{format}",
+                "filename": f"{dir.name}.zip",
                 "filesize": filesize,
                 "buffersize": buffersize,
                 "max_num_steps": max_num_steps,
@@ -237,7 +251,9 @@ class Client(threading.Thread):
         msg_counter = 1
 
         # Modifying socket to longer
-        self.socket.settimeout(1)
+        delay = 1
+        miss_counter = 0
+        self.socket.settimeout(delay)
 
         with open(temp_zip_file, "rb") as f:
             while True:
@@ -251,9 +267,24 @@ class Client(threading.Thread):
                     f"{self}: file transfer, step {msg_counter}/{max_num_steps}"
                 )
 
-                # Send the data
-                self.socket.sendall(data)
-                msg_counter += 1
+                # Continue trying to send data until accepted
+                while True:
+                    try:
+                        # Send the data
+                        self.socket.sendall(data)
+                        msg_counter += 1
+                        break
+
+                    except socket.timeout:
+                        miss_counter += 1
+                        time.sleep(0.5)
+
+                        if miss_counter * delay > 100:
+                            raise TimeoutError(
+                                "Timeout multiple attemptindg sending data"
+                            )
+
+                        continue
 
         logger.debug(f"{self}: finished file transfer")
 

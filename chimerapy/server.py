@@ -253,6 +253,10 @@ class Server(threading.Thread):
         total_bytes_read = 0
         progress = logging_tqdm(range(filesize))
 
+        # Update the client_socket timeout
+        delay = 1
+        client_socket.settimeout(delay)
+
         # Create the filepath to the tempfolder
         dst_filepath = self.tempfolder / filename
 
@@ -279,7 +283,7 @@ class Server(threading.Thread):
                     )
                     msg_counter += 1
                 except socket.timeout:
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     continue
 
                 # write to the file the bytes we just received

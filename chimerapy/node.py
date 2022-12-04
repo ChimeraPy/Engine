@@ -7,6 +7,7 @@ import queue
 import uuid
 import pathlib
 import os
+import tempfile
 
 # Third-party Imports
 import multiprocess as mp
@@ -22,7 +23,7 @@ from .utils import clear_queue
 
 
 class Node(mp.Process):
-    def __init__(self, name: str):
+    def __init__(self, name: str, debug: bool = False):
         """Create a basic unit of computation in ChimeraPy.
 
         A node has three main functions that can be overwritten to add
@@ -44,6 +45,25 @@ class Node(mp.Process):
         self._context = mp.get_start_method()
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
+
+        # If used for debugging, that means that it is being executed
+        # not in an external process
+        self.debug = debug
+        if self.debug:
+
+            # Get the logger and setup the folder to store output data
+            self.logger = logging.getLogger("chimerapy")
+            temp_folder = pathlib.Path(tempfile.mkdtemp())
+            self.logger.info(
+                f"Debug Mode for Node: Generated data is stored in {temp_folder}"
+            )
+
+            # Prepare the node to be used
+            self.config(
+                "0.0.0.0", 9000, temp_folder, [], [], follow=None, networking=False
+            )
+            self._prep()
+            self.prep()
 
     ####################################################################
     ## Process Pickling Methods
@@ -511,27 +531,25 @@ class Node(mp.Process):
         self.logger = self.get_logger()
         self.logger.debug(f"{self}: initialized with context -> {self._context}")
 
-        # Performing preparation for the while loop
-        self._prep()
-        self.prep()
+        # If debugging, do not re-execute the networking component
+        if not self.debug:
 
-        assert isinstance(self.in_queue, queue.Queue)
-        self.logger.debug(f"{self}: finished prep")
+            # Performing preparation for the while loop
+            self._prep()
+            self.prep()
 
-        # Signal that Node is ready
-        self.ready()
+            assert isinstance(self.in_queue, queue.Queue)
+            self.logger.debug(f"{self}: finished prep")
 
-        self.logger.debug(f"{self}: is ready")
-
-        # Now waiting for the Worker to inform the node to execute
-        self.waiting()
+            # Signal that Node is ready
+            self.ready()
+            self.logger.debug(f"{self}: is ready")
+            self.waiting()
 
         self.logger.debug(f"{self}: is running")
-
         self.main()
 
         self.logger.debug(f"{self}: is exiting")
-
         self.teardown()
         self._teardown()
 
@@ -540,3 +558,8 @@ class Node(mp.Process):
     def shutdown(self, msg: Dict = {}):
 
         self.running.value = False
+
+        # If for debugging, user's don't need to know about _teardown
+        # Also, the networking components are not being used
+        if self.debug:
+            self._teardown()

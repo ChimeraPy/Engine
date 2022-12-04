@@ -12,6 +12,8 @@ from pytest_lazyfixture import lazy_fixture
 import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
+# cp.debug(["chimerapy-networking"])
+
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..conftest import linux_run_only, linux_expected_only
 from ..mock import DockeredWorker
@@ -40,13 +42,11 @@ def single_worker_manager(manager, worker):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        graph,
         {
             worker.name: list(NAME_CLASS_MAP.keys()),
-        }
+        },
     )
 
     return manager
@@ -72,10 +72,7 @@ def multiple_worker_manager(manager, worker):
             graph.add_node(node_class(name=node_worker_name))
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(worker_node_map)
+    manager.commit_graph(graph, worker_node_map)
 
     yield manager
 
@@ -86,7 +83,7 @@ def multiple_worker_manager(manager, worker):
 @pytest.fixture
 def dockered_single_worker_manager(manager, docker_client):
 
-    worker = DockeredWorker(docker_client, name="local")
+    worker = DockeredWorker(docker_client, name="docker")
 
     # Define graph
     graph = cp.Graph()
@@ -97,13 +94,11 @@ def dockered_single_worker_manager(manager, docker_client):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
+    manager.commit_graph(
+        graph,
         {
             worker.name: list(NAME_CLASS_MAP.keys()),
-        }
+        },
     )
 
     return manager
@@ -129,10 +124,7 @@ def dockered_multiple_worker_manager(manager, docker_client):
             graph.add_node(node_class(name=node_worker_name))
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(worker_node_map)
+    manager.commit_graph(graph, worker_node_map)
 
     yield manager
 
@@ -194,9 +186,6 @@ def test_worker_data_archiving(worker):
     ],
 )
 def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):
-
-    # Commiting the graph by sending it to the workers
-    config_manager.commit_graph(timeout=10)
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()

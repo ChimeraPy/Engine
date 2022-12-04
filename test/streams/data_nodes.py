@@ -18,8 +18,9 @@ class AudioNode(cp.Node):
         channels: int = 2,
         format: int = pyaudio.paInt16,
         rate: int = 44100,
+        **kwargs
     ):
-        super().__init__(name)
+        super().__init__(name, **kwargs)
         self.chunk = chunk
         self.channels = channels
         self.format = format

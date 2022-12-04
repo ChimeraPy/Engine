@@ -15,7 +15,7 @@ from pytest_lazyfixture import lazy_fixture
 import chimerapy as cp
 
 logger = logging.getLogger("chimerapy")
-cp.debug(["chimerapy-networking", "chimerapy-subprocess"])
+# cp.debug(["chimerapy-networking", "chimerapy-subprocess"])
 
 
 class WebcamNode(cp.Node):
