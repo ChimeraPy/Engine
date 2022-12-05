@@ -30,14 +30,12 @@ def packaged_node_graph():
     return graph
 
 
+@linux_run_only
 @pytest.mark.parametrize(
     "config_graph",
     [
         (lazy_fixture("local_node_graph")),
-        pytest.param(
-            lazy_fixture("packaged_node_graph"),
-            marks=linux_run_only,
-        ),
+        (lazy_fixture("packaged_node_graph")),
     ],
 )
 def test_sending_package(manager, dockered_worker, config_graph):
