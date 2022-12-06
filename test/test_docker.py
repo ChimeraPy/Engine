@@ -1,11 +1,12 @@
 import logging
 import sys
 
+import chimerapy as cp
 import pytest
 
 from .conftest import linux_run_only
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 # Resources: https://docker-py.readthedocs.io/en/stable/containers.html#docker.models.containers.Container
 # https://stackoverflow.com/questions/61763684/following-the-exec-run-output-from-docker-py-in-realtime

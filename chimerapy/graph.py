@@ -3,13 +3,14 @@ import copy
 import logging
 import pdb
 
-from .node import Node
-
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
-logger = logging.getLogger("chimerapy")
+from .node import Node
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 
 class Graph:

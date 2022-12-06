@@ -4,10 +4,11 @@ import queue
 import logging
 import platform
 
-logger = logging.getLogger("chimerapy-networking")
-
 # Third-party
 import docker
+import chimerapy as cp
+
+logger = cp._logger.getLogger("chimerapy-networking")
 
 
 class LogThread(threading.Thread):

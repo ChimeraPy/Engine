@@ -2,9 +2,9 @@
 __version__ = "0.0.7"
 
 # Package Setup
-from . import logger
+from . import _logger
 
-logger.setup()
+_logger.setup()
 
 # Interal Imports
 from .manager import Manager

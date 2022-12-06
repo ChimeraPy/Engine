@@ -11,7 +11,7 @@ from pytest_lazyfixture import lazy_fixture
 # Internal Imports
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 # cp.debug(["chimerapy-networking"])
 
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode

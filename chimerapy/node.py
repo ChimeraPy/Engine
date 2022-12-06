@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Union, Literal
 from multiprocessing.process import AuthenticationString
 import time
 import socket
@@ -20,10 +20,11 @@ from .server import Server
 from .data_handlers import OutputsHandler, SaveHandler
 from . import enums
 from .utils import clear_queue
+from . import _logger
 
 
 class Node(mp.Process):
-    def __init__(self, name: str, debug: bool = False):
+    def __init__(self, name: str, debug: Optional[Literal["step", "stream"]] = None):
         """Create a basic unit of computation in ChimeraPy.
 
         A node has three main functions that can be overwritten to add
@@ -49,10 +50,10 @@ class Node(mp.Process):
         # If used for debugging, that means that it is being executed
         # not in an external process
         self.debug = debug
-        if self.debug:
+        if type(self.debug) != type(None):
 
             # Get the logger and setup the folder to store output data
-            self.logger = logging.getLogger("chimerapy")
+            self.logger = _logger.getLogger("chimerapy")
             temp_folder = pathlib.Path(tempfile.mkdtemp())
             self.logger.info(
                 f"Debug Mode for Node: Generated data is stored in {temp_folder}"
@@ -62,8 +63,11 @@ class Node(mp.Process):
             self.config(
                 "0.0.0.0", 9000, temp_folder, [], [], follow=None, networking=False
             )
-            self._prep()
-            self.prep()
+
+            # Only execute this if step debugging
+            if self.debug == "step":
+                self._prep()
+                self.prep()
 
     ####################################################################
     ## Process Pickling Methods
@@ -96,15 +100,19 @@ class Node(mp.Process):
 
     def get_logger(self) -> logging.Logger:
 
-        # Depending on the type of process, get the self.logger
-        if self._context == "spawn":
-            self.logger = logging.getLogger("chimerapy-subprocess")
-        elif self._context == "fork":
-            self.logger = logging.getLogger("chimerapy-subprocess")
+        # If running in a the main process
+        if "MainProcess" in mp.current_process().name:
+            l = _logger.getLogger("chimerapy")
         else:
-            raise RuntimeError("Invalid multiprocessing spawn method.")
+            # Depending on the type of process, get the self.logger
+            if self._context == "spawn":
+                l = _logger.getLogger("chimerapy-subprocess")
+            elif self._context == "fork":
+                l = _logger.getLogger("chimerapy-subprocess")
+            else:
+                raise RuntimeError("Invalid multiprocessing spawn method.")
 
-        return self.logger
+        return l
 
     ####################################################################
     ## Message Reactivity API
@@ -495,7 +503,10 @@ class Node(mp.Process):
 
         # Shutdown the inputs and outputs threads
         self.outputs_handler.shutdown()
+        self.outputs_handler.join()
         self.save_handler.shutdown()
+        self.save_handler.join()
+        time.sleep(1)
 
         # Shutting down networking
         if self.networking:
@@ -532,19 +543,19 @@ class Node(mp.Process):
         self.logger.debug(f"{self}: initialized with context -> {self._context}")
 
         # If debugging, do not re-execute the networking component
-        if not self.debug:
+        # if not self.debug:
 
-            # Performing preparation for the while loop
-            self._prep()
-            self.prep()
+        # Performing preparation for the while loop
+        self._prep()
+        self.prep()
 
-            assert isinstance(self.in_queue, queue.Queue)
-            self.logger.debug(f"{self}: finished prep")
+        assert isinstance(self.in_queue, queue.Queue)
+        self.logger.debug(f"{self}: finished prep")
 
-            # Signal that Node is ready
-            self.ready()
-            self.logger.debug(f"{self}: is ready")
-            self.waiting()
+        # Signal that Node is ready
+        self.ready()
+        self.logger.debug(f"{self}: is ready")
+        self.waiting()
 
         self.logger.debug(f"{self}: is running")
         self.main()
@@ -561,5 +572,5 @@ class Node(mp.Process):
 
         # If for debugging, user's don't need to know about _teardown
         # Also, the networking components are not being used
-        if self.debug:
+        if self.debug == "step":
             self._teardown()

@@ -13,14 +13,15 @@ import zipfile
 
 import dill
 
-logger = logging.getLogger("chimerapy")
-
 import networkx as nx
 
 from .server import Server
 from .graph import Graph
 from . import enums
 from .exceptions import CommitGraphError
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 
 class Manager:

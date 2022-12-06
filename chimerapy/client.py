@@ -21,8 +21,9 @@ import math
 from . import socket_handling as sh
 from .utils import create_payload, decode_payload
 from . import enums
+from . import _logger
 
-logger = logging.getLogger("chimerapy-networking")
+logger = _logger.getLogger("chimerapy-networking")
 
 
 class Client(threading.Thread):

@@ -6,7 +6,7 @@ import dill
 # Third-party Imports
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 # class PrepInfiniteNode(cp.Node):
 

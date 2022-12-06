@@ -16,7 +16,8 @@ from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
 from pytest_lazyfixture import lazy_fixture
 from .streams import AudioNode, VideoNode, ImageNode, TabularNode
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
+cp.debug()
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
@@ -65,7 +66,7 @@ def test_run_node_in_debug_mode(logreceiver):
     data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
 
     for i, node_cls in enumerate(data_nodes):
-        n = node_cls(name=f"{i}", debug=True)
+        n = node_cls(name=f"{i}", debug="step")
 
         for i in range(5):
             n.step()
@@ -73,11 +74,11 @@ def test_run_node_in_debug_mode(logreceiver):
         n.shutdown()
 
 
-def test_create_multiple_nodes(logreceiver):
+def test_create_multiple_nodes_not_pickled(logreceiver):
 
     ns = []
     for i in range(3):
-        n = VideoNode(name=f"G{i}", debug=True)
+        n = VideoNode(name=f"G{i}", debug="stream")
         n.start()
         ns.append(n)
 

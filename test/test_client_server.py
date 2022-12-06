@@ -15,7 +15,8 @@ import pdb
 
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
+# cp.debug()
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent

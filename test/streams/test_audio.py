@@ -13,7 +13,7 @@ import pyaudio
 # Internal Imports
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 from .data_nodes import AudioNode
 
@@ -28,12 +28,19 @@ RECORD_SECONDS = 5
 
 
 @pytest.fixture
-def audio_node():
+def audio_node_step():
 
     # Create a node
-    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE)
-    an.config("", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
-    an._prep()
+    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE, debug="step")
+
+    return an
+
+
+@pytest.fixture
+def audio_node_stream():
+
+    # Create a node
+    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE, debug="stream")
 
     return an
 
@@ -102,10 +109,10 @@ def test_save_handler_audio(save_handler_and_queue):
     assert expected_audio_path.exists()
 
 
-def test_node_save_audio_single_step(audio_node):
+def test_node_save_audio_single_step(audio_node_step):
 
     # Check that the audio was created
-    expected_audio_path = audio_node.logdir / "test.wav"
+    expected_audio_path = audio_node_step.logdir / "test.wav"
     try:
         os.remove(expected_audio_path)
     except FileNotFoundError:
@@ -113,35 +120,33 @@ def test_node_save_audio_single_step(audio_node):
 
     # Write to audio file
     for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
-        audio_node.step()
+        audio_node_step.step()
 
     # Stop the node the ensure audio completion
-    audio_node.shutdown()
-    audio_node._teardown()
+    audio_node_step.shutdown()
     time.sleep(1)
 
     # Check that the audio was created
     assert expected_audio_path.exists()
 
 
-def test_node_save_audio_stream(audio_node):
+def test_node_save_audio_stream(audio_node_stream):
 
     # Check that the audio was created
-    expected_audio_path = audio_node.logdir / "test.wav"
+    expected_audio_path = audio_node_stream.logdir / "test.wav"
     try:
         os.remove(expected_audio_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    audio_node.start()
+    audio_node_stream.start()
 
     # Wait to generate files
     time.sleep(10)
 
-    audio_node.shutdown()
-    audio_node._teardown()
-    audio_node.join()
+    audio_node_stream.shutdown()
+    audio_node_stream.join()
 
     # Check that the audio was created
     assert expected_audio_path.exists()

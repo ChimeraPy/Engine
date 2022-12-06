@@ -14,7 +14,7 @@ import ffmpeg
 import cv2
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 # Interal Testing imports
 from ..conftest import not_github_actions

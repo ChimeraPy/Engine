@@ -8,18 +8,18 @@ import platform
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-from chimerapy import Worker, Graph, Node
+import chimerapy as cp
 from .conftest import linux_run_only, linux_expected_only
 from .mock import DockeredWorker
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 
 @pytest.fixture
 def graph(gen_node, con_node):
 
     # Define graph
-    _graph = Graph()
+    _graph = cp.Graph()
     _graph.add_nodes_from([gen_node, con_node])
     _graph.add_edge(src=gen_node, dst=con_node)
 
@@ -30,7 +30,7 @@ def graph(gen_node, con_node):
 def single_node_no_connections_manager(manager, worker, gen_node):
 
     # Define graph
-    simple_graph = Graph()
+    simple_graph = cp.Graph()
     simple_graph.add_nodes_from([gen_node])
 
     # Connect to the manager
@@ -67,8 +67,8 @@ def multiple_nodes_one_worker_manager(manager, worker, graph):
 @pytest.fixture
 def multiple_nodes_multiple_workers_manager(manager, graph):
 
-    worker1 = Worker(name="local")
-    worker2 = Worker(name="local2")
+    worker1 = cp.Worker(name="local")
+    worker2 = cp.Worker(name="local2")
 
     worker1.connect(host=manager.host, port=manager.port)
     worker2.connect(host=manager.host, port=manager.port)
@@ -86,7 +86,7 @@ def multiple_nodes_multiple_workers_manager(manager, graph):
 def slow_single_node_single_worker_manager(manager, worker, slow_node):
 
     # Define graph
-    simple_graph = Graph()
+    simple_graph = cp.Graph()
     simple_graph.add_nodes_from([slow_node])
 
     # Connect to the manager
@@ -107,7 +107,7 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
 def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_node):
 
     # Define graph
-    simple_graph = Graph()
+    simple_graph = cp.Graph()
     simple_graph.add_nodes_from([gen_node])
 
     # Connect to the manager
@@ -130,7 +130,7 @@ def dockered_multiple_nodes_one_worker_manager(
 ):
 
     # Define graph
-    simple_graph = Graph()
+    simple_graph = cp.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(gen_node, con_node)
 

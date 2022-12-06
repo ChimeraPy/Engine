@@ -9,9 +9,11 @@ import pathlib
 import os
 import math
 
-logger = logging.getLogger("chimerapy-networking")
 from . import enums
 from .utils import decode_payload, create_payload, logging_tqdm
+from . import _logger
+
+logger = _logger.getLogger("chimerapy-networking")
 
 
 def read_socket_buffer(s: socket.socket, total_size: int, buffer_size: int = 4096):

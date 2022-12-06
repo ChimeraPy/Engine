@@ -18,6 +18,7 @@ class WebcamNode(cp.Node):
     def step(self):
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
+        self.save_video(name="test", data=frame, fps=20)
         return frame
 
     def teardown(self):
@@ -65,8 +66,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {"remote": ["web"], "local": ["show"]}
-    # mapping = {"local": ["web", "show"]}
+    # mapping = {"remote": ["web"], "local": ["show"]}
+    mapping = {"local": ["web", "show"]}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
@@ -86,4 +87,5 @@ if __name__ == "__main__":
             break
 
     manager.stop()
+    manager.collect()
     manager.shutdown()

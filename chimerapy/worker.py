@@ -12,12 +12,13 @@ import sys
 
 import dill
 
-logger = logging.getLogger("chimerapy")
-
 from .server import Server
 from .client import Client
 from . import enums
 from .utils import get_ip_address
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 
 class Worker:
@@ -301,9 +302,27 @@ class Worker:
         if self.manager_host == get_ip_address():
 
             # First rename and then move
-            new_folder_name = self.tempfolder.parent / self.name
-            os.rename(self.tempfolder, new_folder_name)
-            shutil.move(new_folder_name, msg["data"]["path"])
+            # new_folder_name = self.tempfolder.parent / self.name
+            # os.rename(self.tempfolder, new_folder_name)
+            # shutil.move(new_folder_name, msg["data"]["path"])
+            delay = 1
+            miss_counter = 0
+            timeout = 10
+            while True:
+                try:
+                    shutil.move(self.tempfolder, msg["data"]["path"])
+                    break
+                except shutil.Error:  # File already exists!
+                    break
+                except:
+                    time.sleep(delay)
+                    miss_counter += 1
+                    if miss_counter * delay > timeout:
+                        raise TimeoutError("Nodes haven't fully finishing saving!")
+
+            old_folder_name = msg["data"]["path"] / self.tempfolder.name
+            new_folder_name = msg["data"]["path"] / self.name
+            os.rename(old_folder_name, new_folder_name)
 
         else:
 
