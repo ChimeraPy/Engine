@@ -17,4 +17,7 @@ RUN ls
 
 # Install ChimeraPy
 RUN python3 -m pip install --upgrade pip
-RUN cd ChimeraPy && python3 -m pip install '.[test]'
+RUN cd ChimeraPy && python3 -m pip install '.[test]' && cd ..
+
+# For a certain test, remove the mock
+RUN rm -r ChimeraPy/test/mock/test_package

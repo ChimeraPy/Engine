@@ -11,6 +11,7 @@ import pathlib
 import os
 import tempfile
 import shutil
+import pdb
 
 # Third-Party Imports
 
@@ -21,11 +22,12 @@ from .utils import (
     get_open_port,
     decode_payload,
     get_ip_address,
-    logging_tqdm,
 )
 from . import enums
+from . import socket_handling as sh
+from . import _logger
 
-logger = logging.getLogger("chimerapy")
+logger = _logger.getLogger("chimerapy-networking")
 
 
 class Server(threading.Thread):
@@ -66,8 +68,8 @@ class Server(threading.Thread):
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
-        self.handlers.update({enums.FILE_TRANSFER_START: self.file_receive})
-        self.file_transfer_records = collections.defaultdict(list)
+        self.handlers.update({enums.FILE_TRANSFER_START: self.receive_file})
+        self.file_transfer_records = collections.defaultdict(dict)
 
     def __repr__(self):
         return f"<Server {self.name} {self.sender_msg_type}->{self.accepted_msg_type}>"
@@ -94,6 +96,25 @@ class Server(threading.Thread):
 
             # Saving new client thread
             self.client_comms[s] = {"thread": thread, "acks": collections.deque([], 10)}
+
+    @threaded
+    def client_comm_thread(self, s: socket.socket, addr):
+
+        # Continue checking for messages from client until not running
+        while self.is_running.is_set():
+
+            # Monitor the socket
+            try:
+                success, msg = sh.monitor(self.name, s)
+            except (ConnectionResetError, ConnectionAbortedError):
+                break
+
+            # Process the msg
+            if success:
+                self.process_msg(msg, s)
+
+        # Then shutdown socket
+        s.close()
 
     def process_msg(self, msg: Dict, s: socket.socket):
 
@@ -129,88 +150,16 @@ class Server(threading.Thread):
         else:
             logger.error("Invalid message from client")
 
-    @threaded
-    def client_comm_thread(self, s: socket.socket, addr):
-
-        # Continue checking for messages from client until not running
-        while self.is_running.is_set():
-
-            # Check if the socket is closed
-            if s.fileno() == -1:
-                break
-
-            # Get message while not blocking
-            try:
-                # Get the data
-                try:
-                    bs = s.recv(8)
-                except ConnectionResetError:
-                    logger.debug(f"{self}: connection lost, shutting down")
-                    break
-
-                # If null, skip
-                if bs == b"":
-                    continue
-
-                # Get the length
-                (length,) = struct.unpack(">Q", bs)
-                data = b""
-
-                # Use the length to get the entire message
-                while len(data) < int(length):
-                    to_read = int(length) - len(data)
-                    data += s.recv(4096 if to_read > 4096 else to_read)
-
-            except socket.timeout:
-                continue
-
-            # If end, stop it
-            if data == b"":
-                break
-
-            # Decode the message so we can process it
-            msg = decode_payload(data)
-
-            logger.debug(f"{self} msg received, content: {msg['signal']}")
-
-            # Process the msg
-            self.process_msg(msg, s)
-
-        s.close()
-
     def send(self, s: socket.socket, msg: Dict, ack: bool = False):
 
-        # Check first if the connection is alive
-        if s.fileno() == -1:
-            logger.debug(
-                f"Tried to send {msg} to dead client connection name: socket: {s}."
-            )
-            return
-
-        # Create an uuid to track the message
-        msg_uuid = str(uuid.uuid4())
-
-        # Convert msg data to bytes
-        msg_bytes, msg_length = create_payload(
-            type=self.sender_msg_type,
-            signal=msg["signal"],
-            data=msg["data"],
-            provided_uuid=msg_uuid,
-            ack=ack,
+        # Sending the data
+        success, msg_uuid = sh.send(
+            name=self.name, s=s, msg=msg, sender_msg_type=self.sender_msg_type, ack=ack
         )
 
-        # Sending message
-        try:
-            s.sendall(msg_length + msg_bytes)
-            logger.debug(f"{self}: send {msg['signal']}")
-        except socket.timeout:
-            logger.debug(f"{self}: Socket Timeout: skipping")
-            return
-        except:
-            logger.debug(
-                f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
-            )
-            return
+        # If not successful, skip ACK
+        if not success:
+            return None
 
         # If ACK requested, wait
         if ack:
@@ -237,84 +186,83 @@ class Server(threading.Thread):
         for s in self.client_comms:
             self.send(s, msg, ack)
 
-    def file_receive(self, msg: Dict[str, Any], client_socket: socket.socket):
+    def receive_file(self, msg: Dict[str, Any], client_socket: socket.socket):
 
-        logger.debug(f"{self}: just received file transfer initialization")
-
-        # First, extract the filename and filesize
-        name = msg["data"]["name"]
-        filename = msg["data"]["filename"]
-        filesize = int(msg["data"]["filesize"])
-        buffer_size = int(msg["data"]["buffersize"])
-        max_num_steps = int(msg["data"]["max_num_steps"])
-
-        # start receiving the file from the socket
-        # and writing to the file stream
-        total_bytes_read = 0
-        progress = logging_tqdm(range(filesize))
-
-        # Create the filepath to the tempfolder
-        dst_filepath = self.tempfolder / filename
-
-        logger.debug(f"{self}: ready for file transfer")
-
-        # Having counter tracking number of messages
-        msg_counter = 1
-
-        # Compute the number of bytes left
-        bytes_left = filesize - total_bytes_read
-
-        with open(dst_filepath, "wb") as f:
-            while total_bytes_read < filesize:
-
-                # read 1024 bytes from the socket (receive)
-                try:
-                    data = client_socket.recv(
-                        buffer_size if bytes_left > buffer_size else bytes_left
-                    )
-                    total_bytes_read += len(data)
-                    bytes_left = filesize - total_bytes_read
-                    logger.debug(
-                        f"{self}: file transfer, step {msg_counter}/{max_num_steps}"
-                    )
-                    msg_counter += 1
-                except socket.timeout:
-                    time.sleep(0.1)
-                    continue
-
-                # write to the file the bytes we just received
-                f.write(data)
-
-                # update the progress bar
-                progress.update(len(data))
-
-                # Safety check
-                if msg_counter > max_num_steps * 2 + 5:
-                    raise RuntimeError("File transfer took longer than expected!")
-
-        logger.debug(f"{self}: finished file transfer")
+        # Obtain the file
+        success, sender_name, dst_filepath = sh.file_transfer_receive(
+            name=self.name, s=client_socket, msg=msg, tempfolder=self.tempfolder
+        )
 
         # Create a record of the files transferred and from whom
-        self.file_transfer_records[name].append(dst_filepath)
+        if success:
+            self.file_transfer_records[sender_name][dst_filepath.name] = dst_filepath
+
+    def send_file(self, name: str, filepath: pathlib.Path):
+
+        assert filepath.exists() and filepath.is_file()
+
+        # Send the file to all client
+        for s in self.client_comms:
+            sh.send_file(
+                sender_name=name,
+                sender_msg_type=self.sender_msg_type,
+                s=s,
+                filepath=filepath,
+                buffersize=4096,
+            )
+
+    def send_folder(self, name: str, folderpath: pathlib.Path):
+
+        assert folderpath.exists() and folderpath.is_dir()
+
+        for s in self.client_comms:
+
+            sh.send_folder(
+                name=name,
+                s=s,
+                dir=folderpath,
+                tempfolder=self.tempfolder,
+                sender_msg_type=self.sender_msg_type,
+            )
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool):
 
-        for name, filepath_list in self.file_transfer_records.items():
+        for name, filepath_dict in self.file_transfer_records.items():
             # Create a folder for the name
             named_dst = dst / name
             os.mkdir(named_dst)
 
             # Move all the content inside
-            for filepath in filepath_list:
+            for filename, filepath in filepath_dict.items():
+
                 # If not unzip, just move it
                 if not unzip:
-                    shutil.move(filepath, named_dst / filepath.name)
+                    shutil.move(filepath, named_dst / filename)
 
                 # Otherwise, unzip, move content to the original folder,
                 # and delete the zip file
                 else:
                     shutil.unpack_archive(filepath, named_dst)
-                    new_file = named_dst / filepath.stem
+
+                    # Handling if temp folder includes a _ in the beginning
+                    new_filename = filepath.stem
+                    if new_filename[0] == "_":
+                        new_filename = new_filename[1:]
+
+                    new_file = named_dst / new_filename
+
+                    # Wait until file is ready
+                    miss_counter = 0
+                    delay = 0.5
+                    timeout = 10
+                    while not new_file.exists():
+                        time.sleep(delay)
+                        miss_counter += 1
+                        if timeout < delay * miss_counter:
+                            raise TimeoutError(
+                                f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
+                            )
+
                     for file in new_file.iterdir():
                         shutil.move(file, named_dst)
                     shutil.rmtree(new_file)

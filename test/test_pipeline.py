@@ -6,7 +6,7 @@ import numpy as np
 
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 # How to test with matplotlib
 # https://stackoverflow.com/questions/63541241/networkx-drawing-in-layered-manner
@@ -91,6 +91,7 @@ def test_graph_pos_simple(graph, expected_layers, expected_pos):
         assert (
             np.isclose(expected_pos[node_name], pos[node_name])
         ).all(), f"Node {node_name} is incorrect"
+
 
 @pytest.mark.skip(reason="need to automate matplotlib test")
 @pytest.mark.parametrize(

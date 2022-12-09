@@ -27,5 +27,5 @@ Manager
 ------------
 
 .. autoclass:: chimerapy.Manager
-   :members: __init__, register_graph, map_graph, commit_graph, step, start, stop, shutdown
+   :members: __init__, commit_graph, step, start, stop, shutdown
    :member-order: bysource

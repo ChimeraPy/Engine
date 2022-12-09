@@ -118,20 +118,16 @@ This message informs us that the :class:`Worker<chimerapy.Worker>` connected suc
 Worker-Node Mapping
 ===================
 
-After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>` to the :class:`Workers<chimerapy.Worker>`. First, you register the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>` to verify a valid graph. Then, through a dictionary mapping, where the keys are the workers' names and the values are list of the nodes' names, we can specify which workers will perform which node tasks. Here is an example::
+After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>` to the :class:`Workers<chimerapy.Worker>`. This is achieved by using a :class:`Graph<chimerapy.Graph>` object and a mapping between the workers and the nodes. Then, through a dictionary mapping, where the keys are the workers' names and the values are list of the nodes' names, we can specify which workers will perform which node tasks. Here is an example::
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(
-        {
+    manager.commit_graph(
+        graph=graph,
+        mapping={
             "local": ["source", "step"],
-        }
+        },
+        timeout=10
     )
-
-    # Commiting the graph by sending it to the workers
-    manager.commit_graph(timeout=10)
 
 We then commit the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>`. All the :class:`Nodes'<chimerapy.Node>` code are located within the :class:`Manager's<chimerapy.Manager>` computer; therefore, these compartmentalized code needs to be sent to the :class:`Workers<chimerapy.Worker>`. The ``commit_graph`` routine can take some time based on the number of :class:`Worker<chimerapy.Worker>`, :class:`Nodes<chimerapy.Node>`, and their code size hence waiting until all nodes are ready.
 

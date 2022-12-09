@@ -14,8 +14,10 @@ import pytest
 import chimerapy as cp
 
 # Internal Imports
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 from .data_nodes import VideoNode
+
+# cp.debug()
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -23,12 +25,19 @@ TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
-def video_node():
+def video_node_step():
 
     # Create a node
-    vn = VideoNode(name="vn")
-    vn.config("", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
-    vn._prep()
+    vn = VideoNode(name="vn", debug="step")
+
+    return vn
+
+
+@pytest.fixture
+def video_node_stream():
+
+    # Create a node
+    vn = VideoNode(name="vn", debug="stream")
 
     return vn
 
@@ -96,10 +105,10 @@ def test_save_handler_video(save_handler_and_queue):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_single_step(video_node):
+def test_node_save_video_single_step(video_node_step, logreceiver):
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
+    expected_video_path = video_node_step.logdir / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
@@ -107,34 +116,32 @@ def test_node_save_video_single_step(video_node):
 
     fps = 30
     for i in range(fps * 5):
-        video_node.step()
+        video_node_step.step()
 
     # Stop the node the ensure video completion
-    video_node.shutdown()
-    video_node._teardown()
+    video_node_step.shutdown()
 
     # Check that the video was created
     assert expected_video_path.exists()
 
 
-def test_node_save_video_stream(video_node):
+def test_node_save_video_stream(video_node_stream, logreceiver):
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
+    expected_video_path = video_node_stream.logdir / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    video_node.start()
+    video_node_stream.start()
 
     # Wait to generate files
     time.sleep(10)
 
-    video_node.shutdown()
-    video_node._teardown()
-    video_node.join()
+    video_node_stream.shutdown()
+    video_node_stream.join()
 
     # Check that the video was created
     assert expected_video_path.exists()

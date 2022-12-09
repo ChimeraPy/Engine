@@ -15,7 +15,7 @@ import pytest
 import chimerapy as cp
 from .mock import DockeredWorker
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
@@ -63,7 +63,7 @@ def logreceiver():
         # Create server and logger to relay messages
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.bind(("127.0.0.1", 5555))
-        logger = logging.getLogger("")
+        logger = cp._logger.getLogger("chimerapy")
 
         # Continue listening until signaled to stop
         while True:

@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List, Union
+from typing import Dict, Optional, List, Union, Any
 import socket
 import logging
 import pdb
@@ -8,16 +8,20 @@ import time
 import datetime
 import json
 import random
+import tempfile
+import zipfile
 
 import dill
-
-logger = logging.getLogger("chimerapy")
 
 import networkx as nx
 
 from .server import Server
 from .graph import Graph
 from . import enums
+from .exceptions import CommitGraphError
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 
 class Manager:
@@ -45,9 +49,12 @@ class Manager:
         self.max_num_of_workers = max_num_of_workers
 
         # Create log directory to store data
-        timestamp = datetime.datetime.now().strftime("%Y_%m_%d:%H_%M_%S")
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         rand_num = random.randint(1000, 9999)
         self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
+
+        # Also create a tempfolder to store any miscellaneous files and folders
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Create a logging directory
         os.makedirs(self.logdir, exist_ok=True)
@@ -60,6 +67,7 @@ class Manager:
         self.nodes_server_table: Dict = {}
         self.start_time: Optional[datetime.datetime] = None
         self.stop_time: Optional[datetime.datetime] = None
+        self.duration: int = 0
 
         # Specifying the handlers for worker2manager communication
         self.handlers = {
@@ -412,6 +420,67 @@ class Manager:
 
             miss_counter += 1
 
+    def register_graph(self, graph: Graph):
+        """Verifying that a Graph is valid, that is a DAG.
+
+        In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
+        Registering the graph is the first step to setting up the data
+        pipeline in  the cluster.
+
+        Args:
+            graph (Graph): A directed acyclic graph.
+
+        """
+        # First, check if graph is valid
+        if not graph.is_valid():
+            logger.error("Invalid Graph - rejected!")
+            raise CommitGraphError("Invalid Graph, not DAG - rejected!")
+
+        # Else, let's save it
+        self.graph = graph
+
+    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
+        """Mapping ``Node`` from graph to ``Worker`` from cluster.
+
+        The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
+        going to execute which ``Node``s.
+
+        Args:
+            worker_graph_map (Dict[str, List[str]]): The keys are the \
+            ``Worker``'s name and the values should be a list of \
+            the ``Node``'s names that will be executed within its corresponding\
+            ``Worker`` key.
+
+        """
+        # Tracking valid inputs
+        checks = []
+
+        # First, check if the mapping is valid!
+        for worker_name in worker_graph_map:
+
+            # First check if the worker is registered!
+            if worker_name not in self.workers:
+                logger.error(f"{worker_name} is not register to Manager.")
+                checks.append(False)
+                break
+            else:
+                checks.append(True)
+
+            # Then check if the node exists in the graph
+            for node_name in worker_graph_map[worker_name]:
+                if not self.graph.has_node_by_name(node_name):
+                    logger.error(f"{node_name} is not in Manager's graph.")
+                    checks.append(False)
+                    break
+                else:
+                    checks.append(True)
+
+        if not all(checks):
+            raise CommitGraphError("Mapping is invalid")
+
+        # Save the worker graph
+        self.worker_graph_map = worker_graph_map
+
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
@@ -462,75 +531,47 @@ class Manager:
         self.request_connection_creation()
 
     ####################################################################
+    ## Package and Dependency Management
+    ####################################################################
+
+    def distribute_packages(self, packages_meta: List[Dict[str, Any]]):
+
+        # For each package requested, send the packages to be used
+        # by the connected Workers.
+        for package_meta in packages_meta:
+            package_name = package_meta["name"]
+            package_path = package_meta["path"]
+
+            # We do so by sending compressed zip files of the packages
+            zip_package_dst = self.tempfolder / f"{package_name}.zip"
+            with zipfile.PyZipFile(str(zip_package_dst), mode="w") as zip_pkg:
+                zip_pkg.writepy(package_path)
+
+            # Send it to the workers and let them know to load the
+            # send package
+            for worker_name in self.workers:
+                self.server.send_file(name="Manager", filepath=zip_package_dst)
+
+        for worker_name in self.workers:
+            self.server.send(
+                self.workers[worker_name]["socket"],
+                {
+                    "signal": enums.MANAGER_REQUEST_CODE_LOAD,
+                    "data": {"packages": [x["name"] for x in packages_meta]},
+                },
+            )
+
+    ####################################################################
     ## User API
     ####################################################################
 
-    def register_graph(self, graph: Graph):
-        """Verifying that a Graph is valid, that is a DAG.
-
-        In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
-        Registering the graph is the first step to setting up the data
-        pipeline in  the cluster.
-
-        Args:
-            graph (Graph): A directed acyclic graph.
-
-        """
-        # First, check if graph is valid
-        if not graph.is_valid():
-            logger.error("Invalid Graph - rejected!")
-            raise RuntimeError("Invalid Graph - rejected!")
-
-        # Else, let's save it
-        self.graph = graph
-        self.commitable_graph = False
-
-    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
-        """Mapping ``Node`` from graph to ``Worker`` from cluster.
-
-        The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
-        going to execute which ``Node``s.
-
-        Args:
-            worker_graph_map (Dict[str, List[str]]): The keys are the \
-            ``Worker``'s name and the values should be a list of \
-            the ``Node``'s names that will be executed within its corresponding\
-            ``Worker`` key.
-
-        """
-        # Tracking valid inputs
-        checks = []
-
-        # First, check if the mapping is valid!
-        for worker_name in worker_graph_map:
-
-            # First check if the worker is registered!
-            if worker_name not in self.workers:
-                logger.error(f"{worker_name} is not register to Manager.")
-                checks.append(False)
-                break
-            else:
-                checks.append(True)
-
-            # Then check if the node exists in the graph
-            for node_name in worker_graph_map[worker_name]:
-                if not self.graph.has_node_by_name(node_name):
-                    logger.error(f"{node_name} is not in Manager's graph.")
-                    checks.append(False)
-                    break
-                else:
-                    checks.append(True)
-
-        # If everything is okay, we are approved to commit the graph
-        if all(checks):
-            self.commitable_graph = True
-        else:
-            self.commitable_graph = False
-
-        # Save the worker graph
-        self.worker_graph_map = worker_graph_map
-
-    def commit_graph(self, timeout: Optional[Union[int, float]] = None):
+    def commit_graph(
+        self,
+        graph: Graph,
+        mapping: Dict[str, List[str]],
+        timeout: Optional[Union[int, float]] = None,
+        send_packages: Optional[List[Dict[str, pathlib.Path]]] = None,
+    ):
         """Committing ``Graph`` to the cluster.
 
         Committing refers to how the graph itself (with its nodes and edges)
@@ -550,10 +591,13 @@ class Manager:
         ``Nodes``.
 
         """
-        # First, check that the graph has been cleared
-        assert self.commitable_graph, logger.error(
-            "Tried to commit graph that hasn't been confirmed or ready"
-        )
+        # First, test that the graph and the mapping are valid
+        self.register_graph(graph)
+        self.map_graph(mapping)
+
+        # Then send requested packages
+        if send_packages:
+            self.distribute_packages(send_packages)
 
         # First, create the network
         self.create_p2p_network()
@@ -631,6 +675,7 @@ class Manager:
         """
         # Mark the start time
         self.stop_time = datetime.datetime.now()
+        self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to stop
         self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
@@ -640,17 +685,26 @@ class Manager:
         # Wait until the nodes first finished writing down the data
         self.wait_until_all_nodes_saved(timeout=timeout)
 
-        # Request for archives to be send
-        self.server.broadcast({"signal": enums.MANAGER_REQUEST_COLLECT, "data": {}})
+        # Collect from each worker individually
+        for worker_name in self.workers:
 
-        # Wail until all workers have responded with their node server data
-        self.wait_until_all_workers_responded(
-            attribute="collection_complete", timeout=timeout
-        )
+            # Request
+            self.server.send(
+                self.workers[worker_name]["socket"],
+                {
+                    "signal": enums.MANAGER_REQUEST_COLLECT,
+                    "data": {"path": self.logdir},
+                },
+            )
+
+            # Wait until
+            self.wait_until_worker_respond(
+                worker_name, attribute="collection_complete", timeout=self.duration
+            )
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
-        logger.info(f"{self}: data collection complete!")
+        logger.info(f"{self}: Data collection complete!")
 
         # Add the meta data to the archive
         self.save_meta()

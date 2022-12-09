@@ -1,5 +1,5 @@
 # Built-in Imports
-from typing import Literal, Callable, Dict
+from typing import Literal, Callable, Dict, Any
 import os
 import logging
 import collections
@@ -18,10 +18,12 @@ import math
 # Third-party Imports
 
 # Internal Imports
+from . import socket_handling as sh
 from .utils import create_payload, decode_payload
 from . import enums
+from . import _logger
 
-logger = logging.getLogger("chimerapy")
+logger = _logger.getLogger("chimerapy-networking")
 
 
 class Client(threading.Thread):
@@ -55,6 +57,8 @@ class Client(threading.Thread):
 
         # Creating tempfolder to host items
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
+        self.handlers.update({enums.FILE_TRANSFER_START: self.receive_file})
+        self.file_transfer_records = collections.defaultdict(dict)
 
         # Create the socket and connect
         try:
@@ -115,69 +119,32 @@ class Client(threading.Thread):
         # Continue checking for messages from client until not running
         while self.is_running.is_set():
 
-            # Check if the socket is closed
-            if self.socket.fileno() == -1:
-                break
-
-            # Get message while not blocking
+            # Monitor the socket
             try:
-                # Get the data
-                bs = self.socket.recv(8)
-
-                # If null, skip
-                if bs == b"":
-                    continue
-
-                # Get the length
-                (length,) = struct.unpack(">Q", bs)
-                data = b""
-
-                # Use the length to get the entire message
-                while len(data) < int(length):
-                    to_read = int(length) - len(data)
-                    data += self.socket.recv(4096 if to_read > 4096 else to_read)
-
-            except socket.timeout:
-                continue
-
-            # If end, stop it
-            if data == b"":
+                success, msg = sh.monitor(self.name, self.socket)
+            except (ConnectionResetError, ConnectionAbortedError):
                 break
-
-            # Decode the message so we can process it
-            msg = decode_payload(data)
 
             # Process the msg
-            self.process_msg(msg)
+            if success:
+                self.process_msg(msg)
 
         self.socket.close()
 
     def send(self, msg: Dict, ack: bool = False):
 
-        # Create an uuid to track the message
-        msg_uuid = str(uuid.uuid4())
-
-        # Convert msg data to bytes
-        msg_bytes, msg_length = create_payload(
-            type=self.sender_msg_type,
-            signal=msg["signal"],
-            data=msg["data"],
+        # Sending the data
+        success, msg_uuid = sh.send(
+            name=self.name,
+            s=self.socket,
+            msg=msg,
+            sender_msg_type=self.sender_msg_type,
             ack=ack,
-            provided_uuid=msg_uuid,
         )
 
-        # Send the message
-        try:
-            self.socket.sendall(msg_length + msg_bytes)
-            logger.debug(f"{self}: send {msg['signal']}")
-        except socket.timeout:
-            logger.debug(f"{self}: Socket Timeout: skipping")
-            return
-        except:
-            logger.debug(
-                f"{self}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
-            )
-            return
+        # If not successful, skip ACK
+        if not success:
+            return None
 
         # If requested ACK, wait
         if ack:
@@ -198,61 +165,40 @@ class Client(threading.Thread):
 
                     miss_counter += 1
 
-    def send_folder(self, name: str, dir: pathlib.Path, buffersize: int = 4096):
+    def receive_file(self, msg: Dict[str, Any]):
 
-        assert (
-            dir.is_dir() and dir.exists()
-        ), f"Sending {dir} needs to be a folder that exists."
+        # Obtain the file
+        success, sender_name, dst_filepath = sh.file_transfer_receive(
+            name=self.name, s=self.socket, msg=msg, tempfolder=self.tempfolder
+        )
 
-        # First, we need to archive the folder into a zip file
-        format = "zip"
-        shutil.make_archive(str(dir), format, dir.parent, dir.name)
-        zip_file = dir.parent / f"{dir.name}.{format}"
+        # Create a record of the files transferred and from whom
+        if success:
+            self.file_transfer_records[sender_name][dst_filepath.name] = dst_filepath
 
-        # Relocate zip to the tempfolder
-        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
-        shutil.move(zip_file, temp_zip_file)
+    def send_file(self, name: str, filepath: pathlib.Path):
 
-        # Get information about the filesize
-        filesize = os.path.getsize(temp_zip_file)
-        max_num_steps = math.ceil(filesize / buffersize)
+        assert filepath.exists() and filepath.is_file()
 
-        # Now start the process of sending content to the server
-        # First, we send the message inciting file transfer
-        init_msg = {
-            "type": enums.WORKER_MESSAGE,
-            "signal": enums.FILE_TRANSFER_START,
-            "data": {
-                "name": name,
-                "filename": f"{dir.name}.{format}",
-                "filesize": filesize,
-                "buffersize": buffersize,
-                "max_num_steps": max_num_steps,
-            },
-        }
-        self.send(init_msg)
-        logger.debug(f"{self}: sent file transfer initialization")
+        sh.send_file(
+            sender_name=name,
+            sender_msg_type=self.sender_msg_type,
+            s=self.socket,
+            filepath=filepath,
+            buffersize=4096,
+        )
 
-        # Having counter tracking number of messages
-        msg_counter = 1
+    def send_folder(self, name: str, folderpath: pathlib.Path):
 
-        with open(temp_zip_file, "rb") as f:
-            while True:
+        assert folderpath.exists() and folderpath.is_dir()
 
-                # Read the data to be sent
-                data = f.read(buffersize)
-                if not data:
-                    break
-
-                logger.debug(
-                    f"{self}: file transfer, step {msg_counter}/{max_num_steps}"
-                )
-
-                # Send the data
-                self.socket.sendall(data)
-                msg_counter += 1
-
-        logger.debug(f"{self}: finished file transfer")
+        sh.send_folder(
+            name=name,
+            s=self.socket,
+            dir=folderpath,
+            tempfolder=self.tempfolder,
+            sender_msg_type=self.sender_msg_type,
+        )
 
     def shutdown(self):
 

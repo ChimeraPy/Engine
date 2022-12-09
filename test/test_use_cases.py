@@ -12,12 +12,13 @@ import imutils
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-from chimerapy import Node, Graph
+import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
+# cp.debug(["chimerapy-networking", "chimerapy-subprocess"])
 
 
-class WebcamNode(Node):
+class WebcamNode(cp.Node):
     def prep(self):
         self.vid = cv2.VideoCapture(0)
 
@@ -30,7 +31,7 @@ class WebcamNode(Node):
         self.vid.release()
 
 
-class ScreenCapture(Node):
+class ScreenCapture(cp.Node):
     def prep(self):
 
         # https://stackoverflow.com/questions/8257385/automatic-detection-of-display-availability-with-matplotlib
@@ -49,7 +50,7 @@ class ScreenCapture(Node):
             return np.ones((400, 400))
 
 
-class ShowWindow(Node):
+class ShowWindow(cp.Node):
     def step(self, data: Dict[str, Any]):
 
         # time.sleep(1/20)
@@ -68,7 +69,7 @@ class ShowWindow(Node):
     #     cv2.destroyAllWindows()
 
 
-class CombineAndShow(Node):
+class CombineAndShow(cp.Node):
     def step(self, data: Dict[str, Any]):
 
         web_frame = data["web"]
@@ -92,7 +93,7 @@ def webcam_graph():
     web = WebcamNode(name="web")
     show = ShowWindow(name="show")
 
-    graph = Graph()
+    graph = cp.Graph()
     graph.add_nodes_from([web, show])
     graph.add_edge(src=web, dst=show)
 
@@ -105,7 +106,7 @@ def screencapture_graph():
     screen = ScreenCapture(name="screen")
     show = ShowWindow(name="show")
 
-    graph = Graph()
+    graph = cp.Graph()
     graph.add_nodes_from([screen, show])
     graph.add_edge(src=screen, dst=show)
 
@@ -119,7 +120,7 @@ def combine_videos_graph():
     screen = ScreenCapture(name="screen")
     combine = CombineAndShow(name="combine")
 
-    graph = Graph()
+    graph = cp.Graph()
     graph.add_nodes_from([screen, web, combine])
     graph.add_edge(src=screen, dst=combine)
     graph.add_edge(src=web, dst=combine)
@@ -153,8 +154,8 @@ def test_open_camera_in_another_process():
     "graph, mapping",
     [
         (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
-        (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
-        (lazy_fixture("combine_videos_graph"), {"local": ["screen", "combine", "web"]}),
+        # (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
+        # (lazy_fixture("combine_videos_graph"), {"local": ["screen", "combine", "web"]}),
     ],
 )
 def test_use_case_graph(manager, worker, graph, mapping):
@@ -163,11 +164,7 @@ def test_use_case_graph(manager, worker, graph, mapping):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.register_graph(graph)
-
-    # Specify what nodes to what worker
-    manager.map_graph(mapping)
-    manager.commit_graph(timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
 
     # Take a single step and see if the system crashes and burns
     manager.start()

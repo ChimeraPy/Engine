@@ -9,7 +9,7 @@ from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 
 class LowFrequencyNode(cp.Node):
@@ -80,47 +80,38 @@ def step_down_graph():
 
 
 @pytest.mark.parametrize(
-    "_manager, _worker, config_graph, follow",
+    "config_graph, follow",
     [
         (
-            lazy_fixture("manager"),
-            lazy_fixture("worker"),
             lazy_fixture("step_up_graph"),
             "up",
         ),
         (
-            lazy_fixture("manager"),
-            lazy_fixture("worker"),
             lazy_fixture("step_down_graph"),
             "down",
         ),
     ],
 )
-def test_node_frequency_execution(_manager, _worker, config_graph, follow):
+def test_node_frequency_execution(manager, worker, config_graph, follow):
 
-    # Connect to the _manager
-    _worker.connect(host=_manager.host, port=_manager.port)
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
 
-    # Then register graph to _manager
-    _manager.register_graph(config_graph)
-
-    # Specify what nodes to what _worker
-    _manager.map_graph(
+    # Then register graph to manager
+    manager.commit_graph(
+        config_graph,
         {
             "local": ["hf", "lf", "sn"],
-        }
+        },
     )
 
-    # Commiting the graph by sending it to the _workers
-    _manager.commit_graph(timeout=10)
-
     # Take a single step and see if the system crashes and burns
-    _manager.start()
+    manager.start()
     time.sleep(3)
-    _manager.stop()
+    manager.stop()
 
     # Then request gather and confirm that the data is valid
-    latest_data_values = _manager.gather()
+    latest_data_values = manager.gather()
     logger.info(f"Data Values: {latest_data_values}")
     step_records = latest_data_values["sn"]
 

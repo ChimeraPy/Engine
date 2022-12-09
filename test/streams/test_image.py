@@ -12,7 +12,7 @@ import pytest
 # Internal Imports
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 from .data_nodes import ImageNode
 
 # Constants
@@ -21,12 +21,19 @@ TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
-def image_node():
+def image_node_step():
 
     # Create a node
-    img_n = ImageNode(name="img_n")
-    img_n.config("", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
-    img_n._prep()
+    img_n = ImageNode(name="img_n", debug="step")
+
+    return img_n
+
+
+@pytest.fixture
+def image_node_stream():
+
+    # Create a node
+    img_n = ImageNode(name="img_n", debug="stream")
 
     return img_n
 
@@ -90,44 +97,42 @@ def test_save_handler_image(save_handler_and_queue):
     assert expected_image_path.exists()
 
 
-def test_node_save_image_single_step(image_node):
+def test_node_save_image_single_step(image_node_step):
 
     # Check that the image was created
-    expected_image_path = image_node.logdir / "test" / "0.png"
+    expected_image_path = image_node_step.logdir / "test" / "0.png"
     try:
         os.rmdir(expected_image_path.parent)
     except OSError:
         ...
 
     for i in range(5):
-        image_node.step()
+        image_node_step.step()
 
     # Stop the node the ensure image completion
-    image_node.shutdown()
-    image_node._teardown()
+    image_node_step.shutdown()
 
     # Check that the image was created
     assert expected_image_path.exists()
 
 
-def test_node_save_image_stream(image_node):
+def test_node_save_image_stream(image_node_stream):
 
     # Check that the image was created
-    expected_image_path = image_node.logdir / "test" / "0.png"
+    expected_image_path = image_node_stream.logdir / "test" / "0.png"
     try:
         os.rmdir(expected_image_path.parent)
     except OSError:
         ...
 
     # Stream
-    image_node.start()
+    image_node_stream.start()
 
     # Wait to generate files
     time.sleep(10)
 
-    image_node.shutdown()
-    image_node._teardown()
-    image_node.join()
+    image_node_stream.shutdown()
+    image_node_stream.join()
 
     # Check that the image was created
     assert expected_image_path.exists()

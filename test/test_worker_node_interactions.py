@@ -14,8 +14,10 @@ import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
 from pytest_lazyfixture import lazy_fixture
+from .streams import AudioNode, VideoNode, ImageNode, TabularNode
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
+cp.debug()
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
@@ -59,13 +61,24 @@ def test_multiple_threads():
     assert q.qsize() == NUM
 
 
-# @linux_expected_only
-def test_create_multiple_nodes(logreceiver):
+def test_run_node_in_debug_mode(logreceiver):
+
+    data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
+
+    for i, node_cls in enumerate(data_nodes):
+        n = node_cls(name=f"{i}", debug="step")
+
+        for i in range(5):
+            n.step()
+
+        n.shutdown()
+
+
+def test_create_multiple_nodes_not_pickled(logreceiver):
 
     ns = []
     for i in range(3):
-        n = GenNode(name=f"G{i}")
-        n.config("0.0.0.0", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
+        n = VideoNode(name=f"G{i}", debug="stream")
         n.start()
         ns.append(n)
 
@@ -77,8 +90,7 @@ def test_create_multiple_nodes(logreceiver):
         assert n.exitcode == 0
 
 
-# @linux_expected_only
-def test_create_multiple_nodes_after_pickling():
+def test_create_multiple_nodes_after_pickling(logreceiver):
 
     ns = []
     for i in range(10):
@@ -109,7 +121,6 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-# @linux_expected_only
 @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 

@@ -12,7 +12,7 @@ import pytest
 import chimerapy as cp
 
 # Internal Imports
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 from .data_nodes import TabularNode
 
 # Constants
@@ -21,12 +21,19 @@ TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
-def tabular_node():
+def tabular_node_step():
 
     # Create a node
-    an = TabularNode(name="tn")
-    an.config("", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
-    an._prep()
+    an = TabularNode(name="tn", debug="step")
+
+    return an
+
+
+@pytest.fixture
+def tabular_node_stream():
+
+    # Create a node
+    an = TabularNode(name="tn", debug="stream")
 
     return an
 
@@ -89,10 +96,10 @@ def test_save_handler_tabular(save_handler_and_queue):
     assert expected_tabular_path.exists()
 
 
-def test_node_save_tabular_single_step(tabular_node):
+def test_node_save_tabular_single_step(tabular_node_step):
 
     # Check that the tabular was created
-    expected_tabular_path = tabular_node.logdir / "test.csv"
+    expected_tabular_path = tabular_node_step.logdir / "test.csv"
     try:
         os.remove(expected_tabular_path)
     except FileNotFoundError:
@@ -100,35 +107,33 @@ def test_node_save_tabular_single_step(tabular_node):
 
     # Write to tabular file
     for i in range(5):
-        tabular_node.step()
+        tabular_node_step.step()
 
     # Stop the node the ensure tabular completion
-    tabular_node.shutdown()
-    tabular_node._teardown()
+    tabular_node_step.shutdown()
     time.sleep(1)
 
     # Check that the tabular was created
     assert expected_tabular_path.exists()
 
 
-def test_node_save_tabular_stream(tabular_node):
+def test_node_save_tabular_stream(tabular_node_stream):
 
     # Check that the tabular was created
-    expected_tabular_path = tabular_node.logdir / "test.csv"
+    expected_tabular_path = tabular_node_stream.logdir / "test.csv"
     try:
         os.remove(expected_tabular_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    tabular_node.start()
+    tabular_node_stream.start()
 
     # Wait to generate files
     time.sleep(10)
 
-    tabular_node.shutdown()
-    tabular_node._teardown()
-    tabular_node.join()
+    tabular_node_stream.shutdown()
+    tabular_node_stream.join()
 
     # Check that the tabular was created
     assert expected_tabular_path.exists()

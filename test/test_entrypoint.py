@@ -5,12 +5,13 @@ import sys
 
 # Third-party Imports
 import pytest
+import chimerapy as cp
 
 # Test Import
 from .mock import DockeredWorker
 from .conftest import linux_run_only
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
 
 
 @linux_run_only

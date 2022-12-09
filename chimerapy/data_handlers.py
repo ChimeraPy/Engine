@@ -4,7 +4,9 @@ import logging
 import threading
 import queue
 
-logger = logging.getLogger("chimerapy")
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 # Internal Imports
 from . import enums

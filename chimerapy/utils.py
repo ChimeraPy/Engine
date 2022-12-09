@@ -13,7 +13,9 @@ import netifaces as ni
 from tqdm import tqdm
 import lz4.block
 
-logger = logging.getLogger("chimerapy")
+from . import _logger
+
+logger = _logger.getLogger("chimerapy")
 
 
 def threaded(fn):

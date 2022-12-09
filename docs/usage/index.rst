@@ -14,3 +14,4 @@ This section covers the following:
    basics
    defining_pipeline
    intro_tutorial
+   debugging_nodes

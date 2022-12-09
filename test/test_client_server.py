@@ -15,7 +15,8 @@ import pdb
 
 import chimerapy as cp
 
-logger = logging.getLogger("chimerapy")
+logger = cp._logger.getLogger("chimerapy")
+# cp.debug()
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
@@ -155,30 +156,22 @@ def test_server_broadcast_to_multiple_clients(server):
         _client.shutdown()
 
 
-@pytest.mark.repeat(10)
+# @pytest.mark.repeat(10)
 @pytest.mark.parametrize(
-    "_server,_client,dir",
+    "dir",
     [
-        (
-            lazy_fixture("server"),
-            lazy_fixture("client"),
-            TEST_DIR / "mock" / "data" / "simple_folder",
-        ),
-        (
-            lazy_fixture("server"),
-            lazy_fixture("client"),
-            TEST_DIR / "mock" / "data" / "chimerapy_logs",
-        ),
+        (TEST_DIR / "mock" / "data" / "simple_folder"),
+        (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
     ],
 )
-def test_client_sending_folder_to_server(_server, _client, dir):
+def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    _client.send_folder("test", dir)
+    client.send_folder(name="test", folderpath=dir)
 
     # Get the expected behavior
     miss_counter = 0
-    while len(_server.file_transfer_records.keys()) == 0:
+    while len(server.file_transfer_records.keys()) == 0:
 
         miss_counter += 1
         time.sleep(0.1)
@@ -187,25 +180,46 @@ def test_client_sending_folder_to_server(_server, _client, dir):
             assert False, "File transfer failed after 10 second"
 
 
-@pytest.mark.repeat(10)
-def test_server_compression_decompression_not_missing_data(server, client):
+@pytest.mark.parametrize(
+    "dir",
+    [
+        (TEST_DIR / "mock" / "data" / "simple_folder"),
+        (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
+    ],
+)
+def test_server_boradcast_file_to_clients(server, dir):
 
-    # Information that is causing an issue
-    # nodes_server_table = {'screen': {'host': '127.0.1.1', 'port': 5000}, 'combine': {'host': '127.0.1.1', 'port': 5010}, 'web': {'host': '127.0.1.1', 'port': 5020}}
-    # msg = {'signal': 'MANAGER_BROADCAST_NODE_SERVER_DATA', 'data': {'screen': {'host': '127.0.1.1', 'port': 5000}, 'combine': {'host': '127.0.1.1', 'port': 5010}, 'web': {'host': '127.0.1.1', 'port': 5020}}}
+    clients = []
+    for i in range(5):
+        _client = cp.Client(
+            host=server.host,
+            port=server.port,
+            name=f"test-{i}",
+            connect_timeout=2,
+            sender_msg_type=cp.WORKER_MESSAGE,
+            accepted_msg_type=cp.MANAGER_MESSAGE,
+            handlers={"echo": echo, "SHUTDOWN": echo},
+        )
+        _client.start()
+        clients.append(_client)
 
-    # msg_bytes = b'\x1f\x8b\x08\x00j(Gc\x02\xff\x8d\x8c\xbb\x0e\x82@\x10E\x7f\x85l-d\x16%>\xbaU\x88\x15\x98\x80\xb1%\xb3\x0f\x95(\x8f\xc0\x12c\x0c\xff\xee\x8e\x95%\xc9\x14\xf7\x9e93\x1ff\xdf\x9da;\x8f\xa5"\x13\xc7$/\xd3\xa4(\\`\x0b\x8f\r\xd5\xad\xc1\xe7\xffr\x9f\x9fD|\x10\xc5\xb9\xccNqR\x16I~q4\x16gA\xbe\xadj3X\xac;:\x81\x1d\xd0\x10\x1f\xc7J\x13\xda*\xe0:\x02\xe5\xab\xe5U\xfb+\x89k_\x9a\x8d\xf2Q\xca\x10\xb4\x94K\x8c\x90|\x8d\x16\x9d\xffa\x83\xea\x8di~\xf1\xde\x0e\x96~\xf0p\x1d@\xc0\x03Nb\xd7\xf6\x04#\x00\x98\\Um-\xab\xc6\xcc\xf0\xf9\xcf\x7f\x199\xc3\ra"\x19\xd5\xc3U\x98\xbe\xd6\xe8\xbbr2\x01\x00\x00'
+    # Wait until all clients are connected
+    while len(server.client_comms) <= 4:
+        time.sleep(0.1)
 
-    # server.broadcast(
-    #     {
-    #         "signal": cp.enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
-    #         "data": nodes_server_table,
-    #     }
-    # )
+    # Broadcast file
+    server.send_folder(name="test", folderpath=dir)
 
-    server.broadcast(
-        {
-            "signal": cp.enums.MANAGER_REQUEST_NODE_SERVER_DATA,
-            "data": {},
-        }
-    )
+    # Check all clients files
+    for client in clients:
+        miss_counter = 0
+        while len(client.file_transfer_records.keys()) == 0:
+
+            miss_counter += 1
+            time.sleep(0.1)
+
+            if miss_counter > 100:
+                assert False, "File transfer failed after 10 second"
+
+    for _client in clients:
+        _client.shutdown()

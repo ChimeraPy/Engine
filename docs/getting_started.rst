@@ -21,7 +21,7 @@ To confirm that the installation went smoothly, you can test importing the packa
 
     python
     >>> import chimerapy as cp
-    >>>
+    >>> # Successful importing YAY!
 
 After confirming that your installation is ready to go, you can start using ChimeraPy.
 
