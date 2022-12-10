@@ -570,7 +570,7 @@ class Manager:
         graph: Graph,
         mapping: Dict[str, List[str]],
         timeout: Optional[Union[int, float]] = None,
-        send_packages: Optional[List[Dict[str, pathlib.Path]]] = None,
+        send_packages: Optional[List[Dict[str, Any]]] = None,
     ):
         """Committing ``Graph`` to the cluster.
 
@@ -693,7 +693,7 @@ class Manager:
                 self.workers[worker_name]["socket"],
                 {
                     "signal": enums.MANAGER_REQUEST_COLLECT,
-                    "data": {"path": self.logdir},
+                    "data": {"path": str(self.logdir)},
                 },
             )
 

@@ -1,3 +1,58 @@
+[project]
+name = "chimerapy"
+version = "0.0.7"
+description = "ChimeraPy: Python Distributed MultiModal Data Framework"
+authors = [
+    {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"}
+]
+license = {file = "LICENSE.txt"}
+readme = "README.md"
+requires-python = ">3.6"
+
+keywords = ["multimodal", "data", "distributed", "streaming", "real-time"]
+
+classifiers = [
+    "Programming Language :: Python :: 3"
+]
+
+dependencies = [
+    'networkx',
+    'lz4',
+    'dill',
+    'netifaces',
+    'matplotlib',
+    'multiprocess',
+    'opencv-python',
+    'ffmpeg-python',
+    'pyaudio',
+    'pandas',
+    'tqdm'
+]
+
+[project.optional-dependencies]
+test = [
+    'pytest',
+    'pytest-repeat',
+    'pytest-lazy-fixture',
+    'pytest-order',
+    'coveralls',
+    'pre-commit',
+    'docker',
+    'numpy',
+    'imutils',
+    'mss',
+    # 'test_package @ file://localhost/home/eduardo/GitHub/ChimeraPy/test/mock'
+]
+
+[project.urls]
+homepath = "https://github.com/oele-isis-vanderbilt/ChimeraPy"
+documentation = "https://oele-isis-vanderbilt.github.io/ChimeraPy/"
+repository = "https://github.com/oele-isis-vanderbilt/ChimeraPy"
+
+# Entrypoint
+[project.scripts]
+cp-worker = "chimerapy.entry.worker:main"
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"

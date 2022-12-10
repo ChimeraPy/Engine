@@ -291,6 +291,7 @@ class Worker:
                 f"{sent_package}.zip"
             ]
             assert package_zip_path.exists()
+            logger.info(f"{self}: Appending to path: {package_zip_path}")
             sys.path.insert(0, package_zip_path)
 
     def send_archive(self, msg: Dict):
@@ -310,7 +311,7 @@ class Worker:
             timeout = 10
             while True:
                 try:
-                    shutil.move(self.tempfolder, msg["data"]["path"])
+                    shutil.move(self.tempfolder, pathlib.Path(msg["data"]["path"]))
                     break
                 except shutil.Error:  # File already exists!
                     break
@@ -320,8 +321,8 @@ class Worker:
                     if miss_counter * delay > timeout:
                         raise TimeoutError("Nodes haven't fully finishing saving!")
 
-            old_folder_name = msg["data"]["path"] / self.tempfolder.name
-            new_folder_name = msg["data"]["path"] / self.name
+            old_folder_name = pathlib.Path(msg["data"]["path"]) / self.tempfolder.name
+            new_folder_name = pathlib.Path(msg["data"]["path"]) / self.name
             os.rename(old_folder_name, new_folder_name)
 
         else:
