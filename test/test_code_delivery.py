@@ -44,8 +44,7 @@ def packaged_node_graph():
     return graph
 
 
-# @linux_run_only
-@pytest.mark.skip()
+@linux_run_only
 @pytest.mark.parametrize(
     "config_graph",
     [

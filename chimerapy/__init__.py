@@ -15,7 +15,6 @@ from .graph import Graph
 from .client import Client
 from .server import Server
 from .enums import *
-from .utils import log
 from .data_handlers import SaveHandler
 
 # Then define the records
@@ -23,6 +22,7 @@ from . import records
 
 # Then define the entry points
 from . import entry
+from . import utils
 
 # Debugging tools
 from ._debug import debug

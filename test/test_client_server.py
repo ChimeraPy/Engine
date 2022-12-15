@@ -6,6 +6,7 @@ import pathlib
 import os
 import platform
 import tempfile
+import uuid
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
@@ -27,7 +28,6 @@ def echo(msg: Dict, s: socket.socket = None):
     ...
 
 
-@cp.log
 def show_image(msg: Dict, s: socket.socket = None):
     img = msg["data"]
     assert img.shape[0] == IMG_SIZE

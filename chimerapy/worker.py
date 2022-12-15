@@ -292,7 +292,7 @@ class Worker:
             ]
             assert package_zip_path.exists()
             logger.info(f"{self}: Appending to path: {package_zip_path}")
-            sys.path.insert(0, package_zip_path)
+            sys.path.insert(0, str(package_zip_path))
 
     def send_archive(self, msg: Dict):
 

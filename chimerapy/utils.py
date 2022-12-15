@@ -11,7 +11,7 @@ import pickle
 
 import netifaces as ni
 from tqdm import tqdm
-import lz4.block
+import blosc
 
 from . import _logger
 
@@ -105,19 +105,16 @@ def create_payload(
         "ack": int(ack),
     }
 
-    b_payload = pickle.dumps(payload)
-    compressed_bytes_payload = lz4.block.compress(b_payload)
+    b_payload = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
+    compressed_bytes_payload = blosc.compress(b_payload)
 
-    finished_payload = compressed_bytes_payload
-
-    return finished_payload, struct.pack(">Q", len(finished_payload))
+    return compressed_bytes_payload, struct.pack(">Q", len(compressed_bytes_payload))
 
 
 def decode_payload(data: bytes) -> Dict:
 
-    bytes_payload = lz4.block.decompress(data)
-    # bytes_payload = gzip.decompress(data)
-    payload: Dict = pickle.loads(bytes_payload)
+    bytes_payload = blosc.decompress(data)
+    payload = pickle.loads(bytes_payload)
 
     return payload
 

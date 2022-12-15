@@ -41,7 +41,6 @@ test = [
     'numpy',
     'imutils',
     'mss',
-    # 'test_package @ file://localhost/home/eduardo/GitHub/ChimeraPy/test/mock'
 ]
 
 [project.urls]

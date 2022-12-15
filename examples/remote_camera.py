@@ -66,8 +66,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show"]}
+    mapping = {"remote": ["web"], "local": ["show"]}
+    # mapping = {"local": ["web", "show"]}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
