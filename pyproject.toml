@@ -64,6 +64,12 @@ cp-worker = "chimerapy.entry.worker:main"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["test"]  # ["*"] by default
+
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
 [tool.pytest.ini_options]
