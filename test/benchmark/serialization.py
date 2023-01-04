@@ -69,11 +69,11 @@ def payload_serial_deserial_performance():
 
     operations = {
         "pickle": (pickle_se_op, pickle_de_op),
-        "pickle5": {pickle5_se_op, pickle5_de_op},
-        # 'nujson': {nujson_se_op, nujson_de_op}, # Too slow
-        # 'orjson': {orjson_se_op, orjson_de_op}, # Doesn't work with Numpy Arrays
-        "cloudpickle": {cloudpickle_se_op, cloudpickle_de_op},
-        "msgpack": {msgpack_se_op, msgpack_de_op},
+        "pickle5": (pickle5_se_op, pickle5_de_op),
+        # 'nujson': (nujson_se_op, nujson_de_op), # Too slow
+        # 'orjson': (orjson_se_op, orjson_de_op), # Doesn't work with Numpy Arrays
+        "cloudpickle": (cloudpickle_se_op, cloudpickle_de_op),
+        "msgpack": (msgpack_se_op, msgpack_de_op),
     }
 
     # Create msg data
@@ -91,6 +91,7 @@ def payload_serial_deserial_performance():
             b_payload = ser_fun(payload)
 
             tac = time.perf_counter()
+            assert type(b_payload) == bytes, f"{name}, {b_payload}"
             new_payload = des_fun(b_payload)
 
             toc = time.perf_counter()

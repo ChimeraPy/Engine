@@ -2,7 +2,6 @@ import sys
 import pathlib
 import os
 import pdb
-import subprocess
 
 import pytest
 from pytest_lazyfixture import lazy_fixture

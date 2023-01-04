@@ -1,6 +1,6 @@
 [project]
 name = "chimerapy"
-version = "0.0.7"
+version = "0.0.8"
 description = "ChimeraPy: Python Distributed MultiModal Data Framework"
 authors = [
     {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"}
@@ -17,7 +17,6 @@ classifiers = [
 
 dependencies = [
     'networkx',
-    'lz4',
     'dill',
     'netifaces',
     'matplotlib',
@@ -26,7 +25,8 @@ dependencies = [
     'ffmpeg-python',
     'pyaudio',
     'pandas',
-    'tqdm'
+    'tqdm',
+    'blosc'
 ]
 
 [project.optional-dependencies]
@@ -41,6 +41,14 @@ test = [
     'numpy',
     'imutils',
     'mss',
+]
+benchmark = [
+    'lz4',
+    'nujson',
+    'orjson',
+    'cloudpickle',
+    'msgpack',
+    'msgpack_numpy'
 ]
 
 [project.urls]
