@@ -68,7 +68,9 @@ build-backend = "setuptools.build_meta"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["test"]  # ["*"] by default
+where = ["."]
+include = ["*"]  # ["*"] by default
+namespaces = true
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
