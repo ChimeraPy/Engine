@@ -70,7 +70,7 @@ if __name__ == "__main__":
     # mapping = {"local": ["web", "show"]}
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Wail until user stops
     while True:

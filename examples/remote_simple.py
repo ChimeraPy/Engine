@@ -1,10 +1,14 @@
 from typing import Dict, Any
 import time
+import pathlib
+import os
 
 import cv2
 import imutils
 
 import chimerapy as cp
+
+CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class Producer(cp.Node):
@@ -37,7 +41,7 @@ class SimpleGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager()
+    manager = cp.Manager(logdir=CWD / "runs")
     graph = SimpleGraph()
     worker = cp.Worker(name="local")
     # worker2 = cp.Worker(name="remote")
@@ -56,11 +60,8 @@ if __name__ == "__main__":
     # Assuming one worker
     mapping = {"remote": ["prod"], "local": ["cons"]}
 
-    # Specify what nodes to what worker
-    manager.map_graph(mapping)
-
     # Commit the graph
-    manager.commit_graph(timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Wail until user stops
     while True:
