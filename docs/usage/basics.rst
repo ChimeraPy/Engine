@@ -125,8 +125,7 @@ After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>`
         graph=graph,
         mapping={
             "local": ["source", "step"],
-        },
-        timeout=10
+        }
     )
 
 We then commit the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>`. All the :class:`Nodes'<chimerapy.Node>` code are located within the :class:`Manager's<chimerapy.Manager>` computer; therefore, these compartmentalized code needs to be sent to the :class:`Workers<chimerapy.Worker>`. The ``commit_graph`` routine can take some time based on the number of :class:`Worker<chimerapy.Worker>`, :class:`Nodes<chimerapy.Node>`, and their code size hence waiting until all nodes are ready.

@@ -22,15 +22,9 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
 
     class WebcamNode(cp.Node):
         def prep(self):
-            import cv2
-
             self.vid = cv2.VideoCapture(0)
 
         def step(self):
-            import time
-            import numpy as np
-            import imutils
-
             time.sleep(1 / 30)
             ret, frame = self.vid.read()
             return imutils.resize(frame, width=100)
@@ -41,9 +35,6 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
 
     class ShowWindow(cp.Node):
         def step(self, data: Dict[str, Any]):
-            import cv2
-            import numpy as np
-
             frame = data["web"]
             if not isinstance(frame, np.ndarray):
                 return
@@ -80,7 +71,6 @@ With our DAG complete, the next step is configuring the network configuration an
 
         # Then register graph to Manager
         worker.connect(host=manager.host, port=manager.port)
-        manager.register_graph(graph)
 
         # Wait until workers connect
         while True:
@@ -94,11 +84,11 @@ With our DAG complete, the next step is configuring the network configuration an
         # Local Cluster Option
         mapping = {"local": ["web", "show"]}
 
-        # Specify what nodes to what worker
-        manager.map_graph(mapping)
-
         # Commit the graph
-        manager.commit_graph(timeout=10)
+        manager.commit_graph(
+            graph=graph,
+            mapping=mapping
+        )
 
         # Wail until user stops
         while True:
