@@ -10,6 +10,7 @@ import json
 import random
 import tempfile
 import zipfile
+from concurrent.futures import wait
 
 import dill
 
@@ -44,7 +45,7 @@ class Manager:
 
         """
         # Saving input parameters
-        # self.host = socket.gethostbyname(socket.gethostname())
+        self.host = "localhost"
         self.port = port
         self.max_num_of_workers = max_num_of_workers
 
@@ -83,7 +84,7 @@ class Manager:
         # Create server
         self.server = Server(
             port=self.port,
-            name="Manager",
+            name=str(self),
             max_num_of_clients=self.max_num_of_workers,
             sender_msg_type=enums.MANAGER_MESSAGE,
             accepted_msg_type=enums.WORKER_MESSAGE,
@@ -94,6 +95,12 @@ class Manager:
 
         # Updating the manager's port to the found available port
         self.host, self.port = self.server.host, self.server.port
+
+    def __repr__(self):
+        return f"<Manager @{self.host}:{self.port}>"
+
+    def __str__(self):
+        return self.__repr__()
 
     ####################################################################
     ## Message Reactivity API
@@ -229,21 +236,25 @@ class Manager:
             return
 
         # Send for the creation of the node
-        self.server.send(
-            self.workers[worker_name]["socket"],
-            {
-                "signal": enums.MANAGER_CREATE_NODE,
-                "data": {
-                    "worker_name": worker_name,
-                    "node_name": node_name,
-                    "pickled": dill.dumps(
-                        self.graph.G.nodes[node_name]["object"], recurse=True
-                    ),
-                    "in_bound": list(self.graph.G.predecessors(node_name)),
-                    "out_bound": list(self.graph.G.successors(node_name)),
-                    "follow": self.graph.G.nodes[node_name]["follow"],
-                },
-            },
+        wait(
+            [
+                self.server.send(
+                    self.workers[worker_name]["socket"],
+                    {
+                        "signal": enums.MANAGER_CREATE_NODE,
+                        "data": {
+                            "worker_name": worker_name,
+                            "node_name": node_name,
+                            "pickled": dill.dumps(
+                                self.graph.G.nodes[node_name]["object"], recurse=True
+                            ),
+                            "in_bound": list(self.graph.G.predecessors(node_name)),
+                            "out_bound": list(self.graph.G.successors(node_name)),
+                            "follow": self.graph.G.nodes[node_name]["follow"],
+                        },
+                    },
+                )
+            ]
         )
 
     def wait_until_node_creation_complete(
@@ -285,9 +296,16 @@ class Manager:
                     )
 
                 # Send the request to each worker
-                self.server.send(
-                    self.workers[worker_name]["socket"],
-                    {"signal": enums.MANAGER_REQUEST_NODE_SERVER_DATA, "data": {}},
+                wait(
+                    [
+                        self.server.send(
+                            self.workers[worker_name]["socket"],
+                            {
+                                "signal": enums.MANAGER_REQUEST_NODE_SERVER_DATA,
+                                "data": {},
+                            },
+                        )
+                    ]
                 )
 
                 # Wait until response
@@ -322,12 +340,16 @@ class Manager:
                     )
 
                 # Send the request to each worker
-                self.server.send(
-                    self.workers[worker_name]["socket"],
-                    {
-                        "signal": enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
-                        "data": self.nodes_server_table,
-                    },
+                wait(
+                    [
+                        self.server.send(
+                            self.workers[worker_name]["socket"],
+                            {
+                                "signal": enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
+                                "data": self.nodes_server_table,
+                            },
+                        )
+                    ]
                 )
 
                 # Wait until response
@@ -552,14 +574,20 @@ class Manager:
             for worker_name in self.workers:
                 self.server.send_file(name="Manager", filepath=zip_package_dst)
 
+        # Send package finish confirmation
+        futures = []
         for worker_name in self.workers:
-            self.server.send(
+            future = self.server.send(
                 self.workers[worker_name]["socket"],
                 {
                     "signal": enums.MANAGER_REQUEST_CODE_LOAD,
                     "data": {"packages": [x["name"] for x in packages_meta]},
                 },
             )
+            futures.append(future)
+
+        # Wait until completion
+        wait(futures)
 
     ####################################################################
     ## User API
@@ -569,7 +597,6 @@ class Manager:
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
-        timeout: Optional[Union[int, float]] = None,
         send_packages: Optional[List[Dict[str, Any]]] = None,
     ):
         """Committing ``Graph`` to the cluster.
@@ -589,6 +616,19 @@ class Manager:
         is used to inform each ``Node`` where their in-bound and out-bound
         ``Nodes`` are located; thereby establishing the edges between
         ``Nodes``.
+
+        Args:
+            graph (cp.Graph): The graph to deploy within the cluster.
+            mapping (Dict[str, List[str]): Mapping from ``cp.Worker`` to\
+                ``cp.Nodes`` through a dictionary. The keys are the name\
+                of the workers, while the value is a list of the nodes' \
+                names.
+            send_packages (Optional[List[Dict[str, Any]]]): An optional
+                feature for transferring a local package (typically a \
+                development package not found via PYPI or Anaconda). \
+                Provide a list of packages with each package configured \
+                via dictionary with the following key-value pairs: \
+                name:``str`` and path:``pathlit.Path``.
 
         """
         # First, test that the graph and the mapping are valid
@@ -624,7 +664,7 @@ class Manager:
 
         # Send message for workers to inform all nodes to take a single
         # step
-        self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}})
+        wait(self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}}))
 
     def gather(self) -> Dict:
 
@@ -636,7 +676,9 @@ class Manager:
         self.mark_response_as_false_for_workers()
 
         # Request gathering the latest value of each node
-        self.server.broadcast({"signal": enums.MANAGER_REQUEST_GATHER, "data": {}})
+        wait(
+            self.server.broadcast({"signal": enums.MANAGER_REQUEST_GATHER, "data": {}})
+        )
 
         # Wail until all workers have responded with their node server data
         self.wait_until_all_workers_responded(attribute="gather", timeout=5)
@@ -664,7 +706,7 @@ class Manager:
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
+        wait(self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}}))
 
     def stop(self):
         """Stop the executiong of the cluster.
@@ -678,7 +720,7 @@ class Manager:
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to stop
-        self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
+        wait(self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}}))
 
     def collect(self, timeout: Optional[Union[int, float]] = None, unzip: bool = True):
         """Collect data archives across the cluster to the Manager's logs."""
@@ -689,12 +731,16 @@ class Manager:
         for worker_name in self.workers:
 
             # Request
-            self.server.send(
-                self.workers[worker_name]["socket"],
-                {
-                    "signal": enums.MANAGER_REQUEST_COLLECT,
-                    "data": {"path": str(self.logdir)},
-                },
+            wait(
+                [
+                    self.server.send(
+                        self.workers[worker_name]["socket"],
+                        {
+                            "signal": enums.MANAGER_REQUEST_COLLECT,
+                            "data": {"path": str(self.logdir)},
+                        },
+                    )
+                ]
             )
 
             # Wait until

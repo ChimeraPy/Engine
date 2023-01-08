@@ -9,6 +9,7 @@ import tempfile
 import pathlib
 import shutil
 import sys
+from concurrent.futures import wait
 
 import dill
 
@@ -78,7 +79,7 @@ class Worker:
         # Create server
         self.server = Server(
             port=8000,
-            name=f"Worker {self.name}",
+            name=str(self),
             max_num_of_clients=self.max_num_of_nodes,
             sender_msg_type=enums.WORKER_MESSAGE,
             accepted_msg_type=enums.NODE_MESSAGE,
@@ -166,11 +167,15 @@ class Worker:
         }
 
         if self.connected_to_manager:
-            self.client.send(
-                {
-                    "signal": enums.WORKER_REPORT_NODES_STATUS,
-                    "data": nodes_status_data,
-                },
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.WORKER_REPORT_NODES_STATUS,
+                            "data": nodes_status_data,
+                        },
+                    )
+                ]
             )
 
     def report_node_server_data(self, msg: Dict):
@@ -179,22 +184,28 @@ class Worker:
 
         # Then manager request the node server data, so provide it
         if self.connected_to_manager:
-            self.client.send(
-                {
-                    "signal": enums.WORKER_REPORT_NODE_SERVER_DATA,
-                    "data": node_server_data,
-                }
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.WORKER_REPORT_NODE_SERVER_DATA,
+                            "data": node_server_data,
+                        }
+                    )
+                ]
             )
 
     def process_node_server_data(self, msg: Dict):
 
         logger.debug(f"{self}: processing node server data")
 
-        self.server.broadcast(
-            {
-                "signal": enums.WORKER_BROADCAST_NODE_SERVER_DATA,
-                "data": msg["data"],
-            }
+        wait(
+            self.server.broadcast(
+                {
+                    "signal": enums.WORKER_BROADCAST_NODE_SERVER_DATA,
+                    "data": msg["data"],
+                }
+            )
         )
 
         # Now wait until all nodes have responded as CONNECTED
@@ -211,16 +222,27 @@ class Worker:
 
         # Update the nodes status
         if self.connected_to_manager:
-            self.client.send(
-                {
-                    "signal": enums.WORKER_REPORT_NODES_STATUS,
-                    "data": nodes_status_data,
-                },
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.WORKER_REPORT_NODES_STATUS,
+                            "data": nodes_status_data,
+                        },
+                    )
+                ]
             )
 
             # Then confirm that all the node server data has been distributed
-            self.client.send(
-                {"signal": enums.WORKER_COMPLETE_BROADCAST, "data": {"name": self.name}}
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.WORKER_COMPLETE_BROADCAST,
+                            "data": {"name": self.name},
+                        }
+                    )
+                ]
             )
 
     def node_report_gather(self, msg: Dict, node_socket: socket.socket):
@@ -238,11 +260,13 @@ class Worker:
         self.mark_all_response_as_false_for_nodes()
 
         # Request gather from Worker to Nodes
-        self.server.broadcast(
-            {
-                "signal": enums.WORKER_REQUEST_GATHER,
-                "data": {},
-            }
+        wait(
+            self.server.broadcast(
+                {
+                    "signal": enums.WORKER_REQUEST_GATHER,
+                    "data": {},
+                }
+            )
         )
 
         self.wait_until_all_nodes_responded(timeout=5)
@@ -253,7 +277,13 @@ class Worker:
             gather_data["node_data"][node_name] = node_data["gather"]
 
         # Send it back to the Manager
-        self.client.send({"signal": enums.WORKER_REPORT_GATHER, "data": gather_data})
+        wait(
+            [
+                self.client.send(
+                    {"signal": enums.WORKER_REPORT_GATHER, "data": gather_data}
+                )
+            ]
+        )
 
     def node_status_update(self, msg: Dict, s: socket.socket):
 
@@ -275,11 +305,15 @@ class Worker:
 
         # Update Manager on the new nodes status
         if self.connected_to_manager:
-            self.client.send(
-                {
-                    "signal": enums.WORKER_REPORT_NODES_STATUS,
-                    "data": nodes_status_data,
-                }
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.WORKER_REPORT_NODES_STATUS,
+                            "data": nodes_status_data,
+                        }
+                    )
+                ]
             )
 
     def load_sent_packages(self, msg: Dict):
@@ -339,11 +373,15 @@ class Worker:
                 success = False
 
         # After completion, let the Manager know
-        self.client.send(
-            {
-                "signal": enums.WORKER_TRANSFER_COMPLETE,
-                "data": {"name": self.name, "success": success},
-            }
+        wait(
+            [
+                self.client.send(
+                    {
+                        "signal": enums.WORKER_TRANSFER_COMPLETE,
+                        "data": {"name": self.name, "success": success},
+                    }
+                )
+            ]
         )
 
     ####################################################################
@@ -419,7 +457,7 @@ class Worker:
         self.client = Client(
             host=host,
             port=port,
-            name=f"Worker {self.name}",
+            name=str(self),
             connect_timeout=timeout,
             sender_msg_type=enums.WORKER_MESSAGE,
             accepted_msg_type=enums.MANAGER_MESSAGE,
@@ -428,15 +466,19 @@ class Worker:
         self.client.start()
 
         # Sending message to register
-        self.client.send(
-            msg={
-                "signal": enums.WORKER_REGISTER,
-                "data": {
-                    "name": self.name,
-                    "addr": socket.gethostbyname(socket.gethostname()),
-                },
-            },
-            ack=True,
+        wait(
+            [
+                self.client.send(
+                    msg={
+                        "signal": enums.WORKER_REGISTER,
+                        "data": {
+                            "name": self.name,
+                            "addr": socket.gethostbyname(socket.gethostname()),
+                        },
+                    },
+                    ack=True,
+                )
+            ]
         )
 
         # Tracking client state change
@@ -449,17 +491,22 @@ class Worker:
     def step(self, msg: Dict):
 
         # Worker tell all nodes to take a step
-        self.server.broadcast({"signal": enums.WORKER_REQUEST_STEP, "data": {}})
+        wait(self.server.broadcast({"signal": enums.WORKER_REQUEST_STEP, "data": {}}))
 
     def start_nodes(self, msg: Dict):
 
         # Send message to nodes to start
-        self.server.broadcast({"signal": enums.WORKER_START_NODES, "data": {}})
+        wait(self.server.broadcast({"signal": enums.WORKER_START_NODES, "data": {}}))
 
     def stop_nodes(self, msg: Dict):
 
         # Send message to nodes to start
-        self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}})
+        wait(self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}}))
+
+    def idle(self):
+
+        while not self.has_shutdown:
+            time.sleep(2)
 
     def shutdown(self, msg: Dict = {}):
         """Shutdown ``Worker`` safely.
@@ -497,15 +544,19 @@ class Worker:
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)
         if self.connected_to_manager:
-            self.client.send(
-                {
-                    "type": enums.WORKER_MESSAGE,
-                    "signal": enums.WORKER_DEREGISTER,
-                    "data": {
-                        "name": self.name,
-                        "addr": socket.gethostbyname(socket.gethostname()),
-                    },
-                },
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "type": enums.WORKER_MESSAGE,
+                            "signal": enums.WORKER_DEREGISTER,
+                            "data": {
+                                "name": self.name,
+                                "addr": socket.gethostbyname(socket.gethostname()),
+                            },
+                        },
+                    )
+                ]
             )
 
             # Shutdown client

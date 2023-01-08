@@ -164,7 +164,7 @@ def test_use_case_graph(manager, worker, graph, mapping):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Take a single step and see if the system crashes and burns
     manager.start()

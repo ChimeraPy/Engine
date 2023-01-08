@@ -1,25 +1,19 @@
 # Built-in Imports
-from typing import Literal, Callable, Dict, Any
-import os
-import logging
+from typing import Literal, Callable, Dict, Any, List, Tuple
 import collections
-import uuid
-import struct
-import pdb
 import pathlib
-import platform
 import tempfile
 import shutil
 import socket
 import threading
 import time
-import math
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 # Third-party Imports
 
 # Internal Imports
 from . import socket_handling as sh
-from .utils import create_payload, decode_payload
+from .utils import create_payload
 from . import enums
 from . import _logger
 
@@ -54,6 +48,10 @@ class Client(threading.Thread):
         # Saving thread state information
         self.is_running = threading.Event()
         self.is_running.set()
+
+        # Create ThreadPoolExecutorf
+        self.executor = ThreadPoolExecutor(max_workers=10)
+        self.futures: List[Future] = []
 
         # Creating tempfolder to host items
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -92,6 +90,7 @@ class Client(threading.Thread):
                 if msg["ack"]:
 
                     # Get message information
+                    logger.debug(f"{self}: Sending ACK for {msg['uuid']}")
                     msg_bytes, msg_length = create_payload(
                         type=self.sender_msg_type,
                         signal=enums.DATA_ACK,
@@ -109,6 +108,7 @@ class Client(threading.Thread):
 
             # If ACK, update table information
             else:
+                logger.debug(f"{self}: Received ACK for {msg['uuid']}")
                 self.ack_uuids.append(msg["uuid"])
 
         else:
@@ -131,10 +131,41 @@ class Client(threading.Thread):
 
         self.socket.close()
 
-    def send(self, msg: Dict, ack: bool = False):
+    def waiting_for_ack(
+        self, msg_uuid: str, send_future: Future[Tuple[bool, str]]
+    ) -> Tuple[bool, str]:
 
-        # Sending the data
-        success, msg_uuid = sh.send(
+        # Check if the send message was successful
+        success, p_msg_uuid = send_future.result()  # possible_msg_uuid
+
+        # Handle different configurations of msg_uuid
+        if msg_uuid == "":
+            msg_uuid = p_msg_uuid
+
+        # Wait for an ACK message that changes client's ACK status
+        miss_counter = 0
+        while self.is_running:
+            time.sleep(0.5)
+            if msg_uuid in self.ack_uuids:
+                logger.debug(f"Client received ACK")
+                break
+            else:
+                logger.debug(
+                    f"Waiting for ACK for msg: {msg_uuid} from: {self.name}, ack: {self.ack_uuids}"
+                )
+
+                if miss_counter >= 20:
+                    raise RuntimeError(f"Server ACK timeout for {msg_uuid}")
+
+                miss_counter += 1
+
+        return success, msg_uuid
+
+    def send(self, msg: Dict, ack: bool = False) -> Future[Tuple[bool, str]]:
+
+        # Submit send request to the ThreadPoolExecutor
+        send_future = self.executor.submit(
+            sh.send,
             name=self.name,
             s=self.socket,
             msg=msg,
@@ -142,28 +173,41 @@ class Client(threading.Thread):
             ack=ack,
         )
 
-        # If not successful, skip ACK
-        if not success:
-            return None
+        # Store the future
+        self.futures.append(send_future)
 
-        # If requested ACK, wait
+        # If ACK, add dependent job
         if ack:
+            ack_future = self.executor.submit(self.waiting_for_ack, "", send_future)
+            return ack_future
 
-            # Wait until ACK
-            miss_counter = 0
-            while self.is_running.is_set():
-                time.sleep(0.1)
-                if msg_uuid in self.ack_uuids:
-                    break
-                else:
-                    logger.debug(
-                        f"{self}: waiting ACK for msg: {msg_uuid} given {self.ack_uuids}."
-                    )
+        else:
+            return send_future
 
-                    if miss_counter > 20:
-                        raise RuntimeError("Client ACK waiting timeout!")
+    def send_bytes(
+        self, msg: bytes, msg_uuid: str, ack: bool = False
+    ) -> Future[Tuple[bool, str]]:
 
-                    miss_counter += 1
+        # Submit send request to the ThreadPoolExecutor
+        send_future = self.executor.submit(
+            sh.send_bytes,
+            name=self.name,
+            s=self.socket,
+            msg=msg,
+        )
+
+        # Store the future
+        self.futures.append(send_future)
+
+        # If ACK, add dependent job
+        if ack:
+            ack_future = self.executor.submit(
+                self.waiting_for_ack, msg_uuid, send_future
+            )
+            return ack_future
+
+        else:
+            return send_future
 
     def receive_file(self, msg: Dict[str, Any]):
 

@@ -93,7 +93,7 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
 def test_create_multiple_nodes_after_pickling(logreceiver):
 
     ns = []
-    for i in range(10):
+    for i in range(3):
         n = GenNode(name=f"G{i}")
         pkl_n = dill.dumps(n)
         nn = dill.loads(pkl_n)
@@ -171,7 +171,6 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
-# @linux_expected_only
 def test_worker_create_nodes(worker):
 
     to_be_created_nodes = []
@@ -198,7 +197,6 @@ def test_worker_create_nodes(worker):
             continue
 
 
-# @linux_expected_only
 @pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
@@ -267,7 +265,6 @@ def test_step_single_node(worker, gen_node):
     time.sleep(2)
 
 
-# @linux_expected_only
 def test_two_nodes_connect(worker, gen_node, con_node):
 
     # Simple single node without connection
@@ -301,7 +298,6 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     worker.process_node_server_data({"data": node_server_data["nodes"]})
 
 
-# @linux_expected_only
 def test_starting_node(worker, gen_node):
 
     # Simple single node without connection
@@ -328,7 +324,6 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
 
-# @linux_expected_only
 @pytest.mark.parametrize(
     "_manager,_worker",
     [

@@ -8,6 +8,8 @@ import platform
 import tempfile
 import uuid
 
+from concurrent.futures import wait, Future
+
 import pytest
 from pytest_lazyfixture import lazy_fixture
 import numpy as np
@@ -79,7 +81,8 @@ def test_client_connect_to_server(client, server):
 def test_client_send_to_server(server, client):
 
     # Send message from client
-    client.send({"signal": "echo", "data": "ECHO!"})
+    wait([client.send({"signal": "echo", "data": "ECHO!"})])
+    # client.send({"signal": "echo", "data": "ECHO!"})
 
 
 def test_multiple_clients_send_to_server(server):
@@ -98,6 +101,11 @@ def test_multiple_clients_send_to_server(server):
         _client.start()
         clients.append(_client)
 
+    futures = []
+    for _client in clients:
+        futures.append(_client.send({"signal": "echo", "data": "ECHO!"}, ack=True))
+
+    wait(futures)
     for _client in clients:
         _client.send({"signal": "echo", "data": "ECHO!"}, ack=True)
 
@@ -113,7 +121,7 @@ def test_server_send_to_client(server, client):
 
     client_socket = list(server.client_comms.keys())[0]
 
-    server.send(client_socket, {"signal": "echo", "data": "ECHO!"})
+    wait([server.send(client_socket, {"signal": "echo", "data": "ECHO!"})])
 
 
 def test_send_large_items(server, client):
@@ -127,7 +135,7 @@ def test_send_large_items(server, client):
     # img = np.ones([IMG_SIZE, IMG_SIZE])
     img = np.random.rand(IMG_SIZE, IMG_SIZE, 3)
 
-    server.send(client_socket, {"signal": "image", "data": img}, ack=True)
+    wait([server.send(client_socket, {"signal": "image", "data": img}, ack=True)])
 
 
 def test_server_broadcast_to_multiple_clients(server):
@@ -150,7 +158,37 @@ def test_server_broadcast_to_multiple_clients(server):
     while len(server.client_comms) <= 4:
         time.sleep(0.1)
 
-    server.broadcast({"signal": "echo", "data": "ECHO!"}, ack=True)
+    futures = server.broadcast({"signal": "echo", "data": "ECHO!"}, ack=True)
+    wait(futures)
+
+    for _client in clients:
+        _client.shutdown()
+
+
+def test_server_broadcast_to_multiple_clients_a_large_payload(server):
+
+    clients = []
+    for i in range(5):
+        _client = cp.Client(
+            host=server.host,
+            port=server.port,
+            name=f"test-{i}",
+            connect_timeout=2,
+            sender_msg_type=cp.WORKER_MESSAGE,
+            accepted_msg_type=cp.MANAGER_MESSAGE,
+            handlers={"echo": echo, "image": show_image, "SHUTDOWN": echo},
+        )
+        _client.start()
+        clients.append(_client)
+
+    # Wait until all clients are connected
+    while len(server.client_comms) <= 4:
+        time.sleep(0.1)
+
+    img = np.random.rand(IMG_SIZE, IMG_SIZE, 3)
+
+    futures = server.broadcast({"signal": "image", "data": img}, ack=True)
+    wait(futures)
 
     for _client in clients:
         _client.shutdown()

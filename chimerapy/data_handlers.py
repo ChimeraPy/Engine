@@ -3,6 +3,7 @@ import pathlib
 import logging
 import threading
 import queue
+import uuid
 
 from . import _logger
 
@@ -11,6 +12,7 @@ logger = _logger.getLogger("chimerapy")
 # Internal Imports
 from . import enums
 from .records import VideoRecord, AudioRecord, TabularRecord, ImageRecord
+from .utils import create_payload
 
 
 class SaveHandler(threading.Thread):
@@ -80,6 +82,9 @@ class OutputsHandler(threading.Thread):
         self.is_running = threading.Event()
         self.is_running.set()
 
+    def __str__(self):
+        return f"<OutputsHandler for Node={self.name}>"
+
     def run(self):
 
         # If there is no out_bound nodes, just stop
@@ -95,18 +100,33 @@ class OutputsHandler(threading.Thread):
             except queue.Empty:
                 continue
 
+            # Create payload once and send to clients
+            # Create msg_uuid
+            msg_uuid = str(uuid.uuid4())
+
+            msg = {
+                "signal": enums.NODE_DATA_TRANSFER,
+                "data": {
+                    "sent_from": self.name,
+                    "outputs": outputs,
+                },
+            }
+
+            # First create payload and then use send it via all client sockets
+            msg_bytes, msg_length = create_payload(
+                type=enums.NODE_MESSAGE,
+                signal=msg["signal"],
+                data=msg["data"],
+                provided_uuid=msg_uuid,
+                ack=False,
+            )
+
             # Send the message to all p2p clients
             for out_bound_name, client in self.p2p_clients.items():
-                client.send(
-                    {
-                        "signal": enums.NODE_DATA_TRANSFER,
-                        "data": {
-                            "sent_from": self.name,
-                            "send_to": out_bound_name,
-                            "outputs": outputs,
-                        },
-                    },
-                )
+
+                # We don't care about the futures
+                # logger.debug(f"{self}: Sending to {out_bound_name}")
+                _ = client.send_bytes(msg=msg_length + msg_bytes, msg_uuid=msg_uuid)
 
     def shutdown(self):
 

@@ -73,20 +73,47 @@ def monitor(
     return True, msg
 
 
-def send(
-    name: str,
-    s: socket.socket,
-    msg: Dict[str, Any],
-    sender_msg_type: str,
-    ack: bool = False,
-):
+def transmit_bytes(name: str, s: socket.socket, msg: bytes) -> bool:
 
     # Check first if the connection is alive
     if s.fileno() == -1:
         logger.debug(
             f"Tried to send {msg} to dead client connection name: socket: {s}."
         )
-        return False, None
+        return False
+
+    # Sending message
+    try:
+        s.sendall(msg)
+    except socket.timeout:
+        logger.debug(f"{name}: Socket Timeout: skipping")
+        return False
+    except:
+        logger.debug(f"{name}: Broken Pipe Error", exc_info=True)
+        return False
+
+    return True
+
+
+def send_bytes(
+    name: str,
+    s: socket.socket,
+    msg: bytes,
+) -> Tuple[bool, str]:
+
+    # Send msg
+    success = transmit_bytes(name, s, msg)
+
+    return success, ""
+
+
+def send(
+    name: str,
+    s: socket.socket,
+    msg: Dict[str, Any],
+    sender_msg_type: str,
+    ack: bool = False,
+) -> Tuple[bool, str]:
 
     # Create an uuid to track the message
     msg_uuid = str(uuid.uuid4())
@@ -100,20 +127,13 @@ def send(
         ack=ack,
     )
 
-    # Sending message
-    try:
-        s.sendall(msg_length + msg_bytes)
-        logger.debug(f"{name}: send {msg['signal']}")
-    except socket.timeout:
-        logger.debug(f"{name}: Socket Timeout: skipping")
-        return False, None
-    except:
-        logger.debug(
-            f"{name}: Broken Pipe Error, handled for {msg['signal']}", exc_info=True
-        )
-        return False, None
+    # Concat to create the entire msg
+    total_msg = msg_length + msg_bytes
 
-    return True, msg_uuid
+    # Send msg
+    success = transmit_bytes(name, s, total_msg)
+
+    return success, msg_uuid
 
 
 def file_transfer_receive(

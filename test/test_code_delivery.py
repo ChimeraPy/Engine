@@ -26,7 +26,7 @@ def local_node_graph(gen_node):
 
 @pytest.fixture
 def packaged_node_graph():
-    # Installing test package (in case this test package hasn't been done before
+    # Installing test package (in case this test package hasn't been done before)
     # Reference: https://stackoverflow.com/a/55188705/13231446
     try:
         import test_package as tp
@@ -57,7 +57,6 @@ def test_sending_package(manager, dockered_worker, config_graph):
     manager.commit_graph(
         graph=config_graph,
         mapping={dockered_worker.name: list(config_graph.G.nodes())},
-        timeout=10,
         send_packages=[
             {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
         ],

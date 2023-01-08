@@ -1,5 +1,5 @@
 # Built-in Imports
-from typing import Literal, Callable, Dict, Any
+from typing import Literal, Callable, Dict, Any, List, Tuple
 import logging
 import collections
 import uuid
@@ -12,6 +12,7 @@ import os
 import tempfile
 import shutil
 import pdb
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 # Third-Party Imports
 
@@ -20,7 +21,6 @@ from .utils import (
     threaded,
     create_payload,
     get_open_port,
-    decode_payload,
     get_ip_address,
 )
 from . import enums
@@ -62,6 +62,10 @@ class Server(threading.Thread):
         # Saving thread state information
         self.is_running = threading.Event()
         self.is_running.set()
+
+        # Create ThreadPoolExecutor for submitting sends and keep futures inside container
+        self.executor = ThreadPoolExecutor(max_workers=10)
+        self.futures: List[Future] = []
 
         # Keeping track of client threads
         self.client_comms = {}
@@ -127,6 +131,7 @@ class Server(threading.Thread):
                 # If ACK requested, send it
                 if msg["ack"]:
 
+                    logger.debug(f"{self}: Sending ACK for {msg['uuid']}")
                     msg_bytes, msg_length = create_payload(
                         type=self.sender_msg_type,
                         signal=enums.DATA_ACK,
@@ -150,41 +155,108 @@ class Server(threading.Thread):
         else:
             logger.error("Invalid message from client")
 
-    def send(self, s: socket.socket, msg: Dict, ack: bool = False):
+    def waiting_for_ack(
+        self, s: socket.socket, msg_uuid: str, send_future: Future[Tuple[bool, str]]
+    ) -> Tuple[bool, str]:
 
-        # Sending the data
-        success, msg_uuid = sh.send(
-            name=self.name, s=s, msg=msg, sender_msg_type=self.sender_msg_type, ack=ack
+        # Check if the send message was successful
+        success, p_msg_uuid = send_future.result()  # possible_msg_uuid
+
+        # Handle different configurations of msg_uuid
+        if msg_uuid == "":
+            msg_uuid = p_msg_uuid
+
+        # Wait for an ACK message that changes client's ACK status
+        miss_counter = 0
+        while self.is_running:
+            time.sleep(0.1)
+            if msg_uuid in self.client_comms[s]["acks"]:
+                logger.debug(f"Server received ACK")
+                break
+            else:
+                logger.debug(
+                    f"Waiting for ACK for msg: {msg_uuid} from s: {s}, ack: {self.client_comms[s]['acks']}"
+                )
+
+                if miss_counter >= 20:
+                    raise RuntimeError(f"Server ACK timeout for {msg_uuid}")
+
+                miss_counter += 1
+
+        return success, msg_uuid
+
+    def send(
+        self, s: socket.socket, msg: Dict, ack: bool = False
+    ) -> Future[Tuple[bool, str]]:
+
+        # Submit send request to the ThreadPoolExecutor
+        send_future = self.executor.submit(
+            sh.send,
+            name=self.name,
+            s=s,
+            msg=msg,
+            sender_msg_type=self.sender_msg_type,
+            ack=ack,
         )
 
-        # If not successful, skip ACK
-        if not success:
-            return None
+        # Store the future
+        self.futures.append(send_future)
 
-        # If ACK requested, wait
+        # If ACK, add dependent job
         if ack:
+            ack_future = self.executor.submit(self.waiting_for_ack, s, "", send_future)
+            return ack_future
 
-            # Wait for an ACK message that changes client's ACK status
-            miss_counter = 0
-            while self.is_running:
-                time.sleep(0.1)
-                if msg_uuid in self.client_comms[s]["acks"]:
-                    logger.debug(f"Server received ACK")
-                    break
-                else:
-                    logger.debug(
-                        f"Waiting for ACK for msg: {(msg['signal'], msg_uuid)} from s: {s}, ack: {self.client_comms[s]['acks']}"
-                    )
+        else:
+            return send_future
 
-                    if miss_counter >= 20:
-                        raise RuntimeError(f"Server ACK timeout for {msg}")
+    def send_bytes(
+        self, s: socket.socket, msg: bytes, msg_uuid: str, ack: bool = False
+    ) -> Future[Tuple[bool, str]]:
 
-                    miss_counter += 1
+        # Submit send request to the ThreadPoolExecutor
+        send_future = self.executor.submit(
+            sh.send_bytes,
+            name=self.name,
+            s=s,
+            msg=msg,
+        )
 
-    def broadcast(self, msg: Dict, ack: bool = False):
+        # Store the future
+        self.futures.append(send_future)
 
-        for s in self.client_comms:
-            self.send(s, msg, ack)
+        # If ACK, add dependent job
+        if ack:
+            ack_future = self.executor.submit(
+                self.waiting_for_ack, s, msg_uuid, send_future
+            )
+            return ack_future
+
+        else:
+            return send_future
+
+    def broadcast(self, msg: Dict, ack: bool = False) -> List[Future]:
+
+        # Create msg_uuid
+        msg_uuid = str(uuid.uuid4())
+
+        # First create payload and then use send it via all client sockets
+        msg_bytes, msg_length = create_payload(
+            type=self.sender_msg_type,
+            signal=msg["signal"],
+            data=msg["data"],
+            provided_uuid=msg_uuid,
+            ack=ack,
+        )
+
+        # Create total msg
+        total_msg = msg_length + msg_bytes
+
+        # Obtain the futures
+        futures = [
+            self.send_bytes(s, total_msg, msg_uuid, ack) for s in self.client_comms
+        ]
+        return futures
 
     def receive_file(self, msg: Dict[str, Any], client_socket: socket.socket):
 
@@ -270,11 +342,17 @@ class Server(threading.Thread):
     def shutdown(self):
 
         # First, send shutdown message to clients
+        futures = []
         for client_socket in self.client_comms:
             try:
-                self.send(client_socket, {"signal": enums.SHUTDOWN, "data": {}})
+                futures.append(
+                    self.send(client_socket, {"signal": enums.SHUTDOWN, "data": {}})
+                )
             except socket.error:
                 logger.debug("Socket send msg to broken pipe", exc_info=True)
+
+        # Waiting for messages to be send to clients
+        wait(futures)
 
         # First, indicate the end
         self.is_running.clear()

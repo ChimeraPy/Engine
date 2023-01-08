@@ -9,6 +9,8 @@ from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
+cp.debug()
+
 logger = cp._logger.getLogger("chimerapy")
 
 

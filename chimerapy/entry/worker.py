@@ -39,6 +39,7 @@ def main():
         delete_temp=d_args["delete"],
     )
     worker.connect(host=d_args["ip"], port=d_args["port"])
+    worker.idle()
 
 
 if __name__ == "__main__":

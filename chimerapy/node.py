@@ -8,6 +8,7 @@ import uuid
 import pathlib
 import os
 import tempfile
+from concurrent.futures import wait
 
 # Third-party Imports
 import multiprocess as mp
@@ -132,7 +133,7 @@ class Node(mp.Process):
             p2p_client = Client(
                 host=out_bound_info["host"],
                 port=out_bound_info["port"],
-                name=self.name,
+                name=str(self),
                 connect_timeout=5.0,
                 sender_msg_type=enums.NODE_MESSAGE,
                 accepted_msg_type=enums.NODE_MESSAGE,
@@ -144,14 +145,18 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
-        self.client.send(
-            {
-                "signal": enums.NODE_STATUS,
-                "data": {
-                    "node_name": self.name,
-                    "status": self.status,
-                },
-            }
+        wait(
+            [
+                self.client.send(
+                    {
+                        "signal": enums.NODE_STATUS,
+                        "data": {
+                            "node_name": self.name,
+                            "status": self.status,
+                        },
+                    }
+                )
+            ]
         )
 
     def received_data(self, msg: Dict, client_socket: socket.socket):
@@ -174,11 +179,18 @@ class Node(mp.Process):
 
     def provide_gather(self, msg: Dict):
 
-        self.client.send(
-            {
-                "signal": enums.NODE_REPORT_GATHER,
-                "data": {"node_name": self.name, "latest_value": self.latest_value},
-            }
+        wait(
+            [
+                self.client.send(
+                    {
+                        "signal": enums.NODE_REPORT_GATHER,
+                        "data": {
+                            "node_name": self.name,
+                            "latest_value": self.latest_value,
+                        },
+                    }
+                )
+            ]
         )
 
     def start_node(self, msg: Dict):
@@ -343,7 +355,7 @@ class Node(mp.Process):
             self.client = Client(
                 host=self.worker_host,
                 port=self.worker_port,
-                name=f"Node {self.name}",
+                name=str(self),
                 connect_timeout=5.0,
                 sender_msg_type=enums.NODE_MESSAGE,
                 accepted_msg_type=enums.WORKER_MESSAGE,
@@ -354,7 +366,7 @@ class Node(mp.Process):
             # Create server
             self.server = Server(
                 port=5000,
-                name=f"Node {self.name}",
+                name=str(self),
                 max_num_of_clients=len(self.p2p_info["out_bound"]),
                 sender_msg_type=enums.NODE_MESSAGE,
                 accepted_msg_type=enums.NODE_MESSAGE,
@@ -363,16 +375,20 @@ class Node(mp.Process):
             self.server.start()
 
             # Inform client that Node is INITIALIZED!
-            self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                        "host": self.server.host,
-                        "port": self.server.port,
-                    },
-                }
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.NODE_STATUS,
+                            "data": {
+                                "node_name": self.name,
+                                "status": self.status,
+                                "host": self.server.host,
+                                "port": self.server.port,
+                            },
+                        }
+                    )
+                ]
             )
 
     def prep(self):
@@ -390,14 +406,18 @@ class Node(mp.Process):
         # Notify to the worker that the node is fully READY
         self.status["READY"] = 1
         if self.networking:
-            self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                    },
-                }
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.NODE_STATUS,
+                            "data": {
+                                "node_name": self.name,
+                                "status": self.status,
+                            },
+                        }
+                    )
+                ]
             )
 
     def waiting(self):
@@ -513,14 +533,18 @@ class Node(mp.Process):
 
             # Inform the worker that the Node has finished its saving of data
             self.status["FINISHED"] = 1
-            self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                    },
-                }
+            wait(
+                [
+                    self.client.send(
+                        {
+                            "signal": enums.NODE_STATUS,
+                            "data": {
+                                "node_name": self.name,
+                                "status": self.status,
+                            },
+                        }
+                    )
+                ]
             )
 
             # Shutdown the client
