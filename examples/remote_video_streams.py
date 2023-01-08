@@ -10,6 +10,8 @@ import imutils
 
 import chimerapy as cp
 
+cp.debug()
+
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
@@ -18,10 +20,10 @@ class WebcamNode(cp.Node):
         self.vid = cv2.VideoCapture(0)
 
     def step(self):
-        time.sleep(1 / 30)
+        time.sleep(1 / 15)
         ret, frame = self.vid.read()
         self.save_video(name="test", data=frame, fps=20)
-        return frame
+        return imutils.resize(frame, width=600)
 
     def teardown(self):
         self.vid.release()
@@ -36,14 +38,14 @@ class ScreenCaptureNode(cp.Node):
         time.sleep(1 / 30)
         frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)[..., :3]
         self.save_video(name="screen", data=frame, fps=20)
-        return frame
+        return imutils.resize(frame, width=600)
 
 
 class ShowWindow(cp.Node):
     def step(self, data: Dict[str, Any]):
 
         for name, value in data.items():
-            cv2.imshow(name, imutils.resize(value, width=400))
+            cv2.imshow(name, imutils.resize(value, width=1000))
         cv2.waitKey(1)
 
     def teardown(self):
@@ -65,7 +67,6 @@ if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cp.Manager(logdir=CWD / "runs")
-    graph = RemoteCameraGraph()
     worker = cp.Worker(name="local")
 
     # Then register graph to Manager
@@ -77,9 +78,27 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
-    # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show", "screen"]}
+    # For local only
+    if len(manager.workers) == 1:
+        graph = RemoteCameraGraph()
+        mapping = {"local": ["web", "show", "screen"]}
+    else:
+
+        # For mutliple workers (remote and local)
+        graph = cp.Graph()
+        show_node = ShowWindow(name=f"local-show")
+        graph.add_node(show_node)
+        mapping = {"local": ["local-show"]}
+
+        for worker_name in manager.workers:
+            if worker_name == "local":
+                continue
+            else:
+                web_node = WebcamNode(name=f"{worker_name}-web")
+                screen_node = ScreenCaptureNode(name=f"{worker_name}-screen")
+                graph.add_nodes_from([web_node, screen_node])
+                graph.add_edges_from([(web_node, show_node), (screen_node, show_node)])
+                mapping[worker_name] = [f"{worker_name}-web", f"{worker_name}-screen"]
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping)

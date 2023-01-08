@@ -177,6 +177,14 @@ class Node(mp.Process):
         else:
             self.all_inputs_ready = True
 
+        # If both all inputs are ready and new data is available, then
+        # send event through queue
+        if self.new_data_available and self.all_inputs_ready:
+            try:
+                self.in_data_ready_notification_queue.put(True)
+            except queue.Full:
+                pass
+
     def provide_gather(self, msg: Dict):
 
         wait(
@@ -309,7 +317,7 @@ class Node(mp.Process):
         self.p2p_clients = {}
 
         # Create input and output queue
-        self.in_queue = queue.Queue()
+        self.in_data_ready_notification_queue = queue.Queue(maxsize=1)
         self.out_queue = queue.Queue()
         self.save_queue = queue.Queue()
 
@@ -441,13 +449,19 @@ class Node(mp.Process):
         else:
 
             # Else, we have to wait for inputs
-            while True:
+            while self.running.value:
 
-                if self.all_inputs_ready and self.new_data_available:
+                # Using a light-weight data ready notification queue to
+                # leverage propery blocking
+                try:
+                    ready = self.in_data_ready_notification_queue.get(timeout=2)
+                except queue.Empty:
+                    continue
+
+                if ready:
                     inputs = self.in_bound_data.copy()
                     self.new_data_available = False
                 else:
-                    time.sleep(1 / 100)  # Required to allow threads to execute
                     continue
 
                 self.logger.debug(f"{self}: got inputs")
@@ -518,7 +532,7 @@ class Node(mp.Process):
     def _teardown(self):
 
         # Clear out the queues
-        clear_queue(self.in_queue)
+        clear_queue(self.in_data_ready_notification_queue)
         clear_queue(self.out_queue)
 
         # Shutdown the inputs and outputs threads
@@ -573,7 +587,6 @@ class Node(mp.Process):
         self._prep()
         self.prep()
 
-        assert isinstance(self.in_queue, queue.Queue)
         self.logger.debug(f"{self}: finished prep")
 
         # Signal that Node is ready

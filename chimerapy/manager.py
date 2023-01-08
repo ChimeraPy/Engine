@@ -61,7 +61,7 @@ class Manager:
         os.makedirs(self.logdir, exist_ok=True)
 
         # Instance variables
-        self.workers: Dict = {}
+        self.workers: Dict[str, Dict[str, Any]] = {}
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
