@@ -11,27 +11,10 @@ import pickle
 
 import netifaces as ni
 from tqdm import tqdm
-import blosc
 
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
-
-
-def threaded(fn):
-    """Decorator for class methods to be spawn new thread.
-
-    From: https://stackoverflow.com/a/19846691/13231446
-    Args:
-        fn: The method of a class.
-    """
-
-    def wrapper(*args, **kwargs):
-        thread = threading.Thread(target=fn, args=args, kwargs=kwargs)
-        thread.deamon = True
-        return thread
-
-    return wrapper
 
 
 def log(func):
@@ -52,71 +35,6 @@ def log(func):
             raise e
 
     return wrapper
-
-
-def get_open_port(start_port: int) -> socket.socket:
-
-    # Creating socket to connect
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    offset = 0
-
-    while True:
-        try:
-            current_attempt_port = start_port + offset
-            s.bind(("", current_attempt_port))
-            break
-        except socket.error as e:
-            offset += 10
-            if e.errno == errno.EADDRINUSE:
-                logger.debug(f"Port {current_attempt_port} is already in use.")
-            else:
-                logger.error("Unknown socket error", exc_info=True)
-                raise e
-
-    return s
-
-
-def get_ip_address() -> str:
-
-    # Get gateway of the network
-    gws = ni.gateways()
-    default_gw_name = gws["default"][ni.AF_INET][1]
-
-    # Get the ip in the default gateway
-    ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
-    return ip
-
-
-def create_payload(
-    data: Any,
-    type: str,
-    signal: str,
-    provided_uuid: str,
-    ack: bool,
-    timestamp: datetime.timedelta = datetime.timedelta(),
-) -> Tuple[bytes, bytes]:
-
-    payload = {
-        "type": type,
-        "signal": signal,
-        "timestamp": str(timestamp),
-        "uuid": provided_uuid,
-        "data": data,
-        "ack": int(ack),
-    }
-
-    b_payload = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
-    compressed_bytes_payload = blosc.compress(b_payload)
-
-    return compressed_bytes_payload, struct.pack(">Q", len(compressed_bytes_payload))
-
-
-def decode_payload(data: bytes) -> Dict:
-
-    bytes_payload = blosc.decompress(data)
-    payload = pickle.loads(bytes_payload)
-
-    return payload
 
 
 def clear_queue(input_queue: queue.Queue):

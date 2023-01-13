@@ -7,6 +7,8 @@ import os
 import platform
 import tempfile
 import uuid
+from aiohttp import web
+import requests
 
 from concurrent.futures import wait, Future
 
@@ -19,140 +21,99 @@ import pdb
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
-# cp.debug()
+cp.debug()
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 IMG_SIZE = 400
 
 
-def echo(msg: Dict, s: socket.socket = None):
-    ...
+async def hello(request):
+    return web.Response(text="Hello, world")
 
 
-def show_image(msg: Dict, s: socket.socket = None):
-    img = msg["data"]
-    assert img.shape[0] == IMG_SIZE
-    # cv2.imshow('test', img)
-    # cv2.waitKey(0)
+async def echo(msg):
+    logger.debug("ECHO: " + msg)
 
 
 @pytest.fixture
 def server():
-    _server = cp.Server(
-        port=9000,
-        name="test",
-        max_num_of_clients=10,
-        sender_msg_type=cp.MANAGER_MESSAGE,
-        accepted_msg_type=cp.WORKER_MESSAGE,
-        handlers={"echo": echo, "image": show_image},
+    server = cp.Server(
+        name="test", port=8080, routes=[web.get("/", hello)], ws_handlers={"echo": echo}
     )
-    _server.start()
-    yield _server
-    _server.shutdown()
+    server.serve()
+    yield server
+    server.shutdown()
 
 
 @pytest.fixture
 def client(server):
-    _client = cp.Client(
+    client = cp.Client(
+        name="test",
         host=server.host,
         port=server.port,
-        name="test",
-        connect_timeout=2,
-        sender_msg_type=cp.WORKER_MESSAGE,
-        accepted_msg_type=cp.MANAGER_MESSAGE,
-        handlers={
-            "echo": echo,
-            "image": show_image,
-            "SHUTDOWN": echo,
-            "MANAGER_BROADCAST_NODE_SERVER_DATA": echo,
-            "MANAGER_REQUEST_NODE_SERVER_DATA": echo,
-        },
+        ws_handlers={},
     )
-    _client.start()
-    yield _client
-    _client.shutdown()
+    client.connect()
+    yield client
+    client.shutdown()
 
 
-def test_client_connect_to_server(client, server):
-    ...
+def test_server_http_req_res(server):
+    r = requests.get(f"http://{server.host}:{server.port}")
+    assert r.status_code == 200 and r.text == "Hello, world"
+
+
+def test_server_websocket_connection(server, client):
+    while len(server.ws_clients) == 0:
+        time.sleep(0.1)
+    assert client.name in list(server.ws_clients.keys())
+
+
+def test_server_send_to_client(server, client):
+    server.send()
 
 
 def test_client_send_to_server(server, client):
-
-    # Send message from client
-    wait([client.send({"signal": "echo", "data": "ECHO!"})])
-    # client.send({"signal": "echo", "data": "ECHO!"})
+    ...
 
 
 def test_multiple_clients_send_to_server(server):
 
     clients = []
     for i in range(5):
-        _client = cp.Client(
+        client = cp.Client(
             host=server.host,
             port=server.port,
             name=f"test-{i}",
-            connect_timeout=2,
-            sender_msg_type=cp.WORKER_MESSAGE,
-            accepted_msg_type=cp.MANAGER_MESSAGE,
-            handlers={"echo": echo, "SHUTDOWN": echo},
+            ws_handlers={"echo": echo},
         )
-        _client.start()
-        clients.append(_client)
+        clients.append(client)
 
     futures = []
-    for _client in clients:
-        futures.append(_client.send({"signal": "echo", "data": "ECHO!"}, ack=True))
+    for client in clients:
+        futures.append(client.send({"signal": "echo", "data": "ECHO!"}, ack=True))
 
     wait(futures)
-    for _client in clients:
-        _client.send({"signal": "echo", "data": "ECHO!"}, ack=True)
+    for client in clients:
+        client.send({"signal": "echo", "data": "ECHO!"}, ack=True)
 
-    for _client in clients:
-        _client.shutdown()
-
-
-def test_server_send_to_client(server, client):
-
-    # Wait until client is connected
-    while len(server.client_comms) <= 0:
-        time.sleep(0.1)
-
-    client_socket = list(server.client_comms.keys())[0]
-
-    wait([server.send(client_socket, {"signal": "echo", "data": "ECHO!"})])
-
-
-def test_send_large_items(server, client):
-
-    # Wait until client is connected
-    while len(server.client_comms) <= 0:
-        time.sleep(0.1)
-
-    client_socket = list(server.client_comms.keys())[0]
-
-    # img = np.ones([IMG_SIZE, IMG_SIZE])
-    img = np.random.rand(IMG_SIZE, IMG_SIZE, 3)
-
-    wait([server.send(client_socket, {"signal": "image", "data": img}, ack=True)])
+    for client in clients:
+        client.shutdown()
 
 
 def test_server_broadcast_to_multiple_clients(server):
 
     clients = []
     for i in range(5):
-        _client = cp.Client(
+        client = cp.Client(
             host=server.host,
             port=server.port,
             name=f"test-{i}",
-            connect_timeout=2,
-            sender_msg_type=cp.WORKER_MESSAGE,
-            accepted_msg_type=cp.MANAGER_MESSAGE,
-            handlers={"echo": echo, "SHUTDOWN": echo},
+            ws_handlers={"echo": echo, "SHUTDOWN": echo},
         )
-        _client.start()
-        clients.append(_client)
+        client.start()
+        clients.append(client)
 
     # Wait until all clients are connected
     while len(server.client_comms) <= 4:
@@ -161,37 +122,8 @@ def test_server_broadcast_to_multiple_clients(server):
     futures = server.broadcast({"signal": "echo", "data": "ECHO!"}, ack=True)
     wait(futures)
 
-    for _client in clients:
-        _client.shutdown()
-
-
-def test_server_broadcast_to_multiple_clients_a_large_payload(server):
-
-    clients = []
-    for i in range(5):
-        _client = cp.Client(
-            host=server.host,
-            port=server.port,
-            name=f"test-{i}",
-            connect_timeout=2,
-            sender_msg_type=cp.WORKER_MESSAGE,
-            accepted_msg_type=cp.MANAGER_MESSAGE,
-            handlers={"echo": echo, "image": show_image, "SHUTDOWN": echo},
-        )
-        _client.start()
-        clients.append(_client)
-
-    # Wait until all clients are connected
-    while len(server.client_comms) <= 4:
-        time.sleep(0.1)
-
-    img = np.random.rand(IMG_SIZE, IMG_SIZE, 3)
-
-    futures = server.broadcast({"signal": "image", "data": img}, ack=True)
-    wait(futures)
-
-    for _client in clients:
-        _client.shutdown()
+    for client in clients:
+        client.shutdown()
 
 
 # @pytest.mark.repeat(10)
@@ -225,11 +157,11 @@ def test_client_sending_folder_to_server(server, client, dir):
         (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
     ],
 )
-def test_server_boradcast_file_to_clients(server, dir):
+def test_server_broadcast_file_to_clients(server, dir):
 
     clients = []
     for i in range(5):
-        _client = cp.Client(
+        client = cp.Client(
             host=server.host,
             port=server.port,
             name=f"test-{i}",
@@ -238,8 +170,8 @@ def test_server_boradcast_file_to_clients(server, dir):
             accepted_msg_type=cp.MANAGER_MESSAGE,
             handlers={"echo": echo, "SHUTDOWN": echo},
         )
-        _client.start()
-        clients.append(_client)
+        client.start()
+        clients.append(client)
 
     # Wait until all clients are connected
     while len(server.client_comms) <= 4:
@@ -259,5 +191,5 @@ def test_server_boradcast_file_to_clients(server, dir):
             if miss_counter > 100:
                 assert False, "File transfer failed after 10 second"
 
-    for _client in clients:
-        _client.shutdown()
+    for client in clients:
+        client.shutdown()

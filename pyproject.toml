@@ -22,10 +22,12 @@ dependencies = [
     'matplotlib',
     'multiprocess',
     'opencv-python',
-    'ffmpeg-python',
     'pyaudio',
     'pandas',
     'tqdm',
+    'pyzmq',
+    'simplejpeg',
+    'aiohttp',
     'blosc'
 ]
 
@@ -40,7 +42,7 @@ test = [
     'docker',
     'numpy',
     'imutils',
-    'mss',
+    'mss'
 ]
 benchmark = [
     'lz4',
@@ -84,3 +86,6 @@ log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 # Timeout
 faulthandler_timeout=120
+
+# Ignore warnings
+filterwarnings = "ignore::DeprecationWarning"

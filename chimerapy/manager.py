@@ -16,7 +16,7 @@ import dill
 
 import networkx as nx
 
-from .server import Server
+from .networking import Server
 from .graph import Graph
 from . import enums
 from .exceptions import CommitGraphError

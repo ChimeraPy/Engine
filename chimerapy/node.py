@@ -16,9 +16,8 @@ import numpy as np
 import pandas as pd
 
 # Internal Imports
-from .client import Client
-from .server import Server
-from .data_handlers import OutputsHandler, SaveHandler
+from .networking import Client, Publisher, Subscriber
+from .data_handlers import SaveHandler
 from . import enums
 from .utils import clear_queue
 from . import _logger
@@ -327,13 +326,6 @@ class Node(mp.Process):
         self.all_inputs_ready = False
         self.new_data_available = False
 
-        # Create the threads that manager the incoming and outgoing
-        # data chunks
-        self.outputs_handler = OutputsHandler(
-            self.name, self.out_queue, self.p2p_info["out_bound"], self.p2p_clients
-        )
-        self.outputs_handler.start()
-
         # Creating thread for saving incoming data
         self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
         self.save_handler.start()
@@ -372,32 +364,32 @@ class Node(mp.Process):
             self.client.start()
 
             # Create server
-            self.server = Server(
-                port=5000,
-                name=str(self),
-                max_num_of_clients=len(self.p2p_info["out_bound"]),
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.NODE_MESSAGE,
-                handlers=self.from_node_handlers,
-            )
-            self.server.start()
+            # self.server = Server(
+            #     port=5000,
+            #     name=str(self),
+            #     max_num_of_clients=len(self.p2p_info["out_bound"]),
+            #     sender_msg_type=enums.NODE_MESSAGE,
+            #     accepted_msg_type=enums.NODE_MESSAGE,
+            #     handlers=self.from_node_handlers,
+            # )
+            # self.server.start()
 
             # Inform client that Node is INITIALIZED!
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.NODE_STATUS,
-                            "data": {
-                                "node_name": self.name,
-                                "status": self.status,
-                                "host": self.server.host,
-                                "port": self.server.port,
-                            },
-                        }
-                    )
-                ]
-            )
+            # wait(
+            #     [
+            #         self.client.send(
+            #             {
+            #                 "signal": enums.NODE_STATUS,
+            #                 "data": {
+            #                     "node_name": self.name,
+            #                     "status": self.status,
+            #                     "host": self.server.host,
+            #                     "port": self.server.port,
+            #                 },
+            #             }
+            #         )
+            #     ]
+            # )
 
     def prep(self):
         """User-defined method for ``Node`` setup.
@@ -536,8 +528,6 @@ class Node(mp.Process):
         clear_queue(self.out_queue)
 
         # Shutdown the inputs and outputs threads
-        self.outputs_handler.shutdown()
-        self.outputs_handler.join()
         self.save_handler.shutdown()
         self.save_handler.join()
         time.sleep(1)
@@ -565,7 +555,7 @@ class Node(mp.Process):
             self.client.shutdown()
 
             # Shutdown the server
-            self.server.shutdown()
+            # self.server.shutdown()
 
     def run(self):
         """The actual method that is executed in the new process.

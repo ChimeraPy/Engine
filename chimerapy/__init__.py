@@ -1,5 +1,7 @@
-# Meta data
-__version__ = "0.0.7"
+# populate fields for >>>help(imagezmq)
+from .__version__ import __title__, __description__, __url__, __version__
+from .__version__ import __author__, __author_email__, __license__
+from .__version__ import __copyright__
 
 # Package Setup
 from . import _logger
@@ -12,9 +14,8 @@ from .node import Node
 from .worker import Worker
 from .graph import Graph
 
-from .client import Client
-from .server import Server
-from .enums import *
+# Others
+from .networking import Server, Client, Publisher, Subscriber, enums
 from .data_handlers import SaveHandler
 
 # Then define the records

@@ -13,10 +13,8 @@ from concurrent.futures import wait
 
 import dill
 
-from .server import Server
-from .client import Client
+from .networking import Server, Client, get_ip_address
 from . import enums
-from .utils import get_ip_address
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
