@@ -1,9 +1,10 @@
 # Built-in
-from typing import Coroutine, Dict, Optional, Callable, Any
+from typing import Coroutine, Dict, Optional, Callable, Any, Union
 import asyncio
 import threading
 import collections
 import uuid
+import time
 
 # Third-party
 import aiohttp
@@ -165,14 +166,13 @@ class Client:
 
     async def _client_shutdown(self):
 
-        logger.debug(f"{self}: async shutting down")
-
         # Mark to stop and close things
         self.running.clear()
         await self._ws.close()
 
-        logger.debug(f"{self}: async shutting down - FINISHED")
         del self._ws
+
+        self._client_shutdown_complete.set()
 
     ####################################################################
     # Client Sync Lifecyle API
@@ -203,6 +203,17 @@ class Client:
             raise TimeoutError(f"{self}: failed to connect, shutting down!")
         else:
             logger.debug(f"{self}: connected to {self.host}:{self.port}")
+
+    def flush(self, timeout: Optional[Union[int, float]] = None):
+        counter = 0
+        while True:
+            if self._send_msg_queue.qsize() == 0:
+                break
+            else:
+                time.sleep(0.1)
+                counter += 1
+                if timeout and (counter * 0.1) > timeout:
+                    raise TimeoutError("Flush took too long!")
 
     def shutdown(self):
 

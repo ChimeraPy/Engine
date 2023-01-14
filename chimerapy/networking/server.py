@@ -1,9 +1,10 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any
+from typing import Callable, Dict, Optional, Any, Union
 import asyncio
 import threading
 import uuid
 import collections
+import time
 
 # Third-party
 from aiohttp import web
@@ -88,7 +89,6 @@ class Server:
         # Only until the Client has been registered can we send messages
         # to it
         write_task = asyncio.create_task(self._write_ws(client_name, ws, client_queue))
-        asyncio.gather(write_task)
 
     ####################################################################
     # IO Main Methods
@@ -135,7 +135,8 @@ class Server:
         # Continue executing them
         await asyncio.gather(read_task)
 
-        return ws
+        # Close websocket
+        await ws.close()
 
     ####################################################################
     # Client Utilities
@@ -185,8 +186,9 @@ class Server:
 
     async def _server_shutdown(self):
 
-        # Cleanup
+        # Cleanup and signal complete
         await self._runner.cleanup()
+        self._server_shutdown_complete.set()
 
     ####################################################################
     # Server Sync Lifecycle API
@@ -221,17 +223,28 @@ class Server:
         signal: int,
         data: Dict,
         ok: bool = False,
-        waitable: bool = False,
-    ) -> Optional[threading.Event]:
+    ):
 
         # Create msg container
         msg = {"signal": signal, "data": data, "ok": ok}
 
         # Then make the request via the queue
         client_queue = self.ws_clients[client_name]["send_queue"]
-        return self._thread.exec_noncoro(
-            client_queue.put_nowait, args=[msg], waitable=waitable
-        )
+        self._thread.exec_noncoro(client_queue.put_nowait, args=[msg])
+
+    def flush(self, timeout: Optional[Union[float, int]] = None):
+
+        counter = 0
+        for client_name in self.ws_clients:
+            queue = self.ws_clients[client_name]["send_queue"]
+            while True:
+                if queue.qsize() == 0:
+                    break
+                else:
+                    time.sleep(0.1)
+                    counter += 1
+                    if timeout and (counter * 0.1) > timeout:
+                        raise TimeoutError("Flush took too long!")
 
     def shutdown(self):
 

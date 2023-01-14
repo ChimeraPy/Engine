@@ -75,13 +75,8 @@ def test_server_send_to_client(server, client):
     # Simple send with OK
     server.send(client_name=client.name, signal=-11111, data="HELLO", ok=True)
 
-    # Waitable send with OK
-    finished = server.send(
-        client_name=client.name, signal=-11111, data="HELLO", ok=True, waitable=True
-    )
-    assert finished.wait(timeout=2)
-
-    time.sleep(10)
+    # Make sure all messages were sent!
+    server.flush()
 
 
 def test_client_send_to_server(server, client):

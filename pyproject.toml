@@ -28,7 +28,7 @@ dependencies = [
     'pyzmq',
     'simplejpeg',
     'aiohttp',
-    'blosc'
+    'blosc',
 ]
 
 [project.optional-dependencies]
