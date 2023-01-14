@@ -32,14 +32,14 @@ async def hello(request):
     return web.Response(text="Hello, world")
 
 
-async def echo(msg):
-    logger.debug("ECHO: " + msg)
+async def echo(msg: Dict, ws: web.WebSocketResponse = None):
+    logger.debug("ECHO: " + str(msg))
 
 
 @pytest.fixture
 def server():
     server = cp.Server(
-        name="test", port=8080, routes=[web.get("/", hello)], ws_handlers={"echo": echo}
+        name="test", port=8080, routes=[web.get("/", hello)], ws_handlers={-11111: echo}
     )
     server.serve()
     yield server
@@ -52,7 +52,7 @@ def client(server):
         name="test",
         host=server.host,
         port=server.port,
-        ws_handlers={},
+        ws_handlers={-11111: echo},
     )
     client.connect()
     yield client
@@ -65,13 +65,23 @@ def test_server_http_req_res(server):
 
 
 def test_server_websocket_connection(server, client):
-    while len(server.ws_clients) == 0:
-        time.sleep(0.1)
     assert client.name in list(server.ws_clients.keys())
 
 
 def test_server_send_to_client(server, client):
-    server.send()
+    # Simple send
+    server.send(client_name=client.name, signal=-11111, data="HELLO")
+
+    # Simple send with OK
+    server.send(client_name=client.name, signal=-11111, data="HELLO", ok=True)
+
+    # Waitable send with OK
+    finished = server.send(
+        client_name=client.name, signal=-11111, data="HELLO", ok=True, waitable=True
+    )
+    assert finished.wait(timeout=2)
+
+    time.sleep(10)
 
 
 def test_client_send_to_server(server, client):

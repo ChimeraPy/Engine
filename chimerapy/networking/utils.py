@@ -2,7 +2,7 @@ from typing import Any, Dict, Tuple
 import socket
 import errno
 import datetime
-import struct
+import uuid
 import pickle
 
 # Third-party imports
@@ -51,13 +51,17 @@ def get_ip_address() -> str:
 def create_payload(
     signal: int,
     data: Any,
+    msg_uuid: str = str(uuid.uuid4()),
     timestamp: datetime.timedelta = datetime.timedelta(),
+    ok: bool = False,
 ) -> bytes:
 
     payload = {
         "signal": signal,
         "timestamp": str(timestamp),
         "data": data,
+        "uuid": msg_uuid,
+        "ok": ok,
     }
 
     return blosc.compress(pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL))
