@@ -75,12 +75,25 @@ def test_server_send_to_client(server, client):
     # Simple send with OK
     server.send(client_name=client.name, signal=-11111, data="HELLO", ok=True)
 
-    # Make sure all messages were sent!
-    server.flush()
+    cp.utils.waiting_for(
+        lambda: client.msg_processed_counter >= 2,
+        timeout=2,
+        timeout_msg=f"{client}: Didn't receive the necessary 2 messages.",
+    )
 
 
 def test_client_send_to_server(server, client):
-    ...
+    # Simple send
+    client.send(signal=-11111, data="HELLO")
+
+    # Simple send with OK
+    client.send(signal=-11111, data="HELLO", ok=True)
+
+    cp.utils.waiting_for(
+        lambda: server.msg_processed_counter >= 2,
+        timeout=2,
+        timeout_msg=f"{server}: Didn't receive the necessary 2 messages.",
+    )
 
 
 def test_multiple_clients_send_to_server(server):

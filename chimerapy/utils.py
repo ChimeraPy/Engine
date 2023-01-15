@@ -1,40 +1,14 @@
-from typing import Any, Dict, Tuple
-import socket
+from typing import Callable, Union, Optional
 import queue
-import errno
-import datetime
-import threading
 import logging
 import functools
-import struct
-import pickle
+import time
 
-import netifaces as ni
 from tqdm import tqdm
 
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
-
-
-def log(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        args_repr = [repr(a) for a in args]
-        kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]
-        signature = ", ".join(args_repr + kwargs_repr)
-        # logger.debug(f"function {func.__name__} called with args {signature}")
-        logger.debug(f"{args_repr[0]}: function {func.__name__}")
-        try:
-            result = func(*args, **kwargs)
-            return result
-        except Exception as e:
-            logger.exception(
-                f"Exception raised in {func.__name__}. exception: {str(e)}"
-            )
-            raise e
-
-    return wrapper
 
 
 def clear_queue(input_queue: queue.Queue):
@@ -90,3 +64,23 @@ class logging_tqdm(tqdm):
         if not msg:
             msg = self.__str__()
         self.logger.info("%s", msg)
+
+
+def waiting_for(
+    condition: Callable[[], bool],
+    check_period: Union[int, float] = 0.1,
+    timeout: Optional[Union[int, float]] = None,
+    timeout_msg: Optional[str] = None,
+) -> bool:
+
+    counter = 0
+    while True:
+
+        if condition():
+            return True
+        else:
+            time.sleep(check_period)
+            counter += 1
+
+            if timeout and counter * check_period > timeout:
+                raise TimeoutError(timeout_msg)

@@ -5,6 +5,7 @@ import threading
 import collections
 import uuid
 import time
+from functools import partial
 
 # Third-party
 import aiohttp
@@ -44,6 +45,7 @@ class Client:
         # State variables
         self.running = threading.Event()
         self.running.clear()
+        self.msg_processed_counter = 0
 
         # Communication between Async + Sync
         self._send_msg_queue = asyncio.Queue()
@@ -69,6 +71,9 @@ class Client:
         logger.debug(f"{self}: reading")
         async for aiohttp_msg in self._ws:
 
+            # Tracking the number of messages processed
+            self.msg_processed_counter += 1
+
             # Extract the binary data and decoded it
             msg = decode_payload(aiohttp_msg.data)
             logger.debug(f"{self}: read - {msg}")
@@ -84,17 +89,9 @@ class Client:
                     create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                 )
 
-        logger.debug(f"{self}: reading - FINISHED")
-
-    async def _write_ws(self):
-        logger.debug(f"{self}: writing")
-
-        # Then the other messages can be made by the queue
-        while self.running.is_set():
-            msg = await self._send_msg_queue.get()
-            await self._ws.send_bytes(create_payload(**msg))
-
-        logger.debug(f"{self}: writing - FINISHED")
+    async def _write_ws(self, msg: Dict):
+        logger.debug(f"{self}: writing - {msg}")
+        await self._send_msg(**msg)
 
     ####################################################################
     # Client Utilities
@@ -153,7 +150,6 @@ class Client:
 
                 # Establish read and write
                 read_task = asyncio.create_task(self._read_ws())
-                write_task = asyncio.create_task(self._write_ws())
 
                 # Register the client
                 await self._register()
@@ -179,8 +175,10 @@ class Client:
     ####################################################################
 
     def send(self, signal: str, data: Any, ok: bool = False):
+
+        # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "ok": ok}
-        self._thread.exec_noncoro(self._send_msg_queue.put_nowait, args=[msg])
+        self._thread.exec(partial(self._write_ws, msg))
 
     def connect(self):
 
@@ -203,17 +201,6 @@ class Client:
             raise TimeoutError(f"{self}: failed to connect, shutting down!")
         else:
             logger.debug(f"{self}: connected to {self.host}:{self.port}")
-
-    def flush(self, timeout: Optional[Union[int, float]] = None):
-        counter = 0
-        while True:
-            if self._send_msg_queue.qsize() == 0:
-                break
-            else:
-                time.sleep(0.1)
-                counter += 1
-                if timeout and (counter * 0.1) > timeout:
-                    raise TimeoutError("Flush took too long!")
 
     def shutdown(self):
 

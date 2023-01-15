@@ -5,6 +5,7 @@ import threading
 import uuid
 import collections
 import time
+from functools import partial
 
 # Third-party
 from aiohttp import web
@@ -46,6 +47,7 @@ class Server:
         # Using flag for marking if system should be running
         self.running = threading.Event()
         self.running.clear()
+        self.msg_processed_counter = 0
 
         # Create AIOHTTP server
         self._app = web.Application()
@@ -78,17 +80,8 @@ class Server:
         self.uuid_records.append(msg["data"]["uuid"])
 
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
-
-        # Create a queue to make send request to
-        client_name = msg["data"]["client_name"]
-        client_queue = asyncio.Queue()
-
         # Storing the client information
-        self.ws_clients[client_name] = {"ws": ws, "send_queue": client_queue}
-
-        # Only until the Client has been registered can we send messages
-        # to it
-        write_task = asyncio.create_task(self._write_ws(client_name, ws, client_queue))
+        self.ws_clients[msg["data"]["client_name"]] = {"ws": ws}
 
     ####################################################################
     # IO Main Methods
@@ -97,6 +90,9 @@ class Server:
     async def _read_ws(self, ws: web.WebSocketResponse):
         logger.debug(f"{self}: reading")
         async for aiohttp_msg in ws:
+
+            # Tracking the number of messages processed
+            self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
             msg = decode_payload(aiohttp_msg.data)
@@ -113,15 +109,10 @@ class Server:
                     create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                 )
 
-    async def _write_ws(
-        self, client_name: str, ws: web.WebSocketResponse, queue: asyncio.Queue
-    ):
-        logger.debug(f"{self}: writing for <Client {client_name}>")
-
-        while self.running.is_set():
-            msg = await queue.get()
-            logger.debug(f"{self}: write - {msg}")
-            await self._send_msg(ws, **msg)
+    async def _write_ws(self, client_name: str, msg: Dict):
+        logger.debug(f"{self}: client_name: {client_name},  write - {msg}")
+        ws = self.ws_clients[client_name]["ws"]
+        await self._send_msg(ws, **msg)
 
     async def _websocket_handler(self, request):
 
@@ -225,26 +216,9 @@ class Server:
         ok: bool = False,
     ):
 
-        # Create msg container
+        # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "ok": ok}
-
-        # Then make the request via the queue
-        client_queue = self.ws_clients[client_name]["send_queue"]
-        self._thread.exec_noncoro(client_queue.put_nowait, args=[msg])
-
-    def flush(self, timeout: Optional[Union[float, int]] = None):
-
-        counter = 0
-        for client_name in self.ws_clients:
-            queue = self.ws_clients[client_name]["send_queue"]
-            while True:
-                if queue.qsize() == 0:
-                    break
-                else:
-                    time.sleep(0.1)
-                    counter += 1
-                    if timeout and (counter * 0.1) > timeout:
-                        raise TimeoutError("Flush took too long!")
+        self._thread.exec(partial(self._write_ws, client_name, msg))
 
     def shutdown(self):
 
