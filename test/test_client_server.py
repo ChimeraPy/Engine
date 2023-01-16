@@ -26,10 +26,14 @@ cp.debug()
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 IMG_SIZE = 400
+NUMBER_OF_CLIENTS = 5
 
 
 async def hello(request):
     return web.Response(text="Hello, world")
+
+
+ECHO_FLAG = -11111
 
 
 async def echo(msg: Dict, ws: web.WebSocketResponse = None):
@@ -39,7 +43,10 @@ async def echo(msg: Dict, ws: web.WebSocketResponse = None):
 @pytest.fixture
 def server():
     server = cp.Server(
-        name="test", port=8080, routes=[web.get("/", hello)], ws_handlers={-11111: echo}
+        name="test",
+        port=8080,
+        routes=[web.get("/", hello)],
+        ws_handlers={ECHO_FLAG: echo},
     )
     server.serve()
     yield server
@@ -52,11 +59,31 @@ def client(server):
         name="test",
         host=server.host,
         port=server.port,
-        ws_handlers={-11111: echo},
+        ws_handlers={ECHO_FLAG: echo},
     )
     client.connect()
     yield client
     client.shutdown()
+
+
+@pytest.fixture
+def client_list(server):
+
+    clients = []
+    for i in range(NUMBER_OF_CLIENTS):
+        client = cp.Client(
+            host=server.host,
+            port=server.port,
+            name=f"test-{i}",
+            ws_handlers={ECHO_FLAG: echo},
+        )
+        client.connect()
+        clients.append(client)
+
+    yield clients
+
+    for client in clients:
+        client.shutdown()
 
 
 def test_server_http_req_res(server):
@@ -70,10 +97,10 @@ def test_server_websocket_connection(server, client):
 
 def test_server_send_to_client(server, client):
     # Simple send
-    server.send(client_name=client.name, signal=-11111, data="HELLO")
+    server.send(client_name=client.name, signal=ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    server.send(client_name=client.name, signal=-11111, data="HELLO", ok=True)
+    server.send(client_name=client.name, signal=ECHO_FLAG, data="HELLO", ok=True)
 
     cp.utils.waiting_for(
         lambda: client.msg_processed_counter >= 2,
@@ -84,10 +111,10 @@ def test_server_send_to_client(server, client):
 
 def test_client_send_to_server(server, client):
     # Simple send
-    client.send(signal=-11111, data="HELLO")
+    client.send(signal=ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    client.send(signal=-11111, data="HELLO", ok=True)
+    client.send(signal=ECHO_FLAG, data="HELLO", ok=True)
 
     cp.utils.waiting_for(
         lambda: server.msg_processed_counter >= 2,
@@ -96,55 +123,30 @@ def test_client_send_to_server(server, client):
     )
 
 
-def test_multiple_clients_send_to_server(server):
+def test_multiple_clients_send_to_server(server, client_list):
 
-    clients = []
-    for i in range(5):
-        client = cp.Client(
-            host=server.host,
-            port=server.port,
-            name=f"test-{i}",
-            ws_handlers={"echo": echo},
+    for client in client_list:
+        client.send(signal=ECHO_FLAG, data="ECHO!", ok=True)
+
+    cp.utils.waiting_for(
+        lambda: server.msg_processed_counter >= NUMBER_OF_CLIENTS,
+        timeout=5,
+        timeout_msg=f"{server}: Didn't receive the necessary {NUMBER_OF_CLIENTS} messages.",
+    )
+
+
+def test_server_broadcast_to_multiple_clients(server, client_list):
+
+    server.broadcast(signal=ECHO_FLAG, data="ECHO!", ok=True)
+
+    for client in client_list:
+        cp.utils.waiting_for(
+            lambda: client.msg_processed_counter >= 2,
+            timeout=5,
+            timeout_msg=f"{client}: Didn't receive the necessary {2} messages.",
         )
-        clients.append(client)
-
-    futures = []
-    for client in clients:
-        futures.append(client.send({"signal": "echo", "data": "ECHO!"}, ack=True))
-
-    wait(futures)
-    for client in clients:
-        client.send({"signal": "echo", "data": "ECHO!"}, ack=True)
-
-    for client in clients:
-        client.shutdown()
 
 
-def test_server_broadcast_to_multiple_clients(server):
-
-    clients = []
-    for i in range(5):
-        client = cp.Client(
-            host=server.host,
-            port=server.port,
-            name=f"test-{i}",
-            ws_handlers={"echo": echo, "SHUTDOWN": echo},
-        )
-        client.start()
-        clients.append(client)
-
-    # Wait until all clients are connected
-    while len(server.client_comms) <= 4:
-        time.sleep(0.1)
-
-    futures = server.broadcast({"signal": "echo", "data": "ECHO!"}, ack=True)
-    wait(futures)
-
-    for client in clients:
-        client.shutdown()
-
-
-# @pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "dir",
     [
@@ -155,7 +157,7 @@ def test_server_broadcast_to_multiple_clients(server):
 def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    client.send_folder(name="test", folderpath=dir)
+    client.send_folder(dir=dir)
 
     # Get the expected behavior
     miss_counter = 0
@@ -167,47 +169,30 @@ def test_client_sending_folder_to_server(server, client, dir):
         if miss_counter > 100:
             assert False, "File transfer failed after 10 second"
 
+    # Also check that the file exists
+    for record in server.file_transfer_records.values():
+        assert record["dst_filepath"].exists()
 
-@pytest.mark.parametrize(
-    "dir",
-    [
-        (TEST_DIR / "mock" / "data" / "simple_folder"),
-        (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
-    ],
-)
-def test_server_broadcast_file_to_clients(server, dir):
 
-    clients = []
-    for i in range(5):
-        client = cp.Client(
-            host=server.host,
-            port=server.port,
-            name=f"test-{i}",
-            connect_timeout=2,
-            sender_msg_type=cp.WORKER_MESSAGE,
-            accepted_msg_type=cp.MANAGER_MESSAGE,
-            handlers={"echo": echo, "SHUTDOWN": echo},
-        )
-        client.start()
-        clients.append(client)
+# @pytest.mark.parametrize(
+#     "dir",
+#     [
+#         (TEST_DIR / "mock" / "data" / "simple_folder"),
+#         (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
+#     ],
+# )
+# def test_server_broadcast_file_to_clients(server, client_lis, dir):
 
-    # Wait until all clients are connected
-    while len(server.client_comms) <= 4:
-        time.sleep(0.1)
+#     # Broadcast file
+#     server.send_folder(name="test", folderpath=dir)
 
-    # Broadcast file
-    server.send_folder(name="test", folderpath=dir)
+#     # Check all clients files
+#     for client in client_list:
+#         miss_counter = 0
+#         while len(client.file_transfer_records.keys()) == 0:
 
-    # Check all clients files
-    for client in clients:
-        miss_counter = 0
-        while len(client.file_transfer_records.keys()) == 0:
+#             miss_counter += 1
+#             time.sleep(0.1)
 
-            miss_counter += 1
-            time.sleep(0.1)
-
-            if miss_counter > 100:
-                assert False, "File transfer failed after 10 second"
-
-    for client in clients:
-        client.shutdown()
+#             if miss_counter > 100:
+#                 assert False, "File transfer failed after 10 second"

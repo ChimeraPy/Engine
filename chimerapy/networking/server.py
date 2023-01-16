@@ -6,6 +6,8 @@ import uuid
 import collections
 import time
 from functools import partial
+import pathlib
+import tempfile
 
 # Third-party
 from aiohttp import web
@@ -25,6 +27,7 @@ logger = _logger.getLogger("chimerapy-networking")
 # https://docs.aiohttp.org/en/stable/web_advanced.html#application-runners
 # https://stackoverflow.com/questions/58455058/how-do-i-avoid-the-loop-argument
 # https://docs.aiohttp.org/en/stable/web_advanced.html?highlight=weakref#graceful-shutdown
+# https://docs.aiohttp.org/en/stable/web_quickstart.html#file-uploads
 
 
 class Server:
@@ -51,6 +54,11 @@ class Server:
 
         # Create AIOHTTP server
         self._app = web.Application()
+
+        # Adding default routes
+        self._app.add_routes([web.post("/file/post", self._file_receive)])
+
+        # Adding unique routes
         if self.routes:
             self._app.add_routes(self.routes)
 
@@ -69,6 +77,10 @@ class Server:
                 }
             )
 
+        # Adding file transfer capabilities
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
+        self.file_transfer_records = collections.defaultdict(dict)
+
     def __str__(self):
         return f"<Server {self.name}>"
 
@@ -82,6 +94,42 @@ class Server:
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
         # Storing the client information
         self.ws_clients[msg["data"]["client_name"]] = {"ws": ws}
+
+    async def _file_receive(self, request):
+        logger.debug(f"{self}: file receive!")
+
+        reader = await request.multipart()
+
+        # /!\ Don't forget to validate your inputs /!\
+
+        # reader.next() will `yield` the fields of your form
+
+        # Get the "file" field
+        field = await reader.next()
+        assert field.name == "file"
+        filename = field.filename
+
+        # Create dst filepath
+        dst_filepath = self.tempfolder / filename
+
+        # # You cannot rely on Content-Length if transfer is chunked.
+        size = 0
+        with open(dst_filepath, "wb") as f:
+            while True:
+                chunk = await field.read_chunk()  # 8192 bytes by default.
+                if not chunk:
+                    break
+                size += len(chunk)
+                f.write(chunk)
+
+        # Keep record of the files sent!
+        self.file_transfer_records[filename] = {
+            "filename": filename,
+            "dst_filepath": dst_filepath,
+            "size": size,
+        }
+
+        return web.Response(text=f"{filename} sized of {size} successfully stored")
 
     ####################################################################
     # IO Main Methods
@@ -130,7 +178,7 @@ class Server:
         await ws.close()
 
     ####################################################################
-    # Client Utilities
+    # Server Utilities
     ####################################################################
 
     async def _send_msg(
@@ -208,17 +256,18 @@ class Server:
         else:
             logger.debug(f"{self}: running at {self.host}:{self.port}")
 
-    def send(
-        self,
-        client_name: str,
-        signal: int,
-        data: Dict,
-        ok: bool = False,
-    ):
+    def send(self, client_name: str, signal: int, data: Dict, ok: bool = False):
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "ok": ok}
         self._thread.exec(partial(self._write_ws, client_name, msg))
+
+    def broadcast(self, signal: int, data: Dict, ok: bool = False):
+        # Create msg container and execute writing coroutine for all
+        # clients
+        msg = {"signal": signal, "data": data, "ok": ok}
+        for client_name in self.ws_clients:
+            self._thread.exec(partial(self._write_ws, client_name, msg))
 
     def shutdown(self):
 

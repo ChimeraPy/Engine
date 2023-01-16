@@ -4,8 +4,11 @@ import asyncio
 import threading
 import collections
 import uuid
-import time
+import pathlib
 from functools import partial
+import shutil
+import time
+import tempfile
 
 # Third-party
 import aiohttp
@@ -52,6 +55,9 @@ class Client:
 
         # Adding default client handlers
         self.ws_handlers.update({GENERAL_MESSAGE.OK: self._ok})
+
+        # Adding file transfer capabilities
+        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
     def __str__(self):
         return f"<Client {self.name}>"
@@ -121,6 +127,14 @@ class Client:
 
             logger.error(f"{self}: OK was not received!")
 
+    async def _send_file_async(self, url: str, data: aiohttp.FormData):
+
+        # Create a new session for the moment
+        async with aiohttp.ClientSession() as session:
+            logger.debug(f"{self}: Executing file transfer to {url}")
+            response = await session.post(url, data=data)
+            logger.debug(f"{self}: File transfer response => {response}")
+
     ####################################################################
     # Client Async Setup and Shutdown
     ####################################################################
@@ -179,6 +193,53 @@ class Client:
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "ok": ok}
         self._thread.exec(partial(self._write_ws, msg))
+
+    def send_file(self, filepath: pathlib.Path):
+
+        # Compose the url
+        url = f"http://{self.host}:{self.port}/file/post"
+
+        # Make a post request to send the file
+        data = aiohttp.FormData()
+        data.add_field(
+            "file",
+            open(filepath, "rb"),
+            filename=filepath.name,
+            content_type="application/zip",
+        )
+        self._thread.exec(partial(self._send_file_async, url, data))
+
+    def send_folder(self, dir: pathlib.Path):
+
+        assert (
+            dir.is_dir() and dir.exists()
+        ), f"Sending {dir} needs to be a folder that exists."
+
+        # Having continuing attempts to make the zip folder
+        miss_counter = 0
+        delay = 1
+        zip_timeout = 10
+
+        # First, we need to archive the folder into a zip file
+        while True:
+            try:
+                shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+                break
+            except:
+                time.sleep(delay)
+                miss_counter += 1
+
+                if zip_timeout < delay * miss_counter:
+                    raise SystemError("Temp folder couldn't be zipped.")
+
+        zip_file = dir.parent / f"{dir.name}.zip"
+
+        # Relocate zip to the tempfolder
+        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
+        shutil.move(zip_file, temp_zip_file)
+
+        # Then send the file
+        self.send_file(temp_zip_file)
 
     def connect(self):
 
