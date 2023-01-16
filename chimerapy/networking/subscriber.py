@@ -1,86 +1,96 @@
 # Built-in
+from typing import Optional, Union
 import threading
 import pickle
 import datetime
 
 # Third-party Imports
-import numpy as np
-import imutils
 import zmq
-import cv2
-import simplejpeg
+
+# Internal Imports
+from .data_chunk import DataChunk
+
+# Logging
+from .. import _logger
+
+logger = _logger.getLogger("chimerapy-networking")
+
+# Reference:
+# https://pyzmq.readthedocs.io/en/latest/api/zmq.html?highlight=socket#polling
 
 
 class Subscriber:
     def __init__(self, port: int, host: str):
 
-        self.port = port
-        self.host = host
-        self.running = False
+        self.port: int = port
+        self.host: str = host
+        self.running: bool = False
+        self._data_chunk: DataChunk = DataChunk()
+
+    def __str__(self):
+        return f"<Subscriber listening {self.host}:{self.port}>"
 
     def receive_loop(self):
 
         while self.running:
 
-            # Send
-            pickled_msg = self.zmq_socket.recv()
-            msg = pickle.loads(pickled_msg)
-            self.frame = simplejpeg.decode_jpeg(msg["frame"])
+            # Poll (list of tuples of (socket, event_mask))
+            events = self._zmq_poller.poll(timeout=1000)
 
-            self.ready.set()
+            # If there is incoming data, then we know that the SUB
+            # socket has content
+            if events:
 
-            # Compute delta time
-            delta = (datetime.datetime.now() - msg["timestamp"]).total_seconds()
-            print(f"fps: {(1/delta):.2f}")
+                # Recv
+                serial_data_chunk = self._zmq_socket.recv()
+                self._data_chunk = DataChunk.from_bytes(serial_data_chunk)
+                self._ready.set()
 
-    def receive(self):
+    def receive(
+        self,
+        check_period: Union[int, float] = 0.1,
+        timeout: Optional[Union[int, float]] = None,
+    ):
 
+        counter = 0
         while self.running:
 
-            flag = self.ready.wait(timeout=1)
-            if not flag:
-                continue
+            flag = self._ready.wait(timeout=check_period)
+            if not flag:  # miss
+                counter += 1
 
-            return self.frame
+                if timeout and timeout < counter * check_period:
+                    raise TimeoutError(f"{self}: receive timeout!")
+                else:
+                    continue
+
+            else:  # Hit
+                return self._data_chunk
 
     def start(self):
 
         # Mark that the Subscriber is running
         self.running = True
-        self.frame = None
 
         # Create socket
-        self.zmq_context = zmq.Context()
-        self.zmq_socket = self.zmq_context.socket(zmq.SUB)
-        self.zmq_socket.setsockopt(zmq.CONFLATE, 1)
-        self.zmq_socket.connect(f"tcp://{self.host}:{self.port}")
-        self.zmq_socket.subscribe(b"")
+        self._zmq_context = zmq.Context()
+        self._zmq_socket = self._zmq_context.socket(zmq.SUB)
+        self._zmq_socket.setsockopt(zmq.CONFLATE, 1)
+        self._zmq_socket.connect(f"tcp://{self.host}:{self.port}")
+        self._zmq_socket.subscribe(b"")
+
+        # Create poller to make smart non-blocking IO
+        self._zmq_poller = zmq.Poller()
+        self._zmq_poller.register(self._zmq_socket, zmq.POLLIN)
 
         # Create thread
-        self.ready = threading.Event()
-        self.ready.clear()
-        self.receive_thread = threading.Thread(target=self.receive_loop)
-        self.receive_thread.start()
+        self._ready = threading.Event()
+        self._ready.clear()
+        self._receive_thread = threading.Thread(target=self.receive_loop)
+        self._receive_thread.start()
 
     def shutdown(self):
-        self.running = False
-        self.receive_thread.join()
 
-
-if __name__ == "__main__":
-
-    subscriber = Subscriber(port=5555, host="localhost")
-    subscriber.start()
-
-    try:
-        while True:
-            frame = subscriber.receive()
-
-            cv2.imshow("subscriber", frame)
-            if cv2.waitKey(1) == ord("q"):
-                break
-
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt detected, shutting down")
-    finally:
-        subscriber.shutdown()
+        if self.running:
+            self.running = False
+            self._receive_thread.join()

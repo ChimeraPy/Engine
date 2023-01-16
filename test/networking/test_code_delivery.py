@@ -13,7 +13,7 @@ cp.debug()
 from .conftest import linux_run_only
 
 # Constant
-TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
 TEST_PACKAGE_DIR = TEST_DIR / "mock"
 
 

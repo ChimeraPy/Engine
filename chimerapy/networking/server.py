@@ -8,13 +8,17 @@ import time
 from functools import partial
 import pathlib
 import tempfile
+import shutil
+import os
+import pickle
+import enum
 
 # Third-party
 from aiohttp import web
 
 # Internal Imports
 from .async_loop_thread import AsyncLoopThread
-from .utils import decode_payload, create_payload
+from ..utils import decode_payload, create_payload, async_waiting_for, waiting_for
 from .enums import CLIENT_MESSAGE, GENERAL_MESSAGE
 
 # Logging
@@ -37,7 +41,7 @@ class Server:
         port: int,
         host: Optional[str] = "localhost",
         routes: Optional[Dict[str, Callable]] = None,
-        ws_handlers: Optional[Dict[int, Callable]] = None,
+        ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
     ):
 
         # Store parameters
@@ -103,6 +107,11 @@ class Server:
         # /!\ Don't forget to validate your inputs /!\
 
         # reader.next() will `yield` the fields of your form
+        # Get the "meta" field
+        field = await reader.next()
+        assert field.name == "meta"
+        meta_bytes = await field.read(decode=True)
+        meta = pickle.loads(meta_bytes)
 
         # Get the "file" field
         field = await reader.next()
@@ -123,7 +132,7 @@ class Server:
                 f.write(chunk)
 
         # Keep record of the files sent!
-        self.file_transfer_records[filename] = {
+        self.file_transfer_records[meta["sender_name"]][filename] = {
             "filename": filename,
             "dst_filepath": dst_filepath,
             "size": size,
@@ -182,11 +191,13 @@ class Server:
     ####################################################################
 
     async def _send_msg(
-        self, ws: web.WebSocketResponse, signal: int, data: Dict, ok: bool = False
+        self,
+        ws: web.WebSocketResponse,
+        signal: enum.Enum,
+        data: Dict,
+        msg_uuid: str = str(uuid.uuid4()),
+        ok: bool = False,
     ):
-
-        # Create uuid
-        msg_uuid = str(uuid.uuid4())
 
         # Create payload
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
@@ -197,13 +208,14 @@ class Server:
 
         # If ok, wait until ok
         if ok:
-            for i in range(10):
-                if msg_uuid in self.uuid_records:
-                    return
-                else:
-                    await asyncio.sleep(1)
-
-            logger.error(f"{self}: OK was not received!")
+            await async_waiting_for(
+                lambda: msg_uuid in self.uuid_records,
+                check_period=0.1,
+                success_msg=f"{self}: OK received",
+                timeout=10,
+                timeout_raise=False,
+                timeout_msg=f"{self}: OK was not received!",
+            )
 
     ####################################################################
     # Server Async Setup and Shutdown
@@ -256,18 +268,71 @@ class Server:
         else:
             logger.debug(f"{self}: running at {self.host}:{self.port}")
 
-    def send(self, client_name: str, signal: int, data: Dict, ok: bool = False):
+    def send(self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False):
+
+        # Create uuid
+        msg_uuid = str(uuid.uuid4())
 
         # Create msg container and execute writing coroutine
-        msg = {"signal": signal, "data": data, "ok": ok}
+        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
         self._thread.exec(partial(self._write_ws, client_name, msg))
 
-    def broadcast(self, signal: int, data: Dict, ok: bool = False):
+        if ok:
+            waiting_for(
+                lambda: msg_uuid in self.uuid_records,
+                check_period=0.1,
+                timeout=10,
+                timeout_raise=False,
+            )
+
+    def broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
         for client_name in self.ws_clients:
             self._thread.exec(partial(self._write_ws, client_name, msg))
+
+    def move_transfer_files(self, dst: pathlib.Path, unzip: bool):
+
+        for name, filepath_dict in self.file_transfer_records.items():
+            # Create a folder for the name
+            named_dst = dst / name
+            os.mkdir(named_dst)
+
+            # Move all the content inside
+            for filename, filepath in filepath_dict.items():
+
+                # If not unzip, just move it
+                if not unzip:
+                    shutil.move(filepath, named_dst / filename)
+
+                # Otherwise, unzip, move content to the original folder,
+                # and delete the zip file
+                else:
+                    shutil.unpack_archive(filepath, named_dst)
+
+                    # Handling if temp folder includes a _ in the beginning
+                    new_filename = filepath.stem
+                    if new_filename[0] == "_":
+                        new_filename = new_filename[1:]
+
+                    new_file = named_dst / new_filename
+
+                    # Wait until file is ready
+                    miss_counter = 0
+                    delay = 0.5
+                    timeout = 10
+                    while not new_file.exists():
+                        time.sleep(delay)
+                        miss_counter += 1
+                        if timeout < delay * miss_counter:
+                            raise TimeoutError(
+                                f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
+                            )
+
+                    for file in new_file.iterdir():
+                        shutil.move(file, named_dst)
+                    shutil.rmtree(new_file)
 
     def shutdown(self):
 

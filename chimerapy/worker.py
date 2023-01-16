@@ -11,17 +11,26 @@ import shutil
 import sys
 from concurrent.futures import wait
 
+# Third-party Imports
 import dill
+import aiohttp
+from aiohttp import web
 
-from .networking import Server, Client, get_ip_address
-from . import enums
+from .utils import get_ip_address
+from .networking import Server, Client
+from .networking.enums import (
+    GENERAL_MESSAGE,
+    MANAGER_MESSAGE,
+    NODE_MESSAGE,
+    WORKER_MESSAGE,
+)
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
 
 
 class Worker:
-    def __init__(self, name: str, max_num_of_nodes: int = 10, delete_temp: bool = True):
+    def __init__(self, name: str, port: int = 9080, delete_temp: bool = True):
         """Create a local Worker.
 
         To execute ``Nodes`` within the main computer that is also housing
@@ -42,8 +51,8 @@ class Worker:
         """
 
         # Saving parameters
+        self.port = port
         self.name = name
-        self.max_num_of_nodes = max_num_of_nodes
 
         # Instance variables
         self.has_shutdown: bool = False
@@ -52,41 +61,23 @@ class Worker:
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
 
-        # Indicating which function to response
-        self.to_manager_handlers = {
-            enums.SHUTDOWN: self.shutdown,
-            enums.MANAGER_CREATE_NODE: self.create_node,
-            enums.MANAGER_REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
-            enums.MANAGER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
-            enums.MANAGER_REQUEST_GATHER: self.report_node_gather,
-            enums.MANAGER_REQUEST_STEP: self.step,
-            enums.MANAGER_START_NODES: self.start_nodes,
-            enums.MANAGER_STOP_NODES: self.stop_nodes,
-            enums.MANAGER_REQUEST_COLLECT: self.send_archive,
-            enums.MANAGER_REQUEST_CODE_LOAD: self.load_sent_packages,
-        }
-        self.from_node_handlers = {
-            enums.NODE_STATUS: self.node_status_update,
-            enums.NODE_REPORT_GATHER: self.node_report_gather,
-        }
-
         # Create temporary data folder
         self.delete_temp = delete_temp
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Create server
         self.server = Server(
-            port=8000,
+            port=self.port,
             name=str(self),
-            max_num_of_clients=self.max_num_of_nodes,
-            sender_msg_type=enums.WORKER_MESSAGE,
-            accepted_msg_type=enums.NODE_MESSAGE,
-            handlers=self.from_node_handlers,
+            ws_handlers={
+                NODE_MESSAGE.STATUS: self.node_status_update,
+                NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
+            },
         )
 
         # Accesing the port information and starting the server
         self.host, self.port = self.server.host, self.server.port
-        self.server.start()
+        self.server.serve()
 
     def __repr__(self):
         return f"<Worker {self.name}>"
@@ -95,10 +86,10 @@ class Worker:
         return self.__repr__()
 
     ####################################################################
-    ## Message Reactivity API
+    ## Message Reactivity API - Client
     ####################################################################
 
-    def create_node(self, msg: Dict):
+    async def create_node(self, msg: Dict):
 
         # Saving name to track it for now
         node_name = msg["data"]["node_name"]
@@ -165,45 +156,28 @@ class Worker:
         }
 
         if self.connected_to_manager:
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.WORKER_REPORT_NODES_STATUS,
-                            "data": nodes_status_data,
-                        },
-                    )
-                ]
+            self.client.send(
+                signal=WORKER_MESSAGE.REPORT_NODES_STATUS, data=nodes_status_data
             )
 
-    def report_node_server_data(self, msg: Dict):
+    async def report_node_server_data(self, msg: Dict):
 
         node_server_data = self.create_node_server_data()
 
         # Then manager request the node server data, so provide it
         if self.connected_to_manager:
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.WORKER_REPORT_NODE_SERVER_DATA,
-                            "data": node_server_data,
-                        }
-                    )
-                ]
+            self.client.send(
+                signal=WORKER_MESSAGE.REPORT_NODE_SERVER_DATA,
+                data=node_server_data,
             )
 
-    def process_node_server_data(self, msg: Dict):
+    async def process_node_server_data(self, msg: Dict):
 
         logger.debug(f"{self}: processing node server data")
 
-        wait(
-            self.server.broadcast(
-                {
-                    "signal": enums.WORKER_BROADCAST_NODE_SERVER_DATA,
-                    "data": msg["data"],
-                }
-            )
+        self.server.broadcast(
+            signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
+            data=msg["data"],
         )
 
         # Now wait until all nodes have responded as CONNECTED
@@ -220,37 +194,17 @@ class Worker:
 
         # Update the nodes status
         if self.connected_to_manager:
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.WORKER_REPORT_NODES_STATUS,
-                            "data": nodes_status_data,
-                        },
-                    )
-                ]
+            self.client.send(
+                signal=WORKER_MESSAGE.REPORT_NODES_STATUS,
+                data=nodes_status_data,
             )
 
             # Then confirm that all the node server data has been distributed
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.WORKER_COMPLETE_BROADCAST,
-                            "data": {"name": self.name},
-                        }
-                    )
-                ]
+            self.client.send(
+                signal=WORKER_MESSAGE.COMPLETE_BROADCAST, data={"name": self.name}
             )
 
-    def node_report_gather(self, msg: Dict, node_socket: socket.socket):
-
-        # Saving name to track it for now
-        node_name = msg["data"]["node_name"]
-        self.nodes[node_name]["response"] = True
-        self.nodes[node_name]["gather"] = msg["data"]["latest_value"]
-
-    def report_node_gather(self, msg: Dict):
+    async def report_node_gather(self, msg: Dict):
 
         logger.debug(f"{self}: reporting to Manager gather request")
 
@@ -258,14 +212,7 @@ class Worker:
         self.mark_all_response_as_false_for_nodes()
 
         # Request gather from Worker to Nodes
-        wait(
-            self.server.broadcast(
-                {
-                    "signal": enums.WORKER_REQUEST_GATHER,
-                    "data": {},
-                }
-            )
-        )
+        self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
 
         self.wait_until_all_nodes_responded(timeout=5)
 
@@ -275,46 +222,9 @@ class Worker:
             gather_data["node_data"][node_name] = node_data["gather"]
 
         # Send it back to the Manager
-        wait(
-            [
-                self.client.send(
-                    {"signal": enums.WORKER_REPORT_GATHER, "data": gather_data}
-                )
-            ]
-        )
+        self.client.send(signal=WORKER_MESSAGE.REPORT_GATHER, data=gather_data)
 
-    def node_status_update(self, msg: Dict, s: socket.socket):
-
-        # Saving name to track it for now
-        node_name = msg["data"]["node_name"]
-        status = msg["data"]["status"]
-
-        # Update our records by grabbing all data from the msg
-        self.nodes[node_name].update(
-            {k: v for k, v in msg["data"].items() if k != "node_name"}
-        )
-        self.nodes[node_name]["response"] = True
-
-        # Construct information of all the nodes to be send to the Manager
-        nodes_status_data = {
-            "name": self.name,
-            "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
-        }
-
-        # Update Manager on the new nodes status
-        if self.connected_to_manager:
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "signal": enums.WORKER_REPORT_NODES_STATUS,
-                            "data": nodes_status_data,
-                        }
-                    )
-                ]
-            )
-
-    def load_sent_packages(self, msg: Dict):
+    async def load_sent_packages(self, msg: Dict):
 
         # For each package, extract it from the client's tempfolder
         # and load it to the sys.path
@@ -326,7 +236,7 @@ class Worker:
             logger.info(f"{self}: Appending to path: {package_zip_path}")
             sys.path.insert(0, str(package_zip_path))
 
-    def send_archive(self, msg: Dict):
+    async def send_archive(self, msg: Dict):
 
         # Default value of success
         success = False
@@ -371,16 +281,46 @@ class Worker:
                 success = False
 
         # After completion, let the Manager know
-        wait(
-            [
-                self.client.send(
-                    {
-                        "signal": enums.WORKER_TRANSFER_COMPLETE,
-                        "data": {"name": self.name, "success": success},
-                    }
-                )
-            ]
+        self.client.send(
+            signal=WORKER_MESSAGE.TRANSFER_COMPLETE,
+            data={"name": self.name, "success": success},
         )
+
+    ####################################################################
+    ## Message Reactivity API - Server
+    ####################################################################
+
+    async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
+
+        # Saving name to track it for now
+        node_name = msg["data"]["node_name"]
+        self.nodes[node_name]["response"] = True
+        self.nodes[node_name]["gather"] = msg["data"]["latest_value"]
+
+    async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
+
+        # Saving name to track it for now
+        node_name = msg["data"]["node_name"]
+        status = msg["data"]["status"]
+
+        # Update our records by grabbing all data from the msg
+        self.nodes[node_name].update(
+            {k: v for k, v in msg["data"].items() if k != "node_name"}
+        )
+        self.nodes[node_name]["response"] = True
+
+        # Construct information of all the nodes to be send to the Manager
+        nodes_status_data = {
+            "name": self.name,
+            "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
+        }
+
+        # Update Manager on the new nodes status
+        if self.connected_to_manager:
+            self.client.send(
+                signal=WORKER_MESSAGE.REPORT_NODES_STATUS,
+                data=nodes_status_data,
+            )
 
     ####################################################################
     ## Helper Methods
@@ -433,7 +373,7 @@ class Worker:
         return node_server_data
 
     ####################################################################
-    ## Node Lifecycle API
+    ## Worker Lifecycle API
     ####################################################################
 
     def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
@@ -455,28 +395,30 @@ class Worker:
         self.client = Client(
             host=host,
             port=port,
-            name=str(self),
-            connect_timeout=timeout,
-            sender_msg_type=enums.WORKER_MESSAGE,
-            accepted_msg_type=enums.MANAGER_MESSAGE,
-            handlers=self.to_manager_handlers,
+            name=self.name,
+            ws_handlers={
+                GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
+                MANAGER_MESSAGE.CREATE_NODE: self.create_node,
+                MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
+                MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+                MANAGER_MESSAGE.REQUEST_GATHER: self.report_node_gather,
+                MANAGER_MESSAGE.REQUEST_STEP: self.step,
+                MANAGER_MESSAGE.START_NODES: self.start_nodes,
+                MANAGER_MESSAGE.STOP_NODES: self.stop_nodes,
+                MANAGER_MESSAGE.REQUEST_COLLECT: self.send_archive,
+                MANAGER_MESSAGE.REQUEST_CODE_LOAD: self.load_sent_packages,
+            },
         )
-        self.client.start()
+        self.client.connect()
 
         # Sending message to register
-        wait(
-            [
-                self.client.send(
-                    msg={
-                        "signal": enums.WORKER_REGISTER,
-                        "data": {
-                            "name": self.name,
-                            "addr": socket.gethostbyname(socket.gethostname()),
-                        },
-                    },
-                    ack=True,
-                )
-            ]
+        self.client.send(
+            signal=WORKER_MESSAGE.REGISTER,
+            data={
+                "name": self.name,
+                "addr": socket.gethostbyname(socket.gethostname()),
+            },
+            ok=True,
         )
 
         # Tracking client state change
@@ -489,17 +431,17 @@ class Worker:
     def step(self, msg: Dict):
 
         # Worker tell all nodes to take a step
-        wait(self.server.broadcast({"signal": enums.WORKER_REQUEST_STEP, "data": {}}))
+        self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
 
     def start_nodes(self, msg: Dict):
 
         # Send message to nodes to start
-        wait(self.server.broadcast({"signal": enums.WORKER_START_NODES, "data": {}}))
+        self.server.broadcast(signal=WORKER_MESSAGE.START_NODES, data={})
 
     def stop_nodes(self, msg: Dict):
 
         # Send message to nodes to start
-        wait(self.server.broadcast({"signal": enums.WORKER_STOP_NODES, "data": {}}))
+        self.server.broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
 
     def idle(self):
 
@@ -542,19 +484,12 @@ class Worker:
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)
         if self.connected_to_manager:
-            wait(
-                [
-                    self.client.send(
-                        {
-                            "type": enums.WORKER_MESSAGE,
-                            "signal": enums.WORKER_DEREGISTER,
-                            "data": {
-                                "name": self.name,
-                                "addr": socket.gethostbyname(socket.gethostname()),
-                            },
-                        },
-                    )
-                ]
+            self.client.send(
+                signal=WORKER_MESSAGE.DEREGISTER,
+                data={
+                    "name": self.name,
+                    "addr": socket.gethostbyname(socket.gethostname()),
+                },
             )
 
             # Shutdown client

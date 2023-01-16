@@ -9,6 +9,8 @@ from functools import partial
 import shutil
 import time
 import tempfile
+import pickle
+import enum
 
 # Third-party
 import aiohttp
@@ -16,7 +18,7 @@ from aiohttp import web
 
 # Internal Imports
 from .async_loop_thread import AsyncLoopThread
-from .utils import create_payload, decode_payload
+from ..utils import create_payload, decode_payload, waiting_for, async_waiting_for
 from .enums import CLIENT_MESSAGE, GENERAL_MESSAGE
 
 # Logging
@@ -36,7 +38,7 @@ class Client:
         name: str,
         host: str,
         port: int,
-        ws_handlers=Dict[int, Callable[[], Coroutine]],
+        ws_handlers=Dict[enum.Enum, Callable[[], Coroutine]],
     ):
 
         # Store parameters
@@ -103,10 +105,13 @@ class Client:
     # Client Utilities
     ####################################################################
 
-    async def _send_msg(self, signal: int, data: Dict, ok: bool = False):
-
-        # Create uuid
-        msg_uuid = str(uuid.uuid4())
+    async def _send_msg(
+        self,
+        signal: enum.Enum,
+        data: Dict,
+        msg_uuid: str = str(uuid.uuid4()),
+        ok: bool = False,
+    ):
 
         # Create payload
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
@@ -117,15 +122,15 @@ class Client:
 
         # If ok, wait until ok
         if ok:
-            for i in range(10):
-                logger.debug(f"{self}: waiting OK for {msg_uuid}, {self.uuid_records}")
-                if msg_uuid in self.uuid_records:
-                    logger.debug(f"{self}: OK received")
-                    return
-                else:
-                    await asyncio.sleep(1)
 
-            logger.error(f"{self}: OK was not received!")
+            await async_waiting_for(
+                lambda: msg_uuid in self.uuid_records,
+                check_period=0.1,
+                success_msg=f"{self}: OK received",
+                timeout=10,
+                timeout_raise=False,
+                timeout_msg=f"{self}: OK was not received!",
+            )
 
     async def _send_file_async(self, url: str, data: aiohttp.FormData):
 
@@ -151,7 +156,7 @@ class Client:
 
     async def _main(self):
 
-        logger.debug(f"{self}: main -> http://{self.host}:{self.port}/ws")
+        logger.debug(f"{self}: _main -> http://{self.host}:{self.port}/ws")
 
         # Create record of message uuids
         self.uuid_records = collections.deque(maxlen=100)
@@ -188,19 +193,32 @@ class Client:
     # Client Sync Lifecyle API
     ####################################################################
 
-    def send(self, signal: str, data: Any, ok: bool = False):
+    def send(self, signal: enum.Enum, data: Any, ok: bool = False):
+
+        # Create uuid
+        msg_uuid = str(uuid.uuid4())
 
         # Create msg container and execute writing coroutine
-        msg = {"signal": signal, "data": data, "ok": ok}
+        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
         self._thread.exec(partial(self._write_ws, msg))
 
-    def send_file(self, filepath: pathlib.Path):
+        if ok:
+
+            waiting_for(
+                lambda: msg_uuid in self.uuid_records,
+                check_period=0.1,
+                timeout=10,
+                timeout_raise=False,
+            )
+
+    def send_file(self, sender_name: str, filepath: pathlib.Path):
 
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Make a post request to send the file
         data = aiohttp.FormData()
+        data.add_field("meta", pickle.dumps({"sender_name": sender_name}))
         data.add_field(
             "file",
             open(filepath, "rb"),
@@ -209,7 +227,7 @@ class Client:
         )
         self._thread.exec(partial(self._send_file_async, url, data))
 
-    def send_folder(self, dir: pathlib.Path):
+    def send_folder(self, sender_name: str, dir: pathlib.Path):
 
         assert (
             dir.is_dir() and dir.exists()
@@ -239,9 +257,11 @@ class Client:
         shutil.move(zip_file, temp_zip_file)
 
         # Then send the file
-        self.send_file(temp_zip_file)
+        self.send_file(sender_name, temp_zip_file)
 
     def connect(self):
+
+        logger.debug(f"{self}: start connect routine")
 
         # Mark that the client is running
         self.running.set()
@@ -253,6 +273,7 @@ class Client:
         self._thread.start()
 
         # Start async execution
+        logger.debug(f"{self}: executing _main")
         self._thread.exec(self._main)
 
         # Wait until client is ready

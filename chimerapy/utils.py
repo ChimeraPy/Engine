@@ -1,11 +1,21 @@
-from typing import Callable, Union, Optional
+from typing import Callable, Union, Optional, Any, Dict
 import queue
 import logging
 import functools
 import time
+import enum
+import pickle
+import datetime
+import uuid
+import socket
+import asyncio
 
+# Third-party
 from tqdm import tqdm
+import blosc
+import netifaces as ni
 
+# Internal
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
@@ -66,10 +76,12 @@ class logging_tqdm(tqdm):
         self.logger.info("%s", msg)
 
 
-def waiting_for(
+async def async_waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,
+    success_msg: Optional[str] = None,
     timeout: Optional[Union[int, float]] = None,
+    timeout_raise: Optional[bool] = True,
     timeout_msg: Optional[str] = None,
 ) -> bool:
 
@@ -77,10 +89,102 @@ def waiting_for(
     while True:
 
         if condition():
+            if success_msg:
+                logger.debug(success_msg)
+            return True
+        else:
+            await asyncio.sleep(check_period)
+            counter += 1
+
+            if timeout and counter * check_period > timeout:
+                if timeout_raise:
+                    raise TimeoutError(timeout_msg)
+                else:
+                    if timeout_msg:
+                        logger.debug(timeout_msg)
+                    return False
+
+
+def waiting_for(
+    condition: Callable[[], bool],
+    check_period: Union[int, float] = 0.1,
+    success_msg: Optional[str] = None,
+    timeout: Optional[Union[int, float]] = None,
+    timeout_raise: Optional[bool] = True,
+    timeout_msg: Optional[str] = None,
+) -> bool:
+
+    counter = 0
+    while True:
+
+        if condition():
+            if success_msg:
+                logger.debug(success_msg)
             return True
         else:
             time.sleep(check_period)
             counter += 1
 
             if timeout and counter * check_period > timeout:
-                raise TimeoutError(timeout_msg)
+                if timeout_raise:
+                    raise TimeoutError(timeout_msg)
+                else:
+                    if timeout_msg:
+                        logger.debug(timeout_msg)
+                    return False
+
+
+def get_open_port(start_port: int) -> socket.socket:
+
+    # Creating socket to connect
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    offset = 0
+
+    while True:
+        try:
+            current_attempt_port = start_port + offset
+            s.bind(("", current_attempt_port))
+            break
+        except socket.error as e:
+            offset += 10
+            if e.errno == errno.EADDRINUSE:
+                logger.debug(f"Port {current_attempt_port} is already in use.")
+            else:
+                logger.error("Unknown socket error", exc_info=True)
+                raise e
+
+    return s
+
+
+def get_ip_address() -> str:
+
+    # Get gateway of the network
+    gws = ni.gateways()
+    default_gw_name = gws["default"][ni.AF_INET][1]
+
+    # Get the ip in the default gateway
+    ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
+    return ip
+
+
+def create_payload(
+    signal: enum.Enum,
+    data: Any,
+    msg_uuid: str = str(uuid.uuid4()),
+    timestamp: datetime.timedelta = datetime.timedelta(),
+    ok: bool = False,
+) -> bytes:
+
+    payload = {
+        "signal": signal,
+        "timestamp": str(timestamp),
+        "data": data,
+        "uuid": msg_uuid,
+        "ok": ok,
+    }
+
+    return blosc.compress(pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL))
+
+
+def decode_payload(data: bytes) -> Dict[str, Any]:
+    return pickle.loads(blosc.decompress(data))

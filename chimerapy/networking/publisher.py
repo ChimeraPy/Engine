@@ -1,60 +1,48 @@
 # Built-in Imports
 import threading
 import pickle
-import time
 
 # Third-party Imports
-from PIL import ImageGrab
-import numpy as np
-import imutils
 import zmq
-import mss
-import cv2
-import datetime
-import simplejpeg
+
+# Internal Imports
+from .data_chunk import DataChunk
+from ..utils import get_ip_address
 
 # Resources:
 # https://learning-0mq-with-pyzmq.readthedocs.io/en/latest/pyzmq/patterns/pushpull.html
 
 
-def serialize(msg):
-    return pickle.dumps(msg, pickle.HIGHEST_PROTOCOL)
-
-
 class Publisher:
     def __init__(self, port: int):
 
-        self.port = port
-        self.running = False
+        # Storing state variables
+        self.port: int = port
+        self.host: str = get_ip_address()
+        self.running: bool = False
+        self._data_chunk: DataChunk = DataChunk()
 
-    def send(self, frame):
-        self.frame = frame
-        self.ready.set()
+    def __str__(self):
+        return f"<Publisher writing to {self.host}:{self.port}>"
+
+    def publish(self, data_chunk: DataChunk):
+        self._data_chunk = data_chunk
+        self._ready.set()
 
     def send_loop(self):
 
         while self.running:
 
             # # Wait until we have data to send!
-            flag = self.ready.wait(timeout=1)
+            flag = self._ready.wait(timeout=1)
             if not flag:
                 continue
 
             # Send
-            self.zmq_socket.send(
-                serialize(
-                    {
-                        "timestamp": datetime.datetime.now(),
-                        "frame": simplejpeg.encode_jpeg(
-                            np.ascontiguousarray(self.frame)
-                        ),
-                    }
-                )
-            )
+            self._zmq_socket.send(self._data_chunk._serialize())
 
             # Mark finish
-            self.ready.clear()
-            self.prev_frame = self.frame.copy()
+            self._ready.clear()
 
     def start(self):
 
@@ -62,18 +50,18 @@ class Publisher:
         self.running = True
 
         # Create the socket
-        self.zmq_context = zmq.Context()
-        self.zmq_socket = self.zmq_context.socket(zmq.PUB)
-        self.zmq_socket.bind(f"tcp://*:{self.port}")
+        self._zmq_context = zmq.Context()
+        self._zmq_socket = self._zmq_context.socket(zmq.PUB)
+        self._zmq_socket.bind(f"tcp://{self.host}:{self.port}")
 
         # Create send thread
-        self.ready = threading.Event()
-        self.ready.clear()
-        self.send_thread = threading.Thread(target=self.send_loop)
-        self.send_thread.start()
+        self._ready = threading.Event()
+        self._ready.clear()
+        self._send_thread = threading.Thread(target=self.send_loop)
+        self._send_thread.start()
 
     def shutdown(self):
 
         # Mark to stop
         self.running = False
-        self.send_thread.join()
+        self._send_thread.join()

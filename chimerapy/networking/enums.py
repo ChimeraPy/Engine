@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class GENERAL_MESSAGE(Enum):
+    SHUTDOWN = -1
     OK = 0
     FILE_TRANSFER_START = 1
     FILE_TRANSFER_END = 2

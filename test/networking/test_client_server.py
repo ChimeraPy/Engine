@@ -24,7 +24,7 @@ logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
 # Constants
-TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
 IMG_SIZE = 400
 NUMBER_OF_CLIENTS = 5
 
@@ -157,7 +157,7 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
 def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    client.send_folder(dir=dir)
+    client.send_folder(sender_name="test_worker", dir=dir)
 
     # Get the expected behavior
     miss_counter = 0
@@ -170,7 +170,7 @@ def test_client_sending_folder_to_server(server, client, dir):
             assert False, "File transfer failed after 10 second"
 
     # Also check that the file exists
-    for record in server.file_transfer_records.values():
+    for record in server.file_transfer_records["test_worker"].values():
         assert record["dst_filepath"].exists()
 
 
