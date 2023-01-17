@@ -27,6 +27,13 @@ class Subscriber:
         self.running: bool = False
         self._data_chunk: DataChunk = DataChunk()
 
+        # Create socket
+        self._zmq_context = zmq.Context()
+        self._zmq_socket = self._zmq_context.socket(zmq.SUB)
+        self._zmq_socket.setsockopt(zmq.CONFLATE, 1)
+        self._zmq_socket.connect(f"tcp://{self.host}:{self.port}")
+        self._zmq_socket.subscribe(b"")
+
     def __str__(self):
         return f"<Subscriber@{self.host}:{self.port}>"
 
@@ -71,13 +78,6 @@ class Subscriber:
 
         # Mark that the Subscriber is running
         self.running = True
-
-        # Create socket
-        self._zmq_context = zmq.Context()
-        self._zmq_socket = self._zmq_context.socket(zmq.SUB)
-        self._zmq_socket.setsockopt(zmq.CONFLATE, 1)
-        self._zmq_socket.connect(f"tcp://{self.host}:{self.port}")
-        self._zmq_socket.subscribe(b"")
 
         # Create poller to make smart non-blocking IO
         self._zmq_poller = zmq.Poller()

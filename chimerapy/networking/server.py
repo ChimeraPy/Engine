@@ -250,7 +250,12 @@ class Server:
 
     async def _server_shutdown(self):
 
+        # Create shutdown message
+        msg = {"signal": GENERAL_MESSAGE.SHUTDOWN, "data": {}, "ok": False}
+
         # Sending to clients that server shutting!
+        for client_name in self.ws_clients:
+            await self._write_ws(client_name, msg)
 
         # Cleanup and signal complete
         await self._runner.cleanup()

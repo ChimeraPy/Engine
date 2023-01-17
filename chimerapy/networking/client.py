@@ -51,12 +51,19 @@ class Client:
         self.running = threading.Event()
         self.running.clear()
         self.msg_processed_counter = 0
+        self._client_shutdown_complete = threading.Event()
+        self._client_shutdown_complete.clear()
 
         # Communication between Async + Sync
         self._send_msg_queue = asyncio.Queue()
 
         # Adding default client handlers
-        self.ws_handlers.update({GENERAL_MESSAGE.OK: self._ok})
+        self.ws_handlers.update(
+            {
+                GENERAL_MESSAGE.OK: self._ok,
+                GENERAL_MESSAGE.SHUTDOWN: self._client_shutdown,
+            }
+        )
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -184,9 +191,7 @@ class Client:
         # Mark to stop and close things
         self.running.clear()
         await self._ws.close()
-
         del self._ws
-
         self._client_shutdown_complete.set()
 
     ####################################################################
@@ -286,16 +291,14 @@ class Client:
 
     def shutdown(self):
 
-        # Use client event for shutdown
-        self._client_shutdown_complete = threading.Event()
-        self._client_shutdown_complete.clear()
+        if self.running.is_set():
 
-        # Execute shutdown
-        self._thread.exec(self._client_shutdown)
+            # Execute shutdown
+            self._thread.exec(self._client_shutdown)
 
-        # Wait for it
-        if not self._client_shutdown_complete.wait(timeout=5):
-            logger.warning(f"{self}: failed to gracefully shutdown")
+            # Wait for it
+            if not self._client_shutdown_complete.wait(timeout=5):
+                logger.warning(f"{self}: failed to gracefully shutdown")
 
         # Stop threaded loop
         self._thread.stop()

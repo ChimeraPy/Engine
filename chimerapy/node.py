@@ -13,6 +13,7 @@ import datetime
 import multiprocess as mp
 import numpy as np
 import pandas as pd
+import zmq
 
 # Internal Imports
 from .networking import Client, Publisher, Subscriber, DataChunk
@@ -48,7 +49,8 @@ class Node(mp.Process):
 
         # Saving state variables
         self.publisher: Optional[Publisher] = None
-        self.subscriber: Optional[Subscriber] = None
+        self.p2p_subs: List[Subscriber] = []
+        self.sub_poller: Optional[zmq.Poller] = None
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -131,16 +133,18 @@ class Node(mp.Process):
             # Determine the host and port information
             out_bound_info = msg["data"][out_bound_name]
 
-            # Create a client to the out bound node
-            p2p_client = Client(
-                host=out_bound_info["host"],
-                port=out_bound_info["port"],
-                name=str(self),
-                ws_handlers=self.to_node_handlers,
+            # Create subscribers to other nodes' publishers
+            p2p_subscriber = Subscriber(
+                host=out_bound_info["host"], port=out_bound_info["port"]
             )
 
-            # # Save the client
-            self.p2p_clients[out_bound_name] = p2p_client
+            # Storing all subscribers
+            self.p2p_subs.append(p2p_subscriber)
+
+        # After creating all subscribers, use a poller to track them all
+        self.sub_poller = zmq.Poller()
+        for sub in self.p2p_subs:
+            self.sub_poller.register(sub._zmq_socket, zmq.POLLIN)
 
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
@@ -359,18 +363,21 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while self.running.value:
 
-                # Using a light-weight data ready notification queue to
-                # leverage propery blocking
-                try:
-                    ready = self.in_data_ready_notification_queue.get(timeout=2)
-                except queue.Empty:
-                    continue
+                # # Using a light-weight data ready notification queue to
+                # # leverage propery blocking
+                # try:
+                #     ready = self.in_data_ready_notification_queue.get(timeout=2)
+                # except queue.Empty:
+                #     continue
 
-                if ready:
-                    inputs = self.in_bound_data.copy()
-                    self.new_data_available = False
-                else:
-                    continue
+                # if ready:
+                #     inputs = self.in_bound_data.copy()
+                #     self.new_data_available = False
+                # else:
+                #     continue
+
+                # TODO
+                inputs = None
 
                 self.logger.debug(f"{self}: got inputs")
 
