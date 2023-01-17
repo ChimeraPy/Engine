@@ -14,17 +14,12 @@ def main():
     parser.add_argument("--name", type=str, help="Name of the Worker", required=True)
     parser.add_argument("--ip", type=str, help="Manager's IP Address", required=True)
     parser.add_argument("--port", type=int, help="Manager's Port", required=True)
+    parser.add_argument("--wport", type=int, help="Worker's Port", default=8080)
     parser.add_argument(
         "--delete",
         type=bool,
         help="Delete Worker's data after transfer to Manager's computer",
         default=True,
-    )
-    parser.add_argument(
-        "--max_nodes",
-        type=int,
-        help="Maximum number of Nodes that Worker should support",
-        default=10,
     )
 
     args = parser.parse_args()
@@ -35,7 +30,6 @@ def main():
     # Create Worker and execute connect
     worker = Worker(
         name=d_args["name"],
-        max_num_of_nodes=d_args["max_nodes"],
         delete_temp=d_args["delete"],
     )
     worker.connect(host=d_args["ip"], port=d_args["port"])

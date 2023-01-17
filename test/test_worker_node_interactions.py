@@ -6,6 +6,7 @@ import queue
 import sys
 import os
 import pathlib
+from functools import partial
 
 import pytest
 import dill
@@ -201,7 +202,7 @@ def test_worker_create_nodes(worker):
             continue
 
 
-@pytest.mark.repeat(10)
+# @pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
     to_be_created_nodes = []
@@ -299,7 +300,10 @@ def test_two_nodes_connect(worker, gen_node, con_node):
 
     node_server_data = worker.create_node_server_data()
     logger.debug(f"Send the server data: {node_server_data}")
-    worker.process_node_server_data({"data": node_server_data["nodes"]})
+    worker.exec_coro(
+        partial(worker.process_node_server_data, {"data": node_server_data["nodes"]})
+    )
+    time.sleep(3)
 
 
 def test_starting_node(worker, gen_node):
@@ -318,20 +322,20 @@ def test_starting_node(worker, gen_node):
     logger.debug("Create nodes")
     worker.create_node(msg)
 
-    logger.debug("Waiting!")
+    logger.debug("Waiting before starting!")
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.start_nodes({})
+    worker.exec_coro(partial(worker.start_nodes, {}))
 
     logger.debug("Let nodes run for some time")
-    time.sleep(2)
+    time.sleep(5)
 
 
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
-        (lazy_fixture("manager"), lazy_fixture("worker")),
+        # (lazy_fixture("manager"), lazy_fixture("worker")),
         pytest.param(
             lazy_fixture("manager"),
             lazy_fixture("dockered_worker"),

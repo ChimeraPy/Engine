@@ -8,6 +8,7 @@ import pathlib
 import os
 import tempfile
 import datetime
+import threading
 
 # Third-party Imports
 import multiprocess as mp
@@ -49,8 +50,9 @@ class Node(mp.Process):
 
         # Saving state variables
         self.publisher: Optional[Publisher] = None
-        self.p2p_subs: List[Subscriber] = []
-        self.sub_poller: Optional[zmq.Poller] = None
+        self.p2p_subs: Dict[str, Subscriber] = {}
+        self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
+        self.sub_poller = zmq.Poller()
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -113,7 +115,7 @@ class Node(mp.Process):
             if self._context == "spawn":
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
-                l = _logger.getLogger("chimerapy-subprocess")
+                l = _logger.getLogger("chimerapy")
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
 
@@ -139,11 +141,11 @@ class Node(mp.Process):
             )
 
             # Storing all subscribers
-            self.p2p_subs.append(p2p_subscriber)
+            self.p2p_subs[out_bound_name] = p2p_subscriber
+            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = out_bound_name
 
         # After creating all subscribers, use a poller to track them all
-        self.sub_poller = zmq.Poller()
-        for sub in self.p2p_subs:
+        for sub in self.p2p_subs.values():
             self.sub_poller.register(sub._zmq_socket, zmq.POLLIN)
 
         # Notify to the worker that the node is fully CONNECTED
@@ -167,8 +169,8 @@ class Node(mp.Process):
         )
 
     async def start_node(self, msg: Dict):
-        self.worker_signal_start = True
         self.logger.debug(f"{self}: start")
+        self.worker_signal_start.set()
 
     async def stop_node(self, msg: Dict):
         self.running.value = False
@@ -232,7 +234,7 @@ class Node(mp.Process):
         logdir: pathlib.Path,
         in_bound: List[str],
         out_bound: List[str],
-        follow: Optional[bool],
+        follow: Optional[str] = None,
         networking: bool = True,
     ):
         """Configuring the ``Node``'s networking and meta data.
@@ -278,14 +280,13 @@ class Node(mp.Process):
         within this function, along with ``Node`` meta data.
 
         """
-        # Create PUB if it has output bounds
-        if len(self.p2p_info["out_bound"]) >= 1:
-            self.publisher = Publisher()
-            self.publisher.start()
-            self.logger.debug(f"{self}: created publisher")
-
-        # Create input and output queue
+        # Create IO queue
         self.save_queue = queue.Queue()
+
+        # Creating container for the latest values of the subscribers
+        self.in_bound_data: Dict[str, Optional[DataChunk]] = {
+            x: None for x in self.p2p_info["in_bound"]
+        }
 
         # Creating thread for saving incoming data
         self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
@@ -293,7 +294,8 @@ class Node(mp.Process):
 
         # Keeping parameters
         self.step_id = 0
-        self.worker_signal_start = 0
+        self.worker_signal_start = threading.Event()
+        self.worker_signal_start.clear()
         self.status["INIT"] = 1
 
         if self.networking:
@@ -302,7 +304,7 @@ class Node(mp.Process):
             self.client = Client(
                 host=self.worker_host,
                 port=self.worker_port,
-                name=str(self),
+                name=self.name,
                 ws_handlers={
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -313,6 +315,21 @@ class Node(mp.Process):
                 },
             )
             self.client.connect()
+
+            # Creating publisher
+            self.publisher = Publisher()
+            self.publisher.start()
+
+            # Send publisher port and host information
+            self.client.send(
+                signal=NODE_MESSAGE.STATUS,
+                data={
+                    "node_name": self.name,
+                    "status": self.status,
+                    "host": self.publisher.host,
+                    "port": self.publisher.port,
+                },
+            )
 
     def prep(self):
         """User-defined method for ``Node`` setup.
@@ -344,10 +361,11 @@ class Node(mp.Process):
 
             # Wait until worker says to start
             while self.running.value:
-                if self.worker_signal_start:
+                if self.worker_signal_start.wait(timeout=1):
                     break
-                else:
-                    time.sleep(0.1)
+                self.logger.debug(f"{self}: waiting")
+
+        self.logger.debug(f"{self}: finished waiting")
 
     def forward(self, msg: Dict):
 
@@ -363,21 +381,26 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while self.running.value:
 
-                # # Using a light-weight data ready notification queue to
-                # # leverage propery blocking
-                # try:
-                #     ready = self.in_data_ready_notification_queue.get(timeout=2)
-                # except queue.Empty:
-                #     continue
+                # Wait until we get data from any of the subscribers
+                events = dict(self.sub_poller.poll(timeout=1000))
 
-                # if ready:
-                #     inputs = self.in_bound_data.copy()
-                #     self.new_data_available = False
-                # else:
-                #     continue
+                # Empty if no events
+                if len(events) == 0:
+                    continue
 
-                # TODO
-                inputs = None
+                # Else, update values
+                for s in events:  # socket
+                    name = self.socket_to_sub_name_mapping[s]  # inbound
+                    serial_data_chunk = s.recv()
+                    self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
+
+                # If update on the follow, then use the inputs
+                if self.follow in events and not all(
+                    [type(x) != type(None) for x in self.in_bound_data.values()]
+                ):
+                    inputs = self.in_bound_data.copy()
+                else:
+                    continue
 
                 self.logger.debug(f"{self}: got inputs")
 
@@ -390,6 +413,9 @@ class Node(mp.Process):
 
             self.logger.debug(f"{self}: got outputs to publish!")
 
+            # And then save the latest value
+            self.latest_value = output_data_chunk
+
             # First, check that it is a node with outbound!
             if self.publisher:
 
@@ -400,16 +426,13 @@ class Node(mp.Process):
                 )
                 output_data_chunk.update("meta", meta)
 
-                # And then save the latest value
-                self.latest_value = output_data_chunk
-
                 # Send out the output to the OutputsHandler
                 self.publisher.publish(output_data_chunk)
                 self.logger.debug(f"{self}: published!")
 
             else:
 
-                self.logger.error(f"{self}: Do not have publisher yet given outputs")
+                self.logger.warning(f"{self}: Do not have publisher yet given outputs")
 
         # Update the counter
         self.step_id += 1
@@ -469,13 +492,12 @@ class Node(mp.Process):
             self.publisher.shutdown()
 
         # Shutting down subscriber
-        if self.subscriber:
-            self.subscriber.shutdown()
+        for sub in self.p2p_subs.values():
+            sub.shutdown()
 
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()
         self.save_handler.join()
-        time.sleep(1)
 
         # Shutting down networking
         if self.networking:

@@ -14,11 +14,17 @@ import pickle
 import enum
 
 # Third-party
-from aiohttp import web
+from aiohttp import web, WSCloseCode
 
 # Internal Imports
 from .async_loop_thread import AsyncLoopThread
-from ..utils import decode_payload, create_payload, async_waiting_for, waiting_for
+from ..utils import (
+    decode_payload,
+    create_payload,
+    async_waiting_for,
+    waiting_for,
+    get_ip_address,
+)
 from .enums import CLIENT_MESSAGE, GENERAL_MESSAGE
 
 # Logging
@@ -39,7 +45,7 @@ class Server:
         self,
         name: str,
         port: int,
-        host: Optional[str] = "localhost",
+        host: str = get_ip_address(),
         routes: Optional[Dict[str, Callable]] = None,
         ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
     ):
@@ -251,11 +257,13 @@ class Server:
     async def _server_shutdown(self):
 
         # Create shutdown message
-        msg = {"signal": GENERAL_MESSAGE.SHUTDOWN, "data": {}, "ok": False}
+        # msg = {"signal": GENERAL_MESSAGE.SHUTDOWN, "data": {}, "ok": False}
 
-        # Sending to clients that server shutting!
-        for client_name in self.ws_clients:
-            await self._write_ws(client_name, msg)
+        for client_data in self.ws_clients.values():
+            client_ws = client_data["ws"]
+            await client_ws.close(
+                code=WSCloseCode.GOING_AWAY, message="{self}: shutdown"
+            )
 
         # Cleanup and signal complete
         await self._runner.cleanup()

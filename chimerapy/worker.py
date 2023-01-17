@@ -1,4 +1,4 @@
-from typing import Union, Dict, Any
+from typing import Union, Dict, Any, Coroutine
 import socket
 import os
 import time
@@ -268,23 +268,6 @@ class Worker:
     def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
 
         # # Wait until the node has informed us that it has been initialized
-        # miss_counter = 0
-        # delay = 0.1
-
-        # # Constantly check
-        # while True:
-        #     time.sleep(delay)
-
-        #     if self.nodes[node_name]["response"]:
-        #         break
-        #     else:
-
-        #         # Handling timeout
-        #         if miss_counter * delay > timeout:
-        #             raise TimeoutError(f"{self}: {node_name} not responding!")
-
-        #         # Update miss counter
-        #         miss_counter += 1
         waiting_for(
             condition=lambda: self.nodes[node_name]["response"] == True,
             check_period=0.1,
@@ -309,6 +292,9 @@ class Worker:
             }
 
         return node_server_data
+
+    def exec_coro(self, coro: Coroutine):
+        self.server._thread.exec(coro)
 
     ####################################################################
     ## Worker Lifecycle API
@@ -477,15 +463,17 @@ class Worker:
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
 
-        # Shutdown nodes from the client
+        # Shutdown nodes from the client (start all shutdown)
         for node_name in self.nodes:
-
-            # Try shutting down process gently
             self.nodes[node_name]["node_object"].shutdown()
+
+        # Then wait until close, or force
+        for node_name in self.nodes:
             self.nodes[node_name]["node_object"].join(timeout=10)
 
             # If that doesn't work, terminate
             if self.nodes[node_name]["node_object"].exitcode != 0:
+                logger.warning(f"{self}: Node {node_name} forced shutdown")
                 self.nodes[node_name]["node_object"].terminate()
 
             logger.debug(f"{self}: Nodes have joined")

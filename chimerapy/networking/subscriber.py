@@ -92,5 +92,10 @@ class Subscriber:
     def shutdown(self):
 
         if self.running:
+
+            # Stop the thread
             self.running = False
             self._receive_thread.join()
+
+            # And then close the socket
+            self._zmq_socket.close()

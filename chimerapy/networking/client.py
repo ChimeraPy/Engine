@@ -75,7 +75,7 @@ class Client:
     # Client WS Handlers
     ####################################################################
 
-    async def _ok(self, msg: Dict, ws: aiohttp.ClientWebSocketResponse):
+    async def _ok(self, msg: Dict):
         self.uuid_records.append(msg["data"]["uuid"])
 
     ####################################################################
@@ -94,8 +94,11 @@ class Client:
             logger.debug(f"{self}: read - {msg}")
 
             # Select the handler
+            logger.debug(f"{self}: read executing {msg['signal']}")
             handler = self.ws_handlers[msg["signal"]]
-            await handler(msg, self._ws)
+            logger.debug(f"{self}: read handler {handler}")
+            await handler(msg)
+            logger.debug(f"{self}: finished read executing {msg['signal']}")
 
             # Send OK if requested
             if msg["ok"]:
@@ -183,15 +186,14 @@ class Client:
                 # Continue executing them
                 await asyncio.gather(read_task)
 
-                # Then close the socket
-                await ws.close()
+        # After the ws is closed, do the following
+        await self._client_shutdown()
 
-    async def _client_shutdown(self):
+    async def _client_shutdown(self, msg: Dict = {}):
 
         # Mark to stop and close things
         self.running.clear()
         await self._ws.close()
-        del self._ws
         self._client_shutdown_complete.set()
 
     ####################################################################

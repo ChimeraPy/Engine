@@ -605,7 +605,8 @@ class Manager:
 
         # Then send requested packages
         if send_packages:
-            self.distribute_packages(send_packages)
+            logger.warning(f"{self}: distributing packages is not implemented yet!")
+            # self.distribute_packages(send_packages)
 
         # First, create the network
         self.create_p2p_network()
