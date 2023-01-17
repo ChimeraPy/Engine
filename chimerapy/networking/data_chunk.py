@@ -1,7 +1,8 @@
-from typing import Any, Literal
+from typing import Any, Literal, Dict
 import collections
 import pickle
 import blosc
+import datetime
 
 # Third-party Imports
 import numpy as np
@@ -20,6 +21,15 @@ class DataChunk:
         # Creating mapping for checking content_type
         self._content_type_2_checks_mapping = {
             "image": self._check_image,
+        }
+
+        # Adding default key-value pair
+        self._container["meta"] = {
+            "value": {
+                "ownership": [],
+                "created": datetime.datetime.now(),
+            },
+            "content-type": "meta",
         }
 
     def __str__(self):
@@ -80,7 +90,7 @@ class DataChunk:
 
             # For certain content-type, additional compression methods
             # are needed
-            if record["content-type"] != "other":
+            if record["content-type"] not in ["other", "meta"]:
                 s_func = self._content_type_2_serial_mapping[record["content-type"]][0]
                 value = s_func(record["value"])
             else:
@@ -103,7 +113,7 @@ class DataChunk:
         for record_name, record in data.items():
             # For certain content-type, additional compression methods
             # are needed
-            if record["content-type"] != "other":
+            if record["content-type"] not in ["other", "meta"]:
                 ds_func = self._content_type_2_serial_mapping[record["content-type"]][1]
                 value = ds_func(record["value"])
             else:
@@ -135,3 +145,9 @@ class DataChunk:
 
         # Add an entry
         self._container[name] = {"value": value, "content-type": content_type}
+
+    def get(self, name: str) -> Dict[str, Any]:
+        return self._container[name]
+
+    def update(self, name: str, record: Dict[str, Any]):
+        self._container[name] = record

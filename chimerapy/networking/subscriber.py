@@ -28,7 +28,7 @@ class Subscriber:
         self._data_chunk: DataChunk = DataChunk()
 
     def __str__(self):
-        return f"<Subscriber listening {self.host}:{self.port}>"
+        return f"<Subscriber@{self.host}:{self.port}>"
 
     def receive_loop(self):
 

@@ -1,22 +1,18 @@
-from typing import Union, Dict
-import multiprocessing as mp
+from typing import Union, Dict, Any
 import socket
-import logging
 import os
 import time
-import pdb
 import tempfile
 import pathlib
 import shutil
 import sys
-from concurrent.futures import wait
 
 # Third-party Imports
 import dill
 import aiohttp
 from aiohttp import web
 
-from .utils import get_ip_address
+from .utils import get_ip_address, waiting_for
 from .networking import Server, Client
 from .networking.enums import (
     GENERAL_MESSAGE,
@@ -45,11 +41,14 @@ class Worker:
 
         Args:
             name (str): The name for the ``Worker`` that will be used \
-            as reference.
-            max_num_of_nodes (int): Maximum number of ``Nodes`` supported\
-            by the constructed ``Worker``.
-        """
+                as reference.
+            port (int): The port of the Worker's HTTP server. Select 0 \
+                for a random port, mostly when running multiple Worker \
+                instances in the same computer.
+            delete_temp (bool): After session is over, should the Worker
+                delete any of the temporary files.
 
+        """
         # Saving parameters
         self.port = port
         self.name = name
@@ -75,9 +74,12 @@ class Worker:
             },
         )
 
-        # Accesing the port information and starting the server
-        self.host, self.port = self.server.host, self.server.port
+        # Start the server and get the new port address (random if port=0)
         self.server.serve()
+        self.host, self.port = self.server.host, self.server.port
+        logger.info(
+            f"Worker {self.name} running HTTP server at {self.host}:{self.port}"
+        )
 
     def __repr__(self):
         return f"<Worker {self.name}>"
@@ -89,76 +91,8 @@ class Worker:
     ## Message Reactivity API - Client
     ####################################################################
 
-    async def create_node(self, msg: Dict):
-
-        # Saving name to track it for now
-        node_name = msg["data"]["node_name"]
-        logger.debug(f"{self}: received request for Node {node_name} creation: {msg}")
-
-        # Saving the node data
-        self.nodes[node_name] = {
-            k: v for k, v in msg["data"].items() if k != "node_name"
-        }
-        self.nodes[node_name]["status"] = {"INIT": 0, "CONNECTED": 0, "READY": 0}
-        self.nodes[node_name]["response"] = False
-        self.nodes[node_name]["gather"] = None
-
-        # Keep trying to start a process until success
-        fail_attempts = 0
-        while True:
-
-            # If too many attempts, just give up :(
-            if fail_attempts > 5:
-                raise TimeoutError("Could not create Node")
-
-            # Decode the node object
-            self.nodes[node_name]["node_object"] = dill.loads(
-                self.nodes[node_name]["pickled"]
-            )
-
-            # Provide configuration information to the node once in the client
-            self.nodes[node_name]["node_object"].config(
-                self.host,
-                self.port,
-                self.tempfolder,
-                self.nodes[node_name]["in_bound"],
-                self.nodes[node_name]["out_bound"],
-                self.nodes[node_name]["follow"],
-            )
-
-            # Before starting, over write the pid
-            self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
-
-            # Start the node
-            self.nodes[node_name]["node_object"].start()
-
-            # Wait until response from node
-            try:
-                self.wait_until_node_response(node_name, timeout=10)
-                break
-            except TimeoutError:
-
-                # Handle failure
-                self.nodes[node_name]["node_object"].shutdown()
-                self.nodes[node_name]["node_object"].terminate()
-                fail_attempts += 1
-                logger.warning(
-                    f"{node_name} failed to start, retrying for {fail_attempts} time."
-                )
-
-        # Mark success
-        logger.debug(f"{self}: completed node creation: {self.nodes}")
-
-        # Update the manager with the most up-to-date status of the nodes
-        nodes_status_data = {
-            "name": self.name,
-            "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
-        }
-
-        if self.connected_to_manager:
-            self.client.send(
-                signal=WORKER_MESSAGE.REPORT_NODES_STATUS, data=nodes_status_data
-            )
+    async def async_create_node(self, msg: Dict):
+        self.create_node(msg)
 
     async def report_node_server_data(self, msg: Dict):
 
@@ -245,9 +179,6 @@ class Worker:
         if self.manager_host == get_ip_address():
 
             # First rename and then move
-            # new_folder_name = self.tempfolder.parent / self.name
-            # os.rename(self.tempfolder, new_folder_name)
-            # shutil.move(new_folder_name, msg["data"]["path"])
             delay = 1
             miss_counter = 0
             timeout = 10
@@ -336,24 +267,31 @@ class Worker:
 
     def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
 
-        # Wait until the node has informed us that it has been initialized
-        miss_counter = 0
-        delay = 0.1
+        # # Wait until the node has informed us that it has been initialized
+        # miss_counter = 0
+        # delay = 0.1
 
-        # Constantly check
-        while True:
-            time.sleep(delay)
+        # # Constantly check
+        # while True:
+        #     time.sleep(delay)
 
-            if self.nodes[node_name]["response"]:
-                break
-            else:
+        #     if self.nodes[node_name]["response"]:
+        #         break
+        #     else:
 
-                # Handling timeout
-                if miss_counter * delay > timeout:
-                    raise TimeoutError(f"{self}: {node_name} not responding!")
+        #         # Handling timeout
+        #         if miss_counter * delay > timeout:
+        #             raise TimeoutError(f"{self}: {node_name} not responding!")
 
-                # Update miss counter
-                miss_counter += 1
+        #         # Update miss counter
+        #         miss_counter += 1
+        waiting_for(
+            condition=lambda: self.nodes[node_name]["response"] == True,
+            check_period=0.1,
+            timeout=timeout,
+            timeout_raise=True,
+            timeout_msg=f"{self}: {node_name} not responding!",
+        )
 
     def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):
 
@@ -398,7 +336,7 @@ class Worker:
             name=self.name,
             ws_handlers={
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
-                MANAGER_MESSAGE.CREATE_NODE: self.create_node,
+                MANAGER_MESSAGE.CREATE_NODE: self.async_create_node,
                 MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
                 MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
                 MANAGER_MESSAGE.REQUEST_GATHER: self.report_node_gather,
@@ -427,6 +365,77 @@ class Worker:
         logger.info(
             f"{self}: connection successful to Manager located at {host}:{port}."
         )
+
+    def create_node(self, msg: Dict[str, Any]):
+
+        # Saving name to track it for now
+        node_name = msg["data"]["node_name"]
+        logger.debug(f"{self}: received request for Node {node_name} creation: {msg}")
+
+        # Saving the node data
+        self.nodes[node_name] = {
+            k: v for k, v in msg["data"].items() if k != "node_name"
+        }
+        self.nodes[node_name]["status"] = {"INIT": 0, "CONNECTED": 0, "READY": 0}
+        self.nodes[node_name]["response"] = False
+        self.nodes[node_name]["gather"] = None
+
+        # Keep trying to start a process until success
+        fail_attempts = 0
+        while True:
+
+            # If too many attempts, just give up :(
+            if fail_attempts > 5:
+                raise TimeoutError("Could not create Node")
+
+            # Decode the node object
+            self.nodes[node_name]["node_object"] = dill.loads(
+                self.nodes[node_name]["pickled"]
+            )
+
+            # Provide configuration information to the node once in the client
+            self.nodes[node_name]["node_object"].config(
+                self.host,
+                self.port,
+                self.tempfolder,
+                self.nodes[node_name]["in_bound"],
+                self.nodes[node_name]["out_bound"],
+                self.nodes[node_name]["follow"],
+            )
+
+            # Before starting, over write the pid
+            self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
+
+            # Start the node
+            self.nodes[node_name]["node_object"].start()
+
+            # Wait until response from node
+            try:
+                self.wait_until_node_response(node_name, timeout=10)
+                break
+            except TimeoutError:
+
+                # Handle failure
+                self.nodes[node_name]["node_object"].shutdown()
+                self.nodes[node_name]["node_object"].terminate()
+                fail_attempts += 1
+                logger.warning(
+                    f"{node_name} failed to start, retrying for {fail_attempts} time."
+                )
+
+        # Mark success
+        logger.debug(f"{self}: completed node creation: {self.nodes}")
+
+        # Update the manager with the most up-to-date status of the nodes
+        nodes_status_data = {
+            "name": self.name,
+            "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
+        }
+
+        if self.connected_to_manager:
+            self.client.send(
+                signal=WORKER_MESSAGE.REPORT_NODES_STATUS, data=nodes_status_data
+            )
 
     def step(self, msg: Dict):
 
@@ -462,7 +471,7 @@ class Worker:
         """
         # Check if shutdown has been called already
         if self.has_shutdown:
-            logger.debug(f"{self}: requested to shutdown a second time.")
+            logger.debug(f"{self}: requested to shutdown when already shutdown.")
             return
 
         # Shutdown the Worker 2 Node server
@@ -479,7 +488,7 @@ class Worker:
             if self.nodes[node_name]["node_object"].exitcode != 0:
                 self.nodes[node_name]["node_object"].terminate()
 
-        logger.debug(f"{self}: Nodes have joined")
+            logger.debug(f"{self}: Nodes have joined")
 
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)

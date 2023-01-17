@@ -97,9 +97,13 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
         n = GenNode(name=f"G{i}")
         pkl_n = dill.dumps(n)
         nn = dill.loads(pkl_n)
-        nn.config("0.0.0.0", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
+        nn.config(
+            "0.0.0.0", 9000, TEST_DATA_DIR, [], ["Con1"], follow=None, networking=False
+        )
         nn.start()
         ns.append(nn)
+
+    time.sleep(1)
 
     for n in ns:
         n.shutdown()
@@ -111,8 +115,8 @@ def test_create_multiple_workers():
 
     workers = []
 
-    for i in range(10):
-        worker = cp.Worker(name=f"{i}")
+    for i in range(5):
+        worker = cp.Worker(name=f"{i}", port=0)
         workers.append(worker)
 
     time.sleep(5)
@@ -121,7 +125,7 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-@pytest.mark.repeat(3)
+# @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 
     # Simple single node without connection

@@ -1,14 +1,13 @@
 from typing import Dict, List, Any, Optional, Union, Literal
 from multiprocessing.process import AuthenticationString
 import time
-import socket
 import logging
 import queue
 import uuid
 import pathlib
 import os
 import tempfile
-from concurrent.futures import wait
+import datetime
 
 # Third-party Imports
 import multiprocess as mp
@@ -16,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 # Internal Imports
-from .networking import Client, Publisher, Subscriber
+from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
 from .utils import clear_queue
@@ -46,6 +45,10 @@ class Node(mp.Process):
         self._context = mp.get_start_method()
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
+
+        # Saving state variables
+        self.publisher: Optional[Publisher] = None
+        self.subscriber: Optional[Subscriber] = None
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -271,8 +274,11 @@ class Node(mp.Process):
         within this function, along with ``Node`` meta data.
 
         """
-        # Create container for p2p clients
-        self.p2p_clients = {}
+        # Create PUB if it has output bounds
+        if len(self.p2p_info["out_bound"]) >= 1:
+            self.publisher = Publisher()
+            self.publisher.start()
+            self.logger.debug(f"{self}: created publisher")
 
         # Create input and output queue
         self.save_queue = queue.Queue()
@@ -341,9 +347,12 @@ class Node(mp.Process):
 
     def forward(self, msg: Dict):
 
+        # Default value
+        output_data_chunk = None
+
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
-            output = self.step()
+            output_data_chunk = self.step()
 
         else:
 
@@ -366,23 +375,41 @@ class Node(mp.Process):
                 self.logger.debug(f"{self}: got inputs")
 
                 # Once we get them, pass them through!
-                output = self.step(inputs)
+                output_data_chunk = self.step(inputs)
                 break
 
         # If output generated, send it!
-        if type(output) != type(None):
+        if output_data_chunk and isinstance(output_data_chunk, DataChunk):
 
-            # Send out the output to the OutputsHandler
-            self.logger.debug(f"{self}: placed data to out_queue")
-            self.out_queue.put({"step_id": self.step_id, "data": output})
+            self.logger.debug(f"{self}: got outputs to publish!")
 
-            # And then save the latest value
-            self.latest_value = output
+            # First, check that it is a node with outbound!
+            if self.publisher:
+
+                # Add timestamp and step id to the DataChunk
+                meta = output_data_chunk.get("meta")
+                meta["value"]["ownership"].append(
+                    {"name": self.name, "timestamp": datetime.datetime.now()}
+                )
+                output_data_chunk.update("meta", meta)
+
+                # And then save the latest value
+                self.latest_value = output_data_chunk
+
+                # Send out the output to the OutputsHandler
+                self.publisher.publish(output_data_chunk)
+                self.logger.debug(f"{self}: published!")
+
+            else:
+
+                self.logger.error(f"{self}: Do not have publisher yet given outputs")
 
         # Update the counter
         self.step_id += 1
 
-    def step(self, data_dict: Optional[Dict[str, Any]] = None):
+    def step(
+        self, data_chunks: Optional[Dict[str, DataChunk]] = None
+    ) -> Optional[DataChunk]:
         """User-define method.
 
         In this method, the logic that is executed within the ``Node``'s
@@ -394,7 +421,7 @@ class Node(mp.Process):
         data is received.
 
         Args:
-            data_dict (Optional[Dict[str, Any]]): For source nodes, this \
+            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
             parameter should not be considered (as they don't have inputs).\
             For step and sink nodes, the ``data_dict`` must be included\
             to avoid an error. The variable is a dictionary, where the\
@@ -429,6 +456,14 @@ class Node(mp.Process):
         ...
 
     def _teardown(self):
+
+        # Shutting down publisher
+        if self.publisher:
+            self.publisher.shutdown()
+
+        # Shutting down subscriber
+        if self.subscriber:
+            self.subscriber.shutdown()
 
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()

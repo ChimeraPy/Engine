@@ -12,7 +12,7 @@ cp.debug()
 
 @pytest.fixture
 def publisher():
-    pub = cp.Publisher(port=10000)
+    pub = cp.Publisher()
     pub.start()
     yield pub
     pub.shutdown()
@@ -61,5 +61,5 @@ def test_sending_data_chunk_between_pub_and_sub(publisher, subscriber, data_chun
     logger.debug(f"{publisher}: published {data_chunk}")
 
     new_data = subscriber.receive(timeout=2)
-    logger.debug(f"{subscriber} received {new_data}")
+    logger.debug(f"{subscriber}: received {new_data}")
     assert new_data == data_chunk

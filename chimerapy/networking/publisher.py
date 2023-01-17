@@ -14,16 +14,16 @@ from ..utils import get_ip_address
 
 
 class Publisher:
-    def __init__(self, port: int):
+    def __init__(self):
 
         # Storing state variables
-        self.port: int = port
+        self.port: int = -1
         self.host: str = get_ip_address()
         self.running: bool = False
         self._data_chunk: DataChunk = DataChunk()
 
     def __str__(self):
-        return f"<Publisher writing to {self.host}:{self.port}>"
+        return f"<Publisher@{self.host}:{self.port}>"
 
     def publish(self, data_chunk: DataChunk):
         self._data_chunk = data_chunk
@@ -52,7 +52,8 @@ class Publisher:
         # Create the socket
         self._zmq_context = zmq.Context()
         self._zmq_socket = self._zmq_context.socket(zmq.PUB)
-        self._zmq_socket.bind(f"tcp://{self.host}:{self.port}")
+        # self._zmq_socket.bind(f"tcp://{self.host}:{self.port}")
+        self.port = self._zmq_socket.bind_to_random_port(f"tcp://{self.host}")
 
         # Create send thread
         self._ready = threading.Event()

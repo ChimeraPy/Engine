@@ -43,7 +43,16 @@ class Server:
         routes: Optional[Dict[str, Callable]] = None,
         ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
     ):
+        """Create HTTP Server with WS support.
 
+        Args:
+            name (str): Name of the sender.
+            port (int): Port for the web server, 0 for random.
+            host (Optional[str]): The hosting IP address.
+            routes (Optional[Dict[str, Callable]]): HTTP routes.
+            ws_handlers (Optional[Dict[enum.Enum, Callable]]): WS routes.
+
+        """
         # Store parameters
         self.name = name
         self.host = host
@@ -232,10 +241,16 @@ class Server:
         self._site = web.TCPSite(self._runner, self.host, self.port)
         await self._site.start()
 
+        # If port selected 0, then obtain the randomly selected port
+        if self.port == 0:
+            self.port = self._site._server.sockets[0].getsockname()[1]
+
         # Create flag to mark that server is ready
         self._server_ready.set()
 
     async def _server_shutdown(self):
+
+        # Sending to clients that server shutting!
 
         # Cleanup and signal complete
         await self._runner.cleanup()
