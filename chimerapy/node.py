@@ -53,6 +53,7 @@ class Node(mp.Process):
         self.p2p_subs: Dict[str, Subscriber] = {}
         self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
         self.sub_poller = zmq.Poller()
+        self.poll_inputs_thread: Optional[threading.Thread] = None
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -128,29 +129,34 @@ class Node(mp.Process):
     async def process_node_server_data(self, msg: Dict):
 
         # We determine all the out bound nodes
-        for out_bound_name in self.p2p_info["out_bound"]:
+        for in_bound_name in self.p2p_info["in_bound"]:
 
             self.logger.debug(f"{self}: Setting up clients: {self.name}: {msg}")
 
             # Determine the host and port information
-            out_bound_info = msg["data"][out_bound_name]
+            in_bound_info = msg["data"][in_bound_name]
 
             # Create subscribers to other nodes' publishers
             p2p_subscriber = Subscriber(
-                host=out_bound_info["host"], port=out_bound_info["port"]
+                host=in_bound_info["host"], port=in_bound_info["port"]
             )
 
             # Storing all subscribers
-            self.p2p_subs[out_bound_name] = p2p_subscriber
-            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = out_bound_name
+            self.p2p_subs[in_bound_name] = p2p_subscriber
+            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = in_bound_name
 
         # After creating all subscribers, use a poller to track them all
         for sub in self.p2p_subs.values():
             self.sub_poller.register(sub._zmq_socket, zmq.POLLIN)
 
+        # Then start a thread to read the sub poller
+        if self.p2p_info["in_bound"]:
+            self.poll_inputs_thread = threading.Thread(target=self.poll_inputs)
+            self.poll_inputs_thread.start()
+
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
-        self.client.send(
+        await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data={
                 "node_name": self.name,
@@ -160,7 +166,7 @@ class Node(mp.Process):
 
     async def provide_gather(self, msg: Dict):
 
-        self.client.send(
+        await self.client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
                 "node_name": self.name,
@@ -171,6 +177,9 @@ class Node(mp.Process):
     async def start_node(self, msg: Dict):
         self.logger.debug(f"{self}: start")
         self.worker_signal_start.set()
+
+    async def async_forward(self, msg: Dict):
+        self.forward(msg)
 
     async def stop_node(self, msg: Dict):
         self.running.value = False
@@ -287,6 +296,8 @@ class Node(mp.Process):
         self.in_bound_data: Dict[str, Optional[DataChunk]] = {
             x: None for x in self.p2p_info["in_bound"]
         }
+        self.inputs_ready = threading.Event()
+        self.inputs_ready.clear()
 
         # Creating thread for saving incoming data
         self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
@@ -308,7 +319,7 @@ class Node(mp.Process):
                 ws_handlers={
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
-                    WORKER_MESSAGE.REQUEST_STEP: self.forward,
+                    WORKER_MESSAGE.REQUEST_STEP: self.async_forward,
                     WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                     WORKER_MESSAGE.START_NODES: self.start_node,
                     WORKER_MESSAGE.STOP_NODES: self.stop_node,
@@ -367,6 +378,48 @@ class Node(mp.Process):
 
         self.logger.debug(f"{self}: finished waiting")
 
+    def poll_inputs(self):
+
+        while self.running.value:
+
+            self.logger.debug(f"{self}: polling inputs")
+
+            # Wait until we get data from any of the subscribers
+            events = dict(self.sub_poller.poll())
+
+            # Empty if no events
+            if len(events) == 0:
+                continue
+
+            self.logger.debug(f"{self}: polling event processing {len(events)}")
+
+            # Default value
+            follow_event = False
+
+            # Else, update values
+            for s in events:  # socket
+
+                # Update
+                name = self.socket_to_sub_name_mapping[s]  # inbound
+                serial_data_chunk = s.recv()
+                self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
+
+                # Update flag if new values are coming from the node that is
+                # being followed
+                if self.follow == name:
+                    follow_event = True
+
+            self.logger.debug(
+                f"{self}: polling {self.in_bound_data}, follow = {follow_event}, event= {events}"
+            )
+
+            # If update on the follow and all inputs available, then use the inputs
+            if follow_event and all(
+                [type(x) != type(None) for x in self.in_bound_data.values()]
+            ):
+                self.inputs_ready.set()
+                self.logger.debug(f"{self}: got inputs")
+
     def forward(self, msg: Dict):
 
         # Default value
@@ -381,43 +434,28 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while self.running.value:
 
-                # Wait until we get data from any of the subscribers
-                events = dict(self.sub_poller.poll(timeout=1000))
+                self.logger.debug(f"{self}: forward waiting for inputs")
 
-                # Empty if no events
-                if len(events) == 0:
-                    continue
-
-                # Else, update values
-                for s in events:  # socket
-                    name = self.socket_to_sub_name_mapping[s]  # inbound
-                    serial_data_chunk = s.recv()
-                    self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
-
-                # If update on the follow, then use the inputs
-                if self.follow in events and not all(
-                    [type(x) != type(None) for x in self.in_bound_data.values()]
-                ):
-                    inputs = self.in_bound_data.copy()
-                else:
-                    continue
-
-                self.logger.debug(f"{self}: got inputs")
-
-                # Once we get them, pass them through!
-                output_data_chunk = self.step(inputs)
-                break
+                if self.inputs_ready.wait(timeout=1):
+                    # Once we get them, pass them through!
+                    self.inputs_ready.clear()
+                    self.logger.debug(f"{self}: forward processing inputs")
+                    output_data_chunk = self.step(self.in_bound_data)
+                    self.logger.debug(
+                        f"{self}: forward step finish -> output = {output_data_chunk}"
+                    )
+                    break
 
         # If output generated, send it!
         if output_data_chunk and isinstance(output_data_chunk, DataChunk):
-
-            self.logger.debug(f"{self}: got outputs to publish!")
 
             # And then save the latest value
             self.latest_value = output_data_chunk
 
             # First, check that it is a node with outbound!
             if self.publisher:
+
+                self.logger.debug(f"{self}: got outputs to publish!")
 
                 # Add timestamp and step id to the DataChunk
                 meta = output_data_chunk.get("meta")
@@ -490,6 +528,10 @@ class Node(mp.Process):
         # Shutting down publisher
         if self.publisher:
             self.publisher.shutdown()
+
+        # Stop poller
+        if self.poll_inputs_thread:
+            self.poll_inputs_thread.join()
 
         # Shutting down subscriber
         for sub in self.p2p_subs.values():

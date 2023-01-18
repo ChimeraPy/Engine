@@ -42,7 +42,7 @@ test = [
     'docker',
     'numpy',
     'imutils',
-    'mss'
+    'pillow'
 ]
 benchmark = [
     'lz4',

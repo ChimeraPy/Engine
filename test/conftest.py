@@ -145,7 +145,7 @@ class GenNode(cp.Node):
         time.sleep(0.5)
         logger.debug(self.value)
         data_chunk = cp.DataChunk()
-        data_chunk.add("value", self.value)
+        data_chunk.add("a", self.value)
         return data_chunk
 
 
@@ -156,10 +156,12 @@ class ConsumeNode(cp.Node):
     def step(self, data_chunks: Dict[str, cp.DataChunk]) -> cp.DataChunk:
         time.sleep(0.1)
         # Extract the data
-        value = data_chunks["Gen1"].get("value")
+        self.logger.debug(f"{self}: inside step, with {data_chunks}")
+        value = data_chunks["Gen1"].get("a")["value"]
         output = self.coef * value
         data_chunk = cp.DataChunk()
-        data_chunk.add("value", output)
+        data_chunk.add("a", output)
+        self.logger.debug(f"{self}: inside step, finishing with {data_chunk}")
         return data_chunk
 
 
@@ -172,7 +174,7 @@ class SlowPrepNode(cp.Node):
         time.sleep(0.5)
         logger.debug(self.value)
         data_chunk = cp.DataChunk()
-        data_chunk.add("value", self.value)
+        data_chunk.add("a", self.value)
         return data_chunk
 
 

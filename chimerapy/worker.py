@@ -67,7 +67,7 @@ class Worker:
         # Create server
         self.server = Server(
             port=self.port,
-            name=str(self),
+            name=self.name,
             ws_handlers={
                 NODE_MESSAGE.STATUS: self.node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
@@ -94,13 +94,18 @@ class Worker:
     async def async_create_node(self, msg: Dict):
         self.create_node(msg)
 
+    async def async_step(self, msg: Dict):
+
+        # Worker tell all nodes to take a step
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
+
     async def report_node_server_data(self, msg: Dict):
 
         node_server_data = self.create_node_server_data()
 
         # Then manager request the node server data, so provide it
         if self.connected_to_manager:
-            self.client.send(
+            await self.client.async_send(
                 signal=WORKER_MESSAGE.REPORT_NODE_SERVER_DATA,
                 data=node_server_data,
             )
@@ -109,7 +114,7 @@ class Worker:
 
         logger.debug(f"{self}: processing node server data")
 
-        self.server.broadcast(
+        await self.server.async_broadcast(
             signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
             data=msg["data"],
         )
@@ -128,13 +133,13 @@ class Worker:
 
         # Update the nodes status
         if self.connected_to_manager:
-            self.client.send(
+            await self.client.async_send(
                 signal=WORKER_MESSAGE.REPORT_NODES_STATUS,
                 data=nodes_status_data,
             )
 
             # Then confirm that all the node server data has been distributed
-            self.client.send(
+            await self.client.async_send(
                 signal=WORKER_MESSAGE.COMPLETE_BROADCAST, data={"name": self.name}
             )
 
@@ -146,7 +151,7 @@ class Worker:
         self.mark_all_response_as_false_for_nodes()
 
         # Request gather from Worker to Nodes
-        self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
 
         self.wait_until_all_nodes_responded(timeout=5)
 
@@ -156,7 +161,9 @@ class Worker:
             gather_data["node_data"][node_name] = node_data["gather"]
 
         # Send it back to the Manager
-        self.client.send(signal=WORKER_MESSAGE.REPORT_GATHER, data=gather_data)
+        await self.client.async_send(
+            signal=WORKER_MESSAGE.REPORT_GATHER, data=gather_data
+        )
 
     async def load_sent_packages(self, msg: Dict):
 
@@ -212,7 +219,7 @@ class Worker:
                 success = False
 
         # After completion, let the Manager know
-        self.client.send(
+        await self.client.async_send(
             signal=WORKER_MESSAGE.TRANSFER_COMPLETE,
             data={"name": self.name, "success": success},
         )
@@ -248,7 +255,7 @@ class Worker:
 
         # Update Manager on the new nodes status
         if self.connected_to_manager:
-            self.client.send(
+            await self.client.async_send(
                 signal=WORKER_MESSAGE.REPORT_NODES_STATUS,
                 data=nodes_status_data,
             )
@@ -297,7 +304,21 @@ class Worker:
         self.server._thread.exec(coro)
 
     ####################################################################
-    ## Worker Lifecycle API
+    ## Worker ASync Lifecycle API
+    ####################################################################
+
+    async def async_start_nodes(self, msg: Dict):
+
+        # Send message to nodes to start
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.START_NODES, data={})
+
+    async def async_stop_nodes(self, msg: Dict):
+
+        # Send message to nodes to start
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
+
+    ####################################################################
+    ## Worker Sync Lifecycle API
     ####################################################################
 
     def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0):
@@ -326,9 +347,9 @@ class Worker:
                 MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
                 MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
                 MANAGER_MESSAGE.REQUEST_GATHER: self.report_node_gather,
-                MANAGER_MESSAGE.REQUEST_STEP: self.step,
-                MANAGER_MESSAGE.START_NODES: self.start_nodes,
-                MANAGER_MESSAGE.STOP_NODES: self.stop_nodes,
+                MANAGER_MESSAGE.REQUEST_STEP: self.async_step,
+                MANAGER_MESSAGE.START_NODES: self.async_start_nodes,
+                MANAGER_MESSAGE.STOP_NODES: self.async_stop_nodes,
                 MANAGER_MESSAGE.REQUEST_COLLECT: self.send_archive,
                 MANAGER_MESSAGE.REQUEST_CODE_LOAD: self.load_sent_packages,
             },

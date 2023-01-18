@@ -270,6 +270,36 @@ class Server:
         self._server_shutdown_complete.set()
 
     ####################################################################
+    # Server ASync Lifecycle API
+    ####################################################################
+
+    async def async_send(
+        self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False
+    ):
+
+        # Create uuid
+        msg_uuid = str(uuid.uuid4())
+
+        # Create msg container and execute writing coroutine
+        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
+        await self._write_ws(client_name, msg)
+
+        if ok:
+            await async_waiting_for(
+                lambda: msg_uuid in self.uuid_records,
+                check_period=0.1,
+                timeout=10,
+                timeout_raise=False,
+            )
+
+    async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
+        # Create msg container and execute writing coroutine for all
+        # clients
+        msg = {"signal": signal, "data": data, "ok": ok}
+        for client_name in self.ws_clients:
+            await self._write_ws(client_name, msg)
+
+    ####################################################################
     # Server Sync Lifecycle API
     ####################################################################
 
