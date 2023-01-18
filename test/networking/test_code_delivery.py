@@ -10,7 +10,7 @@ import chimerapy as cp
 cp.debug()
 
 # Internal Imports
-from .conftest import linux_run_only
+from ..conftest import linux_run_only
 
 # Constant
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent

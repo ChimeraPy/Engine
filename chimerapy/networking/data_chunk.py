@@ -45,14 +45,10 @@ class DataChunk:
         for record_name, record in self._container.items():
             if record_name in other._container:
                 other_record = other._container[record_name]
-                for item_name, item_value in record.items():
-                    if item_name in other_record:
-                        if type(item_value) == type(other_record[item_name]):
-                            ...
-                        else:
-                            return False
-                    else:
-                        return False
+                if record == other_record:
+                    return True
+                else:
+                    return False
             else:
                 return False
 
