@@ -19,12 +19,14 @@ class Producer(cp.Node):
         time.sleep(1)
         current_counter = self.counter
         self.counter += 1
-        return current_counter
+        data_chunk = cp.DataChunk()
+        data_chunk.add("counter", current_counter)
+        return data_chunk
 
 
 class Consumer(cp.Node):
     def step(self, data: Dict[str, Any]):
-        d = data["prod"]
+        d = data["prod"].get("counter")["value"]
         print("Consumer got data: ", d)
 
 
@@ -49,7 +51,6 @@ if __name__ == "__main__":
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
     # worker2.connect(host=manager.host, port=manager.port)
-    manager.register_graph(graph)
 
     # Wait until workers connect
     while True:

@@ -185,6 +185,8 @@ class Worker:
         # If located in the same computer, just move the data
         if self.manager_host == get_ip_address():
 
+            logger.debug(f"{self}: sending archive locally")
+
             # First rename and then move
             delay = 1
             miss_counter = 0
@@ -207,9 +209,11 @@ class Worker:
 
         else:
 
+            logger.debug(f"{self}: sending archive via network")
+
             # Else, send the archive data to the manager via network
             try:
-                self.client.send_folder(self.name, self.tempfolder)
+                await self.client._send_folder_async(self.name, self.tempfolder)
                 success = True
             except (TimeoutError, SystemError) as error:
                 self.delete_temp = False

@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 import mss
 import imutils
+from PIL import ImageGrab
 
 import chimerapy as cp
 
@@ -23,33 +24,34 @@ class WebcamNode(cp.Node):
         time.sleep(1 / 15)
         ret, frame = self.vid.read()
         self.save_video(name="test", data=frame, fps=20)
-        return imutils.resize(frame, width=600)
+        data_chunk = cp.DataChunk()
+        data_chunk.add("frame", frame, "image")
+        return data_chunk
 
     def teardown(self):
         self.vid.release()
 
 
 class ScreenCaptureNode(cp.Node):
-    def prep(self):
-        self.sct = mss.mss()
-        self.monitor = self.sct.monitors[0]
-
     def step(self):
         time.sleep(1 / 30)
-        frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)[..., :3]
+        frame = cv2.cvtColor(
+            np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
+        )
         self.save_video(name="screen", data=frame, fps=20)
-        return imutils.resize(frame, width=600)
+        data_chunk = cp.DataChunk()
+        data_chunk.add("frame", frame, "image")
+        return data_chunk
 
 
 class ShowWindow(cp.Node):
-    def step(self, data: Dict[str, Any]):
+    def step(self, data_chunks: Dict[str, cp.DataChunk]):
 
-        for name, value in data.items():
-            cv2.imshow(name, imutils.resize(value, width=1000))
-        cv2.waitKey(1)
+        for name, data_chunk in data_chunks.items():
+            self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
 
-    def teardown(self):
-        cv2.destroyAllWindows()
+            cv2.imshow(name, data_chunk.get("frame")["value"])
+            cv2.waitKey(1)
 
 
 class RemoteCameraGraph(cp.Graph):

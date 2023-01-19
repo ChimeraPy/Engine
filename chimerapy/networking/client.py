@@ -150,6 +150,51 @@ class Client:
             response = await session.post(url, data=data)
             logger.debug(f"{self}: File transfer response => {response}")
 
+    async def _send_folder_async(self, sender_name: str, dir: pathlib.Path):
+
+        assert (
+            dir.is_dir() and dir.exists()
+        ), f"Sending {dir} needs to be a folder that exists."
+
+        # Having continuing attempts to make the zip folder
+        miss_counter = 0
+        delay = 1
+        zip_timeout = 10
+
+        # First, we need to archive the folder into a zip file
+        while True:
+            try:
+                shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+                break
+            except:
+                time.sleep(delay)
+                miss_counter += 1
+
+                if zip_timeout < delay * miss_counter:
+                    raise SystemError("Temp folder couldn't be zipped.")
+
+        zip_file = dir.parent / f"{dir.name}.zip"
+
+        # Relocate zip to the tempfolder
+        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
+        shutil.move(zip_file, temp_zip_file)
+
+        # Compose the url
+        url = f"http://{self.host}:{self.port}/file/post"
+
+        # Make a post request to send the file
+        data = aiohttp.FormData()
+        data.add_field("meta", pickle.dumps({"sender_name": sender_name}))
+        data.add_field(
+            "file",
+            open(temp_zip_file, "rb"),
+            filename=temp_zip_file.name,
+            content_type="application/zip",
+        )
+
+        # Then send the file
+        await self._send_file_async(url, data)
+
     ####################################################################
     # Client Async Setup and Shutdown
     ####################################################################

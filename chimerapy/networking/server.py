@@ -358,7 +358,11 @@ class Server:
             os.mkdir(named_dst)
 
             # Move all the content inside
-            for filename, filepath in filepath_dict.items():
+            for filename, file_meta in filepath_dict.items():
+
+                # Extract data
+                logger.debug(f"{self}: move_transfer_files, file_meta = {file_meta}")
+                filepath = file_meta["dst_filepath"]
 
                 # If not unzip, just move it
                 if not unzip:
