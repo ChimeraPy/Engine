@@ -17,7 +17,7 @@
    :alt: coverage
 .. _coverage: https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main
 
-.. |test| image:: https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test
+.. |test| image:: https://img.shields.io/github/actions/workflow/status/oele-isis-vanderbilt/ChimeraPy/.github/workflows/test.yml?branch=main
    :alt: test
 
 .. |license| image:: https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy

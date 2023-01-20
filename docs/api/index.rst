@@ -2,6 +2,13 @@
 API Reference
 =================
 
+DataChunk
+------------
+
+.. autoclass:: chimerapy.DataChunk
+   :members: __init__, add, get, update
+   :member-order: bysource
+
 Node
 ------------
 

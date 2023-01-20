@@ -15,10 +15,8 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
 
     import numpy as np
     import cv2
-    import imutils
 
     import chimerapy as cp
-
 
     class WebcamNode(cp.Node):
         def prep(self):
@@ -27,18 +25,17 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
         def step(self):
             time.sleep(1 / 30)
             ret, frame = self.vid.read()
-            return imutils.resize(frame, width=100)
+            data_chunk = cp.DataChunk()
+            data_chunk.add('frame', frame, 'image')
+            return data_chunk
 
         def teardown(self):
             self.vid.release()
 
 
     class ShowWindow(cp.Node):
-        def step(self, data: Dict[str, Any]):
-            frame = data["web"]
-            if not isinstance(frame, np.ndarray):
-                return
-            frame = imutils.resize(frame, width=500)
+        def step(self, data: Dict[str, cp.DataChunk]):
+            frame = data["web"].get('frame')['value']
             cv2.imshow("frame", frame)
             cv2.waitKey(1)
 

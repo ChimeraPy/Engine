@@ -68,7 +68,7 @@ class RemoteCameraGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs")
+    manager = cp.Manager(logdir=CWD / "runs", port=0)
     worker = cp.Worker(name="local")
 
     # Then register graph to Manager
