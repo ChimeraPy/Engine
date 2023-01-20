@@ -37,6 +37,7 @@ test = [
     'pytest-repeat',
     'pytest-lazy-fixture',
     'pytest-order',
+    'python-ffmepg',
     'coveralls',
     'pre-commit',
     'docker',
