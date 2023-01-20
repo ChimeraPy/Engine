@@ -17,11 +17,12 @@ import aiohttp
 from aiohttp import web
 import networkx as nx
 
-from .networking import Server
+from .networking import Server, Client
 from .networking.enums import MANAGER_MESSAGE, WORKER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
+from .utils import waiting_for
 
 logger = _logger.getLogger("chimerapy")
 
@@ -46,6 +47,7 @@ class Manager:
 
         """
         # Saving input parameters
+        self.name = "Manager"
         self.host = "localhost"
         self.port = port
         self.max_num_of_workers = max_num_of_workers
@@ -82,6 +84,7 @@ class Manager:
                 WORKER_MESSAGE.REPORT_NODES_STATUS: self.update_nodes_status,
                 WORKER_MESSAGE.COMPLETE_BROADCAST: self.complete_worker_broadcast,
                 WORKER_MESSAGE.REPORT_GATHER: self.get_gather,
+                WORKER_MESSAGE.PACKAGE_LOADED: self.complete_worker_load_package,
                 WORKER_MESSAGE.TRANSFER_COMPLETE: self.complete_worker_transfer,
             },
         )
@@ -104,6 +107,8 @@ class Manager:
     async def register_worker(self, msg: Dict, ws: web.WebSocketResponse):
         self.workers[msg["data"]["name"]] = {
             "addr": msg["data"]["addr"],
+            "http_port": msg["data"]["http_port"],
+            "http_ip": msg["data"]["http_ip"],
             "ws": ws,
             "ack": True,
             "response": False,
@@ -112,6 +117,7 @@ class Manager:
             "nodes_status": {},
             "gather": {},
             "collection_complete": False,
+            "package_loaded": False,
         }
         logger.info(
             f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
@@ -148,6 +154,11 @@ class Manager:
     async def get_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
+        self.workers[msg["data"]["name"]]["response"] = True
+
+    async def complete_worker_load_package(self, msg: Dict, ws: web.WebSocketResponse):
+
+        self.workers[msg["data"]["name"]]["package_loaded"] = True
         self.workers[msg["data"]["name"]]["response"] = True
 
     async def complete_worker_transfer(self, msg: Dict, ws: web.WebSocketResponse):
@@ -549,13 +560,27 @@ class Manager:
             # Send it to the workers and let them know to load the
             # send package
             for worker_name in self.workers:
-                self.server.send_file(name="Manager", filepath=zip_package_dst)
+
+                worker_data = self.workers[worker_name]
+
+                # Create a temporary HTTP client
+                client = Client(
+                    self.name,
+                    host=worker_data["http_ip"],
+                    port=worker_data["http_port"],
+                )
+                client.send_file(sender_name=self.name, filepath=zip_package_dst)
 
         # Send package finish confirmation
         self.server.broadcast(
             signal=MANAGER_MESSAGE.REQUEST_CODE_LOAD,
             data={"packages": [x["name"] for x in packages_meta]},
         )
+
+        # Wait until workers have obtain the files and loaded to the path
+        # TODO
+        # Wail until all workers have responded with their node server data
+        self.wait_until_all_workers_responded(attribute="package_loaded", timeout=30)
 
     ####################################################################
     ## User API
@@ -605,8 +630,7 @@ class Manager:
 
         # Then send requested packages
         if send_packages:
-            logger.warning(f"{self}: distributing packages is not implemented yet!")
-            # self.distribute_packages(send_packages)
+            self.distribute_packages(send_packages)
 
         # First, create the network
         self.create_p2p_network()
@@ -721,5 +745,23 @@ class Manager:
         to shutdown, in which they will stop their processes and threads safely.
 
         """
+
+        # If workers are connected, let's notify them that the cluster is
+        # shutting down
+        if len(self.workers) > 0:
+
+            # Send shutdown message
+            self.server.broadcast(signal=MANAGER_MESSAGE.CLUSTER_SHUTDOWN, data={})
+
+            # Wait until all worker's deregister
+            waiting_for(
+                condition=lambda: len(self.workers) == 0,
+                check_period=0.1,
+                success_msg=f"{self}: All workers shutdown",
+                timeout=10,
+                timeout_raise=False,
+                timeout_msg=f"{self}: Not all workers shutdown -> {self.workers}",
+            )
+
         # First, shutdown server
         self.server.shutdown()

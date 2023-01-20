@@ -25,7 +25,7 @@ from ..utils import (
     waiting_for,
     get_ip_address,
 )
-from .enums import CLIENT_MESSAGE, GENERAL_MESSAGE
+from .enums import GENERAL_MESSAGE
 
 # Logging
 from .. import _logger
@@ -92,7 +92,7 @@ class Server:
             self.ws_handlers.update(
                 {
                     GENERAL_MESSAGE.OK: self._ok,
-                    CLIENT_MESSAGE.REGISTER: self._register_ws_client,
+                    GENERAL_MESSAGE.CLIENT_REGISTER: self._register_ws_client,
                 }
             )
 
@@ -136,7 +136,16 @@ class Server:
         # Create dst filepath
         dst_filepath = self.tempfolder / filename
 
-        # # You cannot rely on Content-Length if transfer is chunked.
+        # Create the record and mark that is not complete
+        # Keep record of the files sent!
+        self.file_transfer_records[meta["sender_name"]][filename] = {
+            "filename": filename,
+            "dst_filepath": dst_filepath,
+            "size": 0,
+            "complete": False,
+        }
+
+        # You cannot rely on Content-Length if transfer is chunked.
         size = 0
         with open(dst_filepath, "wb") as f:
             while True:
@@ -146,12 +155,11 @@ class Server:
                 size += len(chunk)
                 f.write(chunk)
 
-        # Keep record of the files sent!
-        self.file_transfer_records[meta["sender_name"]][filename] = {
-            "filename": filename,
-            "dst_filepath": dst_filepath,
-            "size": size,
-        }
+        # After finishing, mark the size and that is complete
+        self.file_transfer_records[meta["sender_name"]][filename].update(
+            {"size": size, "complete": True}
+        )
+        logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
         return web.Response(text=f"{filename} sized of {size} successfully stored")
 

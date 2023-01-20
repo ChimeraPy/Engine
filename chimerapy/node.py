@@ -423,11 +423,11 @@ class Node(mp.Process):
     def forward(self, msg: Dict):
 
         # Default value
-        output_data_chunk = None
+        output = None
 
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
-            output_data_chunk = self.step()
+            output = self.step()
 
         else:
 
@@ -440,14 +440,19 @@ class Node(mp.Process):
                     # Once we get them, pass them through!
                     self.inputs_ready.clear()
                     self.logger.debug(f"{self}: forward processing inputs")
-                    output_data_chunk = self.step(self.in_bound_data)
-                    self.logger.debug(
-                        f"{self}: forward step finish -> output = {output_data_chunk}"
-                    )
+
+                    output = self.step(self.in_bound_data)
                     break
 
         # If output generated, send it!
-        if output_data_chunk and isinstance(output_data_chunk, DataChunk):
+        if output:
+
+            # If output is not DataChunk, just add as default
+            if not isinstance(output, DataChunk):
+                output_data_chunk = DataChunk()
+                output_data_chunk.add("default", output)
+            else:
+                output_data_chunk = output
 
             # And then save the latest value
             self.latest_value = output_data_chunk
@@ -475,9 +480,7 @@ class Node(mp.Process):
         # Update the counter
         self.step_id += 1
 
-    def step(
-        self, data_chunks: Optional[Dict[str, DataChunk]] = None
-    ) -> Optional[DataChunk]:
+    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
         """User-define method.
 
         In this method, the logic that is executed within the ``Node``'s

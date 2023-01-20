@@ -12,10 +12,9 @@ import dill
 import aiohttp
 from aiohttp import web
 
-from .utils import get_ip_address, waiting_for
+from .utils import get_ip_address, waiting_for, async_waiting_for
 from .networking import Server, Client
 from .networking.enums import (
-    GENERAL_MESSAGE,
     MANAGER_MESSAGE,
     NODE_MESSAGE,
     WORKER_MESSAGE,
@@ -170,12 +169,46 @@ class Worker:
         # For each package, extract it from the client's tempfolder
         # and load it to the sys.path
         for sent_package in msg["data"]["packages"]:
-            package_zip_path = self.client.file_transfer_records["Manager"][
+
+            # Wait until the sent package are started
+            await async_waiting_for(
+                condition=lambda: f"{sent_package}.zip"
+                in self.server.file_transfer_records["Manager"],
+                check_period=0.5,
+                success_msg=f"{self}: Started gettng sent package: {sent_package}",
+                timeout=60,
+                timeout_raise=True,
+                timeout_msg=f"{self}: Package {sent_package} was not obtained at all.",
+            )
+
+            # Get the path
+            package_zip_path = self.server.file_transfer_records["Manager"][
                 f"{sent_package}.zip"
-            ]
-            assert package_zip_path.exists()
-            logger.info(f"{self}: Appending to path: {package_zip_path}")
+            ]["dst_filepath"]
+
+            # Wait until the sent package is complete
+            await async_waiting_for(
+                condition=lambda: self.server.file_transfer_records["Manager"][
+                    f"{sent_package}.zip"
+                ]["complete"]
+                == True,
+                check_period=0.5,
+                success_msg=f"{self}: Got package {sent_package}",
+                timeout=60,
+                timeout_raise=True,
+                timeout_msg=f"{self}: Package {sent_package} was not fully received, therefore failing to load.",
+            )
+
+            assert (
+                package_zip_path.exists()
+            ), f"{self}: {package_zip_path} doesn't exists!?"
             sys.path.insert(0, str(package_zip_path))
+
+        # Send message back to the Manager letting them know that
+        logger.info(f"{self}: Completed loading packages sent by Manager")
+        await self.client.async_send(
+            signal=WORKER_MESSAGE.PACKAGE_LOADED, data={"name": self.name}
+        )
 
     async def send_archive(self, msg: Dict):
 
@@ -321,6 +354,9 @@ class Worker:
         # Send message to nodes to start
         await self.server.async_broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
 
+    async def async_shutdown(self, msg: Dict):
+        self.shutdown()
+
     ####################################################################
     ## Worker Sync Lifecycle API
     ####################################################################
@@ -346,7 +382,6 @@ class Worker:
             port=port,
             name=self.name,
             ws_handlers={
-                GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                 MANAGER_MESSAGE.CREATE_NODE: self.async_create_node,
                 MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
                 MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -356,6 +391,7 @@ class Worker:
                 MANAGER_MESSAGE.STOP_NODES: self.async_stop_nodes,
                 MANAGER_MESSAGE.REQUEST_COLLECT: self.send_archive,
                 MANAGER_MESSAGE.REQUEST_CODE_LOAD: self.load_sent_packages,
+                MANAGER_MESSAGE.CLUSTER_SHUTDOWN: self.async_shutdown,
             },
         )
         self.client.connect()
@@ -366,6 +402,8 @@ class Worker:
             data={
                 "name": self.name,
                 "addr": socket.gethostbyname(socket.gethostname()),
+                "http_port": self.port,
+                "http_ip": self.host,
             },
             ok=True,
         )
@@ -513,9 +551,6 @@ class Worker:
                     "addr": socket.gethostbyname(socket.gethostname()),
                 },
             )
-
-            # Shutdown client
-            self.client.shutdown()
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:

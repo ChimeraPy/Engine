@@ -133,7 +133,25 @@ class DataChunk:
     def add(
         self, name: str, value: Any, content_type: Literal["image", "other"] = "other"
     ):
+        """Add a new record to the DataChunk instance.
 
+        The important parameter here is the content_type, as this will \
+        affect the execution speed and real-time ability of a pipeline. \
+        As of now, we only have two options: ``image`` and ``other``, as\
+        these are the provided serialization methods.
+
+        When sending an image (a numpy array), use the ``image`` option.\
+        As for anything else, use the ``other`` option until further \
+        notice.
+
+        Args:
+            name (str): The name to the record.
+            value (Any): The contents to be stored with the name key.
+            content_type (Literal["image", "other"]): Specifying the \
+                content type to help serialization and compression \
+                efficiency.
+
+        """
         # Get the check function (only on specify types of content
         if content_type in ["image"]:
             check_func = self._content_type_2_checks_mapping[content_type]
@@ -143,7 +161,25 @@ class DataChunk:
         self._container[name] = {"value": value, "content-type": content_type}
 
     def get(self, name: str) -> Dict[str, Any]:
+        """Extract the record given a name.
+
+        Args:
+            name (str): The requested key name.
+
+        Returns:
+            Dict[str, Any]: Returns a record, stored as a dictionary, \
+                with the following attributes: ``value``, ``content-type``\
+                and ``ownership``. Mostly you will only need to use \
+                ``value``.
+        """
         return self._container[name]
 
     def update(self, name: str, record: Dict[str, Any]):
+        """Overwrite record with a new one, deletes previous meta data.
+
+        Args:
+            name (str): The name of the record
+            record (Dict[str, Any]): The new record to overwrite the \
+                pre-existing one.
+        """
         self._container[name] = record

@@ -19,7 +19,7 @@ from aiohttp import web
 # Internal Imports
 from .async_loop_thread import AsyncLoopThread
 from ..utils import create_payload, decode_payload, waiting_for, async_waiting_for
-from .enums import CLIENT_MESSAGE, GENERAL_MESSAGE
+from .enums import GENERAL_MESSAGE
 
 # Logging
 from .. import _logger
@@ -38,7 +38,7 @@ class Client:
         name: str,
         host: str,
         port: int,
-        ws_handlers=Dict[enum.Enum, Callable[[], Coroutine]],
+        ws_handlers: Dict[enum.Enum, Callable[[], Coroutine]] = {},
     ):
 
         # Store parameters
@@ -53,6 +53,10 @@ class Client:
         self.msg_processed_counter = 0
         self._client_shutdown_complete = threading.Event()
         self._client_shutdown_complete.clear()
+
+        # Create thread to accept async request
+        self._thread = AsyncLoopThread()
+        self._thread.start()
 
         # Communication between Async + Sync
         self._send_msg_queue = asyncio.Queue()
@@ -203,7 +207,9 @@ class Client:
 
         # First message should be the client registering to the Server
         await self._send_msg(
-            signal=CLIENT_MESSAGE.REGISTER, data={"client_name": self.name}, ok=True
+            signal=GENERAL_MESSAGE.CLIENT_REGISTER,
+            data={"client_name": self.name},
+            ok=True,
         )
 
         # Mark that client has connected
@@ -343,8 +349,6 @@ class Client:
         # Create async loop in thread
         self._client_ready = threading.Event()
         self._client_ready.clear()
-        self._thread = AsyncLoopThread()
-        self._thread.start()
 
         # Start async execution
         logger.debug(f"{self}: executing _main")
