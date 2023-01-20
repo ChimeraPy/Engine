@@ -173,17 +173,17 @@ def test_worker_data_archiving(worker):
     "config_manager, expected_number_of_folders",
     [
         (lazy_fixture("single_worker_manager"), 1),
-        # (lazy_fixture("multiple_worker_manager"), NUM_OF_WORKERS),
+        (lazy_fixture("multiple_worker_manager"), NUM_OF_WORKERS),
         pytest.param(
             lazy_fixture("dockered_single_worker_manager"),
             1,
             marks=linux_run_only,
         ),
-        # pytest.param(
-        #     lazy_fixture("dockered_multiple_worker_manager"),
-        #     NUM_OF_WORKERS,
-        #     marks=linux_run_only,
-        # ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_worker_manager"),
+            NUM_OF_WORKERS,
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):

@@ -278,16 +278,17 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
 
     # Take a single step and see if the system crashes and burns
     config_manager.step()
-    time.sleep(1)
+    time.sleep(2)
 
     # Then request gather and confirm that the data is valid
     latest_data_values = config_manager.gather()
 
     # Assert
     for k, v in expected_output.items():
-        data_chunk = cp.DataChunk()
-        data_chunk.add("a", v)
-        assert k in latest_data_values and latest_data_values[k] == data_chunk
+        assert (
+            k in latest_data_values
+            and latest_data_values[k].get("default")["value"] == v
+        )
 
 
 @pytest.mark.parametrize(
@@ -329,6 +330,7 @@ def test_manager_start(config_manager, expected_output):
 
     # Assert
     for k, v in expected_output.items():
-        data_chunk = cp.DataChunk()
-        data_chunk.add("a", v)
-        assert k in latest_data_values and latest_data_values[k] == data_chunk
+        assert (
+            k in latest_data_values
+            and latest_data_values[k].get("default")["value"] == v
+        )

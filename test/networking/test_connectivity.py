@@ -67,7 +67,7 @@ def test_manager_shutting_down_gracefully():
     # While this one should not!
 
     # Create the actors
-    manager = cp.Manager(logdir=TEST_DATA_DIR)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
     worker = cp.Worker(name="local")
 
     # Connect to the Manager
@@ -75,4 +75,18 @@ def test_manager_shutting_down_gracefully():
 
     # Wait and then shutdown system through the manager
     worker.shutdown()
+    manager.shutdown()
+
+
+def test_manager_shutting_down_ungracefully():
+    # While this one should not!
+
+    # Create the actors
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    worker = cp.Worker(name="local")
+
+    # Connect to the Manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Only shutting Manager
     manager.shutdown()

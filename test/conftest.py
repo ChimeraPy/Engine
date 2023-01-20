@@ -110,14 +110,14 @@ def slow_interval_between_tests():
 
 @pytest.fixture
 def manager():
-    manager = cp.Manager(logdir=TEST_DATA_DIR)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
     yield manager
     manager.shutdown()
 
 
 @pytest.fixture
 def worker():
-    worker = cp.Worker(name="local")
+    worker = cp.Worker(name="local", port=0)
     yield worker
     worker.shutdown()
 
@@ -141,28 +141,23 @@ class GenNode(cp.Node):
     def prep(self):
         self.value = 2
 
-    def step(self) -> cp.DataChunk:
+    def step(self):
         time.sleep(0.5)
         logger.debug(self.value)
-        data_chunk = cp.DataChunk()
-        data_chunk.add("a", self.value)
-        return data_chunk
+        return self.value
 
 
 class ConsumeNode(cp.Node):
     def prep(self):
         self.coef = 3
 
-    def step(self, data_chunks: Dict[str, cp.DataChunk]) -> cp.DataChunk:
+    def step(self, data_chunks: Dict[str, cp.DataChunk]):
         time.sleep(0.1)
         # Extract the data
         self.logger.debug(f"{self}: inside step, with {data_chunks}")
-        value = data_chunks["Gen1"].get("a")["value"]
+        value = data_chunks["Gen1"].get("default")["value"]
         output = self.coef * value
-        data_chunk = cp.DataChunk()
-        data_chunk.add("a", output)
-        self.logger.debug(f"{self}: inside step, finishing with {data_chunk}")
-        return data_chunk
+        return output
 
 
 class SlowPrepNode(cp.Node):
@@ -170,12 +165,10 @@ class SlowPrepNode(cp.Node):
         time.sleep(5)
         self.value = 5
 
-    def step(self) -> cp.DataChunk:
+    def step(self):
         time.sleep(0.5)
         logger.debug(self.value)
-        data_chunk = cp.DataChunk()
-        data_chunk.add("a", self.value)
-        return data_chunk
+        return self.value
 
 
 @pytest.fixture
