@@ -3,18 +3,24 @@ Communication
 
 Client
 ------------
-.. autoclass:: chimerapy.client.Client
+.. autoclass:: chimerapy.networking.Client
    :undoc-members:
    :members:
 
 Server
 ------------
-.. autoclass:: chimerapy.server.Server
+.. autoclass:: chimerapy.networking.Server
    :undoc-members:
    :members:
 
-OutputsHandler
+Publisher
 --------------
-.. autoclass:: chimerapy.data_handlers.OutputsHandler
+.. autoclass:: chimerapy.networking.Publisher
+   :undoc-members:
+   :members:
+
+Subscriber
+--------------
+.. autoclass:: chimerapy.networking.Subscriber
    :undoc-members:
    :members:

@@ -40,7 +40,7 @@ For this example, the ``RandomNode`` is a source node. Step and sink have a ``st
 The DataChunk Container
 ***********************
 
-A main attribute of ChimeraPy is that it doesn't assume what type of data is being transmitted between :class:`Nodes<chimerapy.Node>`. Therefore, when developing your custom node implementations, the ``step`` function can return anything that is serializable. There are moments when this isn't beneficial. For example, to make video streaming in real time, it is required to compress video frames with an algorithm optimized for images. This implies that ChimeraPy must then know what is being transmitted. This is achieved through the use of the :class:`DataChunk<chimerapy.DataChunk>` container. This is an example for a video streaming Node::
+A main attribute of ChimeraPy is that it doesn't assume what type of data is being transmitted between :class:`Nodes<chimerapy.Node>`. Therefore, when developing your custom node implementations, the ``step`` function can return anything that is serializable. There are moments when this isn't beneficial. For example, to make video streaming work in real time, it is required to compress video frames with an algorithm optimized for images. This implies that ChimeraPy must then know what is being transmitted. This is achieved through the use of the :class:`DataChunk<chimerapy.DataChunk>` container. This is an example for a video streaming Node::
 
 
     class ScreenCapture(cp.Node):

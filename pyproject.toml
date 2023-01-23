@@ -38,13 +38,18 @@ test = [
     'pytest-lazy-fixture',
     'pytest-order',
     'pytest-rerunfailures',
+    'auto-changelog',
     'ffmpeg-python',
     'coveralls',
     'pre-commit',
     'docker',
     'numpy',
     'imutils',
-    'pillow'
+    'pillow',
+]
+docs = [
+    'sphinx',
+    'myst-parser'
 ]
 benchmark = [
     'lz4',
