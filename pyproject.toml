@@ -1,6 +1,88 @@
+[project]
+name = "chimerapy"
+version = "0.0.8"
+description = "ChimeraPy: Python Distributed MultiModal Data Framework"
+authors = [
+    {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"}
+]
+license = {file = "LICENSE.txt"}
+readme = "README.md"
+requires-python = ">3.6"
+
+keywords = ["multimodal", "data", "distributed", "streaming", "real-time"]
+
+classifiers = [
+    "Programming Language :: Python :: 3"
+]
+
+dependencies = [
+    'networkx',
+    'dill',
+    'netifaces',
+    'matplotlib',
+    'multiprocess',
+    'opencv-python',
+    'pyaudio',
+    'pandas',
+    'tqdm',
+    'pyzmq',
+    'simplejpeg',
+    'aiohttp',
+    'blosc',
+]
+
+[project.optional-dependencies]
+test = [
+    'pytest',
+    'pytest-repeat',
+    'pytest-lazy-fixture',
+    'pytest-order',
+    'pytest-rerunfailures',
+    'auto-changelog',
+    'ffmpeg-python',
+    'coveralls',
+    'pre-commit',
+    'docker',
+    'numpy',
+    'imutils',
+    'pillow',
+]
+docs = [
+    'sphinx',
+    'myst-parser'
+]
+benchmark = [
+    'lz4',
+    'nujson',
+    'orjson',
+    'cloudpickle',
+    'msgpack',
+    'msgpack_numpy'
+]
+examples = [
+    'dxcam; sys_platform == "win32"'
+]
+
+[project.urls]
+homepath = "https://github.com/oele-isis-vanderbilt/ChimeraPy"
+documentation = "https://oele-isis-vanderbilt.github.io/ChimeraPy/"
+repository = "https://github.com/oele-isis-vanderbilt/ChimeraPy"
+
+# Entrypoint
+[project.scripts]
+cp-worker = "chimerapy.entry.worker:main"
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]  # ["*"] by default
+namespaces = true
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
@@ -14,3 +96,6 @@ log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 # Timeout
 faulthandler_timeout=120
+
+# Ignore warnings
+filterwarnings = "ignore::DeprecationWarning"

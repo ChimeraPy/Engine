@@ -1,24 +1,25 @@
 from typing import Dict, List, Any, Optional, Union, Literal
 from multiprocessing.process import AuthenticationString
 import time
-import socket
 import logging
 import queue
 import uuid
 import pathlib
 import os
 import tempfile
+import datetime
+import threading
 
 # Third-party Imports
 import multiprocess as mp
 import numpy as np
 import pandas as pd
+import zmq
 
 # Internal Imports
-from .client import Client
-from .server import Server
-from .data_handlers import OutputsHandler, SaveHandler
-from . import enums
+from .networking import Client, Publisher, Subscriber, DataChunk
+from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
+from .data_handlers import SaveHandler
 from .utils import clear_queue
 from . import _logger
 
@@ -46,6 +47,13 @@ class Node(mp.Process):
         self._context = mp.get_start_method()
         self.name = name
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
+
+        # Saving state variables
+        self.publisher: Optional[Publisher] = None
+        self.p2p_subs: Dict[str, Subscriber] = {}
+        self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
+        self.sub_poller = zmq.Poller()
+        self.poll_inputs_thread: Optional[threading.Thread] = None
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -108,7 +116,7 @@ class Node(mp.Process):
             if self._context == "spawn":
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
-                l = _logger.getLogger("chimerapy-subprocess")
+                l = _logger.getLogger("chimerapy")
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
 
@@ -118,74 +126,62 @@ class Node(mp.Process):
     ## Message Reactivity API
     ####################################################################
 
-    def process_node_server_data(self, msg: Dict):
+    async def process_node_server_data(self, msg: Dict):
 
         # We determine all the out bound nodes
-        for out_bound_name in self.p2p_info["out_bound"]:
+        for in_bound_name in self.p2p_info["in_bound"]:
 
             self.logger.debug(f"{self}: Setting up clients: {self.name}: {msg}")
 
             # Determine the host and port information
-            out_bound_info = msg["data"][out_bound_name]
+            in_bound_info = msg["data"][in_bound_name]
 
-            # Create a client to the out bound node
-            p2p_client = Client(
-                host=out_bound_info["host"],
-                port=out_bound_info["port"],
-                name=self.name,
-                connect_timeout=5.0,
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.NODE_MESSAGE,
-                handlers=self.to_node_handlers,
+            # Create subscribers to other nodes' publishers
+            p2p_subscriber = Subscriber(
+                host=in_bound_info["host"], port=in_bound_info["port"]
             )
 
-            # # Save the client
-            self.p2p_clients[out_bound_name] = p2p_client
+            # Storing all subscribers
+            self.p2p_subs[in_bound_name] = p2p_subscriber
+            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = in_bound_name
+
+        # After creating all subscribers, use a poller to track them all
+        for sub in self.p2p_subs.values():
+            self.sub_poller.register(sub._zmq_socket, zmq.POLLIN)
+
+        # Then start a thread to read the sub poller
+        if self.p2p_info["in_bound"]:
+            self.poll_inputs_thread = threading.Thread(target=self.poll_inputs)
+            self.poll_inputs_thread.start()
 
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
-        self.client.send(
-            {
-                "signal": enums.NODE_STATUS,
-                "data": {
-                    "node_name": self.name,
-                    "status": self.status,
-                },
-            }
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS,
+            data={
+                "node_name": self.name,
+                "status": self.status,
+            },
         )
 
-    def received_data(self, msg: Dict, client_socket: socket.socket):
+    async def provide_gather(self, msg: Dict):
 
-        # Mark that new data was received, only if its is the Node to
-        # be followed
-        if msg["data"]["sent_from"] == self.follow:
-            self.new_data_available = True
-
-        # Extract the data from the pickle
-        coupled_data: Dict = msg["data"]["outputs"]
-
-        # Sort the given data into their corresponding queue
-        self.in_bound_data[msg["data"]["sent_from"]] = coupled_data["data"]
-
-        if not all([type(x) != type(None) for x in self.in_bound_data.values()]):
-            return None
-        else:
-            self.all_inputs_ready = True
-
-    def provide_gather(self, msg: Dict):
-
-        self.client.send(
-            {
-                "signal": enums.NODE_REPORT_GATHER,
-                "data": {"node_name": self.name, "latest_value": self.latest_value},
-            }
+        await self.client.async_send(
+            signal=NODE_MESSAGE.REPORT_GATHER,
+            data={
+                "node_name": self.name,
+                "latest_value": self.latest_value,
+            },
         )
 
-    def start_node(self, msg: Dict):
-        self.worker_signal_start = True
+    async def start_node(self, msg: Dict):
         self.logger.debug(f"{self}: start")
+        self.worker_signal_start.set()
 
-    def stop_node(self, msg: Dict):
+    async def async_forward(self, msg: Dict):
+        self.forward(msg)
+
+    async def stop_node(self, msg: Dict):
         self.running.value = False
 
     ####################################################################
@@ -247,7 +243,7 @@ class Node(mp.Process):
         logdir: pathlib.Path,
         in_bound: List[str],
         out_bound: List[str],
-        follow: Optional[bool],
+        follow: Optional[str] = None,
         networking: bool = True,
     ):
         """Configuring the ``Node``'s networking and meta data.
@@ -293,48 +289,24 @@ class Node(mp.Process):
         within this function, along with ``Node`` meta data.
 
         """
-        # Create container for p2p clients
-        self.p2p_clients = {}
-
-        # Create input and output queue
-        self.in_queue = queue.Queue()
-        self.out_queue = queue.Queue()
+        # Create IO queue
         self.save_queue = queue.Queue()
 
-        # Create the queues for each in-bound connection
-        self.in_bound_queues = {x: queue.Queue() for x in self.p2p_info["in_bound"]}
-        self.in_bound_data = {x: None for x in self.p2p_info["in_bound"]}
-        self.all_inputs_ready = False
-        self.new_data_available = False
-
-        # Create the threads that manager the incoming and outgoing
-        # data chunks
-        self.outputs_handler = OutputsHandler(
-            self.name, self.out_queue, self.p2p_info["out_bound"], self.p2p_clients
-        )
-        self.outputs_handler.start()
+        # Creating container for the latest values of the subscribers
+        self.in_bound_data: Dict[str, Optional[DataChunk]] = {
+            x: None for x in self.p2p_info["in_bound"]
+        }
+        self.inputs_ready = threading.Event()
+        self.inputs_ready.clear()
 
         # Creating thread for saving incoming data
         self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
         self.save_handler.start()
 
-        # Defining protocol responses
-        self.to_worker_handlers = {
-            enums.SHUTDOWN: self.shutdown,
-            enums.WORKER_BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
-            enums.WORKER_REQUEST_STEP: self.forward,
-            enums.WORKER_REQUEST_GATHER: self.provide_gather,
-            enums.WORKER_START_NODES: self.start_node,
-            enums.WORKER_STOP_NODES: self.stop_node,
-        }
-        self.from_node_handlers = {
-            enums.NODE_DATA_TRANSFER: self.received_data,
-        }
-        self.to_node_handlers = {}
-
         # Keeping parameters
         self.step_id = 0
-        self.worker_signal_start = 0
+        self.worker_signal_start = threading.Event()
+        self.worker_signal_start.clear()
         self.status["INIT"] = 1
 
         if self.networking:
@@ -343,36 +315,31 @@ class Node(mp.Process):
             self.client = Client(
                 host=self.worker_host,
                 port=self.worker_port,
-                name=f"Node {self.name}",
-                connect_timeout=5.0,
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.WORKER_MESSAGE,
-                handlers=self.to_worker_handlers,
+                name=self.name,
+                ws_handlers={
+                    GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
+                    WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+                    WORKER_MESSAGE.REQUEST_STEP: self.async_forward,
+                    WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
+                    WORKER_MESSAGE.START_NODES: self.start_node,
+                    WORKER_MESSAGE.STOP_NODES: self.stop_node,
+                },
             )
-            self.client.start()
+            self.client.connect()
 
-            # Create server
-            self.server = Server(
-                port=5000,
-                name=f"Node {self.name}",
-                max_num_of_clients=len(self.p2p_info["out_bound"]),
-                sender_msg_type=enums.NODE_MESSAGE,
-                accepted_msg_type=enums.NODE_MESSAGE,
-                handlers=self.from_node_handlers,
-            )
-            self.server.start()
+            # Creating publisher
+            self.publisher = Publisher()
+            self.publisher.start()
 
-            # Inform client that Node is INITIALIZED!
+            # Send publisher port and host information
             self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                        "host": self.server.host,
-                        "port": self.server.port,
-                    },
-                }
+                signal=NODE_MESSAGE.STATUS,
+                data={
+                    "node_name": self.name,
+                    "status": self.status,
+                    "host": self.publisher.host,
+                    "port": self.publisher.port,
+                },
             )
 
     def prep(self):
@@ -391,13 +358,11 @@ class Node(mp.Process):
         self.status["READY"] = 1
         if self.networking:
             self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                    },
-                }
+                signal=NODE_MESSAGE.STATUS,
+                data={
+                    "node_name": self.name,
+                    "status": self.status,
+                },
             )
 
     def waiting(self):
@@ -407,12 +372,58 @@ class Node(mp.Process):
 
             # Wait until worker says to start
             while self.running.value:
-                if self.worker_signal_start:
+                if self.worker_signal_start.wait(timeout=1):
                     break
-                else:
-                    time.sleep(0.1)
+                self.logger.debug(f"{self}: waiting")
+
+        self.logger.debug(f"{self}: finished waiting")
+
+    def poll_inputs(self):
+
+        while self.running.value:
+
+            self.logger.debug(f"{self}: polling inputs")
+
+            # Wait until we get data from any of the subscribers
+            events = dict(self.sub_poller.poll())
+
+            # Empty if no events
+            if len(events) == 0:
+                continue
+
+            self.logger.debug(f"{self}: polling event processing {len(events)}")
+
+            # Default value
+            follow_event = False
+
+            # Else, update values
+            for s in events:  # socket
+
+                # Update
+                name = self.socket_to_sub_name_mapping[s]  # inbound
+                serial_data_chunk = s.recv()
+                self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
+
+                # Update flag if new values are coming from the node that is
+                # being followed
+                if self.follow == name:
+                    follow_event = True
+
+            self.logger.debug(
+                f"{self}: polling {self.in_bound_data}, follow = {follow_event}, event= {events}"
+            )
+
+            # If update on the follow and all inputs available, then use the inputs
+            if follow_event and all(
+                [type(x) != type(None) for x in self.in_bound_data.values()]
+            ):
+                self.inputs_ready.set()
+                self.logger.debug(f"{self}: got inputs")
 
     def forward(self, msg: Dict):
+
+        # Default value
+        output = None
 
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
@@ -421,35 +432,55 @@ class Node(mp.Process):
         else:
 
             # Else, we have to wait for inputs
-            while True:
+            while self.running.value:
 
-                if self.all_inputs_ready and self.new_data_available:
-                    inputs = self.in_bound_data.copy()
-                    self.new_data_available = False
-                else:
-                    time.sleep(1 / 100)  # Required to allow threads to execute
-                    continue
+                self.logger.debug(f"{self}: forward waiting for inputs")
 
-                self.logger.debug(f"{self}: got inputs")
+                if self.inputs_ready.wait(timeout=1):
+                    # Once we get them, pass them through!
+                    self.inputs_ready.clear()
+                    self.logger.debug(f"{self}: forward processing inputs")
 
-                # Once we get them, pass them through!
-                output = self.step(inputs)
-                break
+                    output = self.step(self.in_bound_data)
+                    break
 
         # If output generated, send it!
-        if type(output) != type(None):
+        if output:
 
-            # Send out the output to the OutputsHandler
-            self.logger.debug(f"{self}: placed data to out_queue")
-            self.out_queue.put({"step_id": self.step_id, "data": output})
+            # If output is not DataChunk, just add as default
+            if not isinstance(output, DataChunk):
+                output_data_chunk = DataChunk()
+                output_data_chunk.add("default", output)
+            else:
+                output_data_chunk = output
 
             # And then save the latest value
-            self.latest_value = output
+            self.latest_value = output_data_chunk
+
+            # First, check that it is a node with outbound!
+            if self.publisher:
+
+                self.logger.debug(f"{self}: got outputs to publish!")
+
+                # Add timestamp and step id to the DataChunk
+                meta = output_data_chunk.get("meta")
+                meta["value"]["ownership"].append(
+                    {"name": self.name, "timestamp": datetime.datetime.now()}
+                )
+                output_data_chunk.update("meta", meta)
+
+                # Send out the output to the OutputsHandler
+                self.publisher.publish(output_data_chunk)
+                self.logger.debug(f"{self}: published!")
+
+            else:
+
+                self.logger.warning(f"{self}: Do not have publisher yet given outputs")
 
         # Update the counter
         self.step_id += 1
 
-    def step(self, data_dict: Optional[Dict[str, Any]] = None):
+    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
         """User-define method.
 
         In this method, the logic that is executed within the ``Node``'s
@@ -461,7 +492,7 @@ class Node(mp.Process):
         data is received.
 
         Args:
-            data_dict (Optional[Dict[str, Any]]): For source nodes, this \
+            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
             parameter should not be considered (as they don't have inputs).\
             For step and sink nodes, the ``data_dict`` must be included\
             to avoid an error. The variable is a dictionary, where the\
@@ -497,16 +528,21 @@ class Node(mp.Process):
 
     def _teardown(self):
 
-        # Clear out the queues
-        clear_queue(self.in_queue)
-        clear_queue(self.out_queue)
+        # Shutting down publisher
+        if self.publisher:
+            self.publisher.shutdown()
+
+        # Stop poller
+        if self.poll_inputs_thread:
+            self.poll_inputs_thread.join()
+
+        # Shutting down subscriber
+        for sub in self.p2p_subs.values():
+            sub.shutdown()
 
         # Shutdown the inputs and outputs threads
-        self.outputs_handler.shutdown()
-        self.outputs_handler.join()
         self.save_handler.shutdown()
         self.save_handler.join()
-        time.sleep(1)
 
         # Shutting down networking
         if self.networking:
@@ -514,20 +550,15 @@ class Node(mp.Process):
             # Inform the worker that the Node has finished its saving of data
             self.status["FINISHED"] = 1
             self.client.send(
-                {
-                    "signal": enums.NODE_STATUS,
-                    "data": {
-                        "node_name": self.name,
-                        "status": self.status,
-                    },
-                }
+                signal=NODE_MESSAGE.STATUS,
+                data={
+                    "node_name": self.name,
+                    "status": self.status,
+                },
             )
 
             # Shutdown the client
             self.client.shutdown()
-
-            # Shutdown the server
-            self.server.shutdown()
 
     def run(self):
         """The actual method that is executed in the new process.
@@ -549,7 +580,6 @@ class Node(mp.Process):
         self._prep()
         self.prep()
 
-        assert isinstance(self.in_queue, queue.Queue)
         self.logger.debug(f"{self}: finished prep")
 
         # Signal that Node is ready

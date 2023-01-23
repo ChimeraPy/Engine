@@ -1,4 +1,4 @@
 ChangeLog and Commit Messages
 #############################
 
-To help autogenerate changelogs, we adopted the `Conventional Commits <https://www.conventionalcommits.org/en/v1.0.0/>`_ standard along with the use of an `auto-generate-changelog <https://github.com/BobAnkh/auto-generate-changelog>`_. By using conventional commits, communication on the progress of ChimeraPy is standardize and linked directly to the code and commits.
+To help autogenerate changelogs, we adopted the `Conventional Commits <https://www.conventionalcommits.org/en/v1.0.0/>`_ standard along with a Python `auto-changelog tool <https://github.com/KeNaCo/auto-changelog>`_. Use the instructions provided in their GitHub to update/generate changelog for each release.

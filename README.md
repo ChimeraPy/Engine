@@ -1,6 +1,6 @@
 ![Logo](https://user-images.githubusercontent.com/40870026/204550212-a6e1b7c2-194b-4554-ab42-f5e456c6f402.png)
 
-[![PyPI](https://img.shields.io/pypi/v/chimerapy)](https://pypi.org/project/chimerapy/) [![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/workflow/status/oele-isis-vanderbilt/ChimeraPy/Test) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
+[![PyPI](https://img.shields.io/pypi/v/chimerapy)](https://pypi.org/project/chimerapy/) [![Coverage Status](https://coveralls.io/repos/github/oele-isis-vanderbilt/ChimeraPy/badge.svg?branch=main)](https://coveralls.io/github/oele-isis-vanderbilt/ChimeraPy?branch=main) ![](https://img.shields.io/github/actions/workflow/status/oele-isis-vanderbilt/ChimeraPy/.github/workflows/test.yml?branch=main) ![](https://img.shields.io/github/license/oele-isis-vanderbilt/ChimeraPy) ![](https://img.shields.io/badge/style-black-black)
 * [Docs](https://oele-isis-vanderbilt.github.io/ChimeraPy)
 
 <!-- Summary -->

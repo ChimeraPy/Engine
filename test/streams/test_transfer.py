@@ -13,6 +13,7 @@ import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
 # cp.debug(["chimerapy-networking"])
+cp.debug()
 
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..conftest import linux_run_only, linux_expected_only
@@ -61,7 +62,7 @@ def multiple_worker_manager(manager, worker):
     workers = []
     worker_node_map = collections.defaultdict(list)
     for i in range(NUM_OF_WORKERS):
-        worker = cp.Worker(name=f"W{i}")
+        worker = cp.Worker(name=f"W{i}", port=0)
         worker.connect(host=manager.host, port=manager.port)
         workers.append(worker)
 

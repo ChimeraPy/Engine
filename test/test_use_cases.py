@@ -5,7 +5,7 @@ import os
 import sys
 import multiprocessing as mp
 
-import mss
+from PIL import ImageGrab
 import cv2
 import numpy as np
 import imutils
@@ -16,16 +16,19 @@ import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
 # cp.debug(["chimerapy-networking", "chimerapy-subprocess"])
+cp.debug()
 
 
 class WebcamNode(cp.Node):
     def prep(self):
         self.vid = cv2.VideoCapture(0)
 
-    def step(self):
-        time.sleep(1 / 30)
+    def step(self) -> cp.DataChunk:
+        time.sleep(1 / 10)
         ret, frame = self.vid.read()
-        return imutils.resize(frame, width=400)
+        data_chunk = cp.DataChunk()
+        data_chunk.add("frame", frame, "image")
+        return data_chunk
 
     def teardown(self):
         self.vid.release()
@@ -38,53 +41,32 @@ class ScreenCapture(cp.Node):
         if "DISPLAY" not in os.environ:
             self.monitor = None
         else:
-            self.sct = mss.mss()
-            self.monitor = self.sct.monitors[0]
+            self.monitor = True
 
-    def step(self):
+    def step(self) -> cp.DataChunk:
+
         time.sleep(1 / 10)
         if self.monitor:
-            frame = np.array(self.sct.grab(self.monitor), dtype=np.uint8)
-            return imutils.resize(frame, width=400)
+            frame = cv2.cvtColor(
+                np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
+            )
         else:
-            return np.ones((400, 400))
+            frame = (np.random.rand(1000, 1000, 3) * 255).astype(np.uint8)
+
+        # Create container and send it
+        data_chunk = cp.DataChunk()
+        data_chunk.add("frame", frame, "image")
+        return data_chunk
 
 
 class ShowWindow(cp.Node):
-    def step(self, data: Dict[str, Any]):
+    def step(self, data_chunks: Dict[str, cp.DataChunk]):
 
-        # time.sleep(1/20)
+        for name, data_chunk in data_chunks.items():
+            self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
 
-        if "web" in data:
-            frame = data["web"]
-        elif "screen" in data:
-            frame = data["screen"]
-        else:
-            return None
-
-        # cv2.imshow("frame", frame)
-        # cv2.waitKey(1)
-
-    # def teardown(self):
-    #     cv2.destroyAllWindows()
-
-
-class CombineAndShow(cp.Node):
-    def step(self, data: Dict[str, Any]):
-
-        web_frame = data["web"]
-        screen_frame = data["screen"][..., :3]
-
-        dim = (screen_frame.shape[1], screen_frame.shape[0])
-
-        web_frame = cv2.resize(web_frame, dim, interpolation=cv2.INTER_AREA)
-        frame = np.concatenate((web_frame, screen_frame), axis=0)
-
-        # cv2.imshow("frame", frame)
-        # cv2.waitKey(1)
-
-    # def teardown(self):
-    #     cv2.destroyAllWindows()
+            cv2.imshow(name, data_chunk.get("frame")["value"])
+            cv2.waitKey(1)
 
 
 @pytest.fixture
@@ -114,16 +96,16 @@ def screencapture_graph():
 
 
 @pytest.fixture
-def combine_videos_graph():
+def show_multiple_videos_graph():
 
     web = WebcamNode(name="web")
     screen = ScreenCapture(name="screen")
-    combine = CombineAndShow(name="combine")
+    show = ShowWindow(name="show")
 
     graph = cp.Graph()
-    graph.add_nodes_from([screen, web, combine])
-    graph.add_edge(src=screen, dst=combine)
-    graph.add_edge(src=web, dst=combine)
+    graph.add_nodes_from([screen, web, show])
+    graph.add_edge(src=screen, dst=show)
+    graph.add_edge(src=web, dst=show)
 
     return graph
 
@@ -153,9 +135,12 @@ def test_open_camera_in_another_process():
 @pytest.mark.parametrize(
     "graph, mapping",
     [
-        (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
+        # (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
         # (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
-        # (lazy_fixture("combine_videos_graph"), {"local": ["screen", "combine", "web"]}),
+        (
+            lazy_fixture("show_multiple_videos_graph"),
+            {"local": ["screen", "show", "web"]},
+        ),
     ],
 )
 def test_use_case_graph(manager, worker, graph, mapping):
@@ -164,7 +149,7 @@ def test_use_case_graph(manager, worker, graph, mapping):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Take a single step and see if the system crashes and burns
     manager.start()

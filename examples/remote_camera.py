@@ -15,28 +15,26 @@ class WebcamNode(cp.Node):
     def prep(self):
         self.vid = cv2.VideoCapture(0)
 
-    def step(self):
+    def step(self) -> cp.DataChunk:
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
         self.save_video(name="test", data=frame, fps=20)
-        return frame
+        data_chunk = cp.DataChunk()
+        data_chunk.add("frame", frame, "image")
+        return data_chunk
 
     def teardown(self):
         self.vid.release()
 
 
 class ShowWindow(cp.Node):
-    def step(self, data: Dict[str, Any]):
+    def step(self, data_chunks: Dict[str, cp.DataChunk]):
 
-        frame = data["web"]
-        if not isinstance(frame, np.ndarray):
-            return
+        for name, data_chunk in data_chunks.items():
+            self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
 
-        cv2.imshow("frame", frame)
-        cv2.waitKey(1)
-
-    def teardown(self):
-        cv2.destroyAllWindows()
+            cv2.imshow(name, data_chunk.get("frame")["value"])
+            cv2.waitKey(1)
 
 
 class RemoteCameraGraph(cp.Graph):
@@ -66,11 +64,11 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show"]}
+    mapping = {"remote": ["web"], "local": ["show"]}
+    # mapping = {"local": ["web", "show"]}
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping, timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Wail until user stops
     while True:

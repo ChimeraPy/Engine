@@ -1,6 +1,5 @@
 from typing import Dict, Optional, List, Union, Any
 import socket
-import logging
 import pdb
 import pathlib
 import os
@@ -10,16 +9,20 @@ import json
 import random
 import tempfile
 import zipfile
+from concurrent.futures import wait
 
+# Third-party Imports
 import dill
-
+import aiohttp
+from aiohttp import web
 import networkx as nx
 
-from .server import Server
+from .networking import Server, Client
+from .networking.enums import MANAGER_MESSAGE, WORKER_MESSAGE
 from .graph import Graph
-from . import enums
 from .exceptions import CommitGraphError
 from . import _logger
+from .utils import waiting_for
 
 logger = _logger.getLogger("chimerapy")
 
@@ -28,7 +31,7 @@ class Manager:
     def __init__(
         self,
         logdir: pathlib.Path,
-        port: int = 9000,
+        port: int = 8080,
         max_num_of_workers: int = 50,
     ):
         """Create ``Manager``, the controller of the cluster.
@@ -44,9 +47,11 @@ class Manager:
 
         """
         # Saving input parameters
-        # self.host = socket.gethostbyname(socket.gethostname())
+        self.name = "Manager"
+        self.host = "localhost"
         self.port = port
         self.max_num_of_workers = max_num_of_workers
+        self.has_shutdown = False
 
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -60,7 +65,7 @@ class Manager:
         os.makedirs(self.logdir, exist_ok=True)
 
         # Instance variables
-        self.workers: Dict = {}
+        self.workers: Dict[str, Dict[str, Any]] = {}
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
@@ -69,40 +74,43 @@ class Manager:
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: int = 0
 
-        # Specifying the handlers for worker2manager communication
-        self.handlers = {
-            enums.WORKER_REGISTER: self.register_worker,
-            enums.WORKER_DEREGISTER: self.deregister_worker,
-            enums.WORKER_REPORT_NODE_SERVER_DATA: self.node_server_data,
-            enums.WORKER_REPORT_NODES_STATUS: self.update_nodes_status,
-            enums.WORKER_COMPLETE_BROADCAST: self.complete_worker_broadcast,
-            enums.WORKER_REPORT_GATHER: self.get_gather,
-            enums.WORKER_TRANSFER_COMPLETE: self.complete_worker_transfer,
-        }
-
         # Create server
         self.server = Server(
             port=self.port,
             name="Manager",
-            max_num_of_clients=self.max_num_of_workers,
-            sender_msg_type=enums.MANAGER_MESSAGE,
-            accepted_msg_type=enums.WORKER_MESSAGE,
-            handlers=self.handlers,
+            ws_handlers={
+                WORKER_MESSAGE.REGISTER: self.register_worker,
+                WORKER_MESSAGE.DEREGISTER: self.deregister_worker,
+                WORKER_MESSAGE.REPORT_NODE_SERVER_DATA: self.node_server_data,
+                WORKER_MESSAGE.REPORT_NODES_STATUS: self.update_nodes_status,
+                WORKER_MESSAGE.COMPLETE_BROADCAST: self.complete_worker_broadcast,
+                WORKER_MESSAGE.REPORT_GATHER: self.get_gather,
+                WORKER_MESSAGE.PACKAGE_LOADED: self.complete_worker_load_package,
+                WORKER_MESSAGE.TRANSFER_COMPLETE: self.complete_worker_transfer,
+            },
         )
-        self.server.start()
+        self.server.serve()
         logger.info(f"Manager started at {self.server.host}:{self.server.port}")
 
         # Updating the manager's port to the found available port
         self.host, self.port = self.server.host, self.server.port
 
+    def __repr__(self):
+        return f"<Manager @{self.host}:{self.port}>"
+
+    def __str__(self):
+        return self.__repr__()
+
     ####################################################################
     ## Message Reactivity API
     ####################################################################
 
-    def register_worker(self, msg: Dict, worker_socket: socket.socket):
+    async def register_worker(self, msg: Dict, ws: web.WebSocketResponse):
         self.workers[msg["data"]["name"]] = {
             "addr": msg["data"]["addr"],
-            "socket": worker_socket,
+            "http_port": msg["data"]["http_port"],
+            "http_ip": msg["data"]["http_ip"],
+            "ws": ws,
             "ack": True,
             "response": False,
             "reported_nodes_server_data": False,
@@ -110,19 +118,20 @@ class Manager:
             "nodes_status": {},
             "gather": {},
             "collection_complete": False,
+            "package_loaded": False,
         }
         logger.info(
             f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
         )
 
-    def deregister_worker(self, msg: Dict, worker_socket: socket.socket):
-        worker_socket.close()
+    async def deregister_worker(self, msg: Dict, ws: web.WebSocketResponse):
+        await ws.close()
         logger.info(
             f"Manager deregistered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
         )
         del self.workers[msg["data"]["name"]]
 
-    def node_server_data(self, msg: Dict, worker_socket: socket.socket):
+    async def node_server_data(self, msg: Dict, ws: web.WebSocketResponse):
 
         # And then updating the node server data
         self.nodes_server_table.update(msg["data"]["nodes"])
@@ -130,7 +139,7 @@ class Manager:
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["reported_nodes_server_data"] = True
 
-    def update_nodes_status(self, msg: Dict, worker_socket: socket.socket):
+    async def update_nodes_status(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Updating nodes status
         self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
@@ -138,17 +147,22 @@ class Manager:
 
         logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
-    def complete_worker_broadcast(self, msg: Dict, worker_socket: socket.socket):
+    async def complete_worker_broadcast(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Tracking which workers have responded
         self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
 
-    def get_gather(self, msg: Dict, worker_socket: socket.socket):
+    async def get_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
         self.workers[msg["data"]["name"]]["response"] = True
 
-    def complete_worker_transfer(self, msg: Dict, worker_socket: socket.socket):
+    async def complete_worker_load_package(self, msg: Dict, ws: web.WebSocketResponse):
+
+        self.workers[msg["data"]["name"]]["package_loaded"] = True
+        self.workers[msg["data"]["name"]]["response"] = True
+
+    async def complete_worker_transfer(self, msg: Dict, ws: web.WebSocketResponse):
 
         self.workers[msg["data"]["name"]]["collection_complete"] = True
         self.workers[msg["data"]["name"]]["response"] = True
@@ -230,19 +244,17 @@ class Manager:
 
         # Send for the creation of the node
         self.server.send(
-            self.workers[worker_name]["socket"],
-            {
-                "signal": enums.MANAGER_CREATE_NODE,
-                "data": {
-                    "worker_name": worker_name,
-                    "node_name": node_name,
-                    "pickled": dill.dumps(
-                        self.graph.G.nodes[node_name]["object"], recurse=True
-                    ),
-                    "in_bound": list(self.graph.G.predecessors(node_name)),
-                    "out_bound": list(self.graph.G.successors(node_name)),
-                    "follow": self.graph.G.nodes[node_name]["follow"],
-                },
+            client_name=worker_name,
+            signal=MANAGER_MESSAGE.CREATE_NODE,
+            data={
+                "worker_name": worker_name,
+                "node_name": node_name,
+                "pickled": dill.dumps(
+                    self.graph.G.nodes[node_name]["object"], recurse=True
+                ),
+                "in_bound": list(self.graph.G.predecessors(node_name)),
+                "out_bound": list(self.graph.G.successors(node_name)),
+                "follow": self.graph.G.nodes[node_name]["follow"],
             },
         )
 
@@ -286,8 +298,9 @@ class Manager:
 
                 # Send the request to each worker
                 self.server.send(
-                    self.workers[worker_name]["socket"],
-                    {"signal": enums.MANAGER_REQUEST_NODE_SERVER_DATA, "data": {}},
+                    client_name=worker_name,
+                    signal=MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA,
+                    data={},
                 )
 
                 # Wait until response
@@ -323,11 +336,9 @@ class Manager:
 
                 # Send the request to each worker
                 self.server.send(
-                    self.workers[worker_name]["socket"],
-                    {
-                        "signal": enums.MANAGER_BROADCAST_NODE_SERVER_DATA,
-                        "data": self.nodes_server_table,
-                    },
+                    client_name=worker_name,
+                    signal=MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
+                    data=self.nodes_server_table,
                 )
 
                 # Wait until response
@@ -550,16 +561,27 @@ class Manager:
             # Send it to the workers and let them know to load the
             # send package
             for worker_name in self.workers:
-                self.server.send_file(name="Manager", filepath=zip_package_dst)
 
-        for worker_name in self.workers:
-            self.server.send(
-                self.workers[worker_name]["socket"],
-                {
-                    "signal": enums.MANAGER_REQUEST_CODE_LOAD,
-                    "data": {"packages": [x["name"] for x in packages_meta]},
-                },
-            )
+                worker_data = self.workers[worker_name]
+
+                # Create a temporary HTTP client
+                client = Client(
+                    self.name,
+                    host=worker_data["http_ip"],
+                    port=worker_data["http_port"],
+                )
+                client.send_file(sender_name=self.name, filepath=zip_package_dst)
+
+        # Send package finish confirmation
+        self.server.broadcast(
+            signal=MANAGER_MESSAGE.REQUEST_CODE_LOAD,
+            data={"packages": [x["name"] for x in packages_meta]},
+        )
+
+        # Wait until workers have obtain the files and loaded to the path
+        # TODO
+        # Wail until all workers have responded with their node server data
+        self.wait_until_all_workers_responded(attribute="package_loaded", timeout=30)
 
     ####################################################################
     ## User API
@@ -569,8 +591,7 @@ class Manager:
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
-        timeout: Optional[Union[int, float]] = None,
-        send_packages: Optional[List[Dict[str, pathlib.Path]]] = None,
+        send_packages: Optional[List[Dict[str, Any]]] = None,
     ):
         """Committing ``Graph`` to the cluster.
 
@@ -589,6 +610,19 @@ class Manager:
         is used to inform each ``Node`` where their in-bound and out-bound
         ``Nodes`` are located; thereby establishing the edges between
         ``Nodes``.
+
+        Args:
+            graph (cp.Graph): The graph to deploy within the cluster.
+            mapping (Dict[str, List[str]): Mapping from ``cp.Worker`` to\
+                ``cp.Nodes`` through a dictionary. The keys are the name\
+                of the workers, while the value is a list of the nodes' \
+                names.
+            send_packages (Optional[List[Dict[str, Any]]]): An optional
+                feature for transferring a local package (typically a \
+                development package not found via PYPI or Anaconda). \
+                Provide a list of packages with each package configured \
+                via dictionary with the following key-value pairs: \
+                name:``str`` and path:``pathlit.Path``.
 
         """
         # First, test that the graph and the mapping are valid
@@ -624,7 +658,7 @@ class Manager:
 
         # Send message for workers to inform all nodes to take a single
         # step
-        self.server.broadcast({"signal": enums.MANAGER_REQUEST_STEP, "data": {}})
+        self.server.broadcast(signal=MANAGER_MESSAGE.REQUEST_STEP, data={})
 
     def gather(self) -> Dict:
 
@@ -636,7 +670,7 @@ class Manager:
         self.mark_response_as_false_for_workers()
 
         # Request gathering the latest value of each node
-        self.server.broadcast({"signal": enums.MANAGER_REQUEST_GATHER, "data": {}})
+        self.server.broadcast(signal=MANAGER_MESSAGE.REQUEST_GATHER, data={})
 
         # Wail until all workers have responded with their node server data
         self.wait_until_all_workers_responded(attribute="gather", timeout=5)
@@ -664,7 +698,7 @@ class Manager:
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        self.server.broadcast({"signal": enums.MANAGER_START_NODES, "data": {}})
+        self.server.broadcast(signal=MANAGER_MESSAGE.START_NODES, data={})
 
     def stop(self):
         """Stop the executiong of the cluster.
@@ -678,24 +712,20 @@ class Manager:
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to stop
-        self.server.broadcast({"signal": enums.MANAGER_STOP_NODES, "data": {}})
+        self.server.broadcast(signal=MANAGER_MESSAGE.STOP_NODES, data={})
 
     def collect(self, timeout: Optional[Union[int, float]] = None, unzip: bool = True):
         """Collect data archives across the cluster to the Manager's logs."""
         # Wait until the nodes first finished writing down the data
         self.wait_until_all_nodes_saved(timeout=timeout)
 
+        # Request
+        self.server.broadcast(
+            signal=MANAGER_MESSAGE.REQUEST_COLLECT, data={"path": str(self.logdir)}
+        )
+
         # Collect from each worker individually
         for worker_name in self.workers:
-
-            # Request
-            self.server.send(
-                self.workers[worker_name]["socket"],
-                {
-                    "signal": enums.MANAGER_REQUEST_COLLECT,
-                    "data": {"path": self.logdir},
-                },
-            )
 
             # Wait until
             self.wait_until_worker_respond(
@@ -716,5 +746,36 @@ class Manager:
         to shutdown, in which they will stop their processes and threads safely.
 
         """
+
+        # Only let shutdown happen once
+        if self.has_shutdown:
+            logger.debug(f"{self}: requested to shutdown twice, skipping.")
+            return None
+        else:
+            self.has_shutdown = True
+
+        # If workers are connected, let's notify them that the cluster is
+        # shutting down
+        if len(self.workers) > 0:
+
+            # Send shutdown message
+            self.server.broadcast(signal=MANAGER_MESSAGE.CLUSTER_SHUTDOWN, data={})
+
+            # Wait until all worker's deregister
+            waiting_for(
+                condition=lambda: len(self.workers) == 0,
+                check_period=0.1,
+                success_msg=f"{self}: All workers shutdown",
+                timeout=10,
+                timeout_raise=False,
+                timeout_msg=f"{self}: Not all workers shutdown -> {self.workers}",
+            )
+
         # First, shutdown server
         self.server.shutdown()
+
+    def __del__(self):
+
+        # Also good to shutdown anything that isn't
+        if not self.has_shutdown:
+            self.shutdown()

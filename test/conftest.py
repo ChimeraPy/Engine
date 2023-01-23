@@ -105,19 +105,19 @@ def logreceiver():
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
     yield
-    time.sleep(0.1)
+    time.sleep(0.5)
 
 
 @pytest.fixture
 def manager():
-    manager = cp.Manager(logdir=TEST_DATA_DIR)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
     yield manager
     manager.shutdown()
 
 
 @pytest.fixture
 def worker():
-    worker = cp.Worker(name="local")
+    worker = cp.Worker(name="local", port=0)
     yield worker
     worker.shutdown()
 
@@ -151,10 +151,12 @@ class ConsumeNode(cp.Node):
     def prep(self):
         self.coef = 3
 
-    def step(self, data: Dict[str, Any]):
+    def step(self, data_chunks: Dict[str, cp.DataChunk]):
         time.sleep(0.1)
-        output = self.coef * data["Gen1"]
-        logger.debug(output)
+        # Extract the data
+        self.logger.debug(f"{self}: inside step, with {data_chunks}")
+        value = data_chunks["Gen1"].get("default")["value"]
+        output = self.coef * value
         return output
 
 

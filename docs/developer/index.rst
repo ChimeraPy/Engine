@@ -11,7 +11,7 @@ To create a development environment, use instead the following command::
 
     pip install '.[test]'
 
-With this command, the necessary dependencies for testing will be automatically installed.
+With this command, the necessary dependencies for testing will be automatically installed. There are also the following options: ``[docs, benchmark, examples]`` installation add-ons.
 
 To execute the test, use the following command (located within the root GitHub repository folder)::
 
@@ -36,3 +36,4 @@ methods, and modules used by ChimeraPy.
    actors.rst
    utils.rst
    docker.rst
+   docs.rst

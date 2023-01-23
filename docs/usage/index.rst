@@ -15,3 +15,4 @@ This section covers the following:
    defining_pipeline
    intro_tutorial
    debugging_nodes
+   dependencies

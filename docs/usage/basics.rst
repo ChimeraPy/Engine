@@ -35,7 +35,29 @@ It is important to remember that there is three possible node types: source, ste
 * Step: yes inputs, yes outputs
 * Sink: yes inputs, no outputs
 
-For this example, the ``RandomNode`` is a source node. Step and sink have a ``step(self, data: Dict[str, Any])`` method to retrieve input datas. Since source :class:`Node<chimerapy.Node>` do not have inputs, it has a simplified ``step(self)`` method instead.
+For this example, the ``RandomNode`` is a source node. Step and sink have a ``step(self, data: Dict[str, DataChunk])`` method to retrieve input datas. Since source :class:`Node<chimerapy.Node>` do not have inputs, it has a simplified ``step(self)`` method instead.
+
+The DataChunk Container
+***********************
+
+A main attribute of ChimeraPy is that it doesn't assume what type of data is being transmitted between :class:`Nodes<chimerapy.Node>`. Therefore, when developing your custom node implementations, the ``step`` function can return anything that is serializable. There are moments when this isn't beneficial. For example, to make video streaming work in real time, it is required to compress video frames with an algorithm optimized for images. This implies that ChimeraPy must then know what is being transmitted. This is achieved through the use of the :class:`DataChunk<chimerapy.DataChunk>` container. This is an example for a video streaming Node::
+
+
+    class ScreenCapture(cp.Node):
+
+        def step(self) -> cp.DataChunk:
+
+            time.sleep(1 / 10)
+            frame = cv2.cvtColor(
+                np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
+            )
+
+            # Create container and send it
+            data_chunk = cp.DataChunk()
+            data_chunk.add("frame", frame, "image")
+            return data_chunk
+
+As of now, the only special compression algorithms incorporated into ChimeraPy are for images. When transmitting images, use the DataChunk with the ``image`` content-type option. Otherwise, ChimeraPy will mark the Node's output as ``other`` and will apply a generic serialization and compression method.
 
 Creating a DAG
 **************
@@ -56,9 +78,9 @@ The creation of a DAG is done through the :class:`Graph<chimerapy.Graph>` class.
         def prep(self):
             self.coef = 3
 
-        def step(self, data: Dict[str, Any]):
+        def step(self, data: Dict[str, cp.DataChunk]):
             time.sleep(0.1)
-            return self.coef * data["Gen1"]
+            return self.coef * data["Gen1"].get('default')['value']
 
     if __name__ == "__main__":
 
@@ -125,8 +147,7 @@ After setting up our cluster, we need to delegate :class:`Nodes<chimerapy.Node>`
         graph=graph,
         mapping={
             "local": ["source", "step"],
-        },
-        timeout=10
+        }
     )
 
 We then commit the :class:`Graph<chimerapy.Graph>` to the :class:`Worker<chimerapy.Worker>`. All the :class:`Nodes'<chimerapy.Node>` code are located within the :class:`Manager's<chimerapy.Manager>` computer; therefore, these compartmentalized code needs to be sent to the :class:`Workers<chimerapy.Worker>`. The ``commit_graph`` routine can take some time based on the number of :class:`Worker<chimerapy.Worker>`, :class:`Nodes<chimerapy.Node>`, and their code size hence waiting until all nodes are ready.

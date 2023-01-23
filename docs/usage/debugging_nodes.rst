@@ -24,7 +24,10 @@ Before executing the cluster and rolling a complex system to handle streams of d
             # Set the execution to 1 every second
             time.sleep(1)
             ret, frame = cap.read()
-            return frame
+            # To transmit video, you need to use DataChunk directly
+            data_chunk = cp.DataChunk()
+            data_chunk.add('frame', frame, 'image')
+            return data_chunk
 
         def teardown(self):
             # Closing the video capture

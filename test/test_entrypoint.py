@@ -39,6 +39,7 @@ def test_multiple_workers_connect(manager, docker_client):
     for worker in workers:
         assert worker.name in manager.workers
 
+    logger.info("Manager shutting down")
     manager.shutdown()
 
     time.sleep(1)

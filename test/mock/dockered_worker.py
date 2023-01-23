@@ -45,7 +45,8 @@ class DockeredWorker:
 
         # Connect worker to Manager through entrypoint
         _, stream = self.container.exec_run(
-            cmd=f"cp-worker --ip {host} --port {port} --name {self.name}", stream=True
+            cmd=f"cp-worker --ip {host} --port {port} --name {self.name} --wport 0",
+            stream=True,
         )
 
         # Execute worker connect

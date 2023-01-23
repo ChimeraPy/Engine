@@ -9,10 +9,11 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
-from .conftest import linux_run_only, linux_expected_only
-from .mock import DockeredWorker
+from ..conftest import linux_run_only, linux_expected_only
+from ..mock import DockeredWorker
 
 logger = cp._logger.getLogger("chimerapy")
+cp.debug()
 
 
 @pytest.fixture
@@ -67,8 +68,8 @@ def multiple_nodes_one_worker_manager(manager, worker, graph):
 @pytest.fixture
 def multiple_nodes_multiple_workers_manager(manager, graph):
 
-    worker1 = cp.Worker(name="local")
-    worker2 = cp.Worker(name="local2")
+    worker1 = cp.Worker(name="local", port=0)
+    worker2 = cp.Worker(name="local2", port=0)
 
     worker1.connect(host=manager.host, port=manager.port)
     worker2.connect(host=manager.host, port=manager.port)
@@ -284,7 +285,10 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
 
     # Assert
     for k, v in expected_output.items():
-        assert k in latest_data_values and latest_data_values[k] == v
+        assert (
+            k in latest_data_values
+            and latest_data_values[k].get("default")["value"] == v
+        )
 
 
 @pytest.mark.parametrize(
@@ -326,4 +330,7 @@ def test_manager_start(config_manager, expected_output):
 
     # Assert
     for k, v in expected_output.items():
-        assert k in latest_data_values and latest_data_values[k] == v
+        assert (
+            k in latest_data_values
+            and latest_data_values[k].get("default")["value"] == v
+        )

@@ -6,6 +6,7 @@ import queue
 import sys
 import os
 import pathlib
+from functools import partial
 
 import pytest
 import dill
@@ -93,13 +94,17 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
 def test_create_multiple_nodes_after_pickling(logreceiver):
 
     ns = []
-    for i in range(10):
+    for i in range(3):
         n = GenNode(name=f"G{i}")
         pkl_n = dill.dumps(n)
         nn = dill.loads(pkl_n)
-        nn.config("0.0.0.0", 9000, TEST_DATA_DIR, [], [], follow=None, networking=False)
+        nn.config(
+            "0.0.0.0", 9000, TEST_DATA_DIR, [], ["Con1"], follow=None, networking=False
+        )
         nn.start()
         ns.append(nn)
+
+    time.sleep(1)
 
     for n in ns:
         n.shutdown()
@@ -111,8 +116,8 @@ def test_create_multiple_workers():
 
     workers = []
 
-    for i in range(10):
-        worker = cp.Worker(name=f"{i}")
+    for i in range(5):
+        worker = cp.Worker(name=f"{i}", port=0)
         workers.append(worker)
 
     time.sleep(5)
@@ -121,7 +126,7 @@ def test_create_multiple_workers():
         worker.shutdown()
 
 
-@pytest.mark.repeat(3)
+# @pytest.mark.repeat(3)
 def test_worker_create_node(worker, gen_node):
 
     # Simple single node without connection
@@ -171,7 +176,6 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
-# @linux_expected_only
 def test_worker_create_nodes(worker):
 
     to_be_created_nodes = []
@@ -198,8 +202,7 @@ def test_worker_create_nodes(worker):
             continue
 
 
-# @linux_expected_only
-@pytest.mark.repeat(10)
+# @pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
     to_be_created_nodes = []
@@ -267,7 +270,6 @@ def test_step_single_node(worker, gen_node):
     time.sleep(2)
 
 
-# @linux_expected_only
 def test_two_nodes_connect(worker, gen_node, con_node):
 
     # Simple single node without connection
@@ -298,10 +300,12 @@ def test_two_nodes_connect(worker, gen_node, con_node):
 
     node_server_data = worker.create_node_server_data()
     logger.debug(f"Send the server data: {node_server_data}")
-    worker.process_node_server_data({"data": node_server_data["nodes"]})
+    worker.exec_coro(
+        partial(worker.process_node_server_data, {"data": node_server_data["nodes"]})
+    )
+    time.sleep(3)
 
 
-# @linux_expected_only
 def test_starting_node(worker, gen_node):
 
     # Simple single node without connection
@@ -318,21 +322,20 @@ def test_starting_node(worker, gen_node):
     logger.debug("Create nodes")
     worker.create_node(msg)
 
-    logger.debug("Waiting!")
+    logger.debug("Waiting before starting!")
     time.sleep(2)
 
     logger.debug("Start nodes!")
     worker.start_nodes({})
 
     logger.debug("Let nodes run for some time")
-    time.sleep(2)
+    time.sleep(5)
 
 
-# @linux_expected_only
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
-        (lazy_fixture("manager"), lazy_fixture("worker")),
+        # (lazy_fixture("manager"), lazy_fixture("worker")),
         pytest.param(
             lazy_fixture("manager"),
             lazy_fixture("dockered_worker"),

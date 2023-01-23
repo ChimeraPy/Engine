@@ -1,10 +1,14 @@
 from typing import Dict, Any
 import time
+import pathlib
+import os
 
 import cv2
 import imutils
 
 import chimerapy as cp
+
+CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class Producer(cp.Node):
@@ -15,12 +19,14 @@ class Producer(cp.Node):
         time.sleep(1)
         current_counter = self.counter
         self.counter += 1
-        return current_counter
+        data_chunk = cp.DataChunk()
+        data_chunk.add("counter", current_counter)
+        return data_chunk
 
 
 class Consumer(cp.Node):
     def step(self, data: Dict[str, Any]):
-        d = data["prod"]
+        d = data["prod"].get("counter")["value"]
         print("Consumer got data: ", d)
 
 
@@ -37,7 +43,7 @@ class SimpleGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager()
+    manager = cp.Manager(logdir=CWD / "runs")
     graph = SimpleGraph()
     worker = cp.Worker(name="local")
     # worker2 = cp.Worker(name="remote")
@@ -45,7 +51,6 @@ if __name__ == "__main__":
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
     # worker2.connect(host=manager.host, port=manager.port)
-    manager.register_graph(graph)
 
     # Wait until workers connect
     while True:
@@ -56,11 +61,8 @@ if __name__ == "__main__":
     # Assuming one worker
     mapping = {"remote": ["prod"], "local": ["cons"]}
 
-    # Specify what nodes to what worker
-    manager.map_graph(mapping)
-
     # Commit the graph
-    manager.commit_graph(timeout=10)
+    manager.commit_graph(graph=graph, mapping=mapping)
 
     # Wail until user stops
     while True:

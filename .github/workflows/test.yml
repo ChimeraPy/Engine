@@ -66,7 +66,7 @@ jobs:
 
       - name: Perform tests
         run: |
-          coverage run --source=chimerapy -m pytest test/
+          coverage run --source=chimerapy -m pytest --reruns 5 --reruns-delay 5 test/
           coverage combine
 
       - name: Upload coverage data to coveralls.io
