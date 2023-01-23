@@ -44,7 +44,7 @@ async def echo(msg: Dict, ws: web.WebSocketResponse = None):
 def server():
     server = cp.Server(
         name="test",
-        port=8080,
+        port=0,
         routes=[web.get("/", hello)],
         ws_handlers={ECHO_FLAG: echo},
     )
@@ -172,27 +172,3 @@ def test_client_sending_folder_to_server(server, client, dir):
     # Also check that the file exists
     for record in server.file_transfer_records["test_worker"].values():
         assert record["dst_filepath"].exists()
-
-
-# @pytest.mark.parametrize(
-#     "dir",
-#     [
-#         (TEST_DIR / "mock" / "data" / "simple_folder"),
-#         (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
-#     ],
-# )
-# def test_server_broadcast_file_to_clients(server, client_lis, dir):
-
-#     # Broadcast file
-#     server.send_folder(name="test", folderpath=dir)
-
-#     # Check all clients files
-#     for client in client_list:
-#         miss_counter = 0
-#         while len(client.file_transfer_records.keys()) == 0:
-
-#             miss_counter += 1
-#             time.sleep(0.1)
-
-#             if miss_counter > 100:
-#                 assert False, "File transfer failed after 10 second"

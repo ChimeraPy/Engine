@@ -21,8 +21,16 @@ def test_manager_instance(manager):
     ...
 
 
+def test_manager_instance_shutdown_twice(manager):
+    manager.shutdown()
+
+
 def test_worker_instance(worker):
     ...
+
+
+def test_worker_instance_shutdown_twice(worker):
+    worker.shutdown()
 
 
 @pytest.mark.xfail(reason="Incorrect port")

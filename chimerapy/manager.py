@@ -51,6 +51,7 @@ class Manager:
         self.host = "localhost"
         self.port = port
         self.max_num_of_workers = max_num_of_workers
+        self.has_shutdown = False
 
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -746,6 +747,13 @@ class Manager:
 
         """
 
+        # Only let shutdown happen once
+        if self.has_shutdown:
+            logger.debug(f"{self}: requested to shutdown twice, skipping.")
+            return None
+        else:
+            self.has_shutdown = True
+
         # If workers are connected, let's notify them that the cluster is
         # shutting down
         if len(self.workers) > 0:
@@ -765,3 +773,9 @@ class Manager:
 
         # First, shutdown server
         self.server.shutdown()
+
+    def __del__(self):
+
+        # Also good to shutdown anything that isn't
+        if not self.has_shutdown:
+            self.shutdown()

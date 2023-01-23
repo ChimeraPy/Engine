@@ -37,6 +37,7 @@ test = [
     'pytest-repeat',
     'pytest-lazy-fixture',
     'pytest-order',
+    'pytest-rerunfailures',
     'ffmpeg-python',
     'coveralls',
     'pre-commit',
@@ -52,6 +53,9 @@ benchmark = [
     'cloudpickle',
     'msgpack',
     'msgpack_numpy'
+]
+examples = [
+    'dxcam; sys_platform == "win32"'
 ]
 
 [project.urls]

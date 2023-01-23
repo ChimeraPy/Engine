@@ -62,4 +62,10 @@ class AsyncLoopThread(threading.Thread):
         self._loop.run_forever()
 
     def stop(self):
+
+        # Cancel all tasks
+        for task in asyncio.all_tasks(self._loop):
+            task.cancel()
+
+        # Then stop the loop
         self._loop.stop()

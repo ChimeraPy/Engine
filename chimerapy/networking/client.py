@@ -46,6 +46,8 @@ class Client:
         self.host = host
         self.port = port
         self.ws_handlers = ws_handlers
+        self._ws = None
+        self._session = None
 
         # State variables
         self.running = threading.Event()
@@ -107,9 +109,14 @@ class Client:
             # Send OK if requested
             if msg["ok"]:
                 logger.debug(f"{self}: sending OK")
-                await self._ws.send_bytes(
-                    create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
-                )
+                try:
+                    await self._ws.send_bytes(
+                        create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
+                    )
+                except ConnectionResetError:
+                    logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+                    await self._ws.close()
+                    return None
 
     async def _write_ws(self, msg: Dict):
         logger.debug(f"{self}: writing - {msg}")
@@ -132,7 +139,12 @@ class Client:
 
         # Send the message
         logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
-        await self._ws.send_bytes(payload)
+        try:
+            await self._ws.send_bytes(payload)
+        except ConnectionResetError:
+            logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+            await self._ws.close()
+            return None
 
         # If ok, wait until ok
         if ok:
@@ -226,6 +238,7 @@ class Client:
             async with session.ws_connect(f"http://{self.host}:{self.port}/ws") as ws:
 
                 # Store the Client session
+                self._session = session
                 self._ws = ws
 
                 # Establish read and write
@@ -244,7 +257,12 @@ class Client:
 
         # Mark to stop and close things
         self.running.clear()
-        await self._ws.close()
+
+        if self._ws:
+            await asyncio.wait_for(self._ws.close(), timeout=2)
+        if self._session:
+            await asyncio.wait_for(self._session.close(), timeout=2)
+
         self._client_shutdown_complete.set()
 
     ####################################################################
@@ -373,5 +391,5 @@ class Client:
             if not self._client_shutdown_complete.wait(timeout=5):
                 logger.warning(f"{self}: failed to gracefully shutdown")
 
-        # Stop threaded loop
-        self._thread.stop()
+            # Stop threaded loop
+            self._thread.stop()

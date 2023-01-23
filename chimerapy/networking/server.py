@@ -185,9 +185,14 @@ class Server:
             # Send OK if requested
             if msg["ok"]:
                 logger.debug(f"{self}: sending OK for {msg['uuid']}")
-                await ws.send_bytes(
-                    create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
-                )
+                try:
+                    await ws.send_bytes(
+                        create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
+                    )
+                except ConnectionResetError:
+                    logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+                    await ws.close()
+                    return None
 
     async def _write_ws(self, client_name: str, msg: Dict):
         logger.debug(f"{self}: client_name: {client_name},  write - {msg}")
@@ -226,7 +231,13 @@ class Server:
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
 
         # Send the message
-        await ws.send_bytes(payload)
+        try:
+            await ws.send_bytes(payload)
+        except ConnectionResetError:
+            logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+            await ws.close()
+            return None
+
         logger.debug(f"{self}: _send_msg -> {signal}")
 
         # If ok, wait until ok
@@ -264,17 +275,20 @@ class Server:
 
     async def _server_shutdown(self):
 
-        # Create shutdown message
-        # msg = {"signal": GENERAL_MESSAGE.SHUTDOWN, "data": {}, "ok": False}
+        self.running.clear()
 
         for client_data in self.ws_clients.values():
             client_ws = client_data["ws"]
-            await client_ws.close(
-                code=WSCloseCode.GOING_AWAY, message="{self}: shutdown"
+            await asyncio.wait_for(
+                client_ws.close(
+                    code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
+                ),
+                timeout=2,
             )
 
         # Cleanup and signal complete
-        await self._runner.cleanup()
+        await asyncio.wait_for(self._runner.shutdown(), timeout=5)
+        await asyncio.wait_for(self._runner.cleanup(), timeout=5)
         self._server_shutdown_complete.set()
 
     ####################################################################
@@ -406,16 +420,19 @@ class Server:
 
     def shutdown(self):
 
-        # Use client event for shutdown
-        self._server_shutdown_complete = threading.Event()
-        self._server_shutdown_complete.clear()
+        # Only shutdown for the first time
+        if self.running.is_set():
 
-        # Execute shutdown
-        self._thread.exec(self._server_shutdown)
+            # Use client event for shutdown
+            self._server_shutdown_complete = threading.Event()
+            self._server_shutdown_complete.clear()
 
-        # Wait for it
-        if not self._server_shutdown_complete.wait(timeout=5):
-            logger.warning(f"{self}: failed to gracefully shutdown")
+            # Execute shutdown
+            self._thread.exec(self._server_shutdown)
 
-        # Stop the async thread
-        self._thread.stop()
+            # Wait for it
+            if not self._server_shutdown_complete.wait(timeout=15):
+                logger.warning(f"{self}: failed to gracefully shutdown")
+
+            # Stop the async thread
+            self._thread.stop()

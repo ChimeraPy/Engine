@@ -486,17 +486,17 @@ class Worker:
                 signal=WORKER_MESSAGE.REPORT_NODES_STATUS, data=nodes_status_data
             )
 
-    def step(self, msg: Dict):
+    def step(self, msg: Dict = {}):
 
         # Worker tell all nodes to take a step
         self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
 
-    def start_nodes(self, msg: Dict):
+    def start_nodes(self, msg: Dict = {}):
 
         # Send message to nodes to start
         self.server.broadcast(signal=WORKER_MESSAGE.START_NODES, data={})
 
-    def stop_nodes(self, msg: Dict):
+    def stop_nodes(self, msg: Dict = {}):
 
         # Send message to nodes to start
         self.server.broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
@@ -522,6 +522,8 @@ class Worker:
         if self.has_shutdown:
             logger.debug(f"{self}: requested to shutdown when already shutdown.")
             return
+        else:
+            self.has_shutdown = True
 
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
@@ -555,9 +557,6 @@ class Worker:
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)
-
-        # Mark that the Worker has shutdown
-        self.has_shutdown = True
 
     def __del__(self):
 

@@ -2,9 +2,10 @@
 .vimspector.json
 /.vscode
 
-# Ignore the test data - sensitivie
+# Ignore the test data - sensitive
 test/logs/
 test/test_output/
+examples/runs/
 
 # Ignoring the documentation site
 site/

@@ -326,7 +326,7 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.exec_coro(partial(worker.start_nodes, {}))
+    worker.start_nodes({})
 
     logger.debug("Let nodes run for some time")
     time.sleep(5)

@@ -2,10 +2,10 @@ from typing import Dict, Any
 import time
 import pathlib
 import os
+import platform
 
 import numpy as np
 import cv2
-import mss
 import imutils
 from PIL import ImageGrab
 
@@ -33,14 +33,35 @@ class WebcamNode(cp.Node):
 
 
 class ScreenCaptureNode(cp.Node):
+    def prep(self):
+
+        if platform.system() == "Windows":
+            import dxcam
+
+            self.camera = dxcam.create()
+        else:
+            self.camera = None
+
     def step(self):
-        time.sleep(1 / 30)
-        frame = cv2.cvtColor(
-            np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
-        )
+        # Noticed that screencapture methods highly depend on OS
+        if platform.system() == "Windows":
+            time.sleep(1 / 30)
+            frame = self.camera.grab()
+            if not isinstance(frame, np.ndarray):
+                return None
+            else:
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        else:
+            frame = cv2.cvtColor(
+                np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
+            )
+
+        # Save the frame and package it
         self.save_video(name="screen", data=frame, fps=20)
         data_chunk = cp.DataChunk()
-        data_chunk.add("frame", frame, "image")
+        data_chunk.add("frame", imutils.resize(frame, width=720), "image")
+
+        # Then send it
         return data_chunk
 
 
@@ -68,8 +89,8 @@ class RemoteCameraGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs", port=0)
-    worker = cp.Worker(name="local")
+    manager = cp.Manager(logdir=CWD / "runs")
+    worker = cp.Worker(name="local", port=0)
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -99,7 +120,7 @@ if __name__ == "__main__":
                 web_node = WebcamNode(name=f"{worker_name}-web")
                 screen_node = ScreenCaptureNode(name=f"{worker_name}-screen")
                 graph.add_nodes_from([web_node, screen_node])
-                graph.add_edges_from([(web_node, show_node), (screen_node, show_node)])
+                graph.add_edges_from([(screen_node, show_node), (web_node, show_node)])
                 mapping[worker_name] = [f"{worker_name}-web", f"{worker_name}-screen"]
 
     # Commit the graph
