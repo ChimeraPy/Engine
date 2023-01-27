@@ -96,10 +96,10 @@ def step_down_graph():
             lazy_fixture("step_up_graph"),
             "up",
         ),
-        # (
-        #     lazy_fixture("step_down_graph"),
-        #     "down",
-        # ),
+        (
+            lazy_fixture("step_down_graph"),
+            "down",
+        ),
     ],
 )
 def test_node_frequency_execution(manager, worker, config_graph, follow):

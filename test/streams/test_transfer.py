@@ -43,7 +43,7 @@ def single_worker_manager(manager, worker):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         graph,
         {
             worker.name: list(NAME_CLASS_MAP.keys()),
@@ -73,7 +73,7 @@ def multiple_worker_manager(manager, worker):
             graph.add_node(node_class(name=node_worker_name))
 
     # Then register graph to Manager
-    manager.commit_graph(graph, worker_node_map)
+    assert manager.commit_graph(graph, worker_node_map)
 
     yield manager
 
@@ -95,7 +95,7 @@ def dockered_single_worker_manager(manager, docker_client):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         graph,
         {
             worker.name: list(NAME_CLASS_MAP.keys()),
@@ -125,7 +125,7 @@ def dockered_multiple_worker_manager(manager, docker_client):
             graph.add_node(node_class(name=node_worker_name))
 
     # Then register graph to Manager
-    manager.commit_graph(graph, worker_node_map)
+    assert manager.commit_graph(graph, worker_node_map)
 
     yield manager
 
@@ -194,7 +194,7 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     config_manager.stop()
 
     # Transfer the files to the Manager's logs
-    config_manager.collect(timeout=15)
+    assert config_manager.collect()
 
     # Assert the behavior
     assert (

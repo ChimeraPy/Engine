@@ -117,6 +117,7 @@ def test_write_video():
     writer.release()
 
 
+@pytest.mark.skip(reason="Not a depedency for ChimeraPy")
 @pytest.mark.order(after="test_write_video")
 @not_github_actions
 def test_combine_video_and_audio():

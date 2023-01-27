@@ -152,10 +152,9 @@ class Client:
             await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 check_period=0.1,
-                success_msg=f"{self}: OK received",
+                msg=f"{self}: receiving OK",
                 timeout=10,
                 timeout_raise=False,
-                timeout_msg=f"{self}: OK was not received!",
             )
 
     async def _send_file_async(self, url: str, data: aiohttp.FormData):

@@ -8,6 +8,9 @@ from . import _logger
 
 _logger.setup()
 
+# Handling the configuration
+from . import config
+
 # Interal Imports
 from .manager import Manager
 from .node import Node

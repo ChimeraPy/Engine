@@ -56,7 +56,7 @@ def packaged_node_graph():
 def test_sending_package(manager, _worker, config_graph):
     _worker.connect(host=manager.host, port=manager.port)
 
-    manager.commit_graph(
+    assert manager.commit_graph(
         graph=config_graph,
         mapping={_worker.name: list(config_graph.G.nodes())},
         send_packages=[

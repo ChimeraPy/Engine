@@ -105,7 +105,7 @@ def test_server_send_to_client(server, client):
     cp.utils.waiting_for(
         lambda: client.msg_processed_counter >= 2,
         timeout=2,
-        timeout_msg=f"{client}: Didn't receive the necessary 2 messages.",
+        msg=f"{client}: Didn't receive the necessary 2 messages.",
     )
 
 
@@ -119,7 +119,7 @@ def test_client_send_to_server(server, client):
     cp.utils.waiting_for(
         lambda: server.msg_processed_counter >= 2,
         timeout=2,
-        timeout_msg=f"{server}: Didn't receive the necessary 2 messages.",
+        msg=f"{server}: Didn't receive the necessary 2 messages.",
     )
 
 
@@ -131,7 +131,7 @@ def test_multiple_clients_send_to_server(server, client_list):
     cp.utils.waiting_for(
         lambda: server.msg_processed_counter >= NUMBER_OF_CLIENTS,
         timeout=5,
-        timeout_msg=f"{server}: Didn't receive the necessary {NUMBER_OF_CLIENTS} messages.",
+        msg=f"{server}: Didn't receive the necessary {NUMBER_OF_CLIENTS} messages.",
     )
 
 
@@ -143,7 +143,7 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
         cp.utils.waiting_for(
             lambda: client.msg_processed_counter >= 2,
             timeout=5,
-            timeout_msg=f"{client}: Didn't receive the necessary {2} messages.",
+            msg=f"{client}: Didn't receive the necessary {2} messages.",
         )
 
 

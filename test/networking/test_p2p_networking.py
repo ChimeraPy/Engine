@@ -1,15 +1,10 @@
-from typing import Dict
 import time
-import sys
-import pdb
-import logging
-import platform
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
-from ..conftest import linux_run_only, linux_expected_only
+from ..conftest import linux_run_only
 from ..mock import DockeredWorker
 
 logger = cp._logger.getLogger("chimerapy")
@@ -38,7 +33,7 @@ def single_node_no_connections_manager(manager, worker, gen_node):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         simple_graph,
         {
             "local": ["Gen1"],
@@ -55,7 +50,7 @@ def multiple_nodes_one_worker_manager(manager, worker, graph):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         graph,
         {
             "local": ["Gen1", "Con1"],
@@ -75,7 +70,7 @@ def multiple_nodes_multiple_workers_manager(manager, graph):
     worker2.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
+    assert manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
 
     yield manager
 
@@ -94,7 +89,7 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
     worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         simple_graph,
         {
             "local": ["Slo1"],
@@ -115,7 +110,7 @@ def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_no
     dockered_worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         simple_graph,
         {
             dockered_worker.name: ["Gen1"],
@@ -139,7 +134,7 @@ def dockered_multiple_nodes_one_worker_manager(
     dockered_worker.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(
+    assert manager.commit_graph(
         simple_graph,
         {
             dockered_worker.name: ["Gen1", "Con1"],
@@ -159,7 +154,7 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.connect(host=manager.host, port=manager.port)
 
     # Then register graph to Manager
-    manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
+    assert manager.commit_graph(graph, {"local": ["Gen1"], "local2": ["Con1"]})
 
     yield manager
 

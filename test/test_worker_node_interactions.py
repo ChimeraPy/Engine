@@ -335,7 +335,7 @@ def test_starting_node(worker, gen_node):
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
-        # (lazy_fixture("manager"), lazy_fixture("worker")),
+        (lazy_fixture("manager"), lazy_fixture("worker")),
         pytest.param(
             lazy_fixture("manager"),
             lazy_fixture("dockered_worker"),
@@ -361,10 +361,8 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     _manager.map_graph(mapping)
 
     # Request node creation
-    _manager.request_node_creation(worker_name=_worker.name, node_name="Gen1")
-    _manager.wait_until_node_creation_complete(
-        worker_name=_worker.name, node_name="Gen1"
-    )
+    assert _manager.request_node_creation(worker_name=_worker.name, node_name="Gen1")
+    assert "Gen1" in _manager.workers[_worker.name]["nodes_status"]
 
 
 # @linux_expected_only
@@ -412,7 +410,7 @@ def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
 
     # Request node creation
     for node_name in to_be_created_nodes:
-        _manager.request_node_creation(worker_name=_worker.name, node_name=node_name)
-        _manager.wait_until_node_creation_complete(
+        assert _manager.request_node_creation(
             worker_name=_worker.name, node_name=node_name
         )
+        assert node_name in _manager.workers[_worker.name]["nodes_status"]

@@ -1,0 +1,16 @@
+config:
+  version: 1
+  manager:
+    allowed-failures: 5
+    timeout:
+      info-request: 10 # seconds
+      gather: 10 # seconds
+      package-delivery: 30 # seconds
+      worker-shutdown: 2 # seconds
+      node-creation: 30 # seconds
+    retry:
+      data-collection: 30 # seconds
+  worker:
+    allowed-failures: 0
+  deploy:
+    lost-worker-timeout: 15s

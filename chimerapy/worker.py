@@ -12,6 +12,7 @@ import dill
 import aiohttp
 from aiohttp import web
 
+from chimerapy import config
 from .utils import get_ip_address, waiting_for, async_waiting_for
 from .networking import Server, Client
 from .networking.enums import (
@@ -175,10 +176,9 @@ class Worker:
                 condition=lambda: f"{sent_package}.zip"
                 in self.server.file_transfer_records["Manager"],
                 check_period=0.5,
-                success_msg=f"{self}: Started gettng sent package: {sent_package}",
                 timeout=60,
                 timeout_raise=True,
-                timeout_msg=f"{self}: Package {sent_package} was not obtained at all.",
+                msg=f"{self}: Waiting for package {sent_package}.",
             )
 
             # Get the path
@@ -193,10 +193,9 @@ class Worker:
                 ]["complete"]
                 == True,
                 check_period=0.5,
-                success_msg=f"{self}: Got package {sent_package}",
                 timeout=60,
                 timeout_raise=True,
-                timeout_msg=f"{self}: Package {sent_package} was not fully received, therefore failing to load.",
+                msg=f"{self}: Package {sent_package} loading.",
             )
 
             assert (
@@ -317,7 +316,7 @@ class Worker:
             check_period=0.1,
             timeout=timeout,
             timeout_raise=True,
-            timeout_msg=f"{self}: {node_name} not responding!",
+            msg=f"{self}: {node_name} responding!",
         )
 
     def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):

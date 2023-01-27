@@ -17,6 +17,7 @@ import aiohttp
 from aiohttp import web
 import networkx as nx
 
+from chimerapy import config
 from .networking import Server, Client
 from .networking.enums import MANAGER_MESSAGE, WORKER_MESSAGE
 from .graph import Graph
@@ -202,99 +203,75 @@ class Manager:
         for worker_name in self.workers:
             self.workers[worker_name]["response"] = False
 
-    def wait_until_worker_respond(
-        self,
-        worker_name: str,
-        attribute: str = "response",
-        timeout: Union[int, float, None] = 10,
-        delay: float = 0.1,
-    ):
+    def request_node_creation(self, worker_name: str, node_name: str) -> bool:
+        """Request creating a Node from the Graph.
 
-        miss_counter = 0
-        while True:
+        Args:
+            worker_name (str): The targetted Worker
+            node_name (str): The name of the node to create, that is in\
+            in the graph
 
-            # IF the worker responded, then break
-            if self.workers[worker_name][attribute]:
-                break
+        Returns:
+            bool: Success in creating the Node
 
-            time.sleep(delay)
+        """
+        success = False
+        for i in range(config.get("manager.allowed-failures")):
 
-            if timeout and delay * miss_counter > timeout:
-                logger.error(
-                    f"{self}: Worker {worker_name} did not respond: {attribute}"
+            # Send request to create node
+            if isinstance(self.worker_graph_map, nx.Graph):
+                logger.warning(
+                    f"Cannot create Node {node_name} with Worker {worker_name}"
                 )
-                raise RuntimeError(f"{self}: Worker {worker_name} did not respond!")
+                return False
 
-            miss_counter += 1
+            # Send for the creation of the node
+            self.server.send(
+                client_name=worker_name,
+                signal=MANAGER_MESSAGE.CREATE_NODE,
+                data={
+                    "worker_name": worker_name,
+                    "node_name": node_name,
+                    "pickled": dill.dumps(
+                        self.graph.G.nodes[node_name]["object"], recurse=True
+                    ),
+                    "in_bound": list(self.graph.G.predecessors(node_name)),
+                    "out_bound": list(self.graph.G.successors(node_name)),
+                    "follow": self.graph.G.nodes[node_name]["follow"],
+                },
+            )
 
-    def wait_until_all_workers_responded(
-        self, attribute: str, timeout: Union[float, int, None] = 10, delay: float = 0.1
-    ):
-
-        # Waiting until every worker has responded and provided their
-        # data
-        for worker_name in self.workers:
-            self.wait_until_worker_respond(worker_name, attribute, timeout, delay)
-
-    def request_node_creation(self, worker_name: str, node_name: str):
-
-        if isinstance(self.worker_graph_map, nx.Graph):
-            logger.warning(f"Cannot create Node {node_name} with Worker {worker_name}")
-            return
-
-        # Send for the creation of the node
-        self.server.send(
-            client_name=worker_name,
-            signal=MANAGER_MESSAGE.CREATE_NODE,
-            data={
-                "worker_name": worker_name,
-                "node_name": node_name,
-                "pickled": dill.dumps(
-                    self.graph.G.nodes[node_name]["object"], recurse=True
+            # Wait until the node has been created and connected
+            # to the corresponding worker
+            success = waiting_for(
+                lambda: (node_name in self.workers[worker_name]["nodes_status"])
+                and (
+                    self.workers[worker_name]["nodes_status"][node_name]["INIT"] == True
                 ),
-                "in_bound": list(self.graph.G.predecessors(node_name)),
-                "out_bound": list(self.graph.G.successors(node_name)),
-                "follow": self.graph.G.nodes[node_name]["follow"],
-            },
-        )
+                timeout=config.get("manager.timeout.node-creation"),
+                msg=f"{self}: Node creation {worker_name}:{node_name}, attempt {i}",
+            )
 
-    def wait_until_node_creation_complete(
-        self, worker_name: str, node_name: str, timeout: Union[int, float] = 20
-    ):
-
-        delay = 0.1
-        miss_counter = 0
-        while True:
-            time.sleep(delay)
-
-            if (
-                node_name in self.workers[worker_name]["nodes_status"]
-                and self.workers[worker_name]["nodes_status"][node_name]["INIT"]
-            ):
+            if success:
                 break
-            else:
-                if delay * miss_counter > timeout:
-                    raise RuntimeError(
-                        f"Manager waiting for {node_name} not sending INIT"
-                    )
-                miss_counter += 1
 
-    def request_node_server_data(self):
+        return success
 
+    def request_node_server_data(self) -> bool:
+        """Request Workers to provide information about Node's PUBs
+
+        Returns:
+            bool: Success of obtaining the node server data
+
+        """
         # Reset responses
         self.mark_response_as_false_for_workers()
 
         # Send the message to each worker and wait
         for worker_name in self.worker_graph_map:
 
-            fail_attempts = 0
-            while True:
-
-                # If too many attempts, give up :(
-                if fail_attempts > 10:
-                    raise RuntimeError(
-                        "Worker: {worker_name} not responsive after multiple attempts"
-                    )
+            success = False
+            for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
                 self.server.send(
@@ -304,20 +281,31 @@ class Manager:
                 )
 
                 # Wait until response
-                try:
-                    self.wait_until_worker_respond(
-                        worker_name, attribute="reported_nodes_server_data"
-                    )
+                success = waiting_for(
+                    condition=lambda: self.workers[worker_name][
+                        "reported_nodes_server_data"
+                    ],
+                    timeout=config.get("manager.timeout.info-request"),
+                    msg=f"{self}: Requesting Worker's node server request: attempt {i}",
+                )
+
+                if success:
                     break
-                except:
-                    fail_attempts += 1
-                    logger.warning(
-                        f"Failed to receive Worker's node server request: attempt {fail_attempts}"
-                    )
 
-        logger.debug("Node data server gathering successful")
+            if not success:
+                return False
 
-    def request_connection_creation(self):
+        return True
+
+    def request_connection_creation(self) -> bool:
+        """Request establishing the connections between Nodes
+
+        This routine the Manager sends the Node's server data and request \
+        for Workers to organize their own nodes.
+
+        Returns:
+            bool: Returns if connection creation was successful
+        """
 
         # Reset responses
         self.mark_response_as_false_for_workers()
@@ -325,14 +313,8 @@ class Manager:
         # Send the message to each worker and wait
         for worker_name in self.worker_graph_map:
 
-            fail_attempts = 0
-            while True:
-
-                # If too many attempts, give up :(
-                if fail_attempts > 10:
-                    raise RuntimeError(
-                        "Worker: {worker_name} not responsive after multiple attempts"
-                    )
+            success = False
+            for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
                 self.server.send(
@@ -341,19 +323,22 @@ class Manager:
                     data=self.nodes_server_table,
                 )
 
-                # Wait until response
-                try:
-                    self.wait_until_worker_respond(
-                        worker_name, attribute="served_nodes_server_data"
-                    )
-                    break
-                except:
-                    fail_attempts += 1
-                    logger.warning(
-                        f"Failed to receive Worker's node server request: attempt {fail_attempts}"
-                    )
+                success = waiting_for(
+                    condition=lambda: self.workers[worker_name][
+                        "served_nodes_server_data"
+                    ],
+                    timeout=config.get("manager.timeout.info-request"),
+                    msg=f"{self}: receiving Worker's node server request, attempt {i}",
+                )
 
-        logger.debug("Graph connections successful")
+                # Wait until response
+                if success:
+                    break
+
+            if not success:
+                return False
+
+        return True
 
     def check_all_nodes_ready(self):
 
@@ -402,34 +387,33 @@ class Manager:
             return False
 
     def wait_until_all_nodes_ready(
-        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
-    ):
+        self, timeout: Optional[Union[float, int]] = None
+    ) -> bool:
+        """Wait until all Nodes have initialized, connected, and ready to go.
 
-        miss_counter = 0
-        while not self.check_all_nodes_ready():
-            logger.debug("Waiting for nodes to be ready")
-            time.sleep(delay)
+        Args:
+            timeout (Optional[Union[float, int]]): Optional timeout
 
-            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
-                logger.error("Node ready timeout")
-                raise RuntimeError("Node ready timeout")
+        Returns:
+            bool: Success if all ``Nodes`` are ready.
+        """
 
-            miss_counter += 1
+        if not timeout:
+            timeout = config.get("manager.timeout.info-request")
 
-    def wait_until_all_nodes_saved(
-        self, timeout: Optional[Union[float, int]] = None, delay: float = 0.1
-    ):
+        success = False
+        for i in range(config.get("manager.allowed-failures")):
 
-        miss_counter = 0
-        while not self.check_all_nodes_saved():
-            logger.debug("Waiting for nodes' data to be saved")
-            time.sleep(delay)
+            success = waiting_for(
+                condition=self.check_all_nodes_ready,
+                msg=f"{self}: Waited for Nodes to be ready",
+                timeout=config.get("manager.timeout.info-request"),
+            )
 
-            if isinstance(timeout, (float, int)) and miss_counter * delay >= timeout:
-                logger.error("Node save timeout")
-                raise RuntimeError("Node save timeout")
+            if success:
+                break
 
-            miss_counter += 1
+        return success
 
     def register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
@@ -496,57 +480,70 @@ class Manager:
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
 
-    def create_p2p_network(self):
+    def create_p2p_network(self) -> bool:
+        """Create the P2P Nodes in the Network
 
+        This routine only creates the Node via the Workers but doesn't \
+        establish the connections.
+
+        Returns:
+            bool: Success in creating the P2P Nodes
+
+        """
         # Send the message to each worker
         for worker_name in self.worker_graph_map:
 
             # Send each node that needs to be constructed
             for node_name in self.worker_graph_map[worker_name]:
 
-                fail_attempts = 0
-                while True:
+                # Make request to create node
+                success = self.request_node_creation(worker_name, node_name)
 
-                    # If fail too many times, give up :(
-                    if fail_attempts > 10:
-                        raise RuntimeError(
-                            f"Couldn't create {node_name} after multiple tries"
-                        )
+                # If fail too many times, give up :(
+                if not success:
+                    logger.error(f"Couldn't create {node_name} after multiple tries")
+                    return False
 
-                    # Send request to create node
-                    self.request_node_creation(worker_name, node_name)
+        return True
 
-                    # Wait until the node has been created and connected
-                    # to the corresponding worker
-                    try:
-                        self.wait_until_node_creation_complete(worker_name, node_name)
-                        break
-                    except RuntimeError:
-                        fail_attempts += 1
-                        logger.warning(
-                            f"Node creation failed: {worker_name}:{node_name}, attempt {fail_attempts}"
-                        )
+    def setup_p2p_connections(self) -> bool:
+        """Setting up the connections between p2p nodes
 
-                logger.debug(f"Creation of Node {node_name} successful")
-
-    def setup_p2p_connections(self):
+        Returns:
+            bool: Success in creating the connections
+        """
 
         # After all nodes have been created, get the entire graphs
         # host and port information
         self.nodes_server_table = {}
 
         # Broadcast request for node server data
-        self.request_node_server_data()
+        if self.request_node_server_data():
 
-        # Distribute the entire graph's information to all the Workers
-        self.request_connection_creation()
+            # Distribute the entire graph's information to all the Workers
+            if self.request_connection_creation():
+                return True
+
+        return False
 
     ####################################################################
     ## Package and Dependency Management
     ####################################################################
 
-    def distribute_packages(self, packages_meta: List[Dict[str, Any]]):
+    def distribute_packages(self, packages_meta: List[Dict[str, Any]]) -> bool:
+        """Distribute packages to Workers
 
+        Args:
+            packages_meta (List[Dict[str, Any]]): A specification of the \
+            package. It's a list of packages where each element is a \
+            configuration of the package, using a Dictionary with the \
+            following keys: ``name`` and ``path``.
+
+        Returns:
+            bool: Success in cluster's workers loading the distributed \
+                package.
+
+        """
         # For each package requested, send the packages to be used
         # by the connected Workers.
         for package_meta in packages_meta:
@@ -578,10 +575,26 @@ class Manager:
             data={"packages": [x["name"] for x in packages_meta]},
         )
 
-        # Wait until workers have obtain the files and loaded to the path
-        # TODO
         # Wail until all workers have responded with their node server data
-        self.wait_until_all_workers_responded(attribute="package_loaded", timeout=30)
+        success = False
+        for worker_name in self.workers:
+
+            for i in range(config.get("manager.allowed-failures")):
+
+                success = waiting_for(
+                    condition=lambda: self.workers[worker_name]["package_loaded"]
+                    == True,
+                    msg=f"{self}: Worker {worker_name} loaded package, attempt: {i}",
+                )
+
+                if success:
+                    break
+
+            if not success:
+                break
+
+        # If all workers pass, then yay!
+        return success
 
     ####################################################################
     ## User API
@@ -592,7 +605,7 @@ class Manager:
         graph: Graph,
         mapping: Dict[str, List[str]],
         send_packages: Optional[List[Dict[str, Any]]] = None,
-    ):
+    ) -> bool:
         """Committing ``Graph`` to the cluster.
 
         Committing refers to how the graph itself (with its nodes and edges)
@@ -624,23 +637,30 @@ class Manager:
                 via dictionary with the following key-value pairs: \
                 name:``str`` and path:``pathlit.Path``.
 
+        Returns:
+            bool: Success in cluster's setup
+
         """
         # First, test that the graph and the mapping are valid
         self.register_graph(graph)
         self.map_graph(mapping)
 
         # Then send requested packages
+        distribute_package_success = True
         if send_packages:
-            self.distribute_packages(send_packages)
+            distribute_package_success = self.distribute_packages(send_packages)
 
         # First, create the network
-        self.create_p2p_network()
+        if distribute_package_success and self.create_p2p_network():
 
-        # Then setup the p2p connections between nodes
-        self.setup_p2p_connections()
+            # Then setup the p2p connections between nodes
+            if self.setup_p2p_connections():
 
-        # Wait until the cluster has been setup
-        self.wait_until_all_nodes_ready()
+                # Wait until the cluster has been setup
+                if self.wait_until_all_nodes_ready():
+                    return True
+
+        return False
 
     def step(self):
         """Cluster step execution for offline operation.
@@ -673,7 +693,19 @@ class Manager:
         self.server.broadcast(signal=MANAGER_MESSAGE.REQUEST_GATHER, data={})
 
         # Wail until all workers have responded with their node server data
-        self.wait_until_all_workers_responded(attribute="gather", timeout=5)
+        for worker_name in self.workers:
+
+            success = False
+            for i in range(config.get("manager.allowed-failures")):
+
+                success = waiting_for(
+                    condition=lambda: self.workers[worker_name]["gather"],
+                    timeout=config.get("manager.timeout.gather"),
+                    msg=f"Worker: {worker_name}: gathering",
+                )
+
+                if success:
+                    break
 
         # Extract the gather data
         gather_data = {}
@@ -714,10 +746,37 @@ class Manager:
         # Tell the cluster to stop
         self.server.broadcast(signal=MANAGER_MESSAGE.STOP_NODES, data={})
 
-    def collect(self, timeout: Optional[Union[int, float]] = None, unzip: bool = True):
-        """Collect data archives across the cluster to the Manager's logs."""
+    def collect(self, unzip: bool = True) -> bool:
+        """Collect data from the Workers
+
+        First, we wait until all the Nodes have finished save their data.\
+        Then, manager request that Nodes' from the Workers.
+
+        Args:
+            unzip (bool): Should the .zip archives be extracted.
+
+        Returns:
+            bool: Success in collect data from Workers
+
+        """
         # Wait until the nodes first finished writing down the data
-        self.wait_until_all_nodes_saved(timeout=timeout)
+        for worker_name in self.workers:
+
+            success = False
+            for i in range(config.get("manager.allowed-failures")):
+
+                # Waiting for completion
+                success = waiting_for(
+                    condition=self.check_all_nodes_saved,
+                    msg=f"Worker {worker_name} waiting for Nodes to be saved, attempt {i}",
+                    timeout=max(10, self.duration),
+                )
+
+                if success:
+                    break
+
+            if not success:
+                return False
 
         # Request
         self.server.broadcast(
@@ -727,10 +786,23 @@ class Manager:
         # Collect from each worker individually
         for worker_name in self.workers:
 
-            # Wait until
-            self.wait_until_worker_respond(
-                worker_name, attribute="collection_complete", timeout=self.duration
-            )
+            success = False
+            for i in range(config.get("manager.allowed-failures")):
+
+                # Waiting for completion
+                success = waiting_for(
+                    condition=lambda: self.workers[worker_name]["collection_complete"],
+                    msg=f"Worker {worker_name} sending data for collection, attempt {i}",
+                    timeout=self.duration,
+                )
+
+                if success:
+                    break
+                else:
+                    time.sleep(config.get("manager.retry.data-collection"))
+
+            if not success:
+                return False
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
@@ -739,6 +811,9 @@ class Manager:
         # Add the meta data to the archive
         self.save_meta()
 
+        # Success!
+        return True
+
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.
 
@@ -746,7 +821,6 @@ class Manager:
         to shutdown, in which they will stop their processes and threads safely.
 
         """
-
         # Only let shutdown happen once
         if self.has_shutdown:
             logger.debug(f"{self}: requested to shutdown twice, skipping.")
@@ -765,10 +839,9 @@ class Manager:
             waiting_for(
                 condition=lambda: len(self.workers) == 0,
                 check_period=0.1,
-                success_msg=f"{self}: All workers shutdown",
-                timeout=10,
+                msg=f"{self}: All workers shutdown",
                 timeout_raise=False,
-                timeout_msg=f"{self}: Not all workers shutdown -> {self.workers}",
+                timeout=config.get("manager.timeout.worker-shutdown"),
             )
 
         # First, shutdown server
