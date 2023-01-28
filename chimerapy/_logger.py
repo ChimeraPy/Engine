@@ -22,7 +22,7 @@ LOGGING_CONFIG = {
             "stream": "ext://sys.stdout",  # Default is stderr
         },
         "datagram": {
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "standard",
             "class": "logging.handlers.DatagramHandler",
             "host": "127.0.0.1",
@@ -31,6 +31,11 @@ LOGGING_CONFIG = {
     },
     "loggers": {
         "chimerapy": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "chimerapy-worker": {
             "handlers": ["console"],
             "level": "INFO",
             "propagate": True,
@@ -63,6 +68,6 @@ def getLogger(name: str):
     # Ensure that the configuration is set
     debug_loggers = os.environ.get("CHIMERAPY_DEBUG_LOGGERS", "").split(os.pathsep)
     if name in debug_loggers:
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
 
     return logger

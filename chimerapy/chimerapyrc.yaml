@@ -4,13 +4,22 @@ config:
     allowed-failures: 5
     timeout:
       info-request: 10 # seconds
-      gather: 10 # seconds
-      package-delivery: 30 # seconds
+      package-delivery: 60 # seconds
       worker-shutdown: 2 # seconds
-      node-creation: 30 # seconds
+      node-creation: 60 # seconds
     retry:
       data-collection: 30 # seconds
   worker:
-    allowed-failures: 0
-  deploy:
-    lost-worker-timeout: 15s
+    allowed-failures: 2
+    timeout:
+      info-request: 30 # seconds
+      node-creation: 30 # seconds
+      package-delivery: 30 # seconds
+  comms:
+    timeout:
+      ok: 10 # seconds
+      zip-time: 10
+      client-ready: 10
+      server-ready: 10
+      client-shutdown: 10
+      server-shutdown: 15

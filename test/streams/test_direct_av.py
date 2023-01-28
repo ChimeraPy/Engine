@@ -10,7 +10,6 @@ import pytest
 import wave
 import pyaudio
 import numpy as np
-import ffmpeg
 import cv2
 import chimerapy as cp
 
@@ -121,6 +120,7 @@ def test_write_video():
 @pytest.mark.order(after="test_write_video")
 @not_github_actions
 def test_combine_video_and_audio():
+    import ffmpeg
 
     assert V_OUTPUT_FILE.exists()
     assert A_OUTPUT_FILE.exists()

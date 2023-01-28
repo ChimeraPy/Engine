@@ -15,10 +15,24 @@ config: Dict[str, Any] = {}
 
 
 def update(new: Dict[str, Any]):
+    """Updated key value pairs from a dictionary.
+
+    Args:
+        new (Dict[str, Any]): The new updated kv pairs
+    """
     config.update(new)
 
 
-def get(key):
+def get(key: str) -> Any:
+    """Get the configuration
+
+    Args:
+        key (str): The requested key
+
+    Returns:
+        Any: Value of the key
+
+    """
     keys = key.split(".")
     result = config
     for k in keys:
@@ -27,4 +41,5 @@ def get(key):
     return result
 
 
+# Load the defaults
 update(defaults)

@@ -22,7 +22,7 @@ from .networking.enums import (
 )
 from . import _logger
 
-logger = _logger.getLogger("chimerapy")
+logger = _logger.getLogger("chimerapy-worker")
 
 
 class Worker:
@@ -91,6 +91,10 @@ class Worker:
     ## Message Reactivity API - Client
     ####################################################################
 
+    async def load_config(self, msg: Dict):
+        logger.debug(f"{self}: loading Manager-provided config")
+        config.update(msg["data"]["config"])
+
     async def async_create_node(self, msg: Dict):
         self.create_node(msg)
 
@@ -120,8 +124,17 @@ class Worker:
         )
 
         # Now wait until all nodes have responded as CONNECTED
-        self.wait_until_all_nodes_responded()
-        logger.debug(f"{self}: Nodes have been connected.")
+        success = False
+        for i in range(config.get("worker.allowed-failures")):
+            if self.wait_until_all_nodes_responded(
+                timeout=config.get("worker.timeout.info-request")
+            ):
+                logger.debug(f"{self}: Nodes have been connected.")
+                success = True
+                break
+
+        if not success:
+            logger.error("{self}: Nodes failed to establish P2P connections")
 
         # After all nodes have been connected, inform the Manager
         nodes_status_data = {
@@ -153,7 +166,18 @@ class Worker:
         # Request gather from Worker to Nodes
         await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
 
-        self.wait_until_all_nodes_responded(timeout=5)
+        # Now wait until all nodes have responded as CONNECTED
+        success = False
+        for i in range(config.get("worker.allowed-failures")):
+            if self.wait_until_all_nodes_responded(
+                timeout=config.get("worker.timeout.info-request")
+            ):
+                logger.debug(f"{self}: Nodes responded to gather.")
+                success = True
+                break
+
+        if not success:
+            logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
         gather_data = {"name": self.name, "node_data": {}}
@@ -172,14 +196,17 @@ class Worker:
         for sent_package in msg["data"]["packages"]:
 
             # Wait until the sent package are started
-            await async_waiting_for(
+            success = await async_waiting_for(
                 condition=lambda: f"{sent_package}.zip"
                 in self.server.file_transfer_records["Manager"],
-                check_period=0.5,
-                timeout=60,
-                timeout_raise=True,
-                msg=f"{self}: Waiting for package {sent_package}.",
+                timeout=config.get("worker.timeout.package-delivery"),
             )
+
+            if success:
+                logger.debug(f"{self}: Waiting for package {sent_package}: SUCCESS")
+            else:
+                logger.error(f"{self}: Waiting for package {sent_package}: FAILED")
+                return False
 
             # Get the path
             package_zip_path = self.server.file_transfer_records["Manager"][
@@ -187,16 +214,18 @@ class Worker:
             ]["dst_filepath"]
 
             # Wait until the sent package is complete
-            await async_waiting_for(
+            success = await async_waiting_for(
                 condition=lambda: self.server.file_transfer_records["Manager"][
                     f"{sent_package}.zip"
                 ]["complete"]
                 == True,
-                check_period=0.5,
-                timeout=60,
-                timeout_raise=True,
-                msg=f"{self}: Package {sent_package} loading.",
+                timeout=config.get("worker.timeout.package-delivery"),
             )
+
+            if success:
+                logger.debug(f"{self}: Package {sent_package} loading: SUCCESS")
+            else:
+                logger.debug(f"{self}: Package {sent_package} loading: FAILED")
 
             assert (
                 package_zip_path.exists()
@@ -308,21 +337,27 @@ class Worker:
         for node_name in self.nodes:
             self.mark_response_as_false_for_node(node_name)
 
-    def wait_until_node_response(self, node_name: str, timeout: Union[float, int] = 10):
+    def wait_until_node_response(
+        self, node_name: str, timeout: Union[float, int] = 10
+    ) -> bool:
 
         # # Wait until the node has informed us that it has been initialized
-        waiting_for(
+        return waiting_for(
             condition=lambda: self.nodes[node_name]["response"] == True,
             check_period=0.1,
             timeout=timeout,
-            timeout_raise=True,
-            msg=f"{self}: {node_name} responding!",
         )
 
-    def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10):
+    def wait_until_all_nodes_responded(self, timeout: Union[float, int] = 10) -> bool:
 
         for node_name in self.nodes:
-            self.wait_until_node_response(node_name, timeout)
+            success = self.wait_until_node_response(node_name, timeout)
+            if not success:
+                logger.debug(f"{self}: Node {node_name} responding: FAILED")
+                return False
+
+        logger.debug(f"{self}: All Nodes responding: SUCCESS")
+        return True
 
     def create_node_server_data(self):
 
@@ -381,6 +416,7 @@ class Worker:
             port=port,
             name=self.name,
             ws_handlers={
+                MANAGER_MESSAGE.CONFIG: self.load_config,
                 MANAGER_MESSAGE.CREATE_NODE: self.async_create_node,
                 MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
                 MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -429,12 +465,8 @@ class Worker:
         self.nodes[node_name]["gather"] = None
 
         # Keep trying to start a process until success
-        fail_attempts = 0
-        while True:
-
-            # If too many attempts, just give up :(
-            if fail_attempts > 5:
-                raise TimeoutError("Could not create Node")
+        success = False
+        for i in range(config.get("worker.allowed-failures")):
 
             # Decode the node object
             self.nodes[node_name]["node_object"] = dill.loads(
@@ -458,21 +490,25 @@ class Worker:
             self.nodes[node_name]["node_object"].start()
 
             # Wait until response from node
-            try:
-                self.wait_until_node_response(node_name, timeout=10)
-                break
-            except TimeoutError:
+            success = waiting_for(
+                condition=lambda: self.nodes[node_name]["response"] == True,
+                timeout=config.get("worker.timeout.node-creation"),
+            )
 
+            if success:
+                logger.debug(f"{self}: {node_name} responding, SUCCESS")
+                break
+            else:
                 # Handle failure
+                logger.debug(f"{self}: {node_name} responding, FAILED, retry")
                 self.nodes[node_name]["node_object"].shutdown()
                 self.nodes[node_name]["node_object"].terminate()
-                fail_attempts += 1
-                logger.warning(
-                    f"{node_name} failed to start, retrying for {fail_attempts} time."
-                )
 
-        # Mark success
-        logger.debug(f"{self}: completed node creation: {self.nodes}")
+        if not success:
+            logger.error(f"{self}: Node {node_name} failed to create")
+        else:
+            # Mark success
+            logger.debug(f"{self}: completed node creation: {self.nodes}")
 
         # Update the manager with the most up-to-date status of the nodes
         nodes_status_data = {

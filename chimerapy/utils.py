@@ -81,15 +81,12 @@ async def async_waiting_for(
     check_period: Union[int, float] = 0.1,
     timeout: Optional[Union[int, float]] = None,
     timeout_raise: Optional[bool] = True,
-    msg: Optional[str] = None,
 ) -> bool:
 
     counter = 0
     while True:
 
         if condition():
-            if msg:
-                logger.debug(msg)
             return True
         else:
             await asyncio.sleep(check_period)
@@ -99,15 +96,12 @@ async def async_waiting_for(
                 if timeout_raise:
                     raise TimeoutError(str(condition) + ": FAILURE")
                 else:
-                    if msg:
-                        logger.debug(msg + ": FAILURE")
                     return False
 
 
 def waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,
-    msg: Optional[str] = None,
     timeout: Optional[Union[int, float]] = None,
     timeout_raise: Optional[bool] = False,
 ) -> bool:
@@ -116,8 +110,6 @@ def waiting_for(
     while True:
 
         if condition():
-            if msg:
-                logger.debug(msg + ": SUCCESS")
             return True
         else:
             time.sleep(check_period)
@@ -127,8 +119,6 @@ def waiting_for(
                 if timeout_raise:
                     raise TimeoutError(str(condition) + ": FAILURE")
                 else:
-                    if msg:
-                        logger.debug(msg + ": FAILURE")
                     return False
 
 

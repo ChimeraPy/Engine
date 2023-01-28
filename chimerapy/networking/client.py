@@ -17,6 +17,7 @@ import aiohttp
 from aiohttp import web
 
 # Internal Imports
+from chimerapy import config
 from .async_loop_thread import AsyncLoopThread
 from ..utils import create_payload, decode_payload, waiting_for, async_waiting_for
 from .enums import GENERAL_MESSAGE
@@ -102,6 +103,7 @@ class Client:
             # Select the handler
             logger.debug(f"{self}: read executing {msg['signal']}")
             handler = self.ws_handlers[msg["signal"]]
+
             logger.debug(f"{self}: read handler {handler}")
             await handler(msg)
             logger.debug(f"{self}: finished read executing {msg['signal']}")
@@ -149,13 +151,14 @@ class Client:
         # If ok, wait until ok
         if ok:
 
-            await async_waiting_for(
+            success = await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                msg=f"{self}: receiving OK",
-                timeout=10,
-                timeout_raise=False,
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     async def _send_file_async(self, url: str, data: aiohttp.FormData):
 
@@ -174,7 +177,7 @@ class Client:
         # Having continuing attempts to make the zip folder
         miss_counter = 0
         delay = 1
-        zip_timeout = 10
+        zip_timeout = config.get("comms.timeout.zip-time")
 
         # First, we need to archive the folder into a zip file
         while True:
@@ -182,11 +185,12 @@ class Client:
                 shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
                 break
             except:
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 miss_counter += 1
 
                 if zip_timeout < delay * miss_counter:
-                    raise SystemError("Temp folder couldn't be zipped.")
+                    logger.error("Temp folder couldn't be zipped.")
+                    return False
 
         zip_file = dir.parent / f"{dir.name}.zip"
 
@@ -209,6 +213,8 @@ class Client:
 
         # Then send the file
         await self._send_file_async(url, data)
+
+        return True
 
     ####################################################################
     # Client Async Setup and Shutdown
@@ -279,12 +285,14 @@ class Client:
 
         if ok:
 
-            await async_waiting_for(
+            success = await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                timeout=10,
-                timeout_raise=False,
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     ####################################################################
     # Client Sync Lifecyle API
@@ -301,12 +309,14 @@ class Client:
 
         if ok:
 
-            waiting_for(
+            success = waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                timeout=10,
-                timeout_raise=False,
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     def send_file(self, sender_name: str, filepath: pathlib.Path):
 
@@ -324,7 +334,7 @@ class Client:
         )
         self._thread.exec(partial(self._send_file_async, url, data))
 
-    def send_folder(self, sender_name: str, dir: pathlib.Path):
+    def send_folder(self, sender_name: str, dir: pathlib.Path) -> bool:
 
         assert (
             dir.is_dir() and dir.exists()
@@ -333,7 +343,7 @@ class Client:
         # Having continuing attempts to make the zip folder
         miss_counter = 0
         delay = 1
-        zip_timeout = 10
+        zip_timeout = config.get("comms.timeout.zip-time")
 
         # First, we need to archive the folder into a zip file
         while True:
@@ -345,7 +355,8 @@ class Client:
                 miss_counter += 1
 
                 if zip_timeout < delay * miss_counter:
-                    raise SystemError("Temp folder couldn't be zipped.")
+                    logger.error("Temp folder couldn't be zipped.")
+                    return False
 
         zip_file = dir.parent / f"{dir.name}.zip"
 
@@ -355,6 +366,8 @@ class Client:
 
         # Then send the file
         self.send_file(sender_name, temp_zip_file)
+
+        return True
 
     def connect(self):
 
@@ -372,7 +385,7 @@ class Client:
         self._thread.exec(self._main)
 
         # Wait until client is ready
-        flag = self._client_ready.wait(timeout=10)
+        flag = self._client_ready.wait(timeout=config.get("comms.timeout.client-ready"))
         if flag == 0:
             self.shutdown()
             raise TimeoutError(f"{self}: failed to connect, shutting down!")
@@ -387,7 +400,9 @@ class Client:
             self._thread.exec(self._client_shutdown)
 
             # Wait for it
-            if not self._client_shutdown_complete.wait(timeout=5):
+            if not self._client_shutdown_complete.wait(
+                timeout=config.get("comms.timeout.client-shutdown")
+            ):
                 logger.warning(f"{self}: failed to gracefully shutdown")
 
             # Stop threaded loop

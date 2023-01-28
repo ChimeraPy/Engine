@@ -125,6 +125,13 @@ class Manager:
             f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
         )
 
+        # Send Worker the Manager's configuration
+        self.server.send(
+            client_name=str(msg["data"]["name"]),
+            signal=MANAGER_MESSAGE.CONFIG,
+            data={"config": config.config},
+        )
+
     async def deregister_worker(self, msg: Dict, ws: web.WebSocketResponse):
         await ws.close()
         logger.info(
@@ -249,11 +256,16 @@ class Manager:
                     self.workers[worker_name]["nodes_status"][node_name]["INIT"] == True
                 ),
                 timeout=config.get("manager.timeout.node-creation"),
-                msg=f"{self}: Node creation {worker_name}:{node_name}, attempt {i}",
             )
 
             if success:
+                logger.debug(
+                    f"{self}: Node creation {worker_name}:{node_name}: SUCCESS"
+                )
                 break
+
+        if not success:
+            logger.error(f"{self}: Node creation {worker_name}:{node_name}: FAILED")
 
         return success
 
@@ -286,13 +298,16 @@ class Manager:
                         "reported_nodes_server_data"
                     ],
                     timeout=config.get("manager.timeout.info-request"),
-                    msg=f"{self}: Requesting Worker's node server request: attempt {i}",
                 )
 
                 if success:
+                    logger.debug(
+                        f"{self}: Requesting Worker's node server request: SUCCESS"
+                    )
                     break
 
             if not success:
+                logger.error(f"{self}: Requesting Worker's node server request: FAILED")
                 return False
 
         return True
@@ -328,14 +343,17 @@ class Manager:
                         "served_nodes_server_data"
                     ],
                     timeout=config.get("manager.timeout.info-request"),
-                    msg=f"{self}: receiving Worker's node server request, attempt {i}",
                 )
 
                 # Wait until response
                 if success:
+                    logger.debug(
+                        f"{self}: receiving Worker's node server request: SUCCESS"
+                    )
                     break
 
             if not success:
+                logger.error(f"{self}: receiving Worker's node server request: FAILED")
                 return False
 
         return True
@@ -406,12 +424,15 @@ class Manager:
 
             success = waiting_for(
                 condition=self.check_all_nodes_ready,
-                msg=f"{self}: Waited for Nodes to be ready",
                 timeout=config.get("manager.timeout.info-request"),
             )
 
             if success:
+                logger.debug(f"{self}: Waited for Nodes to be ready: SUCCESS")
                 break
+
+        if not success:
+            logger.error(f"{self}: Waited for Nodes to be ready: FAILED")
 
         return success
 
@@ -584,13 +605,17 @@ class Manager:
                 success = waiting_for(
                     condition=lambda: self.workers[worker_name]["package_loaded"]
                     == True,
-                    msg=f"{self}: Worker {worker_name} loaded package, attempt: {i}",
+                    timeout=config.get("manager.timeout.package-delivery"),
                 )
 
                 if success:
+                    logger.debug(
+                        f"{self}: Worker {worker_name} loaded package: SUCCESS"
+                    )
                     break
 
             if not success:
+                logger.error(f"{self}: Worker {worker_name} loaded package: FAILED")
                 break
 
         # If all workers pass, then yay!
@@ -700,12 +725,15 @@ class Manager:
 
                 success = waiting_for(
                     condition=lambda: self.workers[worker_name]["gather"],
-                    timeout=config.get("manager.timeout.gather"),
-                    msg=f"Worker: {worker_name}: gathering",
+                    timeout=config.get("manager.timeout.info-request"),
                 )
 
                 if success:
+                    logger.debug(f"Worker: {worker_name}, gathering: SUCCESS")
                     break
+
+            if not success:
+                logger.error(f"Worker: {worker_name}, gathering: FAILED")
 
         # Extract the gather data
         gather_data = {}
@@ -760,6 +788,7 @@ class Manager:
 
         """
         # Wait until the nodes first finished writing down the data
+        complete_success = True
         for worker_name in self.workers:
 
             success = False
@@ -768,15 +797,20 @@ class Manager:
                 # Waiting for completion
                 success = waiting_for(
                     condition=self.check_all_nodes_saved,
-                    msg=f"Worker {worker_name} waiting for Nodes to be saved, attempt {i}",
                     timeout=max(10, self.duration),
                 )
 
                 if success:
+                    logger.debug(
+                        f"Worker {worker_name} waiting for Nodes to be saved: SUCCESS"
+                    )
                     break
 
             if not success:
-                return False
+                logger.error(
+                    f"Worker {worker_name} waiting for Nodes to be saved: FAILED"
+                )
+                complete_success = False
 
         # Request
         self.server.broadcast(
@@ -792,17 +826,22 @@ class Manager:
                 # Waiting for completion
                 success = waiting_for(
                     condition=lambda: self.workers[worker_name]["collection_complete"],
-                    msg=f"Worker {worker_name} sending data for collection, attempt {i}",
                     timeout=self.duration,
                 )
 
                 if success:
+                    logger.debug(
+                        f"Worker {worker_name} sending data for collection: SUCCESS"
+                    )
                     break
                 else:
+                    logger.error(
+                        f"Worker {worker_name} sending data for collection: FAILED, retry"
+                    )
                     time.sleep(config.get("manager.retry.data-collection"))
 
             if not success:
-                return False
+                complete_success = False
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
@@ -812,7 +851,7 @@ class Manager:
         self.save_meta()
 
         # Success!
-        return True
+        return complete_success
 
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.
@@ -836,13 +875,17 @@ class Manager:
             self.server.broadcast(signal=MANAGER_MESSAGE.CLUSTER_SHUTDOWN, data={})
 
             # Wait until all worker's deregister
-            waiting_for(
+            success = waiting_for(
                 condition=lambda: len(self.workers) == 0,
                 check_period=0.1,
-                msg=f"{self}: All workers shutdown",
                 timeout_raise=False,
                 timeout=config.get("manager.timeout.worker-shutdown"),
             )
+
+            if success:
+                logger.debug(f"{self}: All workers shutdown: SUCCESS")
+            else:
+                logger.warning(f"{self}: All workers shutdown: FAILED - forced")
 
         # First, shutdown server
         self.server.shutdown()
