@@ -26,7 +26,7 @@ logger = _logger.getLogger("chimerapy-worker")
 
 
 class Worker:
-    def __init__(self, name: str, port: int = 9080, delete_temp: bool = True):
+    def __init__(self, name: str, port: int = 10000, delete_temp: bool = True):
         """Create a local Worker.
 
         To execute ``Nodes`` within the main computer that is also housing
@@ -93,7 +93,7 @@ class Worker:
 
     async def load_config(self, msg: Dict):
         logger.debug(f"{self}: loading Manager-provided config")
-        config.update(msg["data"]["config"])
+        config.update_defaults(msg["data"]["config"])
 
     async def async_create_node(self, msg: Dict):
         self.create_node(msg)
@@ -460,7 +460,12 @@ class Worker:
         self.nodes[node_name] = {
             k: v for k, v in msg["data"].items() if k != "node_name"
         }
-        self.nodes[node_name]["status"] = {"INIT": 0, "CONNECTED": 0, "READY": 0}
+        self.nodes[node_name]["status"] = {
+            "INIT": 0,
+            "CONNECTED": 0,
+            "READY": 0,
+            "FINISHED": 0,
+        }
         self.nodes[node_name]["response"] = False
         self.nodes[node_name]["gather"] = None
 
@@ -481,6 +486,7 @@ class Worker:
                 self.nodes[node_name]["in_bound"],
                 self.nodes[node_name]["out_bound"],
                 self.nodes[node_name]["follow"],
+                logging_level=logger.level,
             )
 
             # Before starting, over write the pid
@@ -488,6 +494,7 @@ class Worker:
 
             # Start the node
             self.nodes[node_name]["node_object"].start()
+            logger.debug(f"{self}: started <Node {node_name}>")
 
             # Wait until response from node
             success = waiting_for(
@@ -497,10 +504,25 @@ class Worker:
 
             if success:
                 logger.debug(f"{self}: {node_name} responding, SUCCESS")
-                break
             else:
                 # Handle failure
                 logger.debug(f"{self}: {node_name} responding, FAILED, retry")
+                self.nodes[node_name]["node_object"].shutdown()
+                self.nodes[node_name]["node_object"].terminate()
+                continue
+
+            # Now we wait until the node has fully initialized and ready-up
+            success = waiting_for(
+                condition=lambda: self.nodes[node_name]["status"]["READY"] == True,
+                timeout=config.get("worker.timeout.info-request"),
+            )
+
+            if success:
+                logger.debug(f"{self}: {node_name} fully ready, SUCCESS")
+                break
+            else:
+                # Handle failure
+                logger.debug(f"{self}: {node_name} fully ready, FAILED, retry")
                 self.nodes[node_name]["node_object"].shutdown()
                 self.nodes[node_name]["node_object"].terminate()
 
@@ -520,6 +542,8 @@ class Worker:
             self.client.send(
                 signal=WORKER_MESSAGE.REPORT_NODES_STATUS, data=nodes_status_data
             )
+
+        return success
 
     def step(self, msg: Dict = {}):
 
@@ -569,7 +593,9 @@ class Worker:
 
         # Then wait until close, or force
         for node_name in self.nodes:
-            self.nodes[node_name]["node_object"].join(timeout=10)
+            self.nodes[node_name]["node_object"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
 
             # If that doesn't work, terminate
             if self.nodes[node_name]["node_object"].exitcode != 0:

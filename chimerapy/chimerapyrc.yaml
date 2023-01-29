@@ -6,7 +6,7 @@ config:
       info-request: 10 # seconds
       package-delivery: 60 # seconds
       worker-shutdown: 2 # seconds
-      node-creation: 60 # seconds
+      node-creation: 90 # seconds
     retry:
       data-collection: 30 # seconds
   worker:
@@ -14,6 +14,7 @@ config:
     timeout:
       info-request: 30 # seconds
       node-creation: 30 # seconds
+      node-shutdown: 10 # seconds
       package-delivery: 30 # seconds
   comms:
     timeout:

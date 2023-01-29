@@ -14,7 +14,7 @@ with open(config_file) as f:
 config: Dict[str, Any] = {}
 
 
-def update(new: Dict[str, Any]):
+def update_defaults(new: Dict[str, Any]):
     """Updated key value pairs from a dictionary.
 
     Args:
@@ -42,4 +42,4 @@ def get(key: str) -> Any:
 
 
 # Load the defaults
-update(defaults)
+update_defaults(defaults)

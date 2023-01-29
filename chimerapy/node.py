@@ -1,6 +1,5 @@
 from typing import Dict, List, Any, Optional, Union, Literal
 from multiprocessing.process import AuthenticationString
-import time
 import logging
 import queue
 import uuid
@@ -9,6 +8,7 @@ import os
 import tempfile
 import datetime
 import threading
+import traceback
 
 # Third-party Imports
 import multiprocess as mp
@@ -20,7 +20,6 @@ import zmq
 from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
-from .utils import clear_queue
 from . import _logger
 
 
@@ -55,6 +54,9 @@ class Node(mp.Process):
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
 
+        # Default values
+        self.logging_level: int = logging.INFO
+
         # If used for debugging, that means that it is being executed
         # not in an external process
         self.debug = debug
@@ -69,7 +71,14 @@ class Node(mp.Process):
 
             # Prepare the node to be used
             self.config(
-                "0.0.0.0", 9000, temp_folder, [], [], follow=None, networking=False
+                "0.0.0.0",
+                9000,
+                temp_folder,
+                [],
+                [],
+                follow=None,
+                networking=False,
+                logging_level=logging.DEBUG,
             )
 
             # Only execute this if step debugging
@@ -245,6 +254,7 @@ class Node(mp.Process):
         out_bound: List[str],
         follow: Optional[str] = None,
         networking: bool = True,
+        logging_level: int = logging.INFO,
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -278,6 +288,7 @@ class Node(mp.Process):
 
         # Saving other parameters
         self.networking = networking
+        self.logging_level = logging_level
 
         # Creating initial values
         self.latest_value = None
@@ -427,7 +438,12 @@ class Node(mp.Process):
 
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
-            output = self.step()
+            try:
+                output = self.step()
+            except Exception as e:
+                traceback_info = traceback.format_exc()
+                self.logger.error(traceback_info)
+                return None
 
         else:
 
@@ -441,8 +457,13 @@ class Node(mp.Process):
                     self.inputs_ready.clear()
                     self.logger.debug(f"{self}: forward processing inputs")
 
-                    output = self.step(self.in_bound_data)
-                    break
+                    try:
+                        output = self.step(self.in_bound_data)
+                        break
+                    except Exception as e:
+                        traceback_info = traceback.format_exc()
+                        self.logger.error(traceback_info)
+                        return None
 
         # If output generated, send it!
         if output:
@@ -571,14 +592,19 @@ class Node(mp.Process):
 
         """
         self.logger = self.get_logger()
+        self.logger.setLevel(self.logging_level)
         self.logger.debug(f"{self}: initialized with context -> {self._context}")
-
-        # If debugging, do not re-execute the networking component
-        # if not self.debug:
 
         # Performing preparation for the while loop
         self._prep()
-        self.prep()
+
+        # User-defined, possible error
+        try:
+            self.prep()
+        except Exception as e:
+            traceback_info = traceback.format_exc()
+            self.logger.error(traceback_info)
+            return None
 
         self.logger.debug(f"{self}: finished prep")
 

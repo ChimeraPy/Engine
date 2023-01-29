@@ -99,7 +99,14 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
         pkl_n = dill.dumps(n)
         nn = dill.loads(pkl_n)
         nn.config(
-            "0.0.0.0", 9000, TEST_DATA_DIR, [], ["Con1"], follow=None, networking=False
+            "0.0.0.0",
+            9000,
+            TEST_DATA_DIR,
+            [],
+            ["Con1"],
+            follow=None,
+            networking=False,
+            logging_level=logging.DEBUG,
         )
         nn.start()
         ns.append(nn)

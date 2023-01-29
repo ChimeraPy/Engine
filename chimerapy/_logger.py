@@ -68,6 +68,6 @@ def getLogger(name: str):
     # Ensure that the configuration is set
     debug_loggers = os.environ.get("CHIMERAPY_DEBUG_LOGGERS", "").split(os.pathsep)
     if name in debug_loggers:
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
 
     return logger
