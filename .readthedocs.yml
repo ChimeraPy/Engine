@@ -21,3 +21,10 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.10"
+  apt_packages:
+    - libasound-dev
+    - portaudio19-dev
+    - libportaudio2
+    - libportaudiocpp0
+    - ffmpeg
+    - libav-tools
