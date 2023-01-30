@@ -162,6 +162,7 @@ def dockered_multiple_nodes_multiple_workers_manager(docker_client, manager, gra
     worker2.shutdown()
 
 
+#@pytest.mark.repeat(10)
 @pytest.mark.parametrize(
     "config_manager, expected_worker_to_nodes",
     [
@@ -273,7 +274,7 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
 
     # Take a single step and see if the system crashes and burns
     config_manager.step()
-    time.sleep(2)
+    time.sleep(5)
 
     # Then request gather and confirm that the data is valid
     latest_data_values = config_manager.gather()
@@ -282,6 +283,7 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
     for k, v in expected_output.items():
         assert (
             k in latest_data_values
+            and isinstance(latest_data_values[k], cp.DataChunk)
             and latest_data_values[k].get("default")["value"] == v
         )
 
@@ -317,7 +319,7 @@ def test_manager_start(config_manager, expected_output):
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()
-    time.sleep(2)
+    time.sleep(5)
     config_manager.stop()
 
     # Then request gather and confirm that the data is valid
@@ -327,5 +329,6 @@ def test_manager_start(config_manager, expected_output):
     for k, v in expected_output.items():
         assert (
             k in latest_data_values
+            and isinstance(latest_data_values[k], cp.DataChunk)
             and latest_data_values[k].get("default")["value"] == v
         )

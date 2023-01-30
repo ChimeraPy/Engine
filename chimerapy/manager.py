@@ -85,6 +85,7 @@ class Manager:
                 WORKER_MESSAGE.REPORT_NODE_SERVER_DATA: self.node_server_data,
                 WORKER_MESSAGE.REPORT_NODES_STATUS: self.update_nodes_status,
                 WORKER_MESSAGE.COMPLETE_BROADCAST: self.complete_worker_broadcast,
+                WORKER_MESSAGE.REPORT_NODE_SAVING: self.get_node_saving,
                 WORKER_MESSAGE.REPORT_GATHER: self.get_gather,
                 WORKER_MESSAGE.PACKAGE_LOADED: self.complete_worker_load_package,
                 WORKER_MESSAGE.TRANSFER_COMPLETE: self.complete_worker_transfer,
@@ -118,6 +119,7 @@ class Manager:
             "served_nodes_server_data": False,
             "nodes_status": {},
             "gather": {},
+            "saving_complete": False,
             "collection_complete": False,
             "package_loaded": False,
         }
@@ -163,6 +165,11 @@ class Manager:
     async def get_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
+        self.workers[msg["data"]["name"]]["response"] = True
+
+    async def get_node_saving(self, msg: Dict, ws: web.WebSocketResponse):
+
+        self.workers[msg["data"]["name"]]["saving_complete"] = msg["data"]["nodes_saving_success"]
         self.workers[msg["data"]["name"]]["response"] = True
 
     async def complete_worker_load_package(self, msg: Dict, ws: web.WebSocketResponse):
@@ -361,29 +368,6 @@ class Manager:
                 return False
 
         return True
-
-    def check_all_nodes_saved(self):
-
-        logger.debug(f"Checking node ready: {self.workers}")
-
-        # Tracking all results and avoiding a default True value
-        checks = []
-
-        # Iterate through all the workers
-        for worker_name in self.workers:
-
-            # Iterate through their nodes
-            for node_name in self.workers[worker_name]["nodes_status"]:
-                checks.append(
-                    self.workers[worker_name]["nodes_status"][node_name]["FINISHED"]
-                )
-
-        # Only if all checks are True can we say the p2p network is ready
-        logger.debug(f"checks: {checks}")
-        if all(checks):
-            return True
-        else:
-            return False
 
     def register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
@@ -659,20 +643,24 @@ class Manager:
         # Wail until all workers have responded with their node server data
         for worker_name in self.workers:
 
-            success = False
-            for i in range(config.get("manager.allowed-failures")):
+            response = waiting_for(
+                condition=lambda: self.workers[worker_name]["response"],
+                timeout=config.get("manager.timeout.info-request"),
+            )
 
-                success = waiting_for(
-                    condition=lambda: self.workers[worker_name]["gather"],
-                    timeout=config.get("manager.timeout.info-request"),
+            if not response:
+                logger.error(
+                    f"{self}: Worker {worker_name} didn't respond to Node saving request: FAILED"
                 )
+                
+            else:
+
+                success = self.workers[worker_name]['gather'] != {}
 
                 if success:
                     logger.debug(f"Worker: {worker_name}, gathering: SUCCESS")
-                    break
-
-            if not success:
-                logger.error(f"Worker: {worker_name}, gathering: FAILED")
+                else:
+                    logger.error(f"Worker: {worker_name}, gathering: FAILED")
 
         # Extract the gather data
         gather_data = {}
@@ -728,21 +716,31 @@ class Manager:
         """
         # Wait until the nodes first finished writing down the data
         complete_success = True
+
+        # Mark all as false
+        self.mark_response_as_false_for_workers()
+
+        # Make request that the worker returns all Nodes as saved
+        self.server.broadcast(
+            signal=MANAGER_MESSAGE.REQUEST_SAVING,
+            data={'duration': self.duration}
+        )
+
         for worker_name in self.workers:
 
             # Waiting for completion
             success = waiting_for(
-                condition=self.check_all_nodes_saved,
-                timeout=max(10, self.duration),
+                condition=lambda: self.workers[worker_name]["saving_complete"] == True,
+                timeout=max(config.get('manager.timeout.info-request'), self.duration),
             )
 
             if success:
                 logger.debug(
-                    f"Worker {worker_name} waiting for Nodes to be saved: SUCCESS"
+                    f"{self}: Worker {worker_name} waiting for Nodes to be saved: SUCCESS"
                 )
             else:
                 logger.error(
-                    f"Worker {worker_name} waiting for Nodes to be saved: FAILED"
+                    f"{self}: Worker {worker_name} waiting for Nodes to be saved: FAILED"
                 )
                 complete_success = False
 
@@ -757,16 +755,16 @@ class Manager:
             # Waiting for completion
             success = waiting_for(
                 condition=lambda: self.workers[worker_name]["collection_complete"],
-                timeout=max(10, self.duration),
+                timeout=max(config.get('manager.timeout.info-request'), self.duration),
             )
 
             if success:
                 logger.debug(
-                    f"Worker {worker_name} sending data for collection: SUCCESS"
+                    f"{self}: Worker {worker_name} sending data for collection: SUCCESS"
                 )
             else:
                 logger.error(
-                    f"Worker {worker_name} sending data for collection: FAILED, retry"
+                    f"{self}: Worker {worker_name} sending data for collection: FAILED, retry"
                 )
                 complete_success = False
 

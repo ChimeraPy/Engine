@@ -21,6 +21,7 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
+from .logreceiver import LogReceiver
 
 logger = _logger.getLogger("chimerapy-worker")
 
@@ -71,6 +72,7 @@ class Worker:
             ws_handlers={
                 NODE_MESSAGE.STATUS: self.node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
+                NODE_MESSAGE.REPORT_SAVING: self.node_report_saving
             },
         )
 
@@ -80,6 +82,10 @@ class Worker:
         logger.info(
             f"Worker {self.name} running HTTP server at {self.host}:{self.port}"
         )
+
+        # Create a log listener to read Node's information
+        self.log_receiver = LogReceiver()
+        self.log_receiver.start()
 
     def __repr__(self):
         return f"<Worker {self.name}>"
@@ -156,6 +162,33 @@ class Worker:
                 signal=WORKER_MESSAGE.COMPLETE_BROADCAST, data={"name": self.name}
             )
 
+    async def report_node_saving(self, msg: Dict):
+
+        # Marking as all false
+        self.mark_all_response_as_false_for_nodes()
+
+        # Now wait until all nodes have responded as CONNECTED
+        success = False
+        for i in range(config.get("worker.allowed-failures")):
+            
+            # Request saving from Worker to Nodes
+            await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
+
+            if self.wait_until_all_nodes_responded(
+                timeout=config.get("worker.timeout.info-request")
+            ):
+                logger.debug(f"{self}: Nodes responded to saving request.")
+                success = True
+                break
+
+        if not success:
+            logger.error(f"{self}: Nodes failed to report to saving")
+
+        # Send it back to the Manager
+        await self.client.async_send(
+            signal=WORKER_MESSAGE.REPORT_NODE_SAVING, data={'name': self.name, 'nodes_saving_success': success}
+        )
+
     async def report_node_gather(self, msg: Dict):
 
         logger.debug(f"{self}: reporting to Manager gather request")
@@ -163,12 +196,13 @@ class Worker:
         # Marking as all false
         self.mark_all_response_as_false_for_nodes()
 
-        # Request gather from Worker to Nodes
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
-
-        # Now wait until all nodes have responded as CONNECTED
+        # Wait until all Nodes have gather
         success = False
         for i in range(config.get("worker.allowed-failures")):
+            
+            # Request gather from Worker to Novdes
+            await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
+
             if self.wait_until_all_nodes_responded(
                 timeout=config.get("worker.timeout.info-request")
             ):
@@ -300,6 +334,12 @@ class Worker:
         self.nodes[node_name]["response"] = True
         self.nodes[node_name]["gather"] = msg["data"]["latest_value"]
 
+    async def node_report_saving(self, msg: Dict, ws: web.WebSocketResponse):
+
+        # Saving name to track it for now
+        node_name = msg["data"]["node_name"]
+        self.nodes[node_name]["response"] = True
+
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving name to track it for now
@@ -420,6 +460,7 @@ class Worker:
                 MANAGER_MESSAGE.CREATE_NODE: self.async_create_node,
                 MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA: self.report_node_server_data,
                 MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+                MANAGER_MESSAGE.REQUEST_SAVING: self.report_node_saving,
                 MANAGER_MESSAGE.REQUEST_GATHER: self.report_node_gather,
                 MANAGER_MESSAGE.REQUEST_STEP: self.async_step,
                 MANAGER_MESSAGE.START_NODES: self.async_start_nodes,
@@ -487,6 +528,7 @@ class Worker:
                 self.nodes[node_name]["out_bound"],
                 self.nodes[node_name]["follow"],
                 logging_level=logger.level,
+                worker_logging_port=self.log_receiver.port
             )
 
             # Before starting, over write the pid
@@ -603,6 +645,10 @@ class Worker:
                 self.nodes[node_name]["node_object"].terminate()
 
             logger.debug(f"{self}: Nodes have joined")
+
+        # Stop the log listener
+        self.log_receiver.shutdown()
+        self.log_receiver.join()
 
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)

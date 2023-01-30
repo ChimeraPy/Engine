@@ -3,17 +3,17 @@ config:
   manager:
     allowed-failures: 5
     timeout:
-      info-request: 10 # seconds
+      info-request: 55 # seconds
       package-delivery: 60 # seconds
       worker-shutdown: 2 # seconds
-      node-creation: 90 # seconds
+      node-creation: 130 # seconds
     retry:
       data-collection: 30 # seconds
   worker:
     allowed-failures: 2
     timeout:
-      info-request: 30 # seconds
-      node-creation: 30 # seconds
+      info-request: 45 # seconds
+      node-creation: 60 # seconds
       node-shutdown: 10 # seconds
       package-delivery: 30 # seconds
   comms:
@@ -24,3 +24,4 @@ config:
       server-ready: 10
       client-shutdown: 10
       server-shutdown: 15
+      pub-delay: 5

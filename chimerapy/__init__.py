@@ -30,3 +30,4 @@ from . import utils
 
 # Debugging tools
 from ._debug import debug
+from .logreceiver import LogReceiver

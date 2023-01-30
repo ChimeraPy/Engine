@@ -16,38 +16,31 @@ LOGGING_CONFIG = {
     },
     "handlers": {
         "console": {
-            "level": "INFO",
+            "level": "DEBUG",
             "formatter": "standard",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",  # Default is stderr
-        },
-        "datagram": {
-            "level": "INFO",
-            "formatter": "standard",
-            "class": "logging.handlers.DatagramHandler",
-            "host": "127.0.0.1",
-            "port": 5555,
-        },
+        }
     },
     "loggers": {
         "chimerapy": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "DEBUG",
             "propagate": True,
         },
         "chimerapy-worker": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "DEBUG",
             "propagate": True,
         },
         "chimerapy-networking": {
             "handlers": ["console"],
-            "level": "INFO",
+            "level": "DEBUG",
             "propagate": True,
         },
         "chimerapy-subprocess": {
-            "handlers": ["datagram"],
-            "level": "INFO",
+            "handlers": [],
+            "level": "DEBUG",
             "propagate": True,
         },
     },

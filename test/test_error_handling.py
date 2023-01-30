@@ -46,10 +46,10 @@ class PrepErrorNode(cp.Node):
     "node_cls, expected_success",
     [
         (PlainNode, True),
-        # (FailedToStartNode, False),
-        # (FailedToConnectNode, False),
-        # (PrepInfiniteNode, False),
-        # (PrepErrorNode, False)
+        (FailedToStartNode, False),
+        (FailedToConnectNode, False),
+        (PrepInfiniteNode, False),
+        (PrepErrorNode, False)
     ],
 )
 def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
@@ -75,11 +75,11 @@ def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
 @pytest.mark.parametrize(
     "node_cls, expected_success",
     [
-        # (PlainNode, True),
-        # (FailedToStartNode, False),
-        # (FailedToConnectNode, False),
+        (PlainNode, True),
+        (FailedToStartNode, False),
+        (FailedToConnectNode, False),
         (PrepInfiniteNode, False),
-        # (PrepErrorNode, False)
+        (PrepErrorNode, False)
     ],
 )
 def test_faulty_node_creation_with_manager(manager, worker, node_cls, expected_success):

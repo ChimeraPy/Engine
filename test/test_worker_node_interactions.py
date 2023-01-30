@@ -79,7 +79,7 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
 
     ns = []
     for i in range(3):
-        n = VideoNode(name=f"G{i}", debug="stream")
+        n = VideoNode(name=f"G{i}", debug="stream", debug_port=logreceiver.port)
         n.start()
         ns.append(n)
 
@@ -107,6 +107,7 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
             follow=None,
             networking=False,
             logging_level=logging.DEBUG,
+            worker_logging_port=logreceiver.port
         )
         nn.start()
         ns.append(nn)
@@ -183,7 +184,7 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
 
 
-def test_worker_create_nodes(worker):
+def test_worker_create_multiple_node(worker):
 
     to_be_created_nodes = []
     for i in range(10):
@@ -372,7 +373,6 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     assert "Gen1" in _manager.workers[_worker.name]["nodes_status"]
 
 
-# @linux_expected_only
 @pytest.mark.parametrize(
     "_manager,_worker",
     [

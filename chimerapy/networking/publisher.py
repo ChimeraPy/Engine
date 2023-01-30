@@ -1,13 +1,20 @@
 # Built-in Imports
 import threading
 import pickle
+import time
 
 # Third-party Imports
 import zmq
 
 # Internal Imports
+from chimerapy import config
 from .data_chunk import DataChunk
 from ..utils import get_ip_address
+
+# Logging
+from .. import _logger
+
+logger = _logger.getLogger("chimerapy-networking")
 
 # Resources:
 # https://learning-0mq-with-pyzmq.readthedocs.io/en/latest/pyzmq/patterns/pushpull.html
@@ -40,6 +47,7 @@ class Publisher:
 
             # Send
             self._zmq_socket.send(self._data_chunk._serialize())
+            logger.debug(f"{self}: formally sended via zmq socket")
 
             # Mark finish
             self._ready.clear()
@@ -52,8 +60,8 @@ class Publisher:
         # Create the socket
         self._zmq_context = zmq.Context()
         self._zmq_socket = self._zmq_context.socket(zmq.PUB)
-        # self._zmq_socket.bind(f"tcp://{self.host}:{self.port}")
         self.port = self._zmq_socket.bind_to_random_port(f"tcp://{self.host}")
+        time.sleep(config.get('comms.timeout.pub-delay'))
 
         # Create send thread
         self._ready = threading.Event()

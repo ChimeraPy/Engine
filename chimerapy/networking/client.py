@@ -11,6 +11,7 @@ import time
 import tempfile
 import pickle
 import enum
+import logging
 
 # Third-party
 import aiohttp
@@ -77,6 +78,10 @@ class Client:
 
     def __str__(self):
         return f"<Client {self.name}>"
+
+    def setLogger(self, new_logger: logging.Logger):
+        global logger
+        logger = new_logger
 
     ####################################################################
     # Client WS Handlers
@@ -407,3 +412,6 @@ class Client:
 
             # Stop threaded loop
             self._thread.stop()
+
+    def __del__(self):
+        self.shutdown()

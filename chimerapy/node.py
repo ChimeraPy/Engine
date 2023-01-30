@@ -24,7 +24,7 @@ from . import _logger
 
 
 class Node(mp.Process):
-    def __init__(self, name: str, debug: Optional[Literal["step", "stream"]] = None):
+    def __init__(self, name: str, debug: Optional[Literal["step", "stream"]] = None, debug_port: Optional[int] = None):
         """Create a basic unit of computation in ChimeraPy.
 
         A node has three main functions that can be overwritten to add
@@ -53,6 +53,7 @@ class Node(mp.Process):
         self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
+        self.logger: Optional[logging.Logger] = None
 
         # Default values
         self.logging_level: int = logging.INFO
@@ -69,6 +70,10 @@ class Node(mp.Process):
                 f"Debug Mode for Node: Generated data is stored in {temp_folder}"
             )
 
+            # Determine the port for debugging (make sure its int)
+            if not debug_port:
+                debug_port = 5555
+
             # Prepare the node to be used
             self.config(
                 "0.0.0.0",
@@ -79,6 +84,7 @@ class Node(mp.Process):
                 follow=None,
                 networking=False,
                 logging_level=logging.DEBUG,
+                worker_logging_port=debug_port
             )
 
             # Only execute this if step debugging
@@ -125,9 +131,12 @@ class Node(mp.Process):
             if self._context == "spawn":
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
-                l = _logger.getLogger("chimerapy")
+                l = _logger.getLogger("chimerapy-subprocess") # would be just chimerapy, but testing
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
+
+        # With the logger, let's add a handler
+        l.addHandler(logging.handlers.DatagramHandler(host='127.0.0.1', port=self.worker_logging_port))
 
         return l
 
@@ -165,6 +174,7 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
+        self.connected_ready.set()
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data={
@@ -181,6 +191,17 @@ class Node(mp.Process):
                 "node_name": self.name,
                 "latest_value": self.latest_value,
             },
+        )
+
+    async def provide_saving(self, msg: Dict):
+
+        # Stop the save handler
+        self.save_handler.shutdown()
+        self.save_handler.join()
+
+        await self.client.async_send(
+            signal=NODE_MESSAGE.REPORT_SAVING,
+            data={'node_name': self.name}
         )
 
     async def start_node(self, msg: Dict):
@@ -255,6 +276,7 @@ class Node(mp.Process):
         follow: Optional[str] = None,
         networking: bool = True,
         logging_level: int = logging.INFO,
+        worker_logging_port: int = 5555
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -277,6 +299,7 @@ class Node(mp.Process):
         self.worker_host = host
         self.worker_port = port
         self.logdir = logdir / self.name
+        self.worker_logging_port = worker_logging_port
         os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
@@ -331,6 +354,7 @@ class Node(mp.Process):
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
                     WORKER_MESSAGE.REQUEST_STEP: self.async_forward,
+                    WORKER_MESSAGE.REQUEST_SAVING: self.provide_saving,
                     WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                     WORKER_MESSAGE.START_NODES: self.start_node,
                     WORKER_MESSAGE.STOP_NODES: self.stop_node,
@@ -338,9 +362,16 @@ class Node(mp.Process):
             )
             self.client.connect()
 
+            # Update the client's logger to be able to read it
+            self.client.setLogger(self.logger)
+
             # Creating publisher
             self.publisher = Publisher()
             self.publisher.start()
+
+            # Creating threading event to mark that the Node has been connected
+            self.connected_ready = threading.Event()
+            self.connected_ready.clear()
 
             # Send publisher port and host information
             self.client.send(
@@ -367,13 +398,15 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully READY
         self.status["READY"] = 1
+
+        # Only do so if connected to Worker and its connected
         if self.networking:
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
                     "node_name": self.name,
                     "status": self.status,
-                },
+                }
             )
 
     def waiting(self):
