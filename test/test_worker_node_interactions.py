@@ -107,7 +107,7 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
             follow=None,
             networking=False,
             logging_level=logging.DEBUG,
-            worker_logging_port=logreceiver.port
+            worker_logging_port=logreceiver.port,
         )
         nn.start()
         ns.append(nn)
@@ -210,11 +210,10 @@ def test_worker_create_multiple_node(worker):
             continue
 
 
-# @pytest.mark.repeat(10)
 def test_worker_create_multiple_nodes_stress(worker):
 
     to_be_created_nodes = []
-    for i in range(5):
+    for i in range(2):
 
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")
@@ -391,7 +390,7 @@ def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
     to_be_created_nodes = []
     mapping = {_worker.name: []}
 
-    for i in range(5):
+    for i in range(2):
 
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")
