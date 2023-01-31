@@ -1,5 +1,5 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, Union
+from typing import Callable, Dict, Optional, Any, Union, List
 import asyncio
 import threading
 import uuid
@@ -47,7 +47,7 @@ class Server:
         name: str,
         port: int,
         host: str = get_ip_address(),
-        routes: Optional[Dict[str, Callable]] = None,
+        routes: Optional[List[web.RouteDef]] = None,
         ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
     ):
         """Create HTTP Server with WS support.
@@ -78,6 +78,9 @@ class Server:
         # Adding default routes
         self._app.add_routes([web.post("/file/post", self._file_receive)])
 
+        # Creating container for ws clients
+        self.ws_clients: Dict[str, Dict[str, Any]] = {}
+
         # Adding unique routes
         if self.routes:
             self._app.add_routes(self.routes)
@@ -87,7 +90,6 @@ class Server:
 
             # Adding route for ws and other configuration
             self._app.add_routes([web.get("/ws", self._websocket_handler)])
-            self.ws_clients: Dict[str, Dict[str, Any]] = {}
 
             # Adding other essential ws handlers
             self.ws_handlers.update(

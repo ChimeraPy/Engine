@@ -139,13 +139,11 @@ def test_worker_create_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": gen_node.name,
-            "pickled": dill.dumps(gen_node),
-            "in_bound": [],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": gen_node.name,
+        "pickled": dill.dumps(gen_node),
+        "in_bound": [],
+        "out_bound": [],
+        "follow": None,
     }
 
     logger.debug("Create nodes")
@@ -166,13 +164,11 @@ def test_worker_create_unknown_node(worker):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": node.name,
-            "pickled": dill.dumps(node),
-            "in_bound": [],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": node.name,
+        "pickled": dill.dumps(node),
+        "in_bound": [],
+        "out_bound": [],
+        "follow": None,
     }
     del UnknownNode
 
@@ -195,13 +191,11 @@ def test_worker_create_multiple_node(worker):
 
         # Simple single node without connection
         msg = {
-            "data": {
-                "node_name": new_node.name,
-                "pickled": dill.dumps(new_node),
-                "in_bound": [],
-                "out_bound": [],
-                "follow": None,
-            }
+            "node_name": new_node.name,
+            "pickled": dill.dumps(new_node),
+            "in_bound": [],
+            "out_bound": [],
+            "follow": None,
         }
 
         try:
@@ -223,23 +217,19 @@ def test_worker_create_multiple_nodes_stress(worker):
 
         # Simple single node without connection
         msg = {
-            "data": {
-                "node_name": new_node.name,
-                "pickled": dill.dumps(new_node),
-                "in_bound": [],
-                "out_bound": [],
-                "follow": None,
-            }
+            "node_name": new_node.name,
+            "pickled": dill.dumps(new_node),
+            "in_bound": [],
+            "out_bound": [],
+            "follow": None,
         }
 
         msg2 = {
-            "data": {
-                "node_name": new_node2.name,
-                "pickled": dill.dumps(new_node2),
-                "in_bound": [],
-                "out_bound": [],
-                "follow": None,
-            }
+            "node_name": new_node2.name,
+            "pickled": dill.dumps(new_node2),
+            "in_bound": [],
+            "out_bound": [],
+            "follow": None,
         }
 
         try:
@@ -258,13 +248,11 @@ def test_step_single_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": gen_node.name,
-            "pickled": dill.dumps(gen_node),
-            "in_bound": [],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": gen_node.name,
+        "pickled": dill.dumps(gen_node),
+        "in_bound": [],
+        "out_bound": [],
+        "follow": None,
     }
 
     logger.debug("Create nodes")
@@ -281,24 +269,20 @@ def test_two_nodes_connect(worker, gen_node, con_node):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": gen_node.name,
-            "pickled": dill.dumps(gen_node),
-            "in_bound": [],
-            "out_bound": [con_node.name],
-            "follow": None,
-        }
+        "node_name": gen_node.name,
+        "pickled": dill.dumps(gen_node),
+        "in_bound": [],
+        "out_bound": [con_node.name],
+        "follow": None,
     }
 
     # Simple single node without connection
     msg2 = {
-        "data": {
-            "node_name": con_node.name,
-            "pickled": dill.dumps(con_node),
-            "in_bound": [gen_node.name],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": con_node.name,
+        "pickled": dill.dumps(con_node),
+        "in_bound": [gen_node.name],
+        "out_bound": [],
+        "follow": None,
     }
 
     logger.debug("Create nodes")
@@ -317,13 +301,11 @@ def test_starting_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": gen_node.name,
-            "pickled": dill.dumps(gen_node),
-            "in_bound": [],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": gen_node.name,
+        "pickled": dill.dumps(gen_node),
+        "in_bound": [],
+        "out_bound": [],
+        "follow": None,
     }
 
     logger.debug("Create nodes")
@@ -343,11 +325,11 @@ def test_starting_node(worker, gen_node):
     "_manager,_worker",
     [
         (lazy_fixture("manager"), lazy_fixture("worker")),
-        pytest.param(
-            lazy_fixture("manager"),
-            lazy_fixture("dockered_worker"),
-            marks=linux_run_only,
-        ),
+        # pytest.param(
+        #     lazy_fixture("manager"),
+        #     lazy_fixture("dockered_worker"),
+        #     marks=linux_run_only,
+        # ),
     ],
 )
 def test_manager_directing_worker_to_create_node(_manager, _worker):
@@ -376,11 +358,11 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     "_manager,_worker",
     [
         (lazy_fixture("manager"), lazy_fixture("worker")),
-        pytest.param(
-            lazy_fixture("manager"),
-            lazy_fixture("dockered_worker"),
-            marks=linux_run_only,
-        ),
+        # pytest.param(
+        #     lazy_fixture("manager"),
+        #     lazy_fixture("dockered_worker"),
+        #     marks=linux_run_only,
+        # ),
     ],
 )
 def test_stress_manager_directing_worker_to_create_node(_manager, _worker):

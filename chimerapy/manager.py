@@ -1,6 +1,5 @@
-from typing import Dict, Optional, List, Union, Any
-import socket
-import pdb
+from typing import Dict, Optional, List, Union, Any, Literal
+import pickle
 import pathlib
 import os
 import time
@@ -9,16 +8,17 @@ import json
 import random
 import tempfile
 import zipfile
-from concurrent.futures import wait
+import concurrent.futures
 
 # Third-party Imports
 import dill
 import aiohttp
 from aiohttp import web
 import networkx as nx
+import requests
 
 from chimerapy import config
-from .networking import Server, Client
+from .networking import Server, Client, DataChunk
 from .networking.enums import MANAGER_MESSAGE, WORKER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
@@ -79,17 +79,10 @@ class Manager:
         self.server = Server(
             port=self.port,
             name="Manager",
-            ws_handlers={
-                WORKER_MESSAGE.REGISTER: self.register_worker,
-                WORKER_MESSAGE.DEREGISTER: self.deregister_worker,
-                WORKER_MESSAGE.REPORT_NODE_SERVER_DATA: self.node_server_data,
-                WORKER_MESSAGE.REPORT_NODES_STATUS: self.update_nodes_status,
-                WORKER_MESSAGE.COMPLETE_BROADCAST: self.complete_worker_broadcast,
-                WORKER_MESSAGE.REPORT_NODE_SAVING: self.get_node_saving,
-                WORKER_MESSAGE.REPORT_GATHER: self.get_gather,
-                WORKER_MESSAGE.PACKAGE_LOADED: self.complete_worker_load_package,
-                WORKER_MESSAGE.TRANSFER_COMPLETE: self.complete_worker_transfer,
-            },
+            routes=[
+                web.post("/workers/register", self.register_worker),
+                web.post("/workers/node_status", self.update_nodes_status),
+            ],
         )
         self.server.serve()
         logger.info(f"Manager started at {self.server.host}:{self.server.port}")
@@ -107,80 +100,44 @@ class Manager:
     ## Message Reactivity API
     ####################################################################
 
-    async def register_worker(self, msg: Dict, ws: web.WebSocketResponse):
-        self.workers[msg["data"]["name"]] = {
-            "addr": msg["data"]["addr"],
-            "http_port": msg["data"]["http_port"],
-            "http_ip": msg["data"]["http_ip"],
-            "ws": ws,
-            "ack": True,
-            "response": False,
-            "reported_nodes_server_data": False,
-            "served_nodes_server_data": False,
-            "nodes_status": {},
-            "gather": {},
-            "saving_complete": False,
-            "collection_complete": False,
-            "package_loaded": False,
-        }
-        logger.info(
-            f"Manager registered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
-        )
+    async def register_worker(self, request: web.Request):
+        msg = await request.json()
 
-        # Send Worker the Manager's configuration
-        self.server.send(
-            client_name=str(msg["data"]["name"]),
-            signal=MANAGER_MESSAGE.CONFIG,
-            data={"config": config.config},
-        )
+        if msg["register"]:
+            self.workers[msg["name"]] = {
+                "addr": msg["addr"],
+                "http_port": msg["http_port"],
+                "http_ip": msg["http_ip"],
+                "url": f"http://{msg['http_ip']}:{msg['http_port']}",
+                "reported_nodes_server_data": False,
+                "served_nodes_server_data": False,
+                "nodes_status": {},
+                "saving_complete": False,
+                "collection_complete": False,
+                "package_loaded": False,
+            }
+            logger.info(
+                f"Manager registered <Worker name={msg['name']}> from {msg['addr']}"
+            )
 
-    async def deregister_worker(self, msg: Dict, ws: web.WebSocketResponse):
-        await ws.close()
-        logger.info(
-            f"Manager deregistered <Worker name={msg['data']['name']}> from {msg['data']['addr']}"
-        )
-        del self.workers[msg["data"]["name"]]
+        else:
+            logger.info(
+                f"Manager deregistered <Worker name={msg['name']}> from {msg['addr']}"
+            )
+            del self.workers[msg["name"]]
 
-    async def node_server_data(self, msg: Dict, ws: web.WebSocketResponse):
+        return web.json_response(config.config)
 
-        # And then updating the node server data
-        self.nodes_server_table.update(msg["data"]["nodes"])
-
-        # Tracking which workers have responded
-        self.workers[msg["data"]["name"]]["reported_nodes_server_data"] = True
-
-    async def update_nodes_status(self, msg: Dict, ws: web.WebSocketResponse):
+    async def update_nodes_status(self, request: web.Request):
+        msg = await request.json()
 
         # Updating nodes status
-        self.workers[msg["data"]["name"]]["nodes_status"] = msg["data"]["nodes_status"]
-        self.workers[msg["data"]["name"]]["response"] = True
+        self.workers[msg["name"]]["nodes_status"] = msg["nodes_status"]
+        self.workers[msg["name"]]["response"] = True
 
         logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
-    async def complete_worker_broadcast(self, msg: Dict, ws: web.WebSocketResponse):
-
-        # Tracking which workers have responded
-        self.workers[msg["data"]["name"]]["served_nodes_server_data"] = True
-
-    async def get_gather(self, msg: Dict, ws: web.WebSocketResponse):
-
-        self.workers[msg["data"]["name"]]["gather"] = msg["data"]["node_data"]
-        self.workers[msg["data"]["name"]]["response"] = True
-
-    async def get_node_saving(self, msg: Dict, ws: web.WebSocketResponse):
-
-        self.workers[msg["data"]["name"]]["saving_complete"] = msg["data"]["nodes_saving_success"]
-        self.workers[msg["data"]["name"]]["response"] = True
-
-    async def complete_worker_load_package(self, msg: Dict, ws: web.WebSocketResponse):
-
-        self.workers[msg["data"]["name"]]["package_loaded"] = True
-        self.workers[msg["data"]["name"]]["response"] = True
-
-    async def complete_worker_transfer(self, msg: Dict, ws: web.WebSocketResponse):
-
-        self.workers[msg["data"]["name"]]["collection_complete"] = True
-        self.workers[msg["data"]["name"]]["response"] = True
+        return web.HTTPOk()
 
     ####################################################################
     ## Helper Methods
@@ -212,11 +169,6 @@ class Manager:
         with open(self.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
-    def mark_response_as_false_for_workers(self):
-
-        for worker_name in self.workers:
-            self.workers[worker_name]["response"] = False
-
     def request_node_creation(self, worker_name: str, node_name: str) -> bool:
         """Request creating a Node from the Graph.
 
@@ -235,39 +187,33 @@ class Manager:
             return False
 
         # Send for the creation of the node
-        self.server.send(
-            client_name=worker_name,
-            signal=MANAGER_MESSAGE.CREATE_NODE,
-            data={
-                "worker_name": worker_name,
-                "node_name": node_name,
-                "pickled": dill.dumps(
-                    self.graph.G.nodes[node_name]["object"], recurse=True
-                ),
-                "in_bound": list(self.graph.G.predecessors(node_name)),
-                "out_bound": list(self.graph.G.successors(node_name)),
-                "follow": self.graph.G.nodes[node_name]["follow"],
-            },
+        r = requests.post(
+            self.workers[worker_name]["url"] + "/nodes/create",
+            pickle.dumps(
+                {
+                    "worker_name": worker_name,
+                    "node_name": node_name,
+                    "pickled": dill.dumps(
+                        self.graph.G.nodes[node_name]["object"], recurse=True
+                    ),
+                    "in_bound": list(self.graph.G.predecessors(node_name)),
+                    "out_bound": list(self.graph.G.successors(node_name)),
+                    "follow": self.graph.G.nodes[node_name]["follow"],
+                }
+            ),
+            timeout=config.get("manager.timeout.node-creation"),
         )
 
         # Wait until the node has been created and connected
         # to the corresponding worker
-        response = waiting_for(
-            lambda: (node_name in self.workers[worker_name]["nodes_status"]),
-            timeout=config.get("manager.timeout.node-creation"),
-        )
 
-        if response:
-            success = waiting_for(
-                lambda: (
-                    self.workers[worker_name]["nodes_status"][node_name]["READY"] == 1
-                ),
-                timeout=config.get("manager.timeout.node-creation"),
-            )
-            if success:
+        if r.status_code == requests.codes.ok:
+            data = r.json()
+            if data["success"]:
                 logger.debug(
                     f"{self}: Node creation ({worker_name}, {node_name}): SUCCESS"
                 )
+                self.workers[worker_name]["nodes_status"] = data["nodes_status"]
                 return True
 
             else:
@@ -287,39 +233,30 @@ class Manager:
             bool: Success of obtaining the node server data
 
         """
-        # Reset responses
-        self.mark_response_as_false_for_workers()
-
         # Send the message to each worker and wait
         for worker_name in self.worker_graph_map:
-
-            success = False
             for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
-                self.server.send(
-                    client_name=worker_name,
-                    signal=MANAGER_MESSAGE.REQUEST_NODE_SERVER_DATA,
-                    data={},
+                r = requests.get(
+                    self.workers[worker_name]["url"] + "/nodes/server_data",
                 )
 
-                # Wait until response
-                success = waiting_for(
-                    condition=lambda: self.workers[worker_name][
-                        "reported_nodes_server_data"
-                    ],
-                    timeout=config.get("manager.timeout.info-request"),
-                )
+                if r.status_code == requests.codes.ok:
 
-                if success:
+                    # And then updating the node server data
+                    node_server_data = r.json()["node_server_data"]["nodes"]
+                    self.nodes_server_table.update(node_server_data)
+
                     logger.debug(
                         f"{self}: Requesting Worker's node server request: SUCCESS"
                     )
                     break
 
-            if not success:
-                logger.error(f"{self}: Requesting Worker's node server request: FAILED")
-                return False
+                else:
+                    logger.error(
+                        f"{self}: Requesting Worker's node server request: NO RESPONSE"
+                    )
 
         return True
 
@@ -333,9 +270,6 @@ class Manager:
             bool: Returns if connection creation was successful
         """
 
-        # Reset responses
-        self.mark_response_as_false_for_workers()
-
         # Send the message to each worker and wait
         for worker_name in self.worker_graph_map:
 
@@ -343,24 +277,21 @@ class Manager:
             for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
-                self.server.send(
-                    client_name=worker_name,
-                    signal=MANAGER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
-                    data=self.nodes_server_table,
-                )
-
-                success = waiting_for(
-                    condition=lambda: self.workers[worker_name][
-                        "served_nodes_server_data"
-                    ],
+                r = requests.post(
+                    self.workers[worker_name]["url"] + "/nodes/server_data",
+                    json.dumps(self.nodes_server_table),
                     timeout=config.get("manager.timeout.info-request"),
                 )
 
-                # Wait until response
-                if success:
-                    logger.debug(
-                        f"{self}: receiving Worker's node server request: SUCCESS"
-                    )
+                if r.status_code == requests.codes.ok:
+                    data = r.json()
+                    if data["success"]:
+                        self.workers[worker_name]["nodes_status"] = data["nodes_status"]
+
+                        logger.debug(
+                            f"{self}: receiving Worker's node server request: SUCCESS"
+                        )
+                        success = True
                     break
 
             if not success:
@@ -429,6 +360,45 @@ class Manager:
 
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
+
+    def broadcast_request(self, htype: Literal["get", "post"], route: str) -> bool:
+
+        # Broadcast via a ThreadPool
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(self.workers)
+        ) as executor:
+
+            def request_start(url):
+                if htype == "post":
+                    r = requests.post(
+                        url + route, timeout=config.get("manager.timeout.info-request")
+                    )
+                elif htype == "get":
+                    r = requests.get(
+                        url + route, timeout=config.get("manager.timeout.info-request")
+                    )
+                return r, url
+
+            futures = (
+                executor.submit(request_start, worker["url"])
+                for worker in self.workers.values()
+            )
+            success = []
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    r, url = future.result()
+                    if r.status_code == requests.codes.ok:
+                        logger.debug(f"{self}: Worker {url + route}: SUCCESS")
+                        success.append(True)
+                    else:
+                        logger.error(f"{self}: Worker {url + route}: FAILED, retry")
+                        success.append(False)
+
+                except Exception as exc:
+                    logger.error(exc)
+                    success.append(False)
+
+        return all(success)
 
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
@@ -523,28 +493,24 @@ class Manager:
                 )
                 client.send_file(sender_name=self.name, filepath=zip_package_dst)
 
-        # Send package finish confirmation
-        self.server.broadcast(
-            signal=MANAGER_MESSAGE.REQUEST_CODE_LOAD,
-            data={"packages": [x["name"] for x in packages_meta]},
-        )
-
         # Wail until all workers have responded with their node server data
         success = False
         for worker_name in self.workers:
 
             for i in range(config.get("manager.allowed-failures")):
 
-                success = waiting_for(
-                    condition=lambda: self.workers[worker_name]["package_loaded"]
-                    == True,
+                # Send package finish confirmation
+                r = requests.post(
+                    self.workers[worker_name]["url"] + "/packages/load",
+                    json.dumps({"packages": [x["name"] for x in packages_meta]}),
                     timeout=config.get("manager.timeout.package-delivery"),
                 )
 
-                if success:
+                if r.status_code == requests.codes.ok:
                     logger.debug(
                         f"{self}: Worker {worker_name} loaded package: SUCCESS"
                     )
+                    success = True
                     break
 
             if not success:
@@ -619,53 +585,42 @@ class Manager:
 
         return False
 
-    def step(self):
+    def step(self) -> bool:
         """Cluster step execution for offline operation.
 
         The ``step`` function is for careful but slow operation of the
         cluster. For online execution, ``start`` and ``stop`` are the
         methods to be used.
 
-        """
+        Returns:
+            bool: Success of step function broadcasting
 
-        # Send message for workers to inform all nodes to take a single
-        # step
-        self.server.broadcast(signal=MANAGER_MESSAGE.REQUEST_STEP, data={})
+        """
+        return self.broadcast_request("post", "/nodes/step")
 
     def gather(self) -> Dict:
 
-        # Mark workers as not responded yet
-        self.mark_response_as_false_for_workers()
-
-        # Request gathering the latest value of each node
-        self.server.broadcast(signal=MANAGER_MESSAGE.REQUEST_GATHER, data={})
-
         # Wail until all workers have responded with their node server data
+        gather_data = {}
         for worker_name in self.workers:
 
-            response = waiting_for(
-                condition=lambda: self.workers[worker_name]["response"],
+            r = requests.get(
+                self.workers[worker_name]["url"] + "/nodes/gather",
                 timeout=config.get("manager.timeout.info-request"),
             )
+            logger.debug(r)
 
-            if not response:
-                logger.error(
-                    f"{self}: Worker {worker_name} didn't respond to Node saving request: FAILED"
-                )
-                
+            if r.status_code == requests.codes.ok:
+                logger.debug(f"Worker: {worker_name}, gathering: SUCCESS")
             else:
+                logger.error(f"Worker: {worker_name}, gathering: FAILED")
 
-                success = self.workers[worker_name]['gather'] != {}
+            # Saving the data
+            data = pickle.loads(r.content)["node_data"]
+            for node_name, node_data in data.items():
+                data[node_name] = DataChunk.from_bytes(node_data)
 
-                if success:
-                    logger.debug(f"Worker: {worker_name}, gathering: SUCCESS")
-                else:
-                    logger.error(f"Worker: {worker_name}, gathering: FAILED")
-
-        # Extract the gather data
-        gather_data = {}
-        for worker_data in self.workers.values():
-            gather_data.update(worker_data["gather"])
+            gather_data.update(data)
 
         return gather_data
 
@@ -685,7 +640,7 @@ class Manager:
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        self.server.broadcast(signal=MANAGER_MESSAGE.START_NODES, data={})
+        return self.broadcast_request("post", "/nodes/start")
 
     def stop(self):
         """Stop the executiong of the cluster.
@@ -698,8 +653,8 @@ class Manager:
         self.stop_time = datetime.datetime.now()
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
-        # Tell the cluster to stop
-        self.server.broadcast(signal=MANAGER_MESSAGE.STOP_NODES, data={})
+        # Tell the cluster to start
+        return self.broadcast_request("post", "/nodes/stop")
 
     def collect(self, unzip: bool = True) -> bool:
         """Collect data from the Workers
@@ -715,58 +670,10 @@ class Manager:
 
         """
         # Wait until the nodes first finished writing down the data
-        complete_success = True
+        success = self.broadcast_request("post", "/nodes/save")
 
-        # Mark all as false
-        self.mark_response_as_false_for_workers()
-
-        # Make request that the worker returns all Nodes as saved
-        self.server.broadcast(
-            signal=MANAGER_MESSAGE.REQUEST_SAVING,
-            data={'duration': self.duration}
-        )
-
-        for worker_name in self.workers:
-
-            # Waiting for completion
-            success = waiting_for(
-                condition=lambda: self.workers[worker_name]["saving_complete"] == True,
-                timeout=max(config.get('manager.timeout.info-request'), self.duration),
-            )
-
-            if success:
-                logger.debug(
-                    f"{self}: Worker {worker_name} waiting for Nodes to be saved: SUCCESS"
-                )
-            else:
-                logger.error(
-                    f"{self}: Worker {worker_name} waiting for Nodes to be saved: FAILED"
-                )
-                complete_success = False
-
-        # Request
-        self.server.broadcast(
-            signal=MANAGER_MESSAGE.REQUEST_COLLECT, data={"path": str(self.logdir)}
-        )
-
-        # Collect from each worker individually
-        for worker_name in self.workers:
-
-            # Waiting for completion
-            success = waiting_for(
-                condition=lambda: self.workers[worker_name]["collection_complete"],
-                timeout=max(config.get('manager.timeout.info-request'), self.duration),
-            )
-
-            if success:
-                logger.debug(
-                    f"{self}: Worker {worker_name} sending data for collection: SUCCESS"
-                )
-            else:
-                logger.error(
-                    f"{self}: Worker {worker_name} sending data for collection: FAILED, retry"
-                )
-                complete_success = False
+        # Request collecting archives
+        success = self.broadcast_request("get", "/nodes/collect")
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)
@@ -776,7 +683,7 @@ class Manager:
         self.save_meta()
 
         # Success!
-        return complete_success
+        return success
 
     def shutdown(self):
         """Proper shutting down ChimeraPy cluster.
@@ -797,7 +704,10 @@ class Manager:
         if len(self.workers) > 0:
 
             # Send shutdown message
-            self.server.broadcast(signal=MANAGER_MESSAGE.CLUSTER_SHUTDOWN, data={})
+            try:
+                self.broadcast_request("post", "/shutdown")
+            except:
+                pass
 
             # Wait until all worker's deregister
             success = waiting_for(
