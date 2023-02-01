@@ -145,13 +145,11 @@ def test_worker_data_archiving(worker):
     # Simple single node without connection
     for node in nodes:
         msg = {
-            "data": {
-                "node_name": node.name,
-                "pickled": dill.dumps(node),
-                "in_bound": [],
-                "out_bound": [],
-                "follow": None,
-            }
+            "node_name": node.name,
+            "pickled": dill.dumps(node),
+            "in_bound": [],
+            "out_bound": [],
+            "follow": None,
         }
         worker.create_node(msg)
 
@@ -159,7 +157,7 @@ def test_worker_data_archiving(worker):
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.start_nodes({})
+    worker.start_nodes()
 
     logger.debug("Let nodes run for some time")
     time.sleep(1)

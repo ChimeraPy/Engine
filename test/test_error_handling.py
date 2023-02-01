@@ -49,7 +49,7 @@ class PrepErrorNode(cp.Node):
         (FailedToStartNode, False),
         (FailedToConnectNode, False),
         (PrepInfiniteNode, False),
-        (PrepErrorNode, False)
+        (PrepErrorNode, False),
     ],
 )
 def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
@@ -58,13 +58,11 @@ def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
 
     # Simple single node without connection
     msg = {
-        "data": {
-            "node_name": faulty_node.name,
-            "pickled": dill.dumps(faulty_node),
-            "in_bound": [],
-            "out_bound": [],
-            "follow": None,
-        }
+        "node_name": faulty_node.name,
+        "pickled": dill.dumps(faulty_node),
+        "in_bound": [],
+        "out_bound": [],
+        "follow": None,
     }
 
     logger.debug("Create nodes")
@@ -79,7 +77,7 @@ def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
         (FailedToStartNode, False),
         (FailedToConnectNode, False),
         (PrepInfiniteNode, False),
-        (PrepErrorNode, False)
+        (PrepErrorNode, False),
     ],
 )
 def test_faulty_node_creation_with_manager(manager, worker, node_cls, expected_success):

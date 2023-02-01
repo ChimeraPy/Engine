@@ -361,7 +361,9 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
-    def broadcast_request(self, htype: Literal["get", "post"], route: str) -> bool:
+    def broadcast_request(
+        self, htype: Literal["get", "post"], route: str, data: Any = {}
+    ) -> bool:
 
         # Broadcast via a ThreadPool
         with concurrent.futures.ThreadPoolExecutor(
@@ -371,11 +373,15 @@ class Manager:
             def request_start(url):
                 if htype == "post":
                     r = requests.post(
-                        url + route, timeout=config.get("manager.timeout.info-request")
+                        url + route,
+                        json.dumps(data),
+                        timeout=config.get("manager.timeout.info-request"),
                     )
                 elif htype == "get":
                     r = requests.get(
-                        url + route, timeout=config.get("manager.timeout.info-request")
+                        url + route,
+                        json.dumps(data),
+                        timeout=config.get("manager.timeout.info-request"),
                     )
                 return r, url
 
@@ -671,9 +677,15 @@ class Manager:
         """
         # Wait until the nodes first finished writing down the data
         success = self.broadcast_request("post", "/nodes/save")
+        if success:
+            for worker_name in self.workers:
+                for node_name in self.workers[worker_name]["nodes_status"]:
+                    self.workers[worker_name]["nodes_status"][node_name]["FINISHED"] = 1
 
         # Request collecting archives
-        success = self.broadcast_request("get", "/nodes/collect")
+        success = self.broadcast_request(
+            "post", "/nodes/collect", {"path": str(self.logdir)}
+        )
 
         # # Then move the tempfiles to the log runs and unzip
         self.server.move_transfer_files(self.logdir, unzip)

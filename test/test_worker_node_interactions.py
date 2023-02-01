@@ -259,7 +259,7 @@ def test_step_single_node(worker, gen_node):
     worker.create_node(msg)
 
     logger.debug("Step through")
-    worker.step({})
+    worker.step()
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
@@ -315,7 +315,7 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.start_nodes({})
+    worker.start_nodes()
 
     logger.debug("Let nodes run for some time")
     time.sleep(5)

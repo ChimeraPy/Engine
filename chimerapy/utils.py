@@ -80,7 +80,7 @@ async def async_waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,
     timeout: Optional[Union[int, float]] = None,
-    timeout_raise: Optional[bool] = True,
+    timeout_raise: Optional[bool] = False,
 ) -> bool:
 
     counter = 0

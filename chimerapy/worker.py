@@ -78,7 +78,7 @@ class Worker:
                 web.post("/nodes/server_data", self.process_node_server_data),
                 web.get("/nodes/gather", self.report_node_gather),
                 web.post("/nodes/save", self.report_node_saving),
-                web.get("/nodes/collect", self.send_archive),
+                web.post("/nodes/collect", self.send_archive),
                 web.post("/nodes/step", self.async_step),
                 web.post("/packages/load", self.load_sent_packages),
                 web.post("/nodes/start", self.async_start_nodes),
@@ -409,8 +409,8 @@ class Worker:
                     if miss_counter * delay > timeout:
                         raise TimeoutError("Nodes haven't fully finishing saving!")
 
-            old_folder_name = pathlib.Path(msg["data"]["path"]) / self.tempfolder.name
-            new_folder_name = pathlib.Path(msg["data"]["path"]) / self.name
+            old_folder_name = pathlib.Path(msg["path"]) / self.tempfolder.name
+            new_folder_name = pathlib.Path(msg["path"]) / self.name
             os.rename(old_folder_name, new_folder_name)
 
         else:

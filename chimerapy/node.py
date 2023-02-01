@@ -24,7 +24,12 @@ from . import _logger
 
 
 class Node(mp.Process):
-    def __init__(self, name: str, debug: Optional[Literal["step", "stream"]] = None, debug_port: Optional[int] = None):
+    def __init__(
+        self,
+        name: str,
+        debug: Optional[Literal["step", "stream"]] = None,
+        debug_port: Optional[int] = None,
+    ):
         """Create a basic unit of computation in ChimeraPy.
 
         A node has three main functions that can be overwritten to add
@@ -84,7 +89,7 @@ class Node(mp.Process):
                 follow=None,
                 networking=False,
                 logging_level=logging.DEBUG,
-                worker_logging_port=debug_port
+                worker_logging_port=debug_port,
             )
 
             # Only execute this if step debugging
@@ -131,12 +136,18 @@ class Node(mp.Process):
             if self._context == "spawn":
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
-                l = _logger.getLogger("chimerapy-subprocess") # would be just chimerapy, but testing
+                l = _logger.getLogger(
+                    "chimerapy-subprocess"
+                )  # would be just chimerapy, but testing
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
 
         # With the logger, let's add a handler
-        l.addHandler(logging.handlers.DatagramHandler(host='127.0.0.1', port=self.worker_logging_port))
+        l.addHandler(
+            logging.handlers.DatagramHandler(
+                host="127.0.0.1", port=self.worker_logging_port
+            )
+        )
 
         return l
 
@@ -198,10 +209,14 @@ class Node(mp.Process):
         # Stop the save handler
         self.save_handler.shutdown()
         self.save_handler.join()
+        self.status["FINISHED"] = 1
 
         await self.client.async_send(
-            signal=NODE_MESSAGE.REPORT_SAVING,
-            data={'node_name': self.name}
+            signal=NODE_MESSAGE.STATUS,
+            data={
+                "node_name": self.name,
+                "status": self.status,
+            },
         )
 
     async def start_node(self, msg: Dict):
@@ -276,7 +291,7 @@ class Node(mp.Process):
         follow: Optional[str] = None,
         networking: bool = True,
         logging_level: int = logging.INFO,
-        worker_logging_port: int = 5555
+        worker_logging_port: int = 5555,
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -406,7 +421,7 @@ class Node(mp.Process):
                 data={
                     "node_name": self.name,
                     "status": self.status,
-                }
+                },
             )
 
     def waiting(self):
@@ -597,12 +612,12 @@ class Node(mp.Process):
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()
         self.save_handler.join()
+        self.status["FINISHED"] = 1
 
         # Shutting down networking
         if self.networking:
 
             # Inform the worker that the Node has finished its saving of data
-            self.status["FINISHED"] = 1
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
