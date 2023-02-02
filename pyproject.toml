@@ -1,6 +1,6 @@
 [project]
 name = "chimerapy"
-version = "0.0.8"
+version = "0.0.9"
 description = "ChimeraPy: Python Distributed MultiModal Data Framework"
 authors = [
     {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"}
@@ -29,6 +29,7 @@ dependencies = [
     'simplejpeg',
     'aiohttp',
     'blosc',
+    'PyYAML'
 ]
 
 [project.optional-dependencies]
@@ -39,7 +40,6 @@ test = [
     'pytest-order',
     'pytest-rerunfailures',
     'auto-changelog',
-    'ffmpeg-python',
     'coveralls',
     'pre-commit',
     'docker',
@@ -76,13 +76,15 @@ cp-worker = "chimerapy.entry.worker:main"
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# https://setuptools.pypa.io/en/stable/userguide/datafiles.html
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["*"]  # ["*"] by default
-namespaces = true
+
+[tool.setuptools.package-data]
+chimerapy = ['*.yaml']
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
@@ -95,7 +97,7 @@ log_cli_format = "%(asctime)s.%(msecs)03d [%(levelname)8s] %(message)s (%(filena
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
 # Timeout
-faulthandler_timeout=120
+faulthandler_timeout=300
 
 # Ignore warnings
 filterwarnings = "ignore::DeprecationWarning"

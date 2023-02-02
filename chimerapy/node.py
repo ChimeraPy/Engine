@@ -1,6 +1,5 @@
 from typing import Dict, List, Any, Optional, Union, Literal
 from multiprocessing.process import AuthenticationString
-import time
 import logging
 import queue
 import uuid
@@ -9,6 +8,7 @@ import os
 import tempfile
 import datetime
 import threading
+import traceback
 
 # Third-party Imports
 import multiprocess as mp
@@ -20,12 +20,16 @@ import zmq
 from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
-from .utils import clear_queue
 from . import _logger
 
 
 class Node(mp.Process):
-    def __init__(self, name: str, debug: Optional[Literal["step", "stream"]] = None):
+    def __init__(
+        self,
+        name: str,
+        debug: Optional[Literal["step", "stream"]] = None,
+        debug_port: Optional[int] = None,
+    ):
         """Create a basic unit of computation in ChimeraPy.
 
         A node has three main functions that can be overwritten to add
@@ -54,6 +58,10 @@ class Node(mp.Process):
         self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
+        self.logger: Optional[logging.Logger] = None
+
+        # Default values
+        self.logging_level: int = logging.INFO
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -67,9 +75,21 @@ class Node(mp.Process):
                 f"Debug Mode for Node: Generated data is stored in {temp_folder}"
             )
 
+            # Determine the port for debugging (make sure its int)
+            if not debug_port:
+                debug_port = 5555
+
             # Prepare the node to be used
             self.config(
-                "0.0.0.0", 9000, temp_folder, [], [], follow=None, networking=False
+                "0.0.0.0",
+                9000,
+                temp_folder,
+                [],
+                [],
+                follow=None,
+                networking=False,
+                logging_level=logging.DEBUG,
+                worker_logging_port=debug_port,
             )
 
             # Only execute this if step debugging
@@ -116,9 +136,18 @@ class Node(mp.Process):
             if self._context == "spawn":
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
-                l = _logger.getLogger("chimerapy")
+                l = _logger.getLogger(
+                    "chimerapy-subprocess"
+                )  # would be just chimerapy, but testing
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
+
+        # With the logger, let's add a handler
+        l.addHandler(
+            logging.handlers.DatagramHandler(
+                host="127.0.0.1", port=self.worker_logging_port
+            )
+        )
 
         return l
 
@@ -156,6 +185,7 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully CONNECTED
         self.status["CONNECTED"] = 1
+        self.connected_ready.set()
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data={
@@ -171,6 +201,21 @@ class Node(mp.Process):
             data={
                 "node_name": self.name,
                 "latest_value": self.latest_value,
+            },
+        )
+
+    async def provide_saving(self, msg: Dict):
+
+        # Stop the save handler
+        self.save_handler.shutdown()
+        self.save_handler.join()
+        self.status["FINISHED"] = 1
+
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS,
+            data={
+                "node_name": self.name,
+                "status": self.status,
             },
         )
 
@@ -245,6 +290,8 @@ class Node(mp.Process):
         out_bound: List[str],
         follow: Optional[str] = None,
         networking: bool = True,
+        logging_level: int = logging.INFO,
+        worker_logging_port: int = 5555,
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -267,6 +314,7 @@ class Node(mp.Process):
         self.worker_host = host
         self.worker_port = port
         self.logdir = logdir / self.name
+        self.worker_logging_port = worker_logging_port
         os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
@@ -278,6 +326,7 @@ class Node(mp.Process):
 
         # Saving other parameters
         self.networking = networking
+        self.logging_level = logging_level
 
         # Creating initial values
         self.latest_value = None
@@ -320,6 +369,7 @@ class Node(mp.Process):
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
                     WORKER_MESSAGE.REQUEST_STEP: self.async_forward,
+                    WORKER_MESSAGE.REQUEST_SAVING: self.provide_saving,
                     WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                     WORKER_MESSAGE.START_NODES: self.start_node,
                     WORKER_MESSAGE.STOP_NODES: self.stop_node,
@@ -327,9 +377,16 @@ class Node(mp.Process):
             )
             self.client.connect()
 
+            # Update the client's logger to be able to read it
+            self.client.setLogger(self.logger)
+
             # Creating publisher
             self.publisher = Publisher()
             self.publisher.start()
+
+            # Creating threading event to mark that the Node has been connected
+            self.connected_ready = threading.Event()
+            self.connected_ready.clear()
 
             # Send publisher port and host information
             self.client.send(
@@ -356,6 +413,8 @@ class Node(mp.Process):
 
         # Notify to the worker that the node is fully READY
         self.status["READY"] = 1
+
+        # Only do so if connected to Worker and its connected
         if self.networking:
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
@@ -427,7 +486,12 @@ class Node(mp.Process):
 
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
-            output = self.step()
+            try:
+                output = self.step()
+            except Exception as e:
+                traceback_info = traceback.format_exc()
+                self.logger.error(traceback_info)
+                return None
 
         else:
 
@@ -441,8 +505,13 @@ class Node(mp.Process):
                     self.inputs_ready.clear()
                     self.logger.debug(f"{self}: forward processing inputs")
 
-                    output = self.step(self.in_bound_data)
-                    break
+                    try:
+                        output = self.step(self.in_bound_data)
+                        break
+                    except Exception as e:
+                        traceback_info = traceback.format_exc()
+                        self.logger.error(traceback_info)
+                        return None
 
         # If output generated, send it!
         if output:
@@ -543,12 +612,12 @@ class Node(mp.Process):
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()
         self.save_handler.join()
+        self.status["FINISHED"] = 1
 
         # Shutting down networking
         if self.networking:
 
             # Inform the worker that the Node has finished its saving of data
-            self.status["FINISHED"] = 1
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
@@ -571,14 +640,19 @@ class Node(mp.Process):
 
         """
         self.logger = self.get_logger()
+        self.logger.setLevel(self.logging_level)
         self.logger.debug(f"{self}: initialized with context -> {self._context}")
-
-        # If debugging, do not re-execute the networking component
-        # if not self.debug:
 
         # Performing preparation for the while loop
         self._prep()
-        self.prep()
+
+        # User-defined, possible error
+        try:
+            self.prep()
+        except Exception as e:
+            traceback_info = traceback.format_exc()
+            self.logger.error(traceback_info)
+            return None
 
         self.logger.debug(f"{self}: finished prep")
 

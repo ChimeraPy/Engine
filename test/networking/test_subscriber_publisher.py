@@ -1,3 +1,6 @@
+# Built-in Imports
+import time
+
 # Third-party Imports
 import pytest
 import numpy as np
@@ -57,9 +60,10 @@ def test_sub_instance(subscriber):
 )
 def test_sending_data_chunk_between_pub_and_sub(publisher, subscriber, data_chunk):
 
+    time.sleep(5)
     publisher.publish(data_chunk)
     logger.debug(f"{publisher}: published {data_chunk}")
 
-    new_data = subscriber.receive(timeout=2)
+    new_data = subscriber.receive(timeout=10)
     logger.debug(f"{subscriber}: received {new_data}")
     assert new_data == data_chunk

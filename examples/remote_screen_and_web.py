@@ -10,7 +10,6 @@ import imutils
 from PIL import ImageGrab
 
 import chimerapy as cp
-
 cp.debug()
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
@@ -87,6 +86,8 @@ class RemoteCameraGraph(cp.Graph):
 
 
 if __name__ == "__main__":
+
+    cp.debug()
 
     # Create default manager and desired graph
     manager = cp.Manager(logdir=CWD / "runs")

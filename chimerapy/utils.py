@@ -79,18 +79,14 @@ class logging_tqdm(tqdm):
 async def async_waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,
-    success_msg: Optional[str] = None,
     timeout: Optional[Union[int, float]] = None,
-    timeout_raise: Optional[bool] = True,
-    timeout_msg: Optional[str] = None,
+    timeout_raise: Optional[bool] = False,
 ) -> bool:
 
     counter = 0
     while True:
 
         if condition():
-            if success_msg:
-                logger.debug(success_msg)
             return True
         else:
             await asyncio.sleep(check_period)
@@ -98,28 +94,22 @@ async def async_waiting_for(
 
             if timeout and counter * check_period > timeout:
                 if timeout_raise:
-                    raise TimeoutError(timeout_msg)
+                    raise TimeoutError(str(condition) + ": FAILURE")
                 else:
-                    if timeout_msg:
-                        logger.debug(timeout_msg)
                     return False
 
 
 def waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,
-    success_msg: Optional[str] = None,
     timeout: Optional[Union[int, float]] = None,
-    timeout_raise: Optional[bool] = True,
-    timeout_msg: Optional[str] = None,
+    timeout_raise: Optional[bool] = False,
 ) -> bool:
 
     counter = 0
     while True:
 
         if condition():
-            if success_msg:
-                logger.debug(success_msg)
             return True
         else:
             time.sleep(check_period)
@@ -127,10 +117,8 @@ def waiting_for(
 
             if timeout and counter * check_period > timeout:
                 if timeout_raise:
-                    raise TimeoutError(timeout_msg)
+                    raise TimeoutError(str(condition) + ": FAILURE")
                 else:
-                    if timeout_msg:
-                        logger.debug(timeout_msg)
                     return False
 
 

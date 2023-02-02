@@ -98,3 +98,4 @@ def test_manager_shutting_down_ungracefully():
 
     # Only shutting Manager
     manager.shutdown()
+    worker.shutdown()

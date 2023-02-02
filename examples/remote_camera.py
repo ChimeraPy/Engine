@@ -9,6 +9,7 @@ import cv2
 import chimerapy as cp
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
+cp.debug()
 
 
 class WebcamNode(cp.Node):
@@ -64,8 +65,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {"remote": ["web"], "local": ["show"]}
-    # mapping = {"local": ["web", "show"]}
+    # mapping = {"remote": ["web"], "local": ["show"]}
+    mapping = {"local": ["web", "show"]}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping)

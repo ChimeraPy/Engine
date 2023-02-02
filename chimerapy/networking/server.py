@@ -1,5 +1,5 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, Union
+from typing import Callable, Dict, Optional, Any, Union, List
 import asyncio
 import threading
 import uuid
@@ -17,6 +17,7 @@ import enum
 from aiohttp import web, WSCloseCode
 
 # Internal Imports
+from chimerapy import config
 from .async_loop_thread import AsyncLoopThread
 from ..utils import (
     decode_payload,
@@ -46,7 +47,7 @@ class Server:
         name: str,
         port: int,
         host: str = get_ip_address(),
-        routes: Optional[Dict[str, Callable]] = None,
+        routes: Optional[List[web.RouteDef]] = None,
         ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
     ):
         """Create HTTP Server with WS support.
@@ -77,6 +78,9 @@ class Server:
         # Adding default routes
         self._app.add_routes([web.post("/file/post", self._file_receive)])
 
+        # Creating container for ws clients
+        self.ws_clients: Dict[str, Dict[str, Any]] = {}
+
         # Adding unique routes
         if self.routes:
             self._app.add_routes(self.routes)
@@ -86,7 +90,6 @@ class Server:
 
             # Adding route for ws and other configuration
             self._app.add_routes([web.get("/ws", self._websocket_handler)])
-            self.ws_clients: Dict[str, Dict[str, Any]] = {}
 
             # Adding other essential ws handlers
             self.ws_handlers.update(
@@ -242,14 +245,14 @@ class Server:
 
         # If ok, wait until ok
         if ok:
-            await async_waiting_for(
+            success = await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                success_msg=f"{self}: OK received",
-                timeout=10,
-                timeout_raise=False,
-                timeout_msg=f"{self}: OK was not received!",
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     ####################################################################
     # Server Async Setup and Shutdown
@@ -307,12 +310,14 @@ class Server:
         await self._write_ws(client_name, msg)
 
         if ok:
-            await async_waiting_for(
+            success = await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                timeout=10,
-                timeout_raise=False,
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
@@ -340,11 +345,13 @@ class Server:
         self._thread.exec(self._main)
 
         # Wait until server is ready
-        flag = self._server_ready.wait(timeout=10)
+        flag = self._server_ready.wait(timeout=config.get("comms.timeout.server-ready"))
         if flag == 0:
+
             logger.debug(f"{self}: failed to start, shutting down!")
             self.shutdown()
             raise TimeoutError(f"{self}: failed to start, shutting down!")
+
         else:
             logger.debug(f"{self}: running at {self.host}:{self.port}")
 
@@ -358,12 +365,14 @@ class Server:
         self._thread.exec(partial(self._write_ws, client_name, msg))
 
         if ok:
-            waiting_for(
+            success = waiting_for(
                 lambda: msg_uuid in self.uuid_records,
-                check_period=0.1,
-                timeout=10,
-                timeout_raise=False,
+                timeout=config.get("comms.timeout.ok"),
             )
+            if success:
+                logger.debug(f"{self}: receiving OK: SUCCESS")
+            else:
+                logger.debug(f"{self}: receiving OK: FAILED")
 
     def broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
@@ -372,7 +381,7 @@ class Server:
         for client_name in self.ws_clients:
             self._thread.exec(partial(self._write_ws, client_name, msg))
 
-    def move_transfer_files(self, dst: pathlib.Path, unzip: bool):
+    def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
         for name, filepath_dict in self.file_transfer_records.items():
             # Create a folder for the name
@@ -405,18 +414,22 @@ class Server:
                     # Wait until file is ready
                     miss_counter = 0
                     delay = 0.5
-                    timeout = 10
+                    timeout = config.get("comms.timeout.zip-time")
+
                     while not new_file.exists():
                         time.sleep(delay)
                         miss_counter += 1
                         if timeout < delay * miss_counter:
-                            raise TimeoutError(
+                            logger.error(
                                 f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
                             )
+                            return False
 
                     for file in new_file.iterdir():
                         shutil.move(file, named_dst)
                     shutil.rmtree(new_file)
+
+        return True
 
     def shutdown(self):
 
@@ -431,7 +444,9 @@ class Server:
             self._thread.exec(self._server_shutdown)
 
             # Wait for it
-            if not self._server_shutdown_complete.wait(timeout=15):
+            if not self._server_shutdown_complete.wait(
+                timeout=config.get("comms.timeout.server-shutdown")
+            ):
                 logger.warning(f"{self}: failed to gracefully shutdown")
 
             # Stop the async thread

@@ -46,6 +46,7 @@ disable_loggers = [
     "chardet.charsetprober",
     "matplotlib.font_manager",
     "PIL.PngImagePlugin",
+    "IocpProactor"
 ]
 
 
@@ -58,48 +59,11 @@ def pytest_configure():
 
 @pytest.fixture
 def logreceiver():
-    def listener():
-
-        # Create server and logger to relay messages
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(("127.0.0.1", 5555))
-        logger = cp._logger.getLogger("chimerapy")
-
-        # Continue listening until signaled to stop
-        while True:
-
-            # Listen for information
-            data = s.recv(4096)
-            if data == b"die":
-                break
-
-            # Dont forget to skip over the 32-bit length prepended
-            logrec = pickle.loads(data[4:])
-            rec = logging.LogRecord(
-                name=logrec["name"],
-                level=logrec["levelno"],
-                pathname=logrec["pathname"],
-                lineno=logrec["lineno"],
-                msg=logrec["msg"],
-                args=logrec["args"],
-                exc_info=logrec["exc_info"],
-                func=logrec["funcName"],
-            )
-            logger.handle(rec)
-
-        # Safely shutdown socket
-        s.close()
-
-    # Start relaying thread
-    receiver_thread = threading.Thread(target=listener)
-    receiver_thread.start()
-
-    yield
-
-    # Shutting down thread
-    t = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    t.sendto(b"die", ("127.0.0.1", 5555))
-    receiver_thread.join()
+    listener = cp.LogReceiver(logger_name="chimerapy")
+    listener.start()
+    yield listener
+    listener.shutdown()
+    listener.join()
 
 
 @pytest.fixture(autouse=True)
