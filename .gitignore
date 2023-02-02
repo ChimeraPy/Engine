@@ -27,6 +27,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!chimerapy/dashboard/src/lib
 lib64/
 parts/
 sdist/
