@@ -1,3 +1,6 @@
+const defaultTheme = require('tailwindcss/defaultTheme')
+
+
 const config = {
 	content: [
 		'./src/**/*.{html,js,svelte,ts}',
@@ -5,10 +8,11 @@ const config = {
 	],
 
 	theme: {
-		fontFamily: {
-			sans: ['Helvetica', 'Arial', 'sans-serif']
-		},
-		extend: {}
+		extend: {
+			fontFamily: {
+				poppins: ['Poppins',  ...defaultTheme.fontFamily.sans]
+			}
+		}
 	},
 
 	plugins: [require('flowbite/plugin')],

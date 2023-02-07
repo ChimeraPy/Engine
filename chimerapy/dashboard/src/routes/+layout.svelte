@@ -8,7 +8,7 @@
 
 <div class="container mx-auto flex flex-col h-screen justify-between">
 	<Header sections={data.sections} />
-	<main class="overflow-x-auto">
+	<main>
 		<slot />
 	</main>
 	<Footer sections={data.sections} />
