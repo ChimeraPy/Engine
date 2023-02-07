@@ -6,14 +6,8 @@
 	<title>ChimeraPy Dashboard</title>
 </svelte:head>
 
-<div id="homepage" class="place-items-center">
-	<Img
-		class="p-10 mt-10"
-		src="/ChimeraPy.png"
-		size="max-w-lg"
-		alignment="mx-auto"
-		alt="ChimeraPy"
-	/>
+<div id="homepage">
+	<Img class="p-2 mt-2" src="/ChimeraPy.png" size="max-w-lg" alignment="mx-auto" alt="ChimeraPy" />
 
 	<P class="mb-10 mt-10 text-justify" weight="normal" color="text-black dark:text-gray-400">
 		ChimeraPy is a distributed computing framework for
@@ -81,6 +75,4 @@
 		</div>
 	</div>
 	<hr />
-
-
 </div>

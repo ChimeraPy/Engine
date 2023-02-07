@@ -1,5 +1,4 @@
-const defaultTheme = require('tailwindcss/defaultTheme')
-
+const defaultTheme = require('tailwindcss/defaultTheme');
 
 const config = {
 	content: [
@@ -10,7 +9,7 @@ const config = {
 	theme: {
 		extend: {
 			fontFamily: {
-				poppins: ['Poppins',  ...defaultTheme.fontFamily.sans]
+				poppins: ['Poppins', ...defaultTheme.fontFamily.sans]
 			}
 		}
 	},

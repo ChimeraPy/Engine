@@ -6,9 +6,9 @@
 	export let data: { string: any };
 </script>
 
-<div class="container mx-auto flex flex-col h-screen justify-between">
+<div class="container mx-auto flex flex-col h-screen">
 	<Header sections={data.sections} />
-	<main>
+	<main class="mb-auto flex-grow">
 		<slot />
 	</main>
 	<Footer sections={data.sections} />
