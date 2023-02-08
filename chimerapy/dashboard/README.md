@@ -10,8 +10,7 @@ The dashboard allows any ChimeraPy deployment to monitor the cluster as well as 
 
 Node `v16` or later is required. Tested and developed with `v16`.
 
-The following commands will spin up the test development server at http://localhost:5173.
-
+Use the following commands to install.
 ```bash
 git clone git@github.com:oele-isis-vanderbilt/ChimeraPy.git
 
@@ -23,6 +22,8 @@ npm install
 ## Developing
 
 Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+
+The following commands will spin up the test development server at http://localhost:5173.
 
 ```bash
 npm run dev
