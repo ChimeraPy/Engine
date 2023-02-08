@@ -29,22 +29,21 @@ A manager can be in the following states (we can name them accordingly):
 
 ```typescript
 enum ManagerState {
-    STARTED = 0,  // Just Launched
-    WORKERS_CONNECTED = 1, // Few Workers are connected
-    NODES_READY = 2, // Nodes are ready (Graph Commited)
-    EXECUTING = 3,  // Executing the current pipeline
-    STOPPED = 4, // Stop Command has been applied
-    FINALIZING = 5, // Finalizing the bookkeeping and datatransfoer
-
+	STARTED = 0, // Just Launched
+	WORKERS_CONNECTED = 1, // Few Workers are connected
+	NODES_READY = 2, // Nodes are ready (Graph Commited)
+	EXECUTING = 3, // Executing the current pipeline
+	STOPPED = 4, // Stop Command has been applied
+	FINALIZING = 5 // Finalizing the bookkeeping and datatransfoer
 }
 
 interface Manager {
-    state: ManagerState;
-    ip: string; // Define proper IP
-    port: number;
-    workers: Worker[]; // ToDo Worker Definitions
-    graph?: Graph; // ToDo Graph Definitions
-    worker_graph_map?: { string: string }[];
+	state: ManagerState;
+	ip: string; // Define proper IP
+	port: number;
+	workers: Worker[]; // ToDo Worker Definitions
+	graph?: Graph; // ToDo Graph Definitions
+	worker_graph_map?: { string: string }[];
 }
 ```
 
@@ -63,11 +62,11 @@ Currently, I have thought the following properties for a worker:
 
 ```typescript
 interface Worker {
-    ip: string;
-    name: string;
-    id: string;
-    port: number;
-    nodes: Node[];  // ToDo NodeDefinition
+	ip: string;
+	name: string;
+	id: string;
+	port: number;
+	nodes: Node[]; // ToDo NodeDefinition
 }
 ```
 
@@ -79,14 +78,13 @@ also might be running heavy computational jobs.
 ## Properties
 
 ```typescript
-
 interface Node {
-    name: string;
-    id: string;
-    port: number;
-    running: boolean;
-    data_type: 'Video' | 'Series' | 'Audio';
-    dashboard_component: null | string;
-    capabilities: ('callibrate'| 'start' | 'stop')[];
+	name: string;
+	id: string;
+	port: number;
+	running: boolean;
+	data_type: 'Video' | 'Series' | 'Audio';
+	dashboard_component: null | string;
+	capabilities: ('callibrate' | 'start' | 'stop')[];
 }
 ```

@@ -1,17 +1,7 @@
 <script lang="ts">
-	import { AccordionItem, Accordion, Pagination } from 'flowbite-svelte';
-
-	function objectDetails(worker: App.Worker, workerIndex: number, prefix = 'Worker'): string {
-		const details = [
-			prefix,
-			`#${workerIndex + 1}`,
-			'name = ',
-			worker.name,
-			' ',
-			`${worker.ip}@${worker.port}`
-		];
-		return details.join(' ');
-	}
+	import { AccordionItem, Accordion } from 'flowbite-svelte';
+	import { objectDetails } from '$lib/utils';
+	import Node from './Node.svelte';
 
 	export let manager: App.Manager,
 		workersPerPage: number = 10;
@@ -26,7 +16,7 @@
 			<div slot="header">{objectDetails(worker, i)}</div>
 			{#if worker.nodes.length}
 				{#each worker.nodes as node, i}
-					<p class="mb-2 text-gray-500 dark:text-gray-400">{objectDetails(node, i, 'Node')}</p>
+					<Node {node} index={i} />
 				{/each}
 			{:else}
 				<p class="mb-2 text-gray-500 dark:text-gray-400">No Active Nodes</p>
@@ -34,3 +24,4 @@
 		</AccordionItem>
 	{/each}
 </Accordion>
+<!--ToDo: Implement Pagination-->

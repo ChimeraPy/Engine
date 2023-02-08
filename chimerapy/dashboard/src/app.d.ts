@@ -24,8 +24,6 @@ declare global {
 			nodes: Node[];
 		}
 
-		interface Graph {}
-
 		interface Manager {
 			ip: string; // Define proper IP
 			port: number;

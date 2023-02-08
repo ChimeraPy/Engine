@@ -1,3 +1,5 @@
+import type { writable } from 'svelte/store';
+
 class Api {
 	url: string;
 
@@ -11,7 +13,9 @@ export class MockApi extends Api {
 		super(url);
 	}
 
-	async getNetworkMap(): Promise<App.Manager> {
+	async getNetworkMap(
+		fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>
+	): Promise<App.Manager> {
 		return (await (await fetch('/mocks/networkMap.json')).json()) as App.Manager;
 	}
 }
