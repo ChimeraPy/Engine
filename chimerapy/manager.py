@@ -80,6 +80,9 @@ class Manager:
             port=self.port,
             name="Manager",
             routes=[
+                # Manager-Front-end Routs
+                web.get("/network", self.get_network),
+                # Manager-Worker Routes
                 web.post("/workers/register", self.register_worker),
                 web.post("/workers/node_status", self.update_nodes_status),
             ],
@@ -95,6 +98,13 @@ class Manager:
 
     def __str__(self):
         return self.__repr__()
+
+    ####################################################################
+    ## Front-End API
+    ####################################################################
+
+    async def get_network(self, request: web.Request):
+        return web.json_response(self.dashboard_dict())
 
     ####################################################################
     ## Message Reactivity API
@@ -140,7 +150,55 @@ class Manager:
         return web.HTTPOk()
 
     ####################################################################
-    ## Helper Methods
+    ## Helper Methods (Front-end)
+    ####################################################################
+
+    def dashboard_dict(self) -> Dict:
+
+        # Add default Manager information
+        network_information = {
+            "ip": self.host,
+            "port": self.port,
+        }
+
+        # Then adding per worker information
+        workers_json = []
+        for worker_name, worker_data in self.workers.items():
+            worker_json = {
+                "name": worker_name,
+                "ip": worker_data["http_ip"],
+                "port": worker_data["http_port"],
+                "nodes": [],
+            }
+
+            # Then adding per Node information
+            for node_name, node_status in worker_data["nodes_status"].items():
+                if node_name in self.nodes_server_table:
+                    worker_json["nodes"].append(
+                        {
+                            "ip": self.nodes_server_table[node_name]["host"],
+                            "port": self.nodes_server_table[node_name]["port"],
+                            "name": node_name,
+                        }
+                    )
+                else:
+                    worker_json["nodes"].append(
+                        {
+                            "ip": "",
+                            "port": -1,
+                            "name": node_name,
+                        }
+                    )
+
+            # Appending later
+            workers_json.append(worker_json)
+
+        # Adding it
+        network_information["workers"] = workers_json
+        return network_information
+
+    ####################################################################
+    ## Helper Methods (Cluster)
     ####################################################################
 
     def save_meta(self):
