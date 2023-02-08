@@ -173,13 +173,22 @@ class Manager:
 
             # Then adding per Node information
             for node_name, node_status in worker_data["nodes_status"].items():
-                worker_json["nodes"].append(
-                    {
-                        "ip": self.nodes_server_table[node_name]["host"],
-                        "port": self.nodes_server_table[node_name]["port"],
-                        "name": node_name,
-                    }
-                )
+                if node_name in self.nodes_server_table:
+                    worker_json["nodes"].append(
+                        {
+                            "ip": self.nodes_server_table[node_name]["host"],
+                            "port": self.nodes_server_table[node_name]["port"],
+                            "name": node_name,
+                        }
+                    )
+                else:
+                    worker_json["nodes"].append(
+                        {
+                            "ip": "",
+                            "port": -1,
+                            "name": node_name,
+                        }
+                    )
 
             # Appending later
             workers_json.append(worker_json)

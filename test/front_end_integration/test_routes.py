@@ -12,6 +12,7 @@ import chimerapy as cp
 @pytest.mark.parametrize(
     "config_manager",
     [
+        (lazy_fixture("manager")),
         (lazy_fixture("single_node_no_connections_manager")),
         (lazy_fixture("multiple_nodes_one_worker_manager")),
         (lazy_fixture("multiple_nodes_multiple_workers_manager")),
