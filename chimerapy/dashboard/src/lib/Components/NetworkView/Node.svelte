@@ -1,12 +1,14 @@
 <script lang="ts">
-	export let node: App.Node, index: number;
-	import { objectDetails } from '$lib/utils';
+	import type { Node } from '$lib/models';
+
+	export let node: Node, index: number;
+	import { networkEntityDetails } from '$lib/utils';
 	import { Badge } from 'flowbite-svelte';
 </script>
 
 <div class="flex p-2 flex-row md:justify-between">
 	<div>
-		{objectDetails(node, index)}
+		{networkEntityDetails(node, index, 'Node')}
 	</div>
 	<div>
 		<Badge large border role="button" color="blue">Feed</Badge>

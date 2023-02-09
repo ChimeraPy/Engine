@@ -11,6 +11,9 @@ export const load: LayoutLoad = ({ fetch }) => {
 			{ slug: '/dashboard', title: 'Data Dashboard' },
 			{ slug: '/help', title: 'Help' },
 			{ slug: '/about', title: 'About' }
-		]
+		],
+		logo: '/ChimeraPy.png',
+		copyrightHolderURL: 'https://wp0.vanderbilt.edu/oele/',
+		copyrightHolder: 'oele-isis-vanderbilt'
 	};
 };

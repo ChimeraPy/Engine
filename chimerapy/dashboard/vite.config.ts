@@ -4,7 +4,18 @@ import type { UserConfig } from 'vite';
 const config: UserConfig = {
 	plugins: [sveltekit()],
 	test: {
-		include: ['src/**/*.{test,spec}.{js,ts}']
+		include: ['src/**/*.{test,spec}.{js,ts}'],
+		environment: 'jsdom'
+	},
+	server: {
+		proxy: {
+			'/api': {
+				target: 'http://129.59.104.153:9001',
+				changeOrigin: true,
+				secure: false,
+				rewrite: (path) => path.replace('/api', '')
+			}
+		}
 	}
 };
 

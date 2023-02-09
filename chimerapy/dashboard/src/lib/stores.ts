@@ -1,10 +1,14 @@
-import { readable, writable } from 'svelte/store';
-import type { Writable } from 'svelte/store';
+import { dev } from '$app/environment';
+import { writable } from 'svelte/store';
 import { MockApi } from './Services/MockApi.js';
+import type { Manager } from './models';
 
-const api = new MockApi('https://localhost:5173/');
+const URL = dev ? '/api' : '';
 
-export const networkStore = writable<App.Manager | {}>({});
+const api = new MockApi(URL);
+
+// ToDo: this store is fine for now and distributed async requires the tree to be regenerated in realtime. But something diff based maybe?
+export const networkStore = writable<Manager | null>(null);
 
 export async function initNetwork(
 	fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>

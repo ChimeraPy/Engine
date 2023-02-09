@@ -1,4 +1,4 @@
-import type { writable } from 'svelte/store';
+import type { Manager } from '$lib/models';
 
 class Api {
 	url: string;
@@ -15,7 +15,13 @@ export class MockApi extends Api {
 
 	async getNetworkMap(
 		fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>
-	): Promise<App.Manager> {
-		return (await (await fetch('/mocks/networkMap.json')).json()) as App.Manager;
+	): Promise<Manager> {
+		return (await (await fetch('/mocks/networkMap.json')).json()) as Manager;
+	}
+
+	async load(
+		fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>
+	) {
+		console.log(await (await fetch(`${this.url}/network`)).json());
 	}
 }
