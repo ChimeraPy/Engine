@@ -9,5 +9,7 @@ export const networkStore = writable<App.Manager | {}>({});
 export async function initNetwork(
 	fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>
 ) {
-	api.getNetworkMap(fetch).then(networkStore.set);
+	api.getNetworkMap(fetch).then((network) => {
+		networkStore.set(network);
+	});
 }
