@@ -13,7 +13,7 @@ const config: UserConfig = {
 				target: 'http://129.59.104.153:9001',
 				changeOrigin: true,
 				secure: false,
-				rewrite: (path) => path.replace('/api', '')
+				rewrite: (path: string) => path.replace('/api', '')
 			}
 		}
 	}
