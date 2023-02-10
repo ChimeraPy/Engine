@@ -58,7 +58,7 @@ def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
 
     # Simple single node without connection
     msg = {
-        "node_name": faulty_node.name,
+        "id": faulty_node.id,
         "pickled": dill.dumps(faulty_node),
         "in_bound": [],
         "out_bound": [],

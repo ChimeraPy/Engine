@@ -44,7 +44,7 @@ logger = _logger.getLogger("chimerapy-networking")
 class Server:
     def __init__(
         self,
-        name: str,
+        id: str,
         port: int,
         host: str = get_ip_address(),
         routes: Optional[List[web.RouteDef]] = None,
@@ -53,7 +53,7 @@ class Server:
         """Create HTTP Server with WS support.
 
         Args:
-            name (str): Name of the sender.
+            id (str): ID of the sender.
             port (int): Port for the web server, 0 for random.
             host (Optional[str]): The hosting IP address.
             routes (Optional[Dict[str, Callable]]): HTTP routes.
@@ -61,7 +61,7 @@ class Server:
 
         """
         # Store parameters
-        self.name = name
+        self.id = id
         self.host = host
         self.port = port
         self.routes = routes
@@ -104,7 +104,7 @@ class Server:
         self.file_transfer_records = collections.defaultdict(dict)
 
     def __str__(self):
-        return f"<Server {self.name}>"
+        return f"<Server {self.id}>"
 
     ####################################################################
     # Server WS Handlers
@@ -115,7 +115,7 @@ class Server:
 
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
         # Storing the client information
-        self.ws_clients[msg["data"]["client_name"]] = {"ws": ws}
+        self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
         logger.debug(f"{self}: file receive!")
@@ -141,7 +141,7 @@ class Server:
 
         # Create the record and mark that is not complete
         # Keep record of the files sent!
-        self.file_transfer_records[meta["sender_name"]][filename] = {
+        self.file_transfer_records[meta["sender_id"]][filename] = {
             "filename": filename,
             "dst_filepath": dst_filepath,
             "size": 0,
@@ -159,7 +159,7 @@ class Server:
                 f.write(chunk)
 
         # After finishing, mark the size and that is complete
-        self.file_transfer_records[meta["sender_name"]][filename].update(
+        self.file_transfer_records[meta["sender_id"]][filename].update(
             {"size": size, "complete": True}
         )
         logger.debug(f"Finished updating record: {self.file_transfer_records}")
@@ -197,9 +197,9 @@ class Server:
                     await ws.close()
                     return None
 
-    async def _write_ws(self, client_name: str, msg: Dict):
-        logger.debug(f"{self}: client_name: {client_name},  write - {msg}")
-        ws = self.ws_clients[client_name]["ws"]
+    async def _write_ws(self, client_id: str, msg: Dict):
+        logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
+        ws = self.ws_clients[client_id]["ws"]
         await self._send_msg(ws, **msg)
 
     async def _websocket_handler(self, request):
@@ -299,7 +299,7 @@ class Server:
     ####################################################################
 
     async def async_send(
-        self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False
+        self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
     ):
 
         # Create uuid
@@ -307,7 +307,7 @@ class Server:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        await self._write_ws(client_name, msg)
+        await self._write_ws(client_id, msg)
 
         if ok:
             success = await async_waiting_for(
@@ -323,8 +323,8 @@ class Server:
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
-        for client_name in self.ws_clients:
-            await self._write_ws(client_name, msg)
+        for client_id in self.ws_clients:
+            await self._write_ws(client_id, msg)
 
     ####################################################################
     # Server Sync Lifecycle API
@@ -355,14 +355,14 @@ class Server:
         else:
             logger.debug(f"{self}: running at {self.host}:{self.port}")
 
-    def send(self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False):
+    def send(self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False):
 
         # Create uuid
         msg_uuid = str(uuid.uuid4())
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(partial(self._write_ws, client_name, msg))
+        self._thread.exec(partial(self._write_ws, client_id, msg))
 
         if ok:
             success = waiting_for(
@@ -378,8 +378,8 @@ class Server:
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
-        for client_name in self.ws_clients:
-            self._thread.exec(partial(self._write_ws, client_name, msg))
+        for client_id in self.ws_clients:
+            self._thread.exec(partial(self._write_ws, client_id, msg))
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 

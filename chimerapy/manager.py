@@ -19,7 +19,6 @@ import requests
 
 from chimerapy import config
 from .networking import Server, Client, DataChunk
-from .networking.enums import MANAGER_MESSAGE, WORKER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -78,7 +77,7 @@ class Manager:
         # Create server
         self.server = Server(
             port=self.port,
-            name="Manager",
+            id="Manager",
             routes=[
                 # Manager-Front-end Routs
                 web.get("/network", self.get_network),
@@ -114,7 +113,8 @@ class Manager:
         msg = await request.json()
 
         if msg["register"]:
-            self.workers[msg["name"]] = {
+            self.workers[msg["id"]] = {
+                "name": msg["name"],
                 "addr": msg["addr"],
                 "http_port": msg["http_port"],
                 "http_ip": msg["http_ip"],
@@ -127,14 +127,14 @@ class Manager:
                 "package_loaded": False,
             }
             logger.info(
-                f"Manager registered <Worker name={msg['name']}> from {msg['addr']}"
+                f"Manager registered <Worker id={msg['id']} name={msg['name']}> from {msg['addr']}"
             )
 
         else:
             logger.info(
-                f"Manager deregistered <Worker name={msg['name']}> from {msg['addr']}"
+                f"Manager deregistered <Worker id={msg['id']} name={msg['name']}> from {msg['addr']}"
             )
-            del self.workers[msg["name"]]
+            del self.workers[msg["id"]]
 
         return web.json_response(config.config)
 
@@ -142,8 +142,8 @@ class Manager:
         msg = await request.json()
 
         # Updating nodes status
-        self.workers[msg["name"]]["nodes_status"] = msg["nodes_status"]
-        self.workers[msg["name"]]["response"] = True
+        self.workers[msg["id"]]["nodes_status"] = msg["nodes_status"]
+        self.workers[msg["id"]]["response"] = True
 
         logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
@@ -163,30 +163,31 @@ class Manager:
 
         # Then adding per worker information
         workers_json = []
-        for worker_name, worker_data in self.workers.items():
+        for worker_id, worker_data in self.workers.items():
             worker_json = {
-                "name": worker_name,
+                "id": worker_id,
+                "name": worker_data["name"],
                 "ip": worker_data["http_ip"],
                 "port": worker_data["http_port"],
                 "nodes": [],
             }
 
             # Then adding per Node information
-            for node_name, node_status in worker_data["nodes_status"].items():
-                if node_name in self.nodes_server_table:
+            for node_id, node_status in worker_data["nodes_status"].items():
+                if node_id in self.nodes_server_table:
                     worker_json["nodes"].append(
                         {
-                            "ip": self.nodes_server_table[node_name]["host"],
-                            "port": self.nodes_server_table[node_name]["port"],
-                            "name": node_name,
+                            "id": node_id,
+                            "ip": self.nodes_server_table[node_id]["host"],
+                            "port": self.nodes_server_table[node_id]["port"],
                         }
                     )
                 else:
                     worker_json["nodes"].append(
                         {
+                            "id": node_id,
                             "ip": "",
                             "port": -1,
-                            "name": node_name,
                         }
                     )
 
@@ -227,12 +228,12 @@ class Manager:
         with open(self.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
-    def request_node_creation(self, worker_name: str, node_name: str) -> bool:
+    def request_node_creation(self, worker_id: str, node_id: str) -> bool:
         """Request creating a Node from the Graph.
 
         Args:
-            worker_name (str): The targetted Worker
-            node_name (str): The name of the node to create, that is in\
+            worker_id (str): The targetted Worker
+            node_id (str): The id of the node to create, that is in\
             in the graph
 
         Returns:
@@ -241,22 +242,28 @@ class Manager:
         """
         # Send request to create node
         if isinstance(self.worker_graph_map, nx.Graph):
-            logger.warning(f"Cannot create Node {node_name} with Worker {worker_name}")
+            logger.warning(f"Cannot create Node {node_id} with Worker {worker_id}")
             return False
+
+        # Extract the in_bound list and provide also the node's names
+        in_bound = list(self.graph.G.predecessors(node_id))
+        node_data = self.graph.G.nodes(data=True)
+        in_bound_by_name = [node_data[x]["object"].name for x in in_bound]
 
         # Send for the creation of the node
         r = requests.post(
-            self.workers[worker_name]["url"] + "/nodes/create",
+            self.workers[worker_id]["url"] + "/nodes/create",
             pickle.dumps(
                 {
-                    "worker_name": worker_name,
-                    "node_name": node_name,
+                    "worker_id": worker_id,
+                    "id": node_id,
                     "pickled": dill.dumps(
-                        self.graph.G.nodes[node_name]["object"], recurse=True
+                        self.graph.G.nodes[node_id]["object"], recurse=True
                     ),
-                    "in_bound": list(self.graph.G.predecessors(node_name)),
-                    "out_bound": list(self.graph.G.successors(node_name)),
-                    "follow": self.graph.G.nodes[node_name]["follow"],
+                    "in_bound": in_bound,
+                    "in_bound_by_name": in_bound_by_name,
+                    "out_bound": list(self.graph.G.successors(node_id)),
+                    "follow": self.graph.G.nodes[node_id]["follow"],
                 }
             ),
             timeout=config.get("manager.timeout.node-creation"),
@@ -268,20 +275,16 @@ class Manager:
         if r.status_code == requests.codes.ok:
             data = r.json()
             if data["success"]:
-                logger.debug(
-                    f"{self}: Node creation ({worker_name}, {node_name}): SUCCESS"
-                )
-                self.workers[worker_name]["nodes_status"] = data["nodes_status"]
+                logger.debug(f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS")
+                self.workers[worker_id]["nodes_status"] = data["nodes_status"]
                 return True
 
             else:
-                logger.error(
-                    f"{self}: Node creation ({worker_name}, {node_name}): FAILED"
-                )
+                logger.error(f"{self}: Node creation ({worker_id}, {node_id}): FAILED")
                 return False
 
         else:
-            logger.error(f"{self}: Worker {worker_name} didn't respond!")
+            logger.error(f"{self}: Worker {worker_id} didn't respond!")
             return False
 
     def request_node_server_data(self) -> bool:
@@ -292,12 +295,12 @@ class Manager:
 
         """
         # Send the message to each worker and wait
-        for worker_name in self.worker_graph_map:
+        for worker_id in self.worker_graph_map:
             for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
                 r = requests.get(
-                    self.workers[worker_name]["url"] + "/nodes/server_data",
+                    self.workers[worker_id]["url"] + "/nodes/server_data",
                 )
 
                 if r.status_code == requests.codes.ok:
@@ -329,14 +332,14 @@ class Manager:
         """
 
         # Send the message to each worker and wait
-        for worker_name in self.worker_graph_map:
+        for worker_id in self.worker_graph_map:
 
             success = False
             for i in range(config.get("manager.allowed-failures")):
 
                 # Send the request to each worker
                 r = requests.post(
-                    self.workers[worker_name]["url"] + "/nodes/server_data",
+                    self.workers[worker_id]["url"] + "/nodes/server_data",
                     json.dumps(self.nodes_server_table),
                     timeout=config.get("manager.timeout.info-request"),
                 )
@@ -344,7 +347,7 @@ class Manager:
                 if r.status_code == requests.codes.ok:
                     data = r.json()
                     if data["success"]:
-                        self.workers[worker_name]["nodes_status"] = data["nodes_status"]
+                        self.workers[worker_id]["nodes_status"] = data["nodes_status"]
 
                         logger.debug(
                             f"{self}: receiving Worker's node server request: SUCCESS"
@@ -394,20 +397,20 @@ class Manager:
         checks = []
 
         # First, check if the mapping is valid!
-        for worker_name in worker_graph_map:
+        for worker_id in worker_graph_map:
 
             # First check if the worker is registered!
-            if worker_name not in self.workers:
-                logger.error(f"{worker_name} is not register to Manager.")
+            if worker_id not in self.workers:
+                logger.error(f"{worker_id} is not register to Manager.")
                 checks.append(False)
                 break
             else:
                 checks.append(True)
 
             # Then check if the node exists in the graph
-            for node_name in worker_graph_map[worker_name]:
-                if not self.graph.has_node_by_name(node_name):
-                    logger.error(f"{node_name} is not in Manager's graph.")
+            for node_id in worker_graph_map[worker_id]:
+                if not self.graph.has_node_by_id(node_id):
+                    logger.error(f"{node_id} is not in Manager's graph.")
                     checks.append(False)
                     break
                 else:
@@ -479,17 +482,17 @@ class Manager:
 
         """
         # Send the message to each worker
-        for worker_name in self.worker_graph_map:
+        for worker_id in self.worker_graph_map:
 
             # Send each node that needs to be constructed
-            for node_name in self.worker_graph_map[worker_name]:
+            for node_id in self.worker_graph_map[worker_id]:
 
                 # Make request to create node
-                success = self.request_node_creation(worker_name, node_name)
+                success = self.request_node_creation(worker_id, node_id)
 
                 # If fail too many times, give up :(
                 if not success:
-                    logger.error(f"Couldn't create {node_name} after multiple tries")
+                    logger.error(f"Couldn't create {node_id} after multiple tries")
                     return False
 
         return True
@@ -545,9 +548,7 @@ class Manager:
 
             # Send it to the workers and let them know to load the
             # send package
-            for worker_name in self.workers:
-
-                worker_data = self.workers[worker_name]
+            for worker_id, worker_data in self.workers.items():
 
                 # Create a temporary HTTP client
                 client = Client(
@@ -555,30 +556,28 @@ class Manager:
                     host=worker_data["http_ip"],
                     port=worker_data["http_port"],
                 )
-                client.send_file(sender_name=self.name, filepath=zip_package_dst)
+                client.send_file(sender_id=self.id, filepath=zip_package_dst)
 
         # Wail until all workers have responded with their node server data
         success = False
-        for worker_name in self.workers:
+        for worker_id in self.workers:
 
             for i in range(config.get("manager.allowed-failures")):
 
                 # Send package finish confirmation
                 r = requests.post(
-                    self.workers[worker_name]["url"] + "/packages/load",
+                    self.workers[worker_id]["url"] + "/packages/load",
                     json.dumps({"packages": [x["name"] for x in packages_meta]}),
                     timeout=config.get("manager.timeout.package-delivery"),
                 )
 
                 if r.status_code == requests.codes.ok:
-                    logger.debug(
-                        f"{self}: Worker {worker_name} loaded package: SUCCESS"
-                    )
+                    logger.debug(f"{self}: Worker {worker_id} loaded package: SUCCESS")
                     success = True
                     break
 
             if not success:
-                logger.error(f"{self}: Worker {worker_name} loaded package: FAILED")
+                logger.error(f"{self}: Worker {worker_id} loaded package: FAILED")
                 break
 
         # If all workers pass, then yay!
@@ -666,23 +665,23 @@ class Manager:
 
         # Wail until all workers have responded with their node server data
         gather_data = {}
-        for worker_name in self.workers:
+        for worker_id in self.workers:
 
             r = requests.get(
-                self.workers[worker_name]["url"] + "/nodes/gather",
+                self.workers[worker_id]["url"] + "/nodes/gather",
                 timeout=config.get("manager.timeout.info-request"),
             )
             logger.debug(r)
 
             if r.status_code == requests.codes.ok:
-                logger.debug(f"Worker: {worker_name}, gathering: SUCCESS")
+                logger.debug(f"Worker: {worker_id}, gathering: SUCCESS")
             else:
-                logger.error(f"Worker: {worker_name}, gathering: FAILED")
+                logger.error(f"Worker: {worker_id}, gathering: FAILED")
 
             # Saving the data
             data = pickle.loads(r.content)["node_data"]
-            for node_name, node_data in data.items():
-                data[node_name] = DataChunk.from_bytes(node_data)
+            for node_id, node_data in data.items():
+                data[node_id] = DataChunk.from_bytes(node_data)
 
             gather_data.update(data)
 
@@ -736,9 +735,9 @@ class Manager:
         # Wait until the nodes first finished writing down the data
         success = self.broadcast_request("post", "/nodes/save")
         if success:
-            for worker_name in self.workers:
-                for node_name in self.workers[worker_name]["nodes_status"]:
-                    self.workers[worker_name]["nodes_status"][node_name]["FINISHED"] = 1
+            for worker_id in self.workers:
+                for node_id in self.workers[worker_id]["nodes_status"]:
+                    self.workers[worker_id]["nodes_status"][node_id]["FINISHED"] = 1
 
         # Request collecting archives
         success = self.broadcast_request(

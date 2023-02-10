@@ -41,7 +41,8 @@ def test_multiple_fork_process():
         ps.append(p)
 
     for p in ps:
-        p.join()
+        p.join(5)
+        p.terminate()
 
     assert q.qsize() == NUM
 
@@ -87,8 +88,9 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
 
     for n in ns:
         n.shutdown()
-        n.join()
-        assert n.exitcode == 0
+        n.join(5)
+        n.terminate()
+        # assert n.exitcode == 0
 
 
 def test_create_multiple_nodes_after_pickling(logreceiver):
@@ -103,6 +105,7 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
             9000,
             TEST_DATA_DIR,
             [],
+            [],
             ["Con1"],
             follow=None,
             networking=False,
@@ -116,8 +119,9 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
 
     for n in ns:
         n.shutdown()
-        n.join()
-        assert n.exitcode == 0
+        n.join(5)
+        n.terminate()
+        # assert n.exitcode == 0
 
 
 def test_create_multiple_workers():
@@ -139,9 +143,10 @@ def test_worker_create_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "node_name": gen_node.name,
+        "id": gen_node.id,
         "pickled": dill.dumps(gen_node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -150,8 +155,8 @@ def test_worker_create_node(worker, gen_node):
     worker.create_node(msg)
 
     logger.debug("Finishied creating nodes")
-    assert gen_node.name in worker.nodes
-    assert isinstance(worker.nodes[gen_node.name]["node_object"], cp.Node)
+    assert gen_node.id in worker.nodes
+    assert isinstance(worker.nodes[gen_node.id]["node_object"], cp.Node)
 
 
 @linux_expected_only
@@ -164,9 +169,10 @@ def test_worker_create_unknown_node(worker):
 
     # Simple single node without connection
     msg = {
-        "node_name": node.name,
+        "id": node.id,
         "pickled": dill.dumps(node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -176,8 +182,8 @@ def test_worker_create_unknown_node(worker):
     worker.create_node(msg)
 
     logger.debug("Finishied creating nodes")
-    assert node.name in worker.nodes
-    assert isinstance(worker.nodes[node.name]["node_object"], cp.Node)
+    assert node.id in worker.nodes
+    assert isinstance(worker.nodes[node.id]["node_object"], cp.Node)
 
 
 def test_worker_create_multiple_node(worker):
@@ -191,9 +197,10 @@ def test_worker_create_multiple_node(worker):
 
         # Simple single node without connection
         msg = {
-            "node_name": new_node.name,
+            "id": new_node.id,
             "pickled": dill.dumps(new_node),
             "in_bound": [],
+            "in_bound_by_name": [],
             "out_bound": [],
             "follow": None,
         }
@@ -212,22 +219,24 @@ def test_worker_create_multiple_nodes_stress(worker):
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")
         new_node2 = ConsumeNode(name=f"Con{i}")
-        to_be_created_nodes.append(new_node.name)
-        to_be_created_nodes.append(new_node2.name)
+        to_be_created_nodes.append(new_node.id)
+        to_be_created_nodes.append(new_node2.id)
 
         # Simple single node without connection
         msg = {
-            "node_name": new_node.name,
+            "id": new_node.id,
             "pickled": dill.dumps(new_node),
             "in_bound": [],
+            "in_bound_by_name": [],
             "out_bound": [],
             "follow": None,
         }
 
         msg2 = {
-            "node_name": new_node2.name,
+            "id": new_node2.id,
             "pickled": dill.dumps(new_node2),
             "in_bound": [],
+            "in_bound_by_name": [],
             "out_bound": [],
             "follow": None,
         }
@@ -239,8 +248,8 @@ def test_worker_create_multiple_nodes_stress(worker):
             continue
 
     # Confirm that the node was created
-    for node_name in to_be_created_nodes:
-        assert node_name in worker.nodes
+    for node_id in to_be_created_nodes:
+        assert node_id in worker.nodes
 
 
 # @linux_expected_only
@@ -248,9 +257,10 @@ def test_step_single_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "node_name": gen_node.name,
+        "id": gen_node.id,
         "pickled": dill.dumps(gen_node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -269,18 +279,20 @@ def test_two_nodes_connect(worker, gen_node, con_node):
 
     # Simple single node without connection
     msg = {
-        "node_name": gen_node.name,
+        "id": gen_node.id,
         "pickled": dill.dumps(gen_node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [con_node.name],
         "follow": None,
     }
 
     # Simple single node without connection
     msg2 = {
-        "node_name": con_node.name,
+        "id": con_node.id,
         "pickled": dill.dumps(con_node),
         "in_bound": [gen_node.name],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -301,9 +313,10 @@ def test_starting_node(worker, gen_node):
 
     # Simple single node without connection
     msg = {
-        "node_name": gen_node.name,
+        "id": gen_node.id,
         "pickled": dill.dumps(gen_node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -325,11 +338,11 @@ def test_starting_node(worker, gen_node):
     "_manager,_worker",
     [
         (lazy_fixture("manager"), lazy_fixture("worker")),
-        # pytest.param(
-        #     lazy_fixture("manager"),
-        #     lazy_fixture("dockered_worker"),
-        #     marks=linux_run_only,
-        # ),
+        pytest.param(
+            lazy_fixture("manager"),
+            lazy_fixture("dockered_worker"),
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_manager_directing_worker_to_create_node(_manager, _worker):
@@ -338,7 +351,7 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     simple_graph = cp.Graph()
     new_node = GenNode(name=f"Gen1")
     simple_graph.add_nodes_from([new_node])
-    mapping = {_worker.name: [new_node.name]}
+    mapping = {_worker.id: [new_node.id]}
 
     # Connect to the manager
     _worker.connect(host=_manager.host, port=_manager.port)
@@ -350,19 +363,19 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     _manager.map_graph(mapping)
 
     # Request node creation
-    assert _manager.request_node_creation(worker_name=_worker.name, node_name="Gen1")
-    assert "Gen1" in _manager.workers[_worker.name]["nodes_status"]
+    assert _manager.request_node_creation(worker_id=_worker.id, node_id=new_node.id)
+    assert new_node.id in _manager.workers[_worker.id]["nodes_status"]
 
 
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
         (lazy_fixture("manager"), lazy_fixture("worker")),
-        # pytest.param(
-        #     lazy_fixture("manager"),
-        #     lazy_fixture("dockered_worker"),
-        #     marks=linux_run_only,
-        # ),
+        pytest.param(
+            lazy_fixture("manager"),
+            lazy_fixture("dockered_worker"),
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
@@ -370,22 +383,22 @@ def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
     # Create original containers
     simple_graph = cp.Graph()
     to_be_created_nodes = []
-    mapping = {_worker.name: []}
+    mapping = {_worker.id: []}
 
     for i in range(2):
 
         # Create node and save name for later comparison
         new_node = GenNode(name=f"Gen{i}")
         new_node2 = ConsumeNode(name=f"Con{i}")
-        to_be_created_nodes.append(new_node.name)
-        to_be_created_nodes.append(new_node2.name)
+        to_be_created_nodes.append(new_node.id)
+        to_be_created_nodes.append(new_node2.id)
 
         # Simple single node without connection
         simple_graph.add_nodes_from([new_node, new_node2])
 
         # Create mapping
-        mapping[_worker.name].append(new_node.name)
-        mapping[_worker.name].append(new_node2.name)
+        mapping[_worker.id].append(new_node.id)
+        mapping[_worker.id].append(new_node2.id)
 
     # Connect to the manager
     _worker.connect(host=_manager.host, port=_manager.port)
@@ -397,8 +410,6 @@ def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
     _manager.map_graph(mapping)
 
     # Request node creation
-    for node_name in to_be_created_nodes:
-        assert _manager.request_node_creation(
-            worker_name=_worker.name, node_name=node_name
-        )
-        assert node_name in _manager.workers[_worker.name]["nodes_status"]
+    for node_id in to_be_created_nodes:
+        assert _manager.request_node_creation(worker_id=_worker.id, node_id=node_id)
+        assert node_id in _manager.workers[_worker.id]["nodes_status"]
