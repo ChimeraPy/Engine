@@ -2,6 +2,7 @@ from typing import Callable, Union, Optional, Any, Dict
 import queue
 import logging
 import functools
+import json
 import time
 import enum
 import pickle
@@ -161,18 +162,18 @@ def create_payload(
     msg_uuid: str = str(uuid.uuid4()),
     timestamp: datetime.timedelta = datetime.timedelta(),
     ok: bool = False,
-) -> bytes:
+) -> Dict[str, Any]:
 
     payload = {
-        "signal": signal,
+        "signal": signal.value,
         "timestamp": str(timestamp),
         "data": data,
         "uuid": msg_uuid,
         "ok": ok,
     }
 
-    return blosc.compress(pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL))
+    return payload
 
 
-def decode_payload(data: bytes) -> Dict[str, Any]:
-    return pickle.loads(blosc.decompress(data))
+def decode_payload(data: str) -> Dict[str, Any]:
+    return json.loads(data)

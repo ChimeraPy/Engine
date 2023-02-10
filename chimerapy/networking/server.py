@@ -47,8 +47,8 @@ class Server:
         id: str,
         port: int,
         host: str = get_ip_address(),
-        routes: Optional[List[web.RouteDef]] = None,
-        ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
+        routes: List[web.RouteDef] = [],
+        ws_handlers: Dict[enum.Enum, Callable] = {},
     ):
         """Create HTTP Server with WS support.
 
@@ -65,7 +65,7 @@ class Server:
         self.host = host
         self.port = port
         self.routes = routes
-        self.ws_handlers = ws_handlers
+        self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
 
         # Using flag for marking if system should be running
         self.running = threading.Event()
@@ -94,8 +94,8 @@ class Server:
             # Adding other essential ws handlers
             self.ws_handlers.update(
                 {
-                    GENERAL_MESSAGE.OK: self._ok,
-                    GENERAL_MESSAGE.CLIENT_REGISTER: self._register_ws_client,
+                    GENERAL_MESSAGE.OK.value: self._ok,
+                    GENERAL_MESSAGE.CLIENT_REGISTER.value: self._register_ws_client,
                 }
             )
 
@@ -178,8 +178,9 @@ class Server:
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            msg = decode_payload(aiohttp_msg.data)
-            logger.debug(f"{self}: read - {msg}")
+            logger.debug(f"{self}: got msg, processing now")
+            msg = aiohttp_msg.json()
+            logger.debug(f"{self}: read - {msg}, {type(msg)}")
 
             # Select the handler
             handler = self.ws_handlers[msg["signal"]]
@@ -189,7 +190,7 @@ class Server:
             if msg["ok"]:
                 logger.debug(f"{self}: sending OK for {msg['uuid']}")
                 try:
-                    await ws.send_bytes(
+                    await ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                     )
                 except ConnectionResetError:
@@ -235,7 +236,7 @@ class Server:
 
         # Send the message
         try:
-            await ws.send_bytes(payload)
+            await ws.send_json(payload)
         except ConnectionResetError:
             logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await ws.close()

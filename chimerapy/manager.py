@@ -148,6 +148,8 @@ class Manager:
 
         logger.debug(f"{self}: Nodes status update to: {self.workers}")
 
+        # Relay information to front-end
+
         return web.HTTPOk()
 
     ####################################################################

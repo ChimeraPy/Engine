@@ -76,6 +76,7 @@ class Worker:
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
+        self.manager_url = ""
 
         # Create temporary data folder
         self.delete_temp = delete_temp
@@ -483,17 +484,19 @@ class Worker:
         self.nodes[node_id]["response"] = True
 
         # Construct information of all the nodes to be send to the Manager
-        # nodes_status_data = {
-        #     "name": self.name,
-        #     "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
-        # }
 
         # Update Manager on the new nodes status
-        # if self.connected_to_manager:
-        #     await self.client.async_send(
-        #         signal=WORKER_MESSAGE.REPORT_NODES_STATUS,
-        #         data=nodes_status_data,
-        #     )
+        if self.connected_to_manager:
+
+            msg = {
+                "id": self.id,
+                "name": self.name,
+                "node_status": {k: self.nodes[k]["status"] for k in self.nodes},
+            }
+
+            async with aiohttp.ClientSession(self.manager_url) as session:
+                async with session.post("/workers/node_status", data=json.dumps(msg)):
+                    pass
 
     ####################################################################
     ## Helper Methods
