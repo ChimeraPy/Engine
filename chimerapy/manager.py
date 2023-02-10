@@ -48,6 +48,7 @@ class Manager:
         """
         # Saving input parameters
         self.name = "Manager"
+        self.id = "Manager"
         self.host = "localhost"
         self.port = port
         self.max_num_of_workers = max_num_of_workers
@@ -155,6 +156,11 @@ class Manager:
 
     def dashboard_dict(self) -> Dict:
 
+        # Convert name to id
+        id_to_name = {
+            n: data["object"].name for n, data in self.graph.G.nodes(data=True)
+        }
+
         # Add default Manager information
         network_information = {
             "ip": self.host,
@@ -178,6 +184,7 @@ class Manager:
                     worker_json["nodes"].append(
                         {
                             "id": node_id,
+                            "name": id_to_name[node_id],
                             "ip": self.nodes_server_table[node_id]["host"],
                             "port": self.nodes_server_table[node_id]["port"],
                         }
@@ -186,6 +193,7 @@ class Manager:
                     worker_json["nodes"].append(
                         {
                             "id": node_id,
+                            "name": id_to_name[node_id],
                             "ip": "",
                             "port": -1,
                         }

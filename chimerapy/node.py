@@ -12,6 +12,7 @@ import traceback
 import uuid
 
 # Third-party Imports
+from dataclasses import dataclass
 import multiprocess as mp
 import numpy as np
 import pandas as pd

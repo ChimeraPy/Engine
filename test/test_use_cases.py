@@ -79,7 +79,7 @@ def webcam_graph():
     graph.add_nodes_from([web, show])
     graph.add_edge(src=web, dst=show)
 
-    return graph
+    return (graph, [web.id, show.id])
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ def screencapture_graph():
     graph.add_nodes_from([screen, show])
     graph.add_edge(src=screen, dst=show)
 
-    return graph
+    return (graph, [screen.id, show.id])
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ def show_multiple_videos_graph():
     graph.add_edge(src=screen, dst=show)
     graph.add_edge(src=web, dst=show)
 
-    return graph
+    return (graph, [web.id, screen.id, show.id])
 
 
 @pytest.mark.skipif(
@@ -133,17 +133,18 @@ def test_open_camera_in_another_process():
     sys.platform == "darwin", reason="Camera restrictions that require GUI"
 )
 @pytest.mark.parametrize(
-    "graph, mapping",
+    "graph_data",
     [
         # (lazy_fixture("webcam_graph"), {"local": ["web", "show"]}),
         # (lazy_fixture("screencapture_graph"), {"local": ["screen", "show"]}),
-        (
-            lazy_fixture("show_multiple_videos_graph"),
-            {"local": ["screen", "show", "web"]},
-        ),
+        (lazy_fixture("show_multiple_videos_graph")),
     ],
 )
-def test_use_case_graph(manager, worker, graph, mapping):
+def test_use_case_graph(manager, worker, graph_data):
+
+    # Decompose and get the mapping
+    graph, node_ids = graph_data
+    mapping = {worker.id: node_ids}
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)

@@ -47,7 +47,7 @@ def test_manager_registering_workers_locally(manager):
 
     workers = []
     for i in range(5):
-        worker = cp.Worker(name=f"local-{i}", port=9080 + i * 10)
+        worker = cp.Worker(name=f"local-{i}", port=0)
         worker.connect(host=manager.host, port=manager.port)
         workers.append(worker)
 
@@ -60,7 +60,7 @@ def test_manager_shutting_down_workers_after_delay(manager):
 
     workers = []
     for i in range(5):
-        worker = cp.Worker(name=f"local-{i}", port=9080 + i * 10)
+        worker = cp.Worker(name=f"local-{i}", port=0)
         worker.connect(host=manager.host, port=manager.port)
         workers.append(worker)
 
@@ -76,7 +76,7 @@ def test_manager_shutting_down_gracefully():
 
     # Create the actors
     manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
-    worker = cp.Worker(name="local")
+    worker = cp.Worker(name="local", port=0)
 
     # Connect to the Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -91,7 +91,7 @@ def test_manager_shutting_down_ungracefully():
 
     # Create the actors
     manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
-    worker = cp.Worker(name="local")
+    worker = cp.Worker(name="local", port=0)
 
     # Connect to the Manager
     worker.connect(host=manager.host, port=manager.port)

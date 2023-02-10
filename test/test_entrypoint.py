@@ -22,7 +22,7 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
     logger.info("Executed cmd to connect Worker to Manager.")
 
     # Assert that the Worker is connected
-    assert dockered_worker.name in manager.workers
+    assert dockered_worker.id in manager.workers
     manager.shutdown()
     logger.info("Manager shutting down")
 
@@ -37,7 +37,7 @@ def test_multiple_workers_connect(manager, docker_client):
         workers.append(worker)
 
     for worker in workers:
-        assert worker.name in manager.workers
+        assert worker.id in manager.workers
 
     logger.info("Manager shutting down")
     manager.shutdown()
