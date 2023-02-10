@@ -642,9 +642,6 @@ class Worker:
         return r.status_code == requests.codes.ok
 
     def create_node(self, msg: Dict[str, Any]):
-<<<<<<< HEAD
-        return asyncio.run(self.async_create_node(node_config=msg))
-=======
         # return asyncio.run(self.async_create_node(node_config=msg))
         node_id = msg["id"]
         self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
@@ -657,7 +654,6 @@ class Worker:
         )
 
         return success
->>>>>>> 62340f6 (91 UUID (#95))
 
     def step(self):
 
