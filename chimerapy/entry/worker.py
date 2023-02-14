@@ -1,6 +1,10 @@
 # Built-in Imports
 import argparse
 
+from .. import _logger
+
+logger = _logger.getLogger("chimerapy")
+
 
 def main():
 
@@ -32,6 +36,7 @@ def main():
     worker = Worker(name=d_args["name"], delete_temp=d_args["delete"], id=d_args["id"])
     worker.connect(host=d_args["ip"], port=d_args["port"])
     worker.idle()
+    worker.shutdown()
 
 
 if __name__ == "__main__":

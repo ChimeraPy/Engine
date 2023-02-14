@@ -658,6 +658,8 @@ class Worker:
 
     def idle(self):
 
+        logger.debug(f"{self}: Idle")
+
         while not self.has_shutdown:
             time.sleep(2)
 
@@ -679,6 +681,8 @@ class Worker:
             return
         else:
             self.has_shutdown = True
+
+        logger.debug(f"{self}: shutting down!")
 
         # Shutdown the Worker 2 Node server
         self.server.shutdown()

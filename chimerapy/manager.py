@@ -9,6 +9,7 @@ import random
 import tempfile
 import zipfile
 import concurrent.futures
+from concurrent.futures import Future
 
 # Third-party Imports
 import dill
@@ -295,41 +296,39 @@ class Manager:
             logger.error(f"{self}: Worker {worker_id} didn't respond!")
             return False
 
-    def request_node_server_data(self) -> bool:
+    def request_node_server_data(self, worker_id: str) -> bool:
         """Request Workers to provide information about Node's PUBs
 
         Returns:
             bool: Success of obtaining the node server data
 
         """
-        # Send the message to each worker and wait
-        for worker_id in self.worker_graph_map:
-            for i in range(config.get("manager.allowed-failures")):
+        for i in range(config.get("manager.allowed-failures")):
 
-                # Send the request to each worker
-                r = requests.get(
-                    self.workers[worker_id]["url"] + "/nodes/server_data",
+            # Send the request to each worker
+            r = requests.get(
+                self.workers[worker_id]["url"] + "/nodes/server_data",
+            )
+
+            if r.status_code == requests.codes.ok:
+
+                # And then updating the node server data
+                node_server_data = r.json()["node_server_data"]["nodes"]
+                self.nodes_server_table.update(node_server_data)
+
+                logger.debug(
+                    f"{self}: Requesting Worker's node server request: SUCCESS"
                 )
+                break
 
-                if r.status_code == requests.codes.ok:
-
-                    # And then updating the node server data
-                    node_server_data = r.json()["node_server_data"]["nodes"]
-                    self.nodes_server_table.update(node_server_data)
-
-                    logger.debug(
-                        f"{self}: Requesting Worker's node server request: SUCCESS"
-                    )
-                    break
-
-                else:
-                    logger.error(
-                        f"{self}: Requesting Worker's node server request: NO RESPONSE"
-                    )
+            else:
+                logger.error(
+                    f"{self}: Requesting Worker's node server request: NO RESPONSE"
+                )
 
         return True
 
-    def request_connection_creation(self) -> bool:
+    def request_connection_creation(self, worker_id: str) -> bool:
         """Request establishing the connections between Nodes
 
         This routine the Manager sends the Node's server data and request \
@@ -340,32 +339,30 @@ class Manager:
         """
 
         # Send the message to each worker and wait
-        for worker_id in self.worker_graph_map:
+        success = False
+        for i in range(config.get("manager.allowed-failures")):
 
-            success = False
-            for i in range(config.get("manager.allowed-failures")):
+            # Send the request to each worker
+            r = requests.post(
+                self.workers[worker_id]["url"] + "/nodes/server_data",
+                json.dumps(self.nodes_server_table),
+                timeout=config.get("manager.timeout.info-request"),
+            )
 
-                # Send the request to each worker
-                r = requests.post(
-                    self.workers[worker_id]["url"] + "/nodes/server_data",
-                    json.dumps(self.nodes_server_table),
-                    timeout=config.get("manager.timeout.info-request"),
-                )
+            if r.status_code == requests.codes.ok:
+                data = r.json()
+                if data["success"]:
+                    self.workers[worker_id]["nodes_status"] = data["nodes_status"]
 
-                if r.status_code == requests.codes.ok:
-                    data = r.json()
-                    if data["success"]:
-                        self.workers[worker_id]["nodes_status"] = data["nodes_status"]
+                    logger.debug(
+                        f"{self}: receiving Worker's node server request: SUCCESS"
+                    )
+                    success = True
+                break
 
-                        logger.debug(
-                            f"{self}: receiving Worker's node server request: SUCCESS"
-                        )
-                        success = True
-                    break
-
-            if not success:
-                logger.error(f"{self}: receiving Worker's node server request: FAILED")
-                return False
+        if not success:
+            logger.error(f"{self}: receiving Worker's node server request: FAILED")
+            return False
 
         return True
 
@@ -431,7 +428,11 @@ class Manager:
         self.worker_graph_map = worker_graph_map
 
     def broadcast_request(
-        self, htype: Literal["get", "post"], route: str, data: Any = {}
+        self,
+        htype: Literal["get", "post"],
+        route: str,
+        data: Any = {},
+        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
     ) -> bool:
 
         # Broadcast via a ThreadPool
@@ -441,17 +442,9 @@ class Manager:
 
             def request_start(url):
                 if htype == "post":
-                    r = requests.post(
-                        url + route,
-                        json.dumps(data),
-                        timeout=config.get("manager.timeout.info-request"),
-                    )
+                    r = requests.post(url + route, json.dumps(data), timeout=timeout)
                 elif htype == "get":
-                    r = requests.get(
-                        url + route,
-                        json.dumps(data),
-                        timeout=config.get("manager.timeout.info-request"),
-                    )
+                    r = requests.get(url + route, json.dumps(data), timeout=timeout)
                 return r, url
 
             futures = (
@@ -490,20 +483,27 @@ class Manager:
 
         """
         # Send the message to each worker
-        for worker_id in self.worker_graph_map:
+        futures: List[Future] = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.get("manager.misc.num-of-threads")
+        ) as executor:
+            for worker_id in self.worker_graph_map:
+                for node_id in self.worker_graph_map[worker_id]:
 
-            # Send each node that needs to be constructed
-            for node_id in self.worker_graph_map[worker_id]:
+                    # Make request to create node
+                    futures.append(
+                        executor.submit(self.request_node_creation, worker_id, node_id)
+                    )
 
-                # Make request to create node
-                success = self.request_node_creation(worker_id, node_id)
+        success = []
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                success.append(future.result())
+            except Exception as exc:
+                logger.error(exc)
+                success.append(False)
 
-                # If fail too many times, give up :(
-                if not success:
-                    logger.error(f"Couldn't create {node_id} after multiple tries")
-                    return False
-
-        return True
+        return all(success)
 
     def setup_p2p_connections(self) -> bool:
         """Setting up the connections between p2p nodes
@@ -517,13 +517,48 @@ class Manager:
         self.nodes_server_table = {}
 
         # Broadcast request for node server data
-        if self.request_node_server_data():
+        futures: List[Future] = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=config.get("manager.misc.num-of-threads")
+        ) as executor:
+            for worker_id in self.worker_graph_map:
+
+                # Make the request
+                futures.append(
+                    executor.submit(self.request_node_server_data, worker_id)
+                )
+
+        success = []
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                success.append(future.result())
+            except Exception as exc:
+                logger.error(exc)
+                success.append(False)
+
+        # If all success, then continue making the connection
+        if all(success):
 
             # Distribute the entire graph's information to all the Workers
-            if self.request_connection_creation():
-                return True
+            futures: List[Future] = []
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=config.get("manager.misc.num-of-threads")
+            ) as executor:
+                for worker_id in self.worker_graph_map:
 
-        return False
+                    futures.append(
+                        executor.submit(self.request_connection_creation, worker_id)
+                    )
+
+            success = []
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    success.append(future.result())
+                except Exception as exc:
+                    logger.error(exc)
+                    success.append(False)
+
+        return all(success)
 
     ####################################################################
     ## Package and Dependency Management
@@ -776,15 +811,21 @@ class Manager:
         else:
             self.has_shutdown = True
 
+        logger.debug(f"{self}: shutting down")
+
         # If workers are connected, let's notify them that the cluster is
         # shutting down
         if len(self.workers) > 0:
 
             # Send shutdown message
+            logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
             try:
                 self.broadcast_request("post", "/shutdown")
             except:
                 pass
+            logger.debug(
+                f"{self}: requested all workers to shutdown via /shutdown route"
+            )
 
             # Wait until all worker's deregister
             success = waiting_for(

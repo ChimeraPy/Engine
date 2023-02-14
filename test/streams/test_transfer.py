@@ -70,7 +70,7 @@ def multiple_worker_manager(manager, worker):
         # For each worker, add all possible nodes
         for node_name, node_class in NAME_CLASS_MAP.items():
             node = node_class(name=node_name)
-            worker_node_map[f"W{i}"].append(node.id)
+            worker_node_map[worker.id].append(node.id)
             graph.add_node(node)
 
     # Then register graph to Manager
@@ -123,7 +123,7 @@ def dockered_multiple_worker_manager(manager, docker_client):
         # For each worker, add all possible nodes
         for node_name, node_class in NAME_CLASS_MAP.items():
             node = node_class(name=node_name)
-            worker_node_map[f"W{i}"].append(node.id)
+            worker_node_map[worker.id].append(node.id)
             graph.add_node(node)
 
     # Then register graph to Manager

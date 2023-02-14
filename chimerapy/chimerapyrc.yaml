@@ -2,6 +2,8 @@ config:
   version: 1
   manager:
     allowed-failures: 5
+    misc:
+      num-of-threads: 100
     timeout:
       info-request: 55 # seconds
       package-delivery: 60 # seconds
