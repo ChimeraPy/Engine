@@ -5,10 +5,6 @@ import pdb
 
 import numpy as np
 import networkx as nx
-import matplotlib
-
-matplotlib.use("TKAgg")
-import matplotlib.pyplot as plt
 
 from .node import Node
 from . import _logger
@@ -81,6 +77,12 @@ class Graph:
             font_size (int): Font size
             node_size (int): Node size
         """
+
+        # Only loaded when needed
+        import matplotlib
+
+        matplotlib.use("TKAgg")
+        import matplotlib.pyplot as plt
 
         # Then get the position of the nodes
         layers, pos = self.get_layers_and_pos()
