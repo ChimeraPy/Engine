@@ -266,7 +266,7 @@ class Server:
         # Use an application runner to run the web server
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
-        self._site = web.TCPSite(self._runner, self.host, self.port)
+        self._site = web.TCPSite(self._runner, "0.0.0.0", self.port)
         await self._site.start()
 
         # If port selected 0, then obtain the randomly selected port
