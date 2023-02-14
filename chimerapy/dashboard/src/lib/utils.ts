@@ -15,3 +15,7 @@ export function networkEntityDetails(
 	];
 	return details.join(' ');
 }
+
+export function awaitableDelay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}

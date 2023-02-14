@@ -39,12 +39,17 @@
 		"svelte": "^3.54.0",
 		"svelte-check": "^3.0.1",
 		"svelte-preprocess": "^4.10.7",
+		"svelte-virtual-scroll-list": "github:umesh-timalsina/svelte-virtual-scroll-list#container-styles",
 		"tailwindcss": "^3.1.5",
+		"ts-monads": "github:umesh-timalsina/ts-monads",
 		"tslib": "^2.4.1",
 		"typescript": "^4.9.3",
 		"uuid": "^9.0.0",
 		"vite": "^4.0.0",
 		"vitest": "^0.25.3"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"jszmq": "^0.1.2"
+	}
 }
