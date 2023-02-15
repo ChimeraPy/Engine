@@ -141,7 +141,7 @@ class Node(mp.Process):
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
                 l = _logger.getLogger(
-                    "chimerapy-subprocess"
+                    "chimerapy"
                 )  # would be just chimerapy, but testing
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")

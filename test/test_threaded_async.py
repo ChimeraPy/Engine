@@ -29,7 +29,7 @@ def test_callback_execution(thread):
         queue.put_nowait(1)
 
     thread.exec_noncoro(put, args=[queue])
-    time.sleep(1)
+    time.sleep(5)
     assert queue.qsize() == 1
 
 
