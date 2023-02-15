@@ -37,14 +37,14 @@ logger = _logger.getLogger("chimerapy-networking")
 class Client:
     def __init__(
         self,
-        name: str,
+        id: str,
         host: str,
         port: int,
         ws_handlers: Dict[enum.Enum, Callable[[], Coroutine]] = {},
     ):
 
         # Store parameters
-        self.name = name
+        self.id = id
         self.host = host
         self.port = port
         self.ws_handlers = ws_handlers
@@ -77,7 +77,7 @@ class Client:
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
     def __str__(self):
-        return f"<Client {self.name}>"
+        return f"<Client {self.id}>"
 
     def setLogger(self, new_logger: logging.Logger):
         global logger
@@ -173,7 +173,7 @@ class Client:
             response = await session.post(url, data=data)
             logger.debug(f"{self}: File transfer response => {response}")
 
-    async def _send_folder_async(self, sender_name: str, dir: pathlib.Path):
+    async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
 
         assert (
             dir.is_dir() and dir.exists()
@@ -208,7 +208,7 @@ class Client:
 
         # Make a post request to send the file
         data = aiohttp.FormData()
-        data.add_field("meta", pickle.dumps({"sender_name": sender_name}))
+        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
         data.add_field(
             "file",
             open(temp_zip_file, "rb"),
@@ -230,7 +230,7 @@ class Client:
         # First message should be the client registering to the Server
         await self._send_msg(
             signal=GENERAL_MESSAGE.CLIENT_REGISTER,
-            data={"client_name": self.name},
+            data={"client_id": self.id},
             ok=True,
         )
 
@@ -323,14 +323,14 @@ class Client:
             else:
                 logger.debug(f"{self}: receiving OK: FAILED")
 
-    def send_file(self, sender_name: str, filepath: pathlib.Path):
+    def send_file(self, sender_id: str, filepath: pathlib.Path):
 
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Make a post request to send the file
         data = aiohttp.FormData()
-        data.add_field("meta", pickle.dumps({"sender_name": sender_name}))
+        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
         data.add_field(
             "file",
             open(filepath, "rb"),
@@ -339,7 +339,7 @@ class Client:
         )
         self._thread.exec(partial(self._send_file_async, url, data))
 
-    def send_folder(self, sender_name: str, dir: pathlib.Path) -> bool:
+    def send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
 
         assert (
             dir.is_dir() and dir.exists()
@@ -370,7 +370,7 @@ class Client:
         shutil.move(zip_file, temp_zip_file)
 
         # Then send the file
-        self.send_file(sender_name, temp_zip_file)
+        self.send_file(sender_id, temp_zip_file)
 
         return True
 

@@ -1,4 +1,5 @@
 from typing import Union, Dict, Any, Coroutine, Optional
+import asyncio
 import socket
 import os
 import time
@@ -8,6 +9,7 @@ import shutil
 import sys
 import json
 import pickle
+import uuid
 
 # Third-party Imports
 import dill
@@ -30,7 +32,13 @@ logger = _logger.getLogger("chimerapy-worker")
 
 
 class Worker:
-    def __init__(self, name: str, port: int = 10000, delete_temp: bool = True):
+    def __init__(
+        self,
+        name: str,
+        port: int = 10000,
+        delete_temp: bool = True,
+        id: Optional[str] = None,
+    ):
         """Create a local Worker.
 
         To execute ``Nodes`` within the main computer that is also housing
@@ -57,6 +65,11 @@ class Worker:
         self.port = port
         self.name = name
 
+        if isinstance(id, str):
+            self.id = id
+        else:
+            self.id = str(uuid.uuid4())
+
         # Instance variables
         self.has_shutdown: bool = False
         self.nodes: Dict = {}
@@ -71,7 +84,7 @@ class Worker:
         # Create server
         self.server = Server(
             port=self.port,
-            name=self.name,
+            id=self.id,
             routes=[
                 web.post("/nodes/create", self.async_create_node),
                 web.get("/nodes/server_data", self.report_node_server_data),
@@ -94,16 +107,14 @@ class Worker:
         # Start the server and get the new port address (random if port=0)
         self.server.serve()
         self.host, self.port = self.server.host, self.server.port
-        logger.info(
-            f"Worker {self.name} running HTTP server at {self.host}:{self.port}"
-        )
+        logger.info(f"Worker {self.id} running HTTP server at {self.host}:{self.port}")
 
         # Create a log listener to read Node's information
         self.log_receiver = LogReceiver()
         self.log_receiver.start()
 
     def __repr__(self):
-        return f"<Worker {self.name}>"
+        return f"<Worker name={self.name} id={self.id}>"
 
     def __str__(self):
         return self.__repr__()
@@ -160,93 +171,108 @@ class Worker:
         logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
-    async def async_create_node(self, request: web.Request):
-        msg_bytes = await request.read()
-        msg = pickle.loads(msg_bytes)
+    async def async_create_node(
+        self,
+        request: Optional[web.Request] = None,
+        node_config: Optional[Dict[str, Any]] = None,
+    ):
+
+        if isinstance(request, web.Request):
+            msg_bytes = await request.read()
+            msg = pickle.loads(msg_bytes)
+        elif isinstance(node_config, dict):
+            msg = node_config
+        else:
+            raise RuntimeError("Invalid node creation, need request or msg")
 
         # Saving name to track it for now
-        node_name = msg["node_name"]
-        logger.debug(f"{self}: received request for Node {node_name} creation: {msg}")
+        node_id = msg["id"]
+        logger.debug(f"{self}: received request for Node {id} creation: {msg}")
 
         # Saving the node data
-        self.nodes[node_name] = {k: v for k, v in msg.items() if k != "node_name"}
-        self.nodes[node_name]["status"] = {
+        self.nodes[node_id] = {k: v for k, v in msg.items() if k != "id"}
+        self.nodes[node_id]["status"] = {
             "INIT": 0,
             "CONNECTED": 0,
             "READY": 0,
             "FINISHED": 0,
         }
-        self.nodes[node_name]["response"] = False
-        self.nodes[node_name]["gather"] = None
+        self.nodes[node_id]["response"] = False
+        self.nodes[node_id]["gather"] = None
 
         # Keep trying to start a process until success
         success = False
         for i in range(config.get("worker.allowed-failures")):
 
             # Decode the node object
-            self.nodes[node_name]["node_object"] = dill.loads(
-                self.nodes[node_name]["pickled"]
+            self.nodes[node_id]["node_object"] = dill.loads(
+                self.nodes[node_id]["pickled"]
             )
 
             # Provide configuration information to the node once in the client
-            self.nodes[node_name]["node_object"].config(
+            self.nodes[node_id]["node_object"].config(
                 self.host,
                 self.port,
                 self.tempfolder,
-                self.nodes[node_name]["in_bound"],
-                self.nodes[node_name]["out_bound"],
-                self.nodes[node_name]["follow"],
+                self.nodes[node_id]["in_bound"],
+                self.nodes[node_id]["in_bound_by_name"],
+                self.nodes[node_id]["out_bound"],
+                self.nodes[node_id]["follow"],
                 logging_level=logger.level,
                 worker_logging_port=self.log_receiver.port,
             )
 
             # Before starting, over write the pid
-            self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
+            self.nodes[node_id]["node_object"]._parent_pid = os.getpid()
 
             # Start the node
-            self.nodes[node_name]["node_object"].start()
-            logger.debug(f"{self}: started <Node {node_name}>")
+            self.nodes[node_id]["node_object"].start()
+            logger.debug(f"{self}: started <Node {node_id}>")
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.nodes[node_name]["response"] == True,
+                condition=lambda: self.nodes[node_id]["response"] == True,
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
             if success:
-                logger.debug(f"{self}: {node_name} responding, SUCCESS")
+                logger.debug(f"{self}: {node_id} responding, SUCCESS")
             else:
                 # Handle failure
-                logger.debug(f"{self}: {node_name} responding, FAILED, retry")
-                self.nodes[node_name]["node_object"].shutdown()
-                self.nodes[node_name]["node_object"].terminate()
+                logger.debug(f"{self}: {node_id} responding, FAILED, retry")
+                self.nodes[node_id]["node_object"].shutdown()
+                self.nodes[node_id]["node_object"].terminate()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.nodes[node_name]["status"]["READY"] == True,
+                condition=lambda: self.nodes[node_id]["status"]["READY"] == True,
                 timeout=config.get("worker.timeout.info-request"),
             )
 
             if success:
-                logger.debug(f"{self}: {node_name} fully ready, SUCCESS")
+                logger.debug(f"{self}: {node_id} fully ready, SUCCESS")
                 break
             else:
                 # Handle failure
-                logger.debug(f"{self}: {node_name} fully ready, FAILED, retry")
-                self.nodes[node_name]["node_object"].shutdown()
-                self.nodes[node_name]["node_object"].terminate()
+                logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
+                self.nodes[node_id]["node_object"].shutdown()
+                self.nodes[node_id]["node_object"].terminate()
 
         if not success:
-            logger.error(f"{self}: Node {node_name} failed to create")
+            logger.error(f"{self}: Node {node_id} failed to create")
         else:
             # Mark success
             logger.debug(f"{self}: completed node creation: {self.nodes}")
 
         # Update the manager with the most up-to-date status of the nodes
         nodes_status = {k: self.nodes[k]["status"] for k in self.nodes}
+        response = {"success": success, "nodes_status": nodes_status}
 
-        return web.json_response({"success": success, "nodes_status": nodes_status})
+        if isinstance(request, web.Request):
+            return web.json_response(response)
+        else:
+            return success
 
     async def report_node_server_data(self, request: web.Request):
 
@@ -372,13 +398,13 @@ class Worker:
             logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
-        gather_data = {"name": self.name, "node_data": {}}
-        for node_name, node_data in self.nodes.items():
+        gather_data = {"id": self.id, "node_data": {}}
+        for node_id, node_data in self.nodes.items():
             if node_data["gather"] == None:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
                 node_data["gather"] = data_chunk
-            gather_data["node_data"][node_name] = node_data["gather"]._serialize()
+            gather_data["node_data"][node_id] = node_data["gather"]._serialize()
 
         return web.Response(body=pickle.dumps(gather_data))
 
@@ -410,7 +436,7 @@ class Worker:
                         raise TimeoutError("Nodes haven't fully finishing saving!")
 
             old_folder_name = pathlib.Path(msg["path"]) / self.tempfolder.name
-            new_folder_name = pathlib.Path(msg["path"]) / self.name
+            new_folder_name = pathlib.Path(msg["path"]) / f"{self.name}-{self.id}"
             os.rename(old_folder_name, new_folder_name)
 
         else:
@@ -420,9 +446,7 @@ class Worker:
             # Else, send the archive data to the manager via network
             try:
                 # Create a temporary HTTP client
-                client = Client(
-                    self.name, host=self.manager_host, port=self.manager_port
-                )
+                client = Client(self.id, host=self.manager_host, port=self.manager_port)
                 # client.send_file(sender_name=self.name, filepath=zip_package_dst)
                 await client._send_folder_async(self.name, self.tempfolder)
                 success = True
@@ -434,7 +458,7 @@ class Worker:
                 success = False
 
         # After completion, let the Manager know
-        return web.json_response({"name": self.name, "success": success})
+        return web.json_response({"id": self.id, "success": success})
 
     ####################################################################
     ## Worker <-> Node
@@ -442,22 +466,21 @@ class Worker:
 
     async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # Saving name to track it for now
-        node_name = msg["data"]["node_name"]
-        self.nodes[node_name]["gather"] = msg["data"]["latest_value"]
-        self.nodes[node_name]["response"] = True
+        # Saving gathering value
+        node_id = msg["data"]["id"]
+        self.nodes[node_id]["gather"] = msg["data"]["latest_value"]
+        self.nodes[node_id]["response"] = True
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # Saving name to track it for now
-        node_name = msg["data"]["node_name"]
+        node_id = msg["data"]["id"]
         status = msg["data"]["status"]
 
         # Update our records by grabbing all data from the msg
-        self.nodes[node_name].update(
-            {k: v for k, v in msg["data"].items() if k != "node_name"}
+        self.nodes[node_id].update(
+            {k: v for k, v in msg["data"].items() if k != "node_id"}
         )
-        self.nodes[node_name]["response"] = True
+        self.nodes[node_id]["response"] = True
 
         # Construct information of all the nodes to be send to the Manager
         # nodes_status_data = {
@@ -476,17 +499,17 @@ class Worker:
     ## Helper Methods
     ####################################################################
 
-    def mark_response_as_false_for_node(self, node_name: str):
-        self.nodes[node_name]["response"] = False
+    def mark_response_as_false_for_node(self, node_id: str):
+        self.nodes[node_id]["response"] = False
 
     def mark_all_response_as_false_for_nodes(self):
 
-        for node_name in self.nodes:
-            self.mark_response_as_false_for_node(node_name)
+        for node_id in self.nodes:
+            self.mark_response_as_false_for_node(node_id)
 
     async def wait_until_node_response(
         self,
-        node_name: str,
+        node_id: str,
         timeout: Union[float, int] = 10,
         attribute: str = "response",
         status: Optional[bool] = None,
@@ -495,13 +518,13 @@ class Worker:
         # # Wait until the node has informed us that it has been initialized
         if status:
             return await async_waiting_for(
-                condition=lambda: self.nodes[node_name]["status"][attribute] == True,
+                condition=lambda: self.nodes[node_id]["status"][attribute] == True,
                 check_period=0.1,
                 timeout=timeout,
             )
         else:
             return await async_waiting_for(
-                condition=lambda: self.nodes[node_name][attribute] == True,
+                condition=lambda: self.nodes[node_id][attribute] == True,
                 check_period=0.1,
                 timeout=timeout,
             )
@@ -513,12 +536,12 @@ class Worker:
         status: Optional[bool] = None,
     ) -> bool:
 
-        for node_name in self.nodes:
+        for node_id in self.nodes:
             success = await self.wait_until_node_response(
-                node_name, timeout, attribute, status
+                node_id, timeout, attribute, status
             )
             if not success:
-                logger.debug(f"{self}: Node {node_name} responding: FAILED")
+                logger.debug(f"{self}: Node {node_id } responding: FAILED")
                 return False
 
         logger.debug(f"{self}: All Nodes responding: SUCCESS")
@@ -527,9 +550,9 @@ class Worker:
     def create_node_server_data(self):
 
         # Construct simple data structure for Node to address information
-        node_server_data = {"name": self.name, "nodes": {}}
-        for node_name, node_data in self.nodes.items():
-            node_server_data["nodes"][node_name] = {
+        node_server_data = {"id": self.id, "nodes": {}}
+        for node_id, node_data in self.nodes.items():
+            node_server_data["nodes"][node_id] = {
                 "host": node_data["host"],
                 "port": node_data["port"],
             }
@@ -567,6 +590,7 @@ class Worker:
             f"http://{host}:{port}/workers/register",
             data=json.dumps(
                 {
+                    "id": self.id,
                     "name": self.name,
                     "register": True,
                     "addr": socket.gethostbyname(socket.gethostname()),
@@ -601,6 +625,7 @@ class Worker:
             self.manager_url,
             data=json.dumps(
                 {
+                    "id": self.id,
                     "name": self.name,
                     "register": False,
                     "addr": socket.gethostbyname(socket.gethostname()),
@@ -614,85 +639,16 @@ class Worker:
         return r.status_code == requests.codes.ok
 
     def create_node(self, msg: Dict[str, Any]):
+        # return asyncio.run(self.async_create_node(node_config=msg))
+        node_id = msg["id"]
+        self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
 
-        # Saving name to track it for now
-        node_name = msg["node_name"]
-        logger.debug(f"{self}: received request for Node {node_name} creation: {msg}")
-
-        # Saving the node data
-        self.nodes[node_name] = {k: v for k, v in msg.items() if k != "node_name"}
-        self.nodes[node_name]["status"] = {
-            "INIT": 0,
-            "CONNECTED": 0,
-            "READY": 0,
-            "FINISHED": 0,
-        }
-        self.nodes[node_name]["response"] = False
-        self.nodes[node_name]["gather"] = None
-
-        # Keep trying to start a process until success
-        success = False
-        for i in range(config.get("worker.allowed-failures")):
-
-            # Decode the node object
-            self.nodes[node_name]["node_object"] = dill.loads(
-                self.nodes[node_name]["pickled"]
-            )
-
-            # Provide configuration information to the node once in the client
-            self.nodes[node_name]["node_object"].config(
-                self.host,
-                self.port,
-                self.tempfolder,
-                self.nodes[node_name]["in_bound"],
-                self.nodes[node_name]["out_bound"],
-                self.nodes[node_name]["follow"],
-                logging_level=logger.level,
-                worker_logging_port=self.log_receiver.port,
-            )
-
-            # Before starting, over write the pid
-            self.nodes[node_name]["node_object"]._parent_pid = os.getpid()
-
-            # Start the node
-            self.nodes[node_name]["node_object"].start()
-            logger.debug(f"{self}: started <Node {node_name}>")
-
-            # Wait until response from node
-            success = waiting_for(
-                condition=lambda: self.nodes[node_name]["response"] == True,
-                timeout=config.get("worker.timeout.node-creation"),
-            )
-
-            if success:
-                logger.debug(f"{self}: {node_name} responding, SUCCESS")
-            else:
-                # Handle failure
-                logger.debug(f"{self}: {node_name} responding, FAILED, retry")
-                self.nodes[node_name]["node_object"].shutdown()
-                self.nodes[node_name]["node_object"].terminate()
-                continue
-
-            # Now we wait until the node has fully initialized and ready-up
-            success = waiting_for(
-                condition=lambda: self.nodes[node_name]["status"]["READY"] == True,
-                timeout=config.get("worker.timeout.info-request"),
-            )
-
-            if success:
-                logger.debug(f"{self}: {node_name} fully ready, SUCCESS")
-                break
-            else:
-                # Handle failure
-                logger.debug(f"{self}: {node_name} fully ready, FAILED, retry")
-                self.nodes[node_name]["node_object"].shutdown()
-                self.nodes[node_name]["node_object"].terminate()
-
-        if not success:
-            logger.error(f"{self}: Node {node_name} failed to create")
-        else:
-            # Mark success
-            logger.debug(f"{self}: completed node creation: {self.nodes}")
+        success = waiting_for(
+            condition=lambda: node_id in self.nodes
+            and self.nodes[node_id]["status"]["READY"] == True,
+            check_period=0.1,
+            timeout=config.get("manager.timeout.node-creation"),
+        )
 
         return success
 
@@ -712,6 +668,8 @@ class Worker:
         self.server.broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
 
     def idle(self):
+
+        logger.debug(f"{self}: Idle")
 
         while not self.has_shutdown:
             time.sleep(2)
@@ -735,23 +693,25 @@ class Worker:
         else:
             self.has_shutdown = True
 
+        logger.debug(f"{self}: shutting down!")
+
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
 
         # Shutdown nodes from the client (start all shutdown)
-        for node_name in self.nodes:
-            self.nodes[node_name]["node_object"].shutdown()
+        for node_id in self.nodes:
+            self.nodes[node_id]["node_object"].shutdown()
 
         # Then wait until close, or force
-        for node_name in self.nodes:
-            self.nodes[node_name]["node_object"].join(
+        for node_id in self.nodes:
+            self.nodes[node_id]["node_object"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
 
             # If that doesn't work, terminate
-            if self.nodes[node_name]["node_object"].exitcode != 0:
-                logger.warning(f"{self}: Node {node_name} forced shutdown")
-                self.nodes[node_name]["node_object"].terminate()
+            if self.nodes[node_id]["node_object"].exitcode != 0:
+                logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes[node_id]["node_object"].terminate()
 
             logger.debug(f"{self}: Nodes have joined")
 

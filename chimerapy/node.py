@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional, Union, Literal
+from typing import Dict, List, Any, Optional, Union, Literal, Tuple
 from multiprocessing.process import AuthenticationString
 import logging
 import queue
@@ -9,8 +9,10 @@ import tempfile
 import datetime
 import threading
 import traceback
+import uuid
 
 # Third-party Imports
+from dataclasses import dataclass
 import multiprocess as mp
 import numpy as np
 import pandas as pd
@@ -50,15 +52,16 @@ class Node(mp.Process):
         # Saving input parameters
         self._context = mp.get_start_method()
         self.name = name
+        self.id = str(uuid.uuid4())
         self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
 
         # Saving state variables
         self.publisher: Optional[Publisher] = None
         self.p2p_subs: Dict[str, Subscriber] = {}
-        self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
+        self.socket_to_sub_name_mapping: Dict[zmq.Socket, Tuple[str, str]] = {}
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
-        self.logger: Optional[logging.Logger] = None
+        self.logger: logging.Logger = logging.getLogger("chimerapy")
 
         # Default values
         self.logging_level: int = logging.INFO
@@ -86,6 +89,7 @@ class Node(mp.Process):
                 temp_folder,
                 [],
                 [],
+                [],
                 follow=None,
                 networking=False,
                 logging_level=logging.DEBUG,
@@ -102,7 +106,7 @@ class Node(mp.Process):
     ####################################################################
 
     def __repr__(self):
-        return f"<Node {self.name}>"
+        return f"<Node name={self.name} id={self.id}>"
 
     def __str__(self):
         return self.__repr__()
@@ -137,7 +141,7 @@ class Node(mp.Process):
                 l = _logger.getLogger("chimerapy-subprocess")
             elif self._context == "fork":
                 l = _logger.getLogger(
-                    "chimerapy-subprocess"
+                    "chimerapy"
                 )  # would be just chimerapy, but testing
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
@@ -158,12 +162,12 @@ class Node(mp.Process):
     async def process_node_server_data(self, msg: Dict):
 
         # We determine all the out bound nodes
-        for in_bound_name in self.p2p_info["in_bound"]:
+        for i, in_bound_id in enumerate(self.p2p_info["in_bound"]):
 
-            self.logger.debug(f"{self}: Setting up clients: {self.name}: {msg}")
+            self.logger.debug(f"{self}: Setting up clients: {self.id}: {msg}")
 
             # Determine the host and port information
-            in_bound_info = msg["data"][in_bound_name]
+            in_bound_info = msg["data"][in_bound_id]
 
             # Create subscribers to other nodes' publishers
             p2p_subscriber = Subscriber(
@@ -171,8 +175,11 @@ class Node(mp.Process):
             )
 
             # Storing all subscribers
-            self.p2p_subs[in_bound_name] = p2p_subscriber
-            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = in_bound_name
+            self.p2p_subs[in_bound_id] = p2p_subscriber
+            self.socket_to_sub_name_mapping[p2p_subscriber._zmq_socket] = (
+                self.p2p_info["in_bound_by_name"][i],
+                in_bound_id,
+            )
 
         # After creating all subscribers, use a poller to track them all
         for sub in self.p2p_subs.values():
@@ -189,7 +196,8 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data={
-                "node_name": self.name,
+                "id": self.id,
+                "name": self.name,
                 "status": self.status,
             },
         )
@@ -199,7 +207,8 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
-                "node_name": self.name,
+                "id": self.id,
+                "name": self.name,
                 "latest_value": self.latest_value,
             },
         )
@@ -214,7 +223,8 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data={
-                "node_name": self.name,
+                "id": self.id,
+                "name": self.name,
                 "status": self.status,
             },
         )
@@ -287,6 +297,7 @@ class Node(mp.Process):
         port: int,
         logdir: pathlib.Path,
         in_bound: List[str],
+        in_bound_by_name: List[str],
         out_bound: List[str],
         follow: Optional[str] = None,
         networking: bool = True,
@@ -318,7 +329,11 @@ class Node(mp.Process):
         os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
-        self.p2p_info = {"in_bound": in_bound, "out_bound": out_bound}
+        self.p2p_info = {
+            "in_bound": in_bound,
+            "in_bound_by_name": in_bound_by_name,
+            "out_bound": out_bound,
+        }
         self.follow = follow
 
         # Keeping track of the node's state
@@ -343,7 +358,7 @@ class Node(mp.Process):
 
         # Creating container for the latest values of the subscribers
         self.in_bound_data: Dict[str, Optional[DataChunk]] = {
-            x: None for x in self.p2p_info["in_bound"]
+            x: None for x in self.p2p_info["in_bound_by_name"]
         }
         self.inputs_ready = threading.Event()
         self.inputs_ready.clear()
@@ -364,7 +379,7 @@ class Node(mp.Process):
             self.client = Client(
                 host=self.worker_host,
                 port=self.worker_port,
-                name=self.name,
+                id=self.id,
                 ws_handlers={
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -392,7 +407,8 @@ class Node(mp.Process):
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
-                    "node_name": self.name,
+                    "id": self.id,
+                    "name": self.name,
                     "status": self.status,
                     "host": self.publisher.host,
                     "port": self.publisher.port,
@@ -419,7 +435,8 @@ class Node(mp.Process):
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
-                    "node_name": self.name,
+                    "id": self.id,
+                    "name": self.name,
                     "status": self.status,
                 },
             )
@@ -433,7 +450,7 @@ class Node(mp.Process):
             while self.running.value:
                 if self.worker_signal_start.wait(timeout=1):
                     break
-                self.logger.debug(f"{self}: waiting")
+                # self.logger.debug(f"{self}: waiting")
 
         self.logger.debug(f"{self}: finished waiting")
 
@@ -458,14 +475,16 @@ class Node(mp.Process):
             # Else, update values
             for s in events:  # socket
 
+                self.logger.debug(f"{self}: processing event {s}")
+
                 # Update
-                name = self.socket_to_sub_name_mapping[s]  # inbound
+                name, id = self.socket_to_sub_name_mapping[s]  # inbound
                 serial_data_chunk = s.recv()
                 self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
 
                 # Update flag if new values are coming from the node that is
                 # being followed
-                if self.follow == name:
+                if self.follow == id:
                     follow_event = True
 
             self.logger.debug(
@@ -600,19 +619,23 @@ class Node(mp.Process):
         # Shutting down publisher
         if self.publisher:
             self.publisher.shutdown()
+            self.logger.debug(f"{self}: publisher shutdown")
 
         # Stop poller
         if self.poll_inputs_thread:
             self.poll_inputs_thread.join()
+            self.logger.debug(f"{self}: polling thread shutdown")
 
         # Shutting down subscriber
         for sub in self.p2p_subs.values():
             sub.shutdown()
+            self.logger.debug(f"{self}: subscriber shutdown")
 
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()
         self.save_handler.join()
         self.status["FINISHED"] = 1
+        self.logger.debug(f"{self}: save handler shutdown")
 
         # Shutting down networking
         if self.networking:
@@ -621,7 +644,8 @@ class Node(mp.Process):
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
                 data={
-                    "node_name": self.name,
+                    "id": self.id,
+                    "name": self.name,
                     "status": self.status,
                 },
             )

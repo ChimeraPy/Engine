@@ -58,9 +58,10 @@ def test_faulty_node_creation_worker_only(worker, node_cls, expected_success):
 
     # Simple single node without connection
     msg = {
-        "node_name": faulty_node.name,
+        "id": faulty_node.id,
         "pickled": dill.dumps(faulty_node),
         "in_bound": [],
+        "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
     }
@@ -86,7 +87,7 @@ def test_faulty_node_creation_with_manager(manager, worker, node_cls, expected_s
     simple_graph = cp.Graph()
     new_node = node_cls(name="test")
     simple_graph.add_nodes_from([new_node])
-    mapping = {worker.name: [new_node.name]}
+    mapping = {worker.id: [new_node.id]}
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)

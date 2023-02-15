@@ -13,82 +13,70 @@ cp.debug()
 
 # @pytest.mark.repeat(10)
 @pytest.mark.parametrize(
-    "config_manager, expected_worker_to_nodes",
+    "config_manager",
     [
-        (lazy_fixture("single_node_no_connections_manager"), {"local": ["Gen1"]}),
-        (
-            lazy_fixture("multiple_nodes_one_worker_manager"),
-            {"local": ["Gen1", "Con1"]},
-        ),
-        (
-            lazy_fixture("multiple_nodes_multiple_workers_manager"),
-            {"local": ["Gen1"], "local2": ["Con1"]},
-        ),
+        (lazy_fixture("single_node_no_connections_manager")),
+        (lazy_fixture("multiple_nodes_one_worker_manager")),
+        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
         pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
-            {"test": ["Gen1"]},
             marks=linux_run_only,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
-            {"test": ["Gen1", "Con1"]},
             marks=linux_run_only,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
-            {"local": ["Gen1"], "local2": ["Con1"]},
             marks=linux_run_only,
         ),
     ],
 )
-def test_detecting_when_all_nodes_are_ready(config_manager, expected_worker_to_nodes):
+def test_detecting_when_all_nodes_are_ready(config_manager):
 
-    # Extract all the nodes
-    nodes_names = []
-    for worker_name in config_manager.workers:
+    worker_node_map = config_manager.worker_graph_map
+
+    nodes_ids = []
+    for worker_id in config_manager.workers:
 
         # Assert that the worker has their expected nodes
-        expected_nodes = expected_worker_to_nodes[worker_name]
+        expected_nodes = worker_node_map[worker_id]
         union = set(expected_nodes) | set(
-            config_manager.workers[worker_name]["nodes_status"].keys()
+            config_manager.workers[worker_id]["nodes_status"].keys()
         )
         assert len(union) == len(expected_nodes)
 
         # Assert that all the nodes should be INIT
-        for node_name in config_manager.workers[worker_name]["nodes_status"]:
-            assert config_manager.workers[worker_name]["nodes_status"][node_name][
-                "INIT"
-            ]
-            nodes_names.append(node_name)
+        for node_id in config_manager.workers[worker_id]["nodes_status"]:
+            assert config_manager.workers[worker_id]["nodes_status"][node_id]["INIT"]
+            nodes_ids.append(node_id)
 
     logger.debug(f"After creation of p2p network workers: {config_manager.workers}")
 
     # The config manager should have all the nodes are registered
-    assert all([config_manager.graph.has_node_by_name(x) for x in nodes_names])
+    assert all([config_manager.graph.has_node_by_id(x) for x in nodes_ids])
 
     # Extract all the nodes
-    nodes_names = []
-    for worker_name in config_manager.workers:
-        for node_name in config_manager.workers[worker_name]["nodes_status"]:
-            assert config_manager.workers[worker_name]["nodes_status"][node_name][
+    nodes_ids = []
+    for worker_id in config_manager.workers:
+        for node_id in config_manager.workers[worker_id]["nodes_status"]:
+            assert config_manager.workers[worker_id]["nodes_status"][node_id][
                 "CONNECTED"
             ]
-            nodes_names.append(node_name)
+            nodes_ids.append(node_id)
 
     # The config manager should have all the nodes registered as CONNECTED
-    assert all([x in config_manager.nodes_server_table for x in nodes_names])
+    assert all([x in config_manager.nodes_server_table for x in nodes_ids])
 
     # Extract all the nodes
-    nodes_names = []
-    for worker_name in config_manager.workers:
-        for node_name in config_manager.workers[worker_name]["nodes_status"]:
-            assert config_manager.workers[worker_name]["nodes_status"][node_name][
-                "READY"
-            ]
-            nodes_names.append(node_name)
+    nodes_idss = []
+    for worker_id in config_manager.workers:
+        for node_id in config_manager.workers[worker_id]["nodes_status"]:
+            assert config_manager.workers[worker_id]["nodes_status"][node_id]["READY"]
+            nodes_idss.append(node_id)
 
     # The config manager should have all the nodes registered as READY
-    assert all([x in config_manager.nodes_server_table for x in nodes_names])
+    assert all([x in config_manager.nodes_server_table for x in nodes_idss])
 
 
 # @pytest.mark.repeat(10)
@@ -128,8 +116,14 @@ def test_manager_single_step_after_commit_graph(config_manager, expected_output)
     # Then request gather and confirm that the data is valid
     latest_data_values = config_manager.gather()
 
-    # Assert
+    # Convert the expected from name to id
+    expected_output_by_id = {}
     for k, v in expected_output.items():
+        id = config_manager.graph.get_id_by_name(k)
+        expected_output_by_id[id] = v
+
+    # Assert
+    for k, v in expected_output_by_id.items():
         assert (
             k in latest_data_values
             and isinstance(latest_data_values[k], cp.DataChunk)
@@ -174,8 +168,14 @@ def test_manager_start(config_manager, expected_output):
     # Then request gather and confirm that the data is valid
     latest_data_values = config_manager.gather()
 
-    # Assert
+    # Convert the expected from name to id
+    expected_output_by_id = {}
     for k, v in expected_output.items():
+        id = config_manager.graph.get_id_by_name(k)
+        expected_output_by_id[id] = v
+
+    # Assert
+    for k, v in expected_output_by_id.items():
         assert (
             k in latest_data_values
             and isinstance(latest_data_values[k], cp.DataChunk)

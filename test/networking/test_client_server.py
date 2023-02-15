@@ -43,7 +43,7 @@ async def echo(msg: Dict, ws: web.WebSocketResponse = None):
 @pytest.fixture
 def server():
     server = cp.Server(
-        name="test",
+        id="test_server",
         port=0,
         routes=[web.get("/", hello)],
         ws_handlers={ECHO_FLAG: echo},
@@ -56,7 +56,7 @@ def server():
 @pytest.fixture
 def client(server):
     client = cp.Client(
-        name="test",
+        id="test_client",
         host=server.host,
         port=server.port,
         ws_handlers={ECHO_FLAG: echo},
@@ -74,7 +74,7 @@ def client_list(server):
         client = cp.Client(
             host=server.host,
             port=server.port,
-            name=f"test-{i}",
+            id=f"test-{i}",
             ws_handlers={ECHO_FLAG: echo},
         )
         client.connect()
@@ -92,15 +92,15 @@ def test_server_http_req_res(server):
 
 
 def test_server_websocket_connection(server, client):
-    assert client.name in list(server.ws_clients.keys())
+    assert client.id in list(server.ws_clients.keys())
 
 
 def test_server_send_to_client(server, client):
     # Simple send
-    server.send(client_name=client.name, signal=ECHO_FLAG, data="HELLO")
+    server.send(client_id=client.id, signal=ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    server.send(client_name=client.name, signal=ECHO_FLAG, data="HELLO", ok=True)
+    server.send(client_id=client.id, signal=ECHO_FLAG, data="HELLO", ok=True)
 
     assert cp.utils.waiting_for(
         lambda: client.msg_processed_counter >= 2,
@@ -153,7 +153,7 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
 def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    client.send_folder(sender_name="test_worker", dir=dir)
+    client.send_folder(sender_id="test_worker", dir=dir)
 
     # Get the expected behavior
     miss_counter = 0

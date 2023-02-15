@@ -1,8 +1,7 @@
 # Built-in Imports
 import threading
 import queue
-import logging
-import platform
+import uuid
 
 # Third-party
 import docker
@@ -41,11 +40,14 @@ class DockeredWorker:
         )
         self.name = name
 
+        # Create id
+        self.id: str = str(uuid.uuid4())
+
     def connect(self, host, port):
 
         # Connect worker to Manager through entrypoint
         _, stream = self.container.exec_run(
-            cmd=f"cp-worker --ip {host} --port {port} --name {self.name} --wport 0",
+            cmd=f"cp-worker --id {self.id} --ip {host} --port {port} --name {self.name} --wport 0",
             stream=True,
         )
 

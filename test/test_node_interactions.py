@@ -71,7 +71,7 @@ def step_up_graph():
     graph.add_edge(src=hf, dst=sn, follow=True)
     graph.add_edge(src=lf, dst=sn)
 
-    return graph
+    return (graph, [hf.id, lf.id, sn.id])
 
 
 @pytest.fixture
@@ -86,11 +86,11 @@ def step_down_graph():
     graph.add_edge(src=hf, dst=sn)
     graph.add_edge(src=lf, dst=sn, follow=True)
 
-    return graph
+    return (graph, [hf.id, lf.id, sn.id])
 
 
 @pytest.mark.parametrize(
-    "config_graph, follow",
+    "config_graph_data, follow",
     [
         (
             lazy_fixture("step_up_graph"),
@@ -102,7 +102,10 @@ def step_down_graph():
         ),
     ],
 )
-def test_node_frequency_execution(manager, worker, config_graph, follow):
+def test_node_frequency_execution(manager, worker, config_graph_data, follow):
+
+    # Decompose graph data
+    config_graph, node_ids = config_graph_data
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
@@ -111,7 +114,7 @@ def test_node_frequency_execution(manager, worker, config_graph, follow):
     manager.commit_graph(
         config_graph,
         {
-            "local": ["hf", "lf", "sn"],
+            worker.id: node_ids,
         },
     )
 
@@ -120,23 +123,28 @@ def test_node_frequency_execution(manager, worker, config_graph, follow):
     time.sleep(3)
     manager.stop()
 
+    # Convert name to id
+    name_to_id = {
+        data["object"].name: n for n, data in manager.graph.G.nodes(data=True)
+    }
+
     # Then request gather and confirm that the data is valid
     latest_data_values = manager.gather()
     logger.info(f"Data Values: {latest_data_values}")
-    data_chunk_step_records = latest_data_values["sn"]
+    data_chunk_step_records = latest_data_values[name_to_id["sn"]]
     step_records = data_chunk_step_records.get("record")["value"]
 
     if follow == "up":
-        assert step_records["lf"] == latest_data_values["lf"]
+        assert step_records["lf"] == latest_data_values[name_to_id["lf"]]
         assert (
             np.abs(
                 (
                     step_records["hf"].get("i")["value"]
-                    - latest_data_values["hf"].get("i")["value"]
+                    - latest_data_values[name_to_id["hf"]].get("i")["value"]
                 )
             )
             < 5
         )
     elif follow == "down":
-        assert step_records["lf"] == latest_data_values["lf"]
-        assert step_records["hf"] != latest_data_values["hf"]
+        assert step_records["lf"] == latest_data_values[name_to_id["lf"]]
+        assert step_records["hf"] != latest_data_values[name_to_id["hf"]]
