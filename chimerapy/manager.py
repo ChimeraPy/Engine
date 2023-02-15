@@ -31,7 +31,7 @@ logger = _logger.getLogger("chimerapy")
 class Manager:
     def __init__(
         self,
-        logdir: pathlib.Path,
+        logdir: Union[pathlib.Path, str],
         port: int = 9000,
         max_num_of_workers: int = 50,
     ):
@@ -58,7 +58,9 @@ class Manager:
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         rand_num = random.randint(1000, 9999)
-        self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
+        self.logdir = (
+            pathlib.Path(logdir).resolve() / f"chimerapy-{timestamp}-{rand_num}"
+        )
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
