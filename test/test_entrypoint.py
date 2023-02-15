@@ -12,6 +12,7 @@ from .mock import DockeredWorker
 from .conftest import linux_run_only
 
 logger = cp._logger.getLogger("chimerapy")
+cp.debug()
 
 
 @linux_run_only
@@ -21,10 +22,16 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
     dockered_worker.connect(manager.host, manager.port)
     logger.info("Executed cmd to connect Worker to Manager.")
 
+    time.sleep(2)
+
     # Assert that the Worker is connected
     assert dockered_worker.id in manager.workers
+<<<<<<< HEAD
     manager.shutdown()
+=======
+>>>>>>> 62340f6 (91 UUID (#95))
     logger.info("Manager shutting down")
+    manager.shutdown()
 
 
 @linux_run_only

@@ -15,9 +15,9 @@ cp.debug()
 @pytest.mark.parametrize(
     "config_manager",
     [
-        # (lazy_fixture("single_node_no_connections_manager")),
-        # (lazy_fixture("multiple_nodes_one_worker_manager")),
-        # (lazy_fixture("multiple_nodes_multiple_workers_manager")),
+        (lazy_fixture("single_node_no_connections_manager")),
+        (lazy_fixture("multiple_nodes_one_worker_manager")),
+        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
         pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
             marks=linux_run_only,

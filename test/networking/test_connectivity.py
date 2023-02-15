@@ -43,6 +43,11 @@ def test_manager_registering_worker_locally(manager, worker):
     assert worker.id in manager.workers
 
 
+def test_manager_registering_via_localhost(manager, worker):
+    worker.connect(host="localhost", port=manager.port)
+    assert worker.id in manager.workers
+
+
 def test_manager_registering_workers_locally(manager):
 
     workers = []

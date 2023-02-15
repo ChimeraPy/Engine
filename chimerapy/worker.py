@@ -642,7 +642,22 @@ class Worker:
         return r.status_code == requests.codes.ok
 
     def create_node(self, msg: Dict[str, Any]):
+<<<<<<< HEAD
         return asyncio.run(self.async_create_node(node_config=msg))
+=======
+        # return asyncio.run(self.async_create_node(node_config=msg))
+        node_id = msg["id"]
+        self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
+
+        success = waiting_for(
+            condition=lambda: node_id in self.nodes
+            and self.nodes[node_id]["status"]["READY"] == True,
+            check_period=0.1,
+            timeout=config.get("manager.timeout.node-creation"),
+        )
+
+        return success
+>>>>>>> 62340f6 (91 UUID (#95))
 
     def step(self):
 
@@ -660,6 +675,8 @@ class Worker:
         self.server.broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
 
     def idle(self):
+
+        logger.debug(f"{self}: Idle")
 
         while not self.has_shutdown:
             time.sleep(2)
@@ -682,6 +699,8 @@ class Worker:
             return
         else:
             self.has_shutdown = True
+
+        logger.debug(f"{self}: shutting down!")
 
         # Shutdown the Worker 2 Node server
         self.server.shutdown()

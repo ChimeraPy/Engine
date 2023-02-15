@@ -69,7 +69,7 @@ def logreceiver():
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
     yield
-    time.sleep(0.5)
+    time.sleep(3)
 
 
 @pytest.fixture
