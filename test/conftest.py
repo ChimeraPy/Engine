@@ -107,7 +107,7 @@ class GenNode(cp.Node):
 
     def step(self):
         time.sleep(0.5)
-        logger.debug(f"{self.value}")
+        logger.debug(self.value)
         return self.value
 
 

@@ -5,9 +5,20 @@
 import logging.config
 import os
 from dataclasses import dataclass
+from logging import LogRecord
 from typing import Any, Dict
 
 from zmq.log.handlers import PUBHandler
+
+
+# FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
+#  brings in an overhead for tracking it upstream
+class ZMQLogPublisher(PUBHandler):
+    """A small wrapper around the ZMQ PUBHandler to make it work with non-strings."""
+
+    def emit(self, record: LogRecord) -> None:
+        record.msg = str(record.msg)
+        super().emit(record)
 
 
 @dataclass
@@ -84,7 +95,7 @@ def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig)
         Uses the same formatter as the consoleHandler
     """
     # Add a handler to publish the logs to zmq ws
-    handler = PUBHandler(
+    handler = ZMQLogPublisher(
         f"{handler_config.transport}://*:{handler_config.publisher_port}"
     )
     handler.root_topic = handler_config.root_topic

@@ -83,7 +83,7 @@ class Manager:
         self.duration: int = 0
 
         if publish_logs_via_zmq:
-            handler_config = _logger.ZMQLogHandlerConfig.from_dict(**kwargs)
+            handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
             _logger.add_zmq_handler(logger, handler_config)
 
         # Create server
