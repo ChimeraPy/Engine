@@ -83,21 +83,20 @@ def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig)
     Note:
         Uses the same formatter as the consoleHandler
     """
-    if handler_config is not None:
-        # Add a handler to publish the logs to zmq ws
-        handler = PUBHandler(
-            f"{handler_config.transport}://*:{handler_config.publisher_port}"
+    # Add a handler to publish the logs to zmq ws
+    handler = PUBHandler(
+        f"{handler_config.transport}://*:{handler_config.publisher_port}"
+    )
+    handler.root_topic = handler_config.root_topic
+    logger.addHandler(handler)
+    handler.setLevel(logging.DEBUG)
+    # Use the same formatter as the console
+    handler.setFormatter(
+        logging.Formatter(
+            logger.handlers[0].formatter._fmt,
+            logger.handlers[0].formatter.datefmt,
         )
-        handler.root_topic = handler_config.root_topic
-        logger.addHandler(handler)
-        handler.setLevel(logging.DEBUG)
-        # Use the same formatter as the console
-        handler.setFormatter(
-            logging.Formatter(
-                logger.handlers[0].formatter._fmt,
-                logger.handlers[0].formatter.datefmt,
-            )
-        )  # FIXME: This is a hack, can this be done better?
+    )  # FIXME: This is a hack, can this be done better?
 
 
 def getLogger(
