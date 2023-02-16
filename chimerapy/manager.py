@@ -20,8 +20,9 @@ import networkx as nx
 import requests
 
 from chimerapy import config
-from .states import ManagerState, WorkerState
+from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
+from .networking.enums import MANAGER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -50,9 +51,7 @@ class Manager:
 
         """
         # Saving input parameters
-        self.state = ManagerState(
-            name="Manager", id="Manager", ip="localhost", port=port
-        )
+        self.state = ManagerState(id="Manager", ip="localhost", port=port)
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
 
@@ -85,6 +84,7 @@ class Manager:
                 web.get("/network", self.get_network),
                 # Manager-Worker Routes
                 web.post("/workers/register", self.register_worker),
+                web.post("/workers/deregister", self.deregister_worker),
                 web.post("/workers/node_status", self.update_nodes_status),
             ],
         )
@@ -121,7 +121,7 @@ class Manager:
     ####################################################################
 
     async def get_network(self, request: web.Request):
-        return web.json_response(asdict(self.state))
+        return web.json_response(self.state.to_dict())
 
     ####################################################################
     ## Worker -> Manager Messages
@@ -129,35 +129,42 @@ class Manager:
 
     async def register_worker(self, request: web.Request):
         msg = await request.json()
-        worker_state = WorkerState(msg)
+        worker_state = WorkerState.from_dict(msg)
 
-        if msg["register"]:
-            self.state.workers[worker_state.id] = replace(
-                self.state.workers[worker_state.id], **asdict(worker_state)
-            )
-            logger.info(
-                f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-            )
+        logger.debug(worker_state)
 
-        else:
-            logger.info(
-                f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-            )
-            del self.state.workers[worker_state.id]
+        self.state.workers[worker_state.id] = worker_state
+        logger.info(
+            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
         return web.json_response(config.config)
 
+    async def deregister_worker(self, request: web.Request):
+        msg = await request.json()
+        worker_state = WorkerState.from_dict(msg)
+
+        logger.info(
+            f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        del self.state.workers[worker_state.id]
+
+        return web.HTTPOk()
+
     async def update_nodes_status(self, request: web.Request):
         msg = await request.json()
-        worker_state = WorkerState(msg)
+        worker_state = WorkerState.from_dict(msg)
 
         # Updating nodes status
-        self.state.workers[worker_state.id] = replace(
-            self.state.workers[worker_state.id], **asdict(worker_state)
-        )
+        self.state.workers[worker_state.id] = worker_state
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
+        await self.server.async_broadcast(
+            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
+            data=self.state.to_dict(),
+        )
 
         return web.HTTPOk()
 
@@ -215,7 +222,8 @@ class Manager:
 
         # Send for the creation of the node
         r = requests.post(
-            self.state.workers[worker_id]["url"] + "/nodes/create",
+            f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
+            + "/nodes/create",
             pickle.dumps(
                 {
                     "worker_id": worker_id,
@@ -239,7 +247,10 @@ class Manager:
             data = r.json()
             if data["success"]:
                 logger.debug(f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS")
-                self.state.workers[worker_id].nodes[node_id] = data["node_state"]
+                self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
+                    data["node_state"]
+                )
+                logger.debug(f"{self}: WorkerState: {self.state.workers}")
                 return True
 
             else:
@@ -308,9 +319,10 @@ class Manager:
             if r.status_code == requests.codes.ok:
                 data = r.json()
                 if data["success"]:
-                    self.state.workers[worker_id] = replace(
-                        self.state.workers[worker_id], **data["worker_state"]
+                    self.state.workers[worker_id] = WorkerState.from_dict(
+                        data["worker_state"]
                     )
+                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
                     logger.debug(
                         f"{self}: receiving Worker's node server request: SUCCESS"
@@ -553,9 +565,9 @@ class Manager:
 
                 # Create a temporary HTTP client
                 client = Client(
-                    self.state.name,
-                    host=worker_data["ip"],
-                    port=worker_data["port"],
+                    self.state.id,
+                    host=worker_data.ip,
+                    port=worker_data.port,
                 )
                 client.send_file(sender_id=self.state.id, filepath=zip_package_dst)
 
@@ -684,7 +696,7 @@ class Manager:
             # Saving the data
             data = pickle.loads(r.content)["node_data"]
             for node_id, node_data in data.items():
-                data[node_id] = DataChunk.from_bytes(node_data)
+                data[node_id] = DataChunk.from_json(node_data)
 
             gather_data.update(data)
 
@@ -740,7 +752,7 @@ class Manager:
         if success:
             for worker_id in self.state.workers:
                 for node_id in self.state.workers[worker_id].nodes:
-                    self.state.workers[worker_id].nodes[node_id].finished = 1
+                    self.state.workers[worker_id].nodes[node_id].finished = True
 
         # Request collecting archives
         success = self.broadcast_request(

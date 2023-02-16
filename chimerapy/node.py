@@ -10,7 +10,6 @@ import datetime
 import threading
 import traceback
 import uuid
-from dataclasses import asdict
 
 # Third-party Imports
 from dataclasses import asdict
@@ -206,8 +205,7 @@ class Node(mp.Process):
         self.state.connected = True
         self.connected_ready.set()
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS,
-            data=asdict(self.state),
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
 
     async def provide_gather(self, msg: Dict):
@@ -215,8 +213,8 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
-                "state": asdict(self.state),
-                "latest_value": self.latest_value,
+                "state": self.state.to_dict(),
+                "latest_value": self.latest_value.to_json(),
             },
         )
 
@@ -228,7 +226,7 @@ class Node(mp.Process):
         self.state.finished = True
 
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=asdict(self.state)
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
 
     async def start_node(self, msg: Dict):
@@ -346,7 +344,7 @@ class Node(mp.Process):
         self.logging_level = logging_level
 
         # Creating initial values
-        self.latest_value = None
+        self.latest_value: DataChunk = DataChunk()
 
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``
@@ -409,7 +407,7 @@ class Node(mp.Process):
             # Send publisher port and host information
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
-                data=asdict(self.state),
+                data=self.state.to_dict(),
             )
 
     def prep(self):
@@ -429,10 +427,7 @@ class Node(mp.Process):
 
         # Only do so if connected to Worker and its connected
         if self.networking:
-            self.client.send(
-                signal=NODE_MESSAGE.STATUS,
-                data=asdict(self.state),
-            )
+            self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
 
     def waiting(self):
 
@@ -634,10 +629,7 @@ class Node(mp.Process):
         if self.networking:
 
             # Inform the worker that the Node has finished its saving of data
-            self.client.send(
-                signal=NODE_MESSAGE.STATUS,
-                data=asdict(self.state),
-            )
+            self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
 
             # Shutdown the client
             self.client.shutdown()

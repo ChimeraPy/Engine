@@ -1,30 +1,48 @@
 from typing import Dict
+import time
 
+import pytest
 from aiohttp import web
 import chimerapy as cp
 from chimerapy.networking.enums import MANAGER_MESSAGE
+from chimerapy.states import ManagerState
 
 from ..conftest import GenNode
 
 logger = cp._logger.getLogger("chimerapy")
 
 
-def test_node_updates(manager, worker):
+class Record:
+    def __init__(self):
+        self.network_state = None
 
-    msg_counter = 0
+    async def node_update_counter(self, msg: Dict):
+        self.network_state = ManagerState.from_dict(msg["data"])
 
-    async def node_update_counter(msg: Dict, ws: web.WebSocketResponse):
-        logger.debug(msg)
-        msg_counter += 1
+
+@pytest.fixture
+def test_ws_client(manager):
+
+    # Create a record
+    record = Record()
 
     # Simulating a front-end client with a Python WS client
     client = cp.Client(
         id="test_ws",
         host=manager.host,
         port=manager.port,
-        ws_handler={MANAGER_MESSAGE.REPORT_STATUS: node_update_counter},
+        ws_handlers={MANAGER_MESSAGE.NODE_STATUS_UPDATE: record.node_update_counter},
     )
     client.connect()
+
+    yield client, record
+    client.shutdown()
+
+
+# @pytest.mark.skip()
+def test_node_updates(test_ws_client, manager, worker):
+
+    client, record = test_ws_client
 
     # Create original containers
     simple_graph = cp.Graph()
@@ -34,13 +52,9 @@ def test_node_updates(manager, worker):
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
+    manager.commit_graph(simple_graph, mapping)
 
-    # Then register graph to Manager
-    manager.register_graph(simple_graph)
+    time.sleep(5)
 
-    # Specify what nodes to what worker
-    manager.map_graph(mapping)
-
-    # Request node creation
-    assert manager.request_node_creation(worker_id=worker.id, node_id=new_node.id)
-    assert new_node.id in manager.workers[worker.id]["nodes_status"]
+    # New test assertations
+    assert record.network_state == manager.state

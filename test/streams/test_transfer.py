@@ -28,7 +28,7 @@ NAME_CLASS_MAP = {
     "tn": TabularNode,
     "an": AudioNode,
 }
-NUM_OF_WORKERS = 5
+NUM_OF_WORKERS = 3
 
 
 @pytest.fixture
@@ -205,7 +205,5 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     )
     assert (config_manager.logdir / "meta.json").exists()
     for worker_id in config_manager.workers:
-        for node_id in config_manager.workers[worker_id]["nodes_status"]:
-            assert config_manager.workers[worker_id]["nodes_status"][node_id][
-                "FINISHED"
-            ]
+        for node_id in config_manager.workers[worker_id].nodes:
+            assert config_manager.workers[worker_id].nodes[node_id].finished

@@ -65,4 +65,4 @@ def test_sending_package(manager, _worker, config_graph):
     )
 
     for node_id in config_graph.G.nodes():
-        assert manager.workers[_worker.id]["nodes_status"][node_id]["INIT"] == 1
+        assert manager.workers[_worker.id].nodes[node_id].init == True
