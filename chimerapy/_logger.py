@@ -4,6 +4,29 @@
 # https://stackoverflow.com/questions/13649664/how-to-use-logging-with-pythons-fileconfig-and-configure-the-logfile-filename
 import logging.config
 import os
+from dataclasses import dataclass
+from typing import Any, Dict
+
+from zmq.log.handlers import PUBHandler
+
+
+@dataclass
+class ZMQLogHandlerConfig:
+    """Configuration for the log publishing via ZMQ Sockets."""
+
+    publisher_port: int = 8687
+    transport: str = "ws"
+    root_topic: str = "chimerapy_logs"
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]):
+        kwargs = {
+            "publisher_port": d.get("publisher_port", 8687),
+            "transport": d.get("publisher_transport", "ws"),
+            "root_topic": d.get("publisher_root_topic", "chimerapy_logs"),
+        }
+        return cls(**kwargs)
+
 
 LOGGING_CONFIG = {
     "version": 1,
@@ -20,7 +43,7 @@ LOGGING_CONFIG = {
             "formatter": "standard",
             "class": "logging.StreamHandler",
             "stream": "ext://sys.stdout",  # Default is stderr
-        }
+        },
     },
     "loggers": {
         "chimerapy": {
@@ -46,6 +69,7 @@ LOGGING_CONFIG = {
     },
 }
 
+
 # Setup the logging configuration
 def setup():
 
@@ -53,7 +77,32 @@ def setup():
     logging.config.dictConfig(LOGGING_CONFIG)
 
 
-def getLogger(name: str):
+def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig):
+    """Add a ZMQ log handler to the logger.
+
+    Note:
+        Uses the same formatter as the consoleHandler
+    """
+    if handler_config is not None:
+        # Add a handler to publish the logs to zmq ws
+        handler = PUBHandler(
+            f"{handler_config.transport}://*:{handler_config.publisher_port}"
+        )
+        handler.root_topic = handler_config.root_topic
+        logger.addHandler(handler)
+        handler.setLevel(logging.DEBUG)
+        # Use the same formatter as the console
+        handler.setFormatter(
+            logging.Formatter(
+                logger.handlers[0].formatter._fmt,
+                logger.handlers[0].formatter.datefmt,
+            )
+        )  # FIXME: This is a hack, can this be done better?
+
+
+def getLogger(
+    name: str,
+) -> logging.Logger:
 
     # Get the logging
     logger = logging.getLogger(name)
