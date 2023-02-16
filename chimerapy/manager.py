@@ -34,6 +34,8 @@ class Manager:
         logdir: Union[pathlib.Path, str],
         port: int = 9000,
         max_num_of_workers: int = 50,
+        publish_logs_via_zmq: bool = False,
+        **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
 
@@ -45,7 +47,9 @@ class Manager:
             port (int): Referred port, might return a different one based\
             on availablity.
             max_num_of_workers (int): max_num_of_workers
-
+            publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
+            **kwargs: Additional keyword arguments.
+                Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
         self.name = "Manager"
@@ -77,6 +81,10 @@ class Manager:
         self.start_time: Optional[datetime.datetime] = None
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: int = 0
+
+        if publish_logs_via_zmq:
+            handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
+            _logger.add_zmq_handler(logger, handler_config)
 
         # Create server
         self.server = Server(
