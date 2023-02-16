@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from logging import LogRecord
 from typing import Any, Dict
 
-from zmq.log.handlers import PUBHandler
+from zmq.log.handlers import TOPIC_DELIM, PUBHandler
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -17,8 +17,31 @@ class ZMQLogPublisher(PUBHandler):
     """A small wrapper around the ZMQ PUBHandler to make it work with non-strings."""
 
     def emit(self, record: LogRecord) -> None:
-        record.msg = str(record.msg)
-        super().emit(record)
+        """Emit a log message on my socket."""
+
+        try:
+            topic, record.msg = record.getMessage().split(TOPIC_DELIM, 1)
+        except ValueError:
+            topic = ""
+        try:
+            bmsg = self.format(record).encode("utf8")
+        except Exception:
+            self.handleError(record)
+            return
+
+        topic_list = []
+
+        if self.root_topic:
+            topic_list.append(self.root_topic)
+
+        topic_list.append(record.levelname)
+
+        if topic:
+            topic_list.append(topic)
+
+        btopic = ".".join(topic_list).encode("utf8")
+
+        self.socket.send_multipart([btopic, bmsg])
 
 
 @dataclass
