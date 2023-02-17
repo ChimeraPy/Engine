@@ -26,8 +26,8 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
 
     # Assert that the Worker is connected
     assert dockered_worker.id in manager.workers
-    manager.shutdown()
     logger.info("Manager shutting down")
+    manager.shutdown()
 
 
 @linux_run_only

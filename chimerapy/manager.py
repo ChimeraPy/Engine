@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 import concurrent.futures
 from concurrent.futures import Future
-from dataclasses import replace, asdict
+
 
 # Third-party Imports
 import dill
@@ -34,9 +34,11 @@ logger = _logger.getLogger("chimerapy")
 class Manager:
     def __init__(
         self,
-        logdir: pathlib.Path,
+        logdir: Union[pathlib.Path, str],
         port: int = 9000,
         max_num_of_workers: int = 50,
+        publish_logs_via_zmq: bool = False,
+        **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
 
@@ -48,7 +50,9 @@ class Manager:
             port (int): Referred port, might return a different one based\
             on availablity.
             max_num_of_workers (int): max_num_of_workers
-
+            publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
+            **kwargs: Additional keyword arguments.
+                Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
         self.state = ManagerState(id="Manager", ip="localhost", port=port)
@@ -58,7 +62,9 @@ class Manager:
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         rand_num = random.randint(1000, 9999)
-        self.logdir = logdir / f"chimerapy-{timestamp}-{rand_num}"
+        self.logdir = (
+            pathlib.Path(logdir).resolve() / f"chimerapy-{timestamp}-{rand_num}"
+        )
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -74,6 +80,10 @@ class Manager:
         self.start_time: Optional[datetime.datetime] = None
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: int = 0
+
+        if publish_logs_via_zmq:
+            handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
+            _logger.add_zmq_handler(logger, handler_config)
 
         # Create server
         self.server = Server(
@@ -138,6 +148,7 @@ class Manager:
             f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
         )
         logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
 
         return web.json_response(config.config)
 
@@ -251,6 +262,7 @@ class Manager:
                     data["node_state"]
                 )
                 logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
                 return True
 
             else:
