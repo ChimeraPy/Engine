@@ -19,6 +19,7 @@ import pandas as pd
 import zmq
 
 # Internal Imports
+from .states import NodeState
 from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
@@ -51,9 +52,7 @@ class Node(mp.Process):
 
         # Saving input parameters
         self._context = mp.get_start_method()
-        self.name = name
-        self.id = str(uuid.uuid4())
-        self.status = {"INIT": 0, "CONNECTED": 0, "READY": 0, "FINISHED": 0}
+        self.state = NodeState(id=str(uuid.uuid4()), name=name)
 
         # Saving state variables
         self.publisher: Optional[Publisher] = None
@@ -102,11 +101,23 @@ class Node(mp.Process):
                 self.prep()
 
     ####################################################################
+    ## Properties
+    ####################################################################
+
+    @property
+    def id(self) -> str:
+        return self.state.id
+
+    @property
+    def name(self) -> str:
+        return self.state.name
+
+    ####################################################################
     ## Process Pickling Methods
     ####################################################################
 
     def __repr__(self):
-        return f"<Node name={self.name} id={self.id}>"
+        return f"<Node name={self.state.name} id={self.state.id}>"
 
     def __str__(self):
         return self.__repr__()
@@ -164,7 +175,7 @@ class Node(mp.Process):
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.p2p_info["in_bound"]):
 
-            self.logger.debug(f"{self}: Setting up clients: {self.id}: {msg}")
+            self.logger.debug(f"{self}: Setting up clients: {self.state.id}: {msg}")
 
             # Determine the host and port information
             in_bound_info = msg["data"][in_bound_id]
@@ -191,7 +202,7 @@ class Node(mp.Process):
             self.poll_inputs_thread.start()
 
         # Notify to the worker that the node is fully CONNECTED
-        self.status["CONNECTED"] = 1
+        self.state.connected = True
         self.connected_ready.set()
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
@@ -212,10 +223,10 @@ class Node(mp.Process):
         # Stop the save handler
         self.save_handler.shutdown()
         self.save_handler.join()
-        self.status["FINISHED"] = 1
+        self.state.finished = True
 
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
+            signal=NODE_MESSAGE.STATUS, data=asdict(self.state)
         )
 
     async def start_node(self, msg: Dict):
@@ -313,7 +324,7 @@ class Node(mp.Process):
         # Obtaining worker information
         self.worker_host = host
         self.worker_port = port
-        self.logdir = logdir / self.name
+        self.logdir = logdir / self.state.name
         self.worker_logging_port = worker_logging_port
         os.makedirs(self.logdir, exist_ok=True)
 
@@ -360,7 +371,7 @@ class Node(mp.Process):
         self.step_id = 0
         self.worker_signal_start = threading.Event()
         self.worker_signal_start.clear()
-        self.status["INIT"] = 1
+        self.state.init = True
 
         if self.networking:
 
@@ -368,7 +379,7 @@ class Node(mp.Process):
             self.client = Client(
                 host=self.worker_host,
                 port=self.worker_port,
-                id=self.id,
+                id=self.state.id,
                 ws_handlers={
                     GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                     WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
@@ -387,6 +398,7 @@ class Node(mp.Process):
             # Creating publisher
             self.publisher = Publisher()
             self.publisher.start()
+            self.state.port = self.publisher.port
 
             # Creating threading event to mark that the Node has been connected
             self.connected_ready = threading.Event()
@@ -411,7 +423,7 @@ class Node(mp.Process):
     def ready(self):
 
         # Notify to the worker that the node is fully READY
-        self.status["READY"] = 1
+        self.state.ready = True
 
         # Only do so if connected to Worker and its connected
         if self.networking:
@@ -529,7 +541,7 @@ class Node(mp.Process):
                 # Add timestamp and step id to the DataChunk
                 meta = output_data_chunk.get("meta")
                 meta["value"]["ownership"].append(
-                    {"name": self.name, "timestamp": datetime.datetime.now()}
+                    {"name": self.state.name, "timestamp": datetime.datetime.now()}
                 )
                 output_data_chunk.update("meta", meta)
 
@@ -610,7 +622,7 @@ class Node(mp.Process):
         # Shutdown the inputs and outputs threads
         self.save_handler.shutdown()
         self.save_handler.join()
-        self.status["FINISHED"] = 1
+        self.state.finished = True
         self.logger.debug(f"{self}: save handler shutdown")
 
         # Shutting down networking

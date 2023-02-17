@@ -157,7 +157,7 @@ def test_worker_create_node(worker, gen_node):
 
     logger.debug("Finishied creating nodes")
     assert gen_node.id in worker.nodes
-    assert isinstance(worker.nodes[gen_node.id]["node_object"], cp.Node)
+    assert isinstance(worker.nodes_extra[gen_node.id]["node_object"], cp.Node)
 
 
 @linux_expected_only
@@ -184,7 +184,7 @@ def test_worker_create_unknown_node(worker):
 
     logger.debug("Finishied creating nodes")
     assert node.id in worker.nodes
-    assert isinstance(worker.nodes[node.id]["node_object"], cp.Node)
+    assert isinstance(worker.nodes_extra[node.id]["node_object"], cp.Node)
 
 
 def test_worker_create_multiple_node(worker):

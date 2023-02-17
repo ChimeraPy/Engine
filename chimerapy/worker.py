@@ -1,6 +1,6 @@
 from typing import Union, Dict, Any, Coroutine, Optional
 import asyncio
-import socket
+import collections
 import os
 import time
 import tempfile
@@ -75,7 +75,6 @@ class Worker:
 
         # Instance variables
         self.has_shutdown: bool = False
-        self.nodes: Dict = {}
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
@@ -87,8 +86,8 @@ class Worker:
 
         # Create server
         self.server = Server(
-            port=self.port,
-            id=self.id,
+            port=self.state.port,
+            id=self.state.id,
             routes=[
                 web.post("/nodes/create", self.async_create_node),
                 web.get("/nodes/server_data", self.report_node_server_data),
@@ -120,7 +119,7 @@ class Worker:
         self.log_receiver.start()
 
     def __repr__(self):
-        return f"<Worker name={self.name} id={self.id}>"
+        return f"<Worker name={self.state.name} id={self.state.id}>"
 
     def __str__(self):
         return self.__repr__()
@@ -220,48 +219,50 @@ class Worker:
         logger.debug(f"{self}: received request for Node {id} creation: {msg}")
 
         # Saving the node data
-        self.nodes[node_id] = {k: v for k, v in msg.items() if k != "id"}
-        self.nodes[node_id]["status"] = {
-            "INIT": 0,
-            "CONNECTED": 0,
-            "READY": 0,
-            "FINISHED": 0,
-        }
-        self.nodes[node_id]["response"] = False
-        self.nodes[node_id]["gather"] = None
+        self.state.nodes[node_id] = NodeState(id=node_id)
+        self.nodes_extra[node_id]["response"] = False
+        self.nodes_extra[node_id]["gather"] = None
+        self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
+        logger.debug(f"{self}: created state for <Node {node_id}>")
 
         # Keep trying to start a process until success
         success = False
         for i in range(config.get("worker.allowed-failures")):
 
             # Decode the node object
-            self.nodes[node_id]["node_object"] = dill.loads(
-                self.nodes[node_id]["pickled"]
+            self.nodes_extra[node_id]["node_object"] = dill.loads(
+                self.nodes_extra[node_id]["pickled"]
             )
+            logger.debug(f"{self}: unpickled <Node {node_id}>")
+
+            # Record the node name
+            self.state.nodes[node_id].name = self.nodes_extra[node_id][
+                "node_object"
+            ].name
 
             # Provide configuration information to the node once in the client
             self.nodes_extra[node_id]["node_object"].config(
                 self.state.ip,
                 self.state.port,
                 self.tempfolder,
-                self.nodes[node_id]["in_bound"],
-                self.nodes[node_id]["in_bound_by_name"],
-                self.nodes[node_id]["out_bound"],
-                self.nodes[node_id]["follow"],
+                self.nodes_extra[node_id]["in_bound"],
+                self.nodes_extra[node_id]["in_bound_by_name"],
+                self.nodes_extra[node_id]["out_bound"],
+                self.nodes_extra[node_id]["follow"],
                 logging_level=logger.level,
                 worker_logging_port=self.log_receiver.port,
             )
 
             # Before starting, over write the pid
-            self.nodes[node_id]["node_object"]._parent_pid = os.getpid()
+            self.nodes_extra[node_id]["node_object"]._parent_pid = os.getpid()
 
             # Start the node
-            self.nodes[node_id]["node_object"].start()
+            self.nodes_extra[node_id]["node_object"].start()
             logger.debug(f"{self}: started <Node {node_id}>")
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.nodes[node_id]["response"] == True,
+                condition=lambda: self.state.nodes[node_id].init == True,
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -270,13 +271,13 @@ class Worker:
             else:
                 # Handle failure
                 logger.debug(f"{self}: {node_id} responding, FAILED, retry")
-                self.nodes[node_id]["node_object"].shutdown()
-                self.nodes[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["node_object"].terminate()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.nodes[node_id]["status"]["READY"] == True,
+                condition=lambda: self.state.nodes[node_id].ready == True,
                 timeout=config.get("worker.timeout.info-request"),
             )
 
@@ -286,14 +287,14 @@ class Worker:
             else:
                 # Handle failure
                 logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
-                self.nodes[node_id]["node_object"].shutdown()
-                self.nodes[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["node_object"].terminate()
 
         if not success:
             logger.error(f"{self}: Node {node_id} failed to create")
         else:
             # Mark success
-            logger.debug(f"{self}: completed node creation: {self.nodes}")
+            logger.debug(f"{self}: completed node creation: {node_id}")
 
         # Update the manager with the most up-to-date status of the nodes
         response = {
@@ -338,7 +339,7 @@ class Worker:
                     logger.debug(f"{self}: Node {node_id} has connected: FAIL")
                     success.append(False)
 
-        if not success:
+        if not all(success):
             logger.error(f"{self}: Nodes failed to establish P2P connections")
 
         # After all nodes have been connected, inform the Manager
@@ -376,14 +377,14 @@ class Worker:
 
     async def report_node_saving(self, request: web.Request):
 
+        # Request saving from Worker to Nodes
+        await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.REQUEST_SAVING, data={}
+        )
+
         # Now wait until all nodes have responded as CONNECTED
         success = []
         for i in range(config.get("worker.allowed-failures")):
-
-            # Request saving from Worker to Nodes
-            await self.server.async_broadcast(
-                signal=WORKER_MESSAGE.REQUEST_SAVING, data={}
-            )
 
             if await async_waiting_for(
                 condition=lambda: self.state.nodes[node_id].finished == True,
@@ -417,26 +418,27 @@ class Worker:
         await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
 
         # Wait until all Nodes have gather
-        success = False
-        for i in range(config.get("worker.allowed-failures")):
+        success = []
+        for node_id in self.state.nodes:
+            for i in range(config.get("worker.allowed-failures")):
 
-            if await async_waiting_for(
-                condition=lambda: self.nodes_extra[node_id]["response"] == True,
-                timeout=config.get("worker.timeout.info-request"),
-            ):
-                logger.debug(f"{self}: Node {node_id} responded to gather: PASS")
-                success.append(True)
-                break
-            else:
-                logger.debug(f"{self}: Node {node_id} responded to gather: FAIL")
-                success.append(False)
+                if await async_waiting_for(
+                    condition=lambda: self.nodes_extra[node_id]["response"] == True,
+                    timeout=config.get("worker.timeout.info-request"),
+                ):
+                    logger.debug(f"{self}: Node {node_id} responded to gather: PASS")
+                    success.append(True)
+                    break
+                else:
+                    logger.debug(f"{self}: Node {node_id} responded to gather: FAIL")
+                    success.append(False)
 
-        if not success:
-            logger.error(f"{self}: Nodes failed to report to gather")
+                if not all(success):
+                    logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
-        gather_data = {"id": self.id, "node_data": {}}
-        for node_id, node_data in self.nodes.items():
+        gather_data = {"id": self.state.id, "node_data": {}}
+        for node_id, node_data in self.nodes_extra.items():
             if node_data["gather"] == None:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
@@ -522,13 +524,6 @@ class Worker:
 
         # Update Manager on the new nodes status
         if self.connected_to_manager:
-
-            msg = {
-                "id": self.id,
-                "name": self.name,
-                "node_status": {k: self.nodes[k]["status"] for k in self.nodes},
-            }
-
             async with aiohttp.ClientSession(self.manager_url) as session:
                 async with session.post(
                     "/workers/node_status", data=self.state.to_json()
@@ -539,59 +534,11 @@ class Worker:
     ## Helper Methods
     ####################################################################
 
-    def mark_response_as_false_for_node(self, node_id: str):
-        self.nodes[node_id]["response"] = False
-
-    def mark_all_response_as_false_for_nodes(self):
-
-        for node_id in self.nodes:
-            self.mark_response_as_false_for_node(node_id)
-
-    async def wait_until_node_response(
-        self,
-        node_id: str,
-        timeout: Union[float, int] = 10,
-        attribute: str = "response",
-        status: Optional[bool] = None,
-    ) -> bool:
-
-        # # Wait until the node has informed us that it has been initialized
-        if status:
-            return await async_waiting_for(
-                condition=lambda: self.nodes[node_id]["status"][attribute] == True,
-                check_period=0.1,
-                timeout=timeout,
-            )
-        else:
-            return await async_waiting_for(
-                condition=lambda: self.nodes[node_id][attribute] == True,
-                check_period=0.1,
-                timeout=timeout,
-            )
-
-    async def wait_until_all_nodes_responded(
-        self,
-        timeout: Union[float, int] = 10,
-        attribute: str = "response",
-        status: Optional[bool] = None,
-    ) -> bool:
-
-        for node_id in self.nodes:
-            success = await self.wait_until_node_response(
-                node_id, timeout, attribute, status
-            )
-            if not success:
-                logger.debug(f"{self}: Node {node_id } responding: FAILED")
-                return False
-
-        logger.debug(f"{self}: All Nodes responding: SUCCESS")
-        return True
-
     def create_node_server_data(self):
 
         # Construct simple data structure for Node to address information
-        node_server_data = {"id": self.id, "nodes": {}}
-        for node_id, node_data in self.nodes.items():
+        node_server_data = {"id": self.state.id, "nodes": {}}
+        for node_id, node_state in self.state.nodes.items():
             node_server_data["nodes"][node_id] = {
                 "host": self.state.ip,
                 "port": node_state.port,
@@ -663,13 +610,12 @@ class Worker:
         return r.status_code == requests.codes.ok
 
     def create_node(self, msg: Dict[str, Any]):
-        # return asyncio.run(self.async_create_node(node_config=msg))
         node_id = msg["id"]
         self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
 
         success = waiting_for(
-            condition=lambda: node_id in self.nodes
-            and self.nodes[node_id]["status"]["READY"] == True,
+            condition=lambda: node_id in self.state.nodes
+            and self.state.nodes[node_id].ready == True,
             check_period=0.1,
             timeout=config.get("manager.timeout.node-creation"),
         )
@@ -730,19 +676,19 @@ class Worker:
         self.server.shutdown()
 
         # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.nodes:
-            self.nodes[node_id]["node_object"].shutdown()
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].shutdown()
 
         # Then wait until close, or force
-        for node_id in self.nodes:
-            self.nodes[node_id]["node_object"].join(
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
 
             # If that doesn't work, terminate
-            if self.nodes[node_id]["node_object"].exitcode != 0:
+            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
                 logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["node_object"].terminate()
 
             logger.debug(f"{self}: Nodes have joined")
 
