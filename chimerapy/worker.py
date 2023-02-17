@@ -329,7 +329,7 @@ class Worker:
         for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].connected,
+                    condition=lambda: self.state.nodes[node_id].connected == True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
@@ -378,28 +378,27 @@ class Worker:
     async def report_node_saving(self, request: web.Request):
 
         # Request saving from Worker to Nodes
-        await self.server.async_broadcast(
-            signal=WORKER_MESSAGE.REQUEST_SAVING, data={}
-        )
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
 
         # Now wait until all nodes have responded as CONNECTED
         success = []
         for i in range(config.get("worker.allowed-failures")):
+            for node_id in self.nodes:
 
-            if await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].finished == True,
-                timeout=config.get("worker.timeout.info-request"),
-            ):
-                logger.debug(
-                    f"{self}: Node {node_id} responded to saving request: PASS"
-                )
-                success.append(True)
-                break
-            else:
-                logger.debug(
-                    f"{self}: Node {node_id} responded to saving request: FAIL"
-                )
-                success.append(False)
+                if await async_waiting_for(
+                    condition=lambda: self.state.nodes[node_id].finished == True,
+                    timeout=config.get("worker.timeout.info-request"),
+                ):
+                    logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: PASS"
+                    )
+                    success.append(True)
+                    break
+                else:
+                    logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: FAIL"
+                    )
+                    success.append(False)
 
         if not all(success):
             logger.error(f"{self}: Nodes failed to report to saving")

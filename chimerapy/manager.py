@@ -19,7 +19,7 @@ import networkx as nx
 import requests
 
 from chimerapy import config
-from .states import ManagerState, WorkerState
+from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
@@ -53,9 +53,7 @@ class Manager:
                 Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
-        self.state = ManagerState(
-            id="Manager", ip="localhost", port=port
-        )
+        self.state = ManagerState(id="Manager", ip="localhost", port=port)
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
 
@@ -171,10 +169,6 @@ class Manager:
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
-        await self.server.async_broadcast(
-            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
-            data=self.state.to_dict(),
-        )
 
         return web.HTTPOk()
 
@@ -706,7 +700,7 @@ class Manager:
             # Saving the data
             data = pickle.loads(r.content)["node_data"]
             for node_id, node_data in data.items():
-                data[node_id] = DataChunk.from_bytes(node_data)
+                data[node_id] = node_data
 
             gather_data.update(data)
 
@@ -762,7 +756,7 @@ class Manager:
         if success:
             for worker_id in self.state.workers:
                 for node_id in self.state.workers[worker_id].nodes:
-                    self.state.workers[worker_id].nodes[node_id].finished = 1
+                    self.state.workers[worker_id].nodes[node_id].finished = True
 
         # Request collecting archives
         success = self.broadcast_request(
