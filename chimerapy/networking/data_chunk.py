@@ -1,4 +1,4 @@
-from typing import Any, Literal, Dict
+from typing import Any, Literal, Dict, List
 import collections
 import pickle
 import blosc
@@ -7,6 +7,11 @@ import datetime
 # Third-party Imports
 import numpy as np
 import simplejpeg
+
+# Internal Imports
+from .._logger import getLogger
+
+logger = getLogger("chimerapy")
 
 
 class DataChunk:
@@ -119,6 +124,13 @@ class DataChunk:
                 "value": value,
                 "content-type": record["content-type"],
             }
+
+    def to_json(self) -> List[int]:
+        return list(self._serialize())
+
+    @classmethod
+    def from_json(cls, data_str: str):
+        return cls.from_bytes(bytes(data_str))
 
     @classmethod
     def from_bytes(cls, data_bytes: bytes):

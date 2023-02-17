@@ -1,6 +1,6 @@
 from enum import Enum
 
-
+# Server <--> Client
 class GENERAL_MESSAGE(Enum):  # Used only Client and Server
     SHUTDOWN = -1
     OK = 0
@@ -18,6 +18,7 @@ class WORKER_MESSAGE(Enum):
     STOP_NODES = 30
 
 
+# Node -> Worker
 class NODE_MESSAGE(Enum):
     STATUS = 32
     REPORT_GATHER = 33
