@@ -10,6 +10,7 @@ import sys
 import json
 import pickle
 import uuid
+import collections
 
 # Third-party Imports
 import dill
@@ -18,6 +19,7 @@ from aiohttp import web
 import requests
 
 from chimerapy import config
+from .states import WorkerState, NodeState
 from .utils import get_ip_address, waiting_for, async_waiting_for
 from .networking import Server, Client, DataChunk
 from .networking.enums import (
@@ -62,13 +64,14 @@ class Worker:
 
         """
         # Saving parameters
-        self.port = port
-        self.name = name
-
         if isinstance(id, str):
-            self.id = id
+            id = id
         else:
-            self.id = str(uuid.uuid4())
+            id = str(uuid.uuid4())
+
+        # Creating state
+        self.state = WorkerState(id=id, name=name, port=port)
+        self.nodes_extra = collections.defaultdict(dict)
 
         # Instance variables
         self.has_shutdown: bool = False
@@ -107,8 +110,10 @@ class Worker:
 
         # Start the server and get the new port address (random if port=0)
         self.server.serve()
-        self.host, self.port = self.server.host, self.server.port
-        logger.info(f"Worker {self.id} running HTTP server at {self.host}:{self.port}")
+        self.state.ip, self.state.port = self.server.host, self.server.port
+        logger.info(
+            f"Worker {self.state.id} running HTTP server at {self.state.ip}:{self.state.port}"
+        )
 
         # Create a log listener to read Node's information
         self.log_receiver = LogReceiver()
@@ -119,6 +124,30 @@ class Worker:
 
     def __str__(self):
         return self.__repr__()
+
+    ####################################################################
+    ## Properties
+    ####################################################################
+
+    @property
+    def id(self) -> str:
+        return self.state.id
+
+    @property
+    def name(self) -> str:
+        return self.state.name
+
+    @property
+    def nodes(self) -> Dict[str, NodeState]:
+        return self.state.nodes
+
+    @property
+    def ip(self) -> str:
+        return self.state.ip
+
+    @property
+    def port(self) -> int:
+        return self.state.port
 
     ####################################################################
     ## Manager -> Worker
@@ -211,9 +240,9 @@ class Worker:
             )
 
             # Provide configuration information to the node once in the client
-            self.nodes[node_id]["node_object"].config(
-                self.host,
-                self.port,
+            self.nodes_extra[node_id]["node_object"].config(
+                self.state.ip,
+                self.state.port,
                 self.tempfolder,
                 self.nodes[node_id]["in_bound"],
                 self.nodes[node_id]["in_bound_by_name"],
@@ -267,8 +296,10 @@ class Worker:
             logger.debug(f"{self}: completed node creation: {self.nodes}")
 
         # Update the manager with the most up-to-date status of the nodes
-        nodes_status = {k: self.nodes[k]["status"] for k in self.nodes}
-        response = {"success": success, "nodes_status": nodes_status}
+        response = {
+            "success": success,
+            "node_state": self.state.nodes[node_id].to_dict(),
+        }
 
         if isinstance(request, web.Request):
             return web.json_response(response)
@@ -293,16 +324,19 @@ class Worker:
         )
 
         # Now wait until all nodes have responded as CONNECTED
-        success = False
-        for i in range(config.get("worker.allowed-failures")):
-            if await self.wait_until_all_nodes_responded(
-                timeout=config.get("worker.timeout.info-request"),
-                attribute="CONNECTED",
-                status=True,
-            ):
-                logger.debug(f"{self}: Nodes have been connected.")
-                success = True
-                break
+        success = []
+        for node_id in self.state.nodes:
+            for i in range(config.get("worker.allowed-failures")):
+                if await async_waiting_for(
+                    condition=lambda: self.state.nodes[node_id].connected,
+                    timeout=config.get("worker.timeout.info-request"),
+                ):
+                    logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
+                    success.append(True)
+                    break
+                else:
+                    logger.debug(f"{self}: Node {node_id} has connected: FAIL")
+                    success.append(False)
 
         if not success:
             logger.error(f"{self}: Nodes failed to establish P2P connections")
@@ -311,10 +345,7 @@ class Worker:
         logger.debug(f"{self}: Informing Manager of processing completion")
 
         return web.json_response(
-            {
-                "success": True,
-                "nodes_status": {k: self.nodes[k]["status"] for k in self.nodes},
-            }
+            {"success": True, "worker_state": self.state.to_dict()}
         )
 
     async def async_step(self, request: web.Request):
@@ -345,11 +376,8 @@ class Worker:
 
     async def report_node_saving(self, request: web.Request):
 
-        # Marking as all false
-        self.mark_all_response_as_false_for_nodes()
-
         # Now wait until all nodes have responded as CONNECTED
-        success = False
+        success = []
         for i in range(config.get("worker.allowed-failures")):
 
             # Request saving from Worker to Nodes
@@ -357,16 +385,22 @@ class Worker:
                 signal=WORKER_MESSAGE.REQUEST_SAVING, data={}
             )
 
-            if await self.wait_until_all_nodes_responded(
+            if await async_waiting_for(
+                condition=lambda: self.state.nodes[node_id].finished == True,
                 timeout=config.get("worker.timeout.info-request"),
-                status=True,
-                attribute="FINISHED",
             ):
-                logger.debug(f"{self}: Nodes responded to saving request.")
-                success = True
+                logger.debug(
+                    f"{self}: Node {node_id} responded to saving request: PASS"
+                )
+                success.append(True)
                 break
+            else:
+                logger.debug(
+                    f"{self}: Node {node_id} responded to saving request: FAIL"
+                )
+                success.append(False)
 
-        if not success:
+        if not all(success):
             logger.error(f"{self}: Nodes failed to report to saving")
 
         # Send it back to the Manager
@@ -376,24 +410,26 @@ class Worker:
 
         logger.debug(f"{self}: reporting to Manager gather request")
 
-        # Marking as all false
-        self.mark_all_response_as_false_for_nodes()
+        for node_id in self.state.nodes:
+            self.nodes_extra[node_id]["response"] = False
+
+        # Request gather from Worker to Nodes
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_GATHER, data={})
 
         # Wait until all Nodes have gather
         success = False
         for i in range(config.get("worker.allowed-failures")):
 
-            # Request gather from Worker to Novdes
-            await self.server.async_broadcast(
-                signal=WORKER_MESSAGE.REQUEST_GATHER, data={}
-            )
-
-            if await self.wait_until_all_nodes_responded(
-                timeout=config.get("worker.timeout.info-request")
+            if await async_waiting_for(
+                condition=lambda: self.nodes_extra[node_id]["response"] == True,
+                timeout=config.get("worker.timeout.info-request"),
             ):
-                logger.debug(f"{self}: Nodes responded to gather.")
-                success = True
+                logger.debug(f"{self}: Node {node_id} responded to gather: PASS")
+                success.append(True)
                 break
+            else:
+                logger.debug(f"{self}: Node {node_id} responded to gather: FAIL")
+                success.append(False)
 
         if not success:
             logger.error(f"{self}: Nodes failed to report to gather")
@@ -405,7 +441,7 @@ class Worker:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
                 node_data["gather"] = data_chunk
-            gather_data["node_data"][node_id] = node_data["gather"]._serialize()
+            gather_data["node_data"][node_id] = node_data["gather"]
 
         return web.Response(body=pickle.dumps(gather_data))
 
@@ -468,22 +504,21 @@ class Worker:
     async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving gathering value
-        node_id = msg["data"]["id"]
-        self.nodes[node_id]["gather"] = msg["data"]["latest_value"]
-        self.nodes[node_id]["response"] = True
+        node_state = NodeState.from_dict(msg["data"]["state"])
+        node_id = node_state.id
+        self.state.nodes[node_id] = node_state
+
+        self.nodes_extra[node_id]["gather"] = msg["data"]["latest_value"]
+        self.nodes_extra[node_id]["response"] = True
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        node_id = msg["data"]["id"]
-        status = msg["data"]["status"]
+        logger.debug(f"{self}: note_status_update: ", msg)
+        node_state = NodeState.from_dict(msg["data"])
+        node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        self.nodes[node_id].update(
-            {k: v for k, v in msg["data"].items() if k != "node_id"}
-        )
-        self.nodes[node_id]["response"] = True
-
-        # Construct information of all the nodes to be send to the Manager
+        self.state.nodes[node_id] = node_state
 
         # Update Manager on the new nodes status
         if self.connected_to_manager:
@@ -495,7 +530,9 @@ class Worker:
             }
 
             async with aiohttp.ClientSession(self.manager_url) as session:
-                async with session.post("/workers/node_status", data=json.dumps(msg)):
+                async with session.post(
+                    "/workers/node_status", data=self.state.to_json()
+                ):
                     pass
 
     ####################################################################
@@ -556,8 +593,8 @@ class Worker:
         node_server_data = {"id": self.id, "nodes": {}}
         for node_id, node_data in self.nodes.items():
             node_server_data["nodes"][node_id] = {
-                "host": node_data["host"],
-                "port": node_data["port"],
+                "host": self.state.ip,
+                "port": node_state.port,
             }
 
         return node_server_data
@@ -591,16 +628,7 @@ class Worker:
         # Sending message to register
         r = requests.post(
             f"http://{host}:{port}/workers/register",
-            data=json.dumps(
-                {
-                    "id": self.id,
-                    "name": self.name,
-                    "register": True,
-                    "addr": socket.gethostbyname(socket.gethostname()),
-                    "http_port": self.port,
-                    "http_ip": self.host,
-                }
-            ),
+            data=self.state.to_json(),
             timeout=config.get("worker.timeout.info-request"),
         )
 
@@ -614,7 +642,7 @@ class Worker:
             self.connected_to_manager = True
             self.manager_host = host
             self.manager_port = port
-            self.manager_url = f"http://{host}:{port}/workers/register"
+            self.manager_url = f"http://{host}:{port}"
             logger.info(
                 f"{self}: connection successful to Manager located at {host}:{port}."
             )
@@ -625,15 +653,8 @@ class Worker:
     def deregister(self):
 
         r = requests.post(
-            self.manager_url,
-            data=json.dumps(
-                {
-                    "id": self.id,
-                    "name": self.name,
-                    "register": False,
-                    "addr": socket.gethostbyname(socket.gethostname()),
-                }
-            ),
+            self.manager_url + "/workers/deregister",
+            data=self.state.to_json(),
             timeout=config.get("worker.timeout.info-request"),
         )
 
@@ -697,6 +718,13 @@ class Worker:
             self.has_shutdown = True
 
         logger.debug(f"{self}: shutting down!")
+        # Sending message to Manager that client is shutting down (only
+        # if the manager hasn't already set the client to not running)
+        if self.connected_to_manager:
+            try:
+                self.deregister()
+            except requests.ConnectionError:
+                logger.warning(f"{self}: shutdown didn't reach Manager")
 
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
@@ -721,14 +749,6 @@ class Worker:
         # Stop the log listener
         self.log_receiver.shutdown()
         self.log_receiver.join()
-
-        # Sending message to Manager that client is shutting down (only
-        # if the manager hasn't already set the client to not running)
-        if self.connected_to_manager:
-            try:
-                self.deregister()
-            except requests.ConnectionError:
-                logger.warning(f"{self}: shutdown didn't reach Manager")
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:

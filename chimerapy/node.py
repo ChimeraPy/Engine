@@ -194,12 +194,7 @@ class Node(mp.Process):
         self.status["CONNECTED"] = 1
         self.connected_ready.set()
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS,
-            data={
-                "id": self.id,
-                "name": self.name,
-                "status": self.status,
-            },
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
 
     async def provide_gather(self, msg: Dict):
@@ -207,9 +202,8 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
-                "id": self.id,
-                "name": self.name,
-                "latest_value": self.latest_value,
+                "state": self.state.to_dict(),
+                "latest_value": self.latest_value
             },
         )
 
@@ -221,12 +215,7 @@ class Node(mp.Process):
         self.status["FINISHED"] = 1
 
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS,
-            data={
-                "id": self.id,
-                "name": self.name,
-                "status": self.status,
-            },
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
 
     async def start_node(self, msg: Dict):
@@ -406,13 +395,7 @@ class Node(mp.Process):
             # Send publisher port and host information
             self.client.send(
                 signal=NODE_MESSAGE.STATUS,
-                data={
-                    "id": self.id,
-                    "name": self.name,
-                    "status": self.status,
-                    "host": self.publisher.host,
-                    "port": self.publisher.port,
-                },
+                data=self.state.to_dict(),
             )
 
     def prep(self):
@@ -432,14 +415,7 @@ class Node(mp.Process):
 
         # Only do so if connected to Worker and its connected
         if self.networking:
-            self.client.send(
-                signal=NODE_MESSAGE.STATUS,
-                data={
-                    "id": self.id,
-                    "name": self.name,
-                    "status": self.status,
-                },
-            )
+            self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
 
     def waiting(self):
 
@@ -641,14 +617,7 @@ class Node(mp.Process):
         if self.networking:
 
             # Inform the worker that the Node has finished its saving of data
-            self.client.send(
-                signal=NODE_MESSAGE.STATUS,
-                data={
-                    "id": self.id,
-                    "name": self.name,
-                    "status": self.status,
-                },
-            )
+            self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
 
             # Shutdown the client
             self.client.shutdown()

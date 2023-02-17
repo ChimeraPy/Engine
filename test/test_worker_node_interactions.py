@@ -7,6 +7,7 @@ import sys
 import os
 import pathlib
 from functools import partial
+import requests
 
 import pytest
 import dill
@@ -334,6 +335,37 @@ def test_starting_node(worker, gen_node):
     time.sleep(5)
 
 
+def test_worker_gather(worker, gen_node):
+
+    # Simple single node without connection
+    msg = {
+        "id": gen_node.id,
+        "pickled": dill.dumps(gen_node),
+        "in_bound": [],
+        "in_bound_by_name": [],
+        "out_bound": [],
+        "follow": None,
+    }
+
+    logger.debug("Create nodes")
+    worker.create_node(msg)
+
+    logger.debug("Waiting before starting!")
+    time.sleep(2)
+
+    logger.debug("Start nodes!")
+    worker.start_nodes()
+
+    logger.debug("Let nodes run for some time")
+    time.sleep(5)
+
+    r = requests.get(
+        f"http://{worker.ip}:{worker.port}" + "/nodes/gather",
+        timeout=cp.config.get("manager.timeout.info-request"),
+    )
+    assert r.status_code == requests.codes.ok
+
+
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
@@ -364,7 +396,7 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
 
     # Request node creation
     assert _manager.request_node_creation(worker_id=_worker.id, node_id=new_node.id)
-    assert new_node.id in _manager.workers[_worker.id]["nodes_status"]
+    assert new_node.id in _manager.workers[_worker.id].nodes
 
 
 @pytest.mark.parametrize(
@@ -412,4 +444,4 @@ def test_stress_manager_directing_worker_to_create_node(_manager, _worker):
     # Request node creation
     for node_id in to_be_created_nodes:
         assert _manager.request_node_creation(worker_id=_worker.id, node_id=node_id)
-        assert node_id in _manager.workers[_worker.id]["nodes_status"]
+        assert node_id in _manager.workers[_worker.id].nodes

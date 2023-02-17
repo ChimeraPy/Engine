@@ -19,6 +19,7 @@ import networkx as nx
 import requests
 
 from chimerapy import config
+from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
@@ -52,10 +53,7 @@ class Manager:
                 Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
-        self.name = "Manager"
-        self.id = "Manager"
-        self.host = "localhost"
-        self.port = port
+        self.state = ManagerState(id="Manager", ip="localhost", port=port)
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
 
@@ -95,6 +93,7 @@ class Manager:
                 web.get("/network", self.get_network),
                 # Manager-Worker Routes
                 web.post("/workers/register", self.register_worker),
+                web.post("/workers/deregister", self.deregister_worker),
                 web.post("/workers/node_status", self.update_nodes_status),
             ],
         )
@@ -115,7 +114,7 @@ class Manager:
     ####################################################################
 
     async def get_network(self, request: web.Request):
-        return web.json_response(self.dashboard_dict())
+        return web.json_response(self.state.to_dict())
 
     ####################################################################
     ## Message Reactivity API
@@ -123,41 +122,42 @@ class Manager:
 
     async def register_worker(self, request: web.Request):
         msg = await request.json()
+        worker_state = WorkerState.from_dict(msg)
 
-        if msg["register"]:
-            self.workers[msg["id"]] = {
-                "name": msg["name"],
-                "addr": msg["addr"],
-                "http_port": msg["http_port"],
-                "http_ip": msg["http_ip"],
-                "url": f"http://{msg['http_ip']}:{msg['http_port']}",
-                "reported_nodes_server_data": False,
-                "served_nodes_server_data": False,
-                "nodes_status": {},
-                "saving_complete": False,
-                "collection_complete": False,
-                "package_loaded": False,
-            }
-            logger.info(
-                f"Manager registered <Worker id={msg['id']} name={msg['name']}> from {msg['addr']}"
-            )
+        logger.debug(worker_state)
 
-        else:
-            logger.info(
-                f"Manager deregistered <Worker id={msg['id']} name={msg['name']}> from {msg['addr']}"
-            )
-            del self.workers[msg["id"]]
+        self.state.workers[worker_state.id] = worker_state
+        logger.info(
+            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
         return web.json_response(config.config)
 
+    async def deregister_worker(self, request: web.Request):
+        msg = await request.json()
+        worker_state = WorkerState.from_dict(msg)
+
+        logger.info(
+            f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        del self.state.workers[worker_state.id]
+
+        return web.HTTPOk()
+
     async def update_nodes_status(self, request: web.Request):
         msg = await request.json()
+        worker_state = WorkerState.from_dict(msg)
 
         # Updating nodes status
-        self.workers[msg["id"]]["nodes_status"] = msg["nodes_status"]
-        self.workers[msg["id"]]["response"] = True
+        self.state.workers[worker_state.id] = worker_state
+        logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
-        logger.debug(f"{self}: Nodes status update to: {self.workers}")
+        # Relay information to front-end
+        await self.server.async_broadcast(
+            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
+            data=self.state.to_dict(),
+        )
 
         return web.HTTPOk()
 
@@ -271,7 +271,8 @@ class Manager:
 
         # Send for the creation of the node
         r = requests.post(
-            self.workers[worker_id]["url"] + "/nodes/create",
+            f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
+            + "/nodes/create",
             pickle.dumps(
                 {
                     "worker_id": worker_id,
@@ -295,7 +296,10 @@ class Manager:
             data = r.json()
             if data["success"]:
                 logger.debug(f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS")
-                self.workers[worker_id]["nodes_status"] = data["nodes_status"]
+                self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
+                    data["node_state"]
+                )
+                logger.debug(f"{self}: WorkerState: {self.state.workers}")
                 return True
 
             else:
@@ -362,7 +366,10 @@ class Manager:
             if r.status_code == requests.codes.ok:
                 data = r.json()
                 if data["success"]:
-                    self.workers[worker_id]["nodes_status"] = data["nodes_status"]
+                    self.state.workers[worker_id] = WorkerState.from_dict(
+                        data["worker_state"]
+                    )
+                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
                     logger.debug(
                         f"{self}: receiving Worker's node server request: SUCCESS"
@@ -605,9 +612,9 @@ class Manager:
 
                 # Create a temporary HTTP client
                 client = Client(
-                    self.name,
-                    host=worker_data["http_ip"],
-                    port=worker_data["http_port"],
+                    self.state.id,
+                    host=worker_data.ip,
+                    port=worker_data.port,
                 )
                 client.send_file(sender_id=self.id, filepath=zip_package_dst)
 
@@ -788,9 +795,9 @@ class Manager:
         # Wait until the nodes first finished writing down the data
         success = self.broadcast_request("post", "/nodes/save")
         if success:
-            for worker_id in self.workers:
-                for node_id in self.workers[worker_id]["nodes_status"]:
-                    self.workers[worker_id]["nodes_status"][node_id]["FINISHED"] = 1
+            for worker_id in self.state.workers:
+                for node_id in self.state.workers[worker_id].nodes:
+                    self.state.workers[worker_id].nodes[node_id].finished = True
 
         # Request collecting archives
         success = self.broadcast_request(
