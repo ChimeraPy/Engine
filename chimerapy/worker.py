@@ -220,7 +220,7 @@ class Worker:
         # Saving the node data
         self.state.nodes[node_id] = NodeState(id=node_id)
         self.nodes_extra[node_id]["response"] = False
-        self.nodes_extra[node_id]["gather"] = None
+        self.nodes_extra[node_id]["gather"] = DataChunk()
         self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
         logger.debug(f"{self}: created state for <Node {node_id}>")
 

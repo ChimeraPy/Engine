@@ -212,7 +212,10 @@ class Node(mp.Process):
 
         await self.client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
-            data={"state": self.state.to_dict(), "latest_value": self.latest_value},
+            data={
+                "state": self.state.to_dict(),
+                "latest_value": self.latest_value.to_json(),
+            },
         )
 
     async def provide_saving(self, msg: Dict):
