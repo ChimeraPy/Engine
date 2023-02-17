@@ -7,6 +7,7 @@ import os
 import platform
 import tempfile
 import uuid
+import enum
 from aiohttp import web
 import requests
 
@@ -33,7 +34,8 @@ async def hello(request):
     return web.Response(text="Hello, world")
 
 
-ECHO_FLAG = -11111
+class TEST_PROTOCOL(enum.Enum):
+    ECHO_FLAG = -11111
 
 
 async def echo(msg: Dict, ws: web.WebSocketResponse = None):
@@ -46,7 +48,7 @@ def server():
         id="test_server",
         port=0,
         routes=[web.get("/", hello)],
-        ws_handlers={ECHO_FLAG: echo},
+        ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
     )
     server.serve()
     yield server
@@ -59,7 +61,7 @@ def client(server):
         id="test_client",
         host=server.host,
         port=server.port,
-        ws_handlers={ECHO_FLAG: echo},
+        ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
     )
     client.connect()
     yield client
@@ -75,7 +77,7 @@ def client_list(server):
             host=server.host,
             port=server.port,
             id=f"test-{i}",
-            ws_handlers={ECHO_FLAG: echo},
+            ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
         )
         client.connect()
         clients.append(client)
@@ -97,10 +99,12 @@ def test_server_websocket_connection(server, client):
 
 def test_server_send_to_client(server, client):
     # Simple send
-    server.send(client_id=client.id, signal=ECHO_FLAG, data="HELLO")
+    server.send(client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    server.send(client_id=client.id, signal=ECHO_FLAG, data="HELLO", ok=True)
+    server.send(
+        client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True
+    )
 
     assert cp.utils.waiting_for(
         lambda: client.msg_processed_counter >= 2,
@@ -110,10 +114,10 @@ def test_server_send_to_client(server, client):
 
 def test_client_send_to_server(server, client):
     # Simple send
-    client.send(signal=ECHO_FLAG, data="HELLO")
+    client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    client.send(signal=ECHO_FLAG, data="HELLO", ok=True)
+    client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True)
 
     assert cp.utils.waiting_for(
         lambda: server.msg_processed_counter >= 2,
@@ -124,7 +128,7 @@ def test_client_send_to_server(server, client):
 def test_multiple_clients_send_to_server(server, client_list):
 
     for client in client_list:
-        client.send(signal=ECHO_FLAG, data="ECHO!", ok=True)
+        client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
     assert cp.utils.waiting_for(
         lambda: server.msg_processed_counter >= NUMBER_OF_CLIENTS,
@@ -134,7 +138,7 @@ def test_multiple_clients_send_to_server(server, client_list):
 
 def test_server_broadcast_to_multiple_clients(server, client_list):
 
-    server.broadcast(signal=ECHO_FLAG, data="ECHO!", ok=True)
+    server.broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
     for client in client_list:
         assert cp.utils.waiting_for(

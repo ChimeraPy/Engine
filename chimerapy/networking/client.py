@@ -40,14 +40,14 @@ class Client:
         id: str,
         host: str,
         port: int,
-        ws_handlers: Dict[enum.Enum, Callable[[], Coroutine]] = {},
+        ws_handlers: Dict[enum.Enum, Callable] = {},
     ):
 
         # Store parameters
         self.id = id
         self.host = host
         self.port = port
-        self.ws_handlers = ws_handlers
+        self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
         self._ws = None
         self._session = None
 
@@ -68,8 +68,8 @@ class Client:
         # Adding default client handlers
         self.ws_handlers.update(
             {
-                GENERAL_MESSAGE.OK: self._ok,
-                GENERAL_MESSAGE.SHUTDOWN: self._client_shutdown,
+                GENERAL_MESSAGE.OK.value: self._ok,
+                GENERAL_MESSAGE.SHUTDOWN.value: self._client_shutdown,
             }
         )
 
@@ -102,7 +102,7 @@ class Client:
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            msg = decode_payload(aiohttp_msg.data)
+            msg = aiohttp_msg.json()
             logger.debug(f"{self}: read - {msg}")
 
             # Select the handler
@@ -117,7 +117,7 @@ class Client:
             if msg["ok"]:
                 logger.debug(f"{self}: sending OK")
                 try:
-                    await self._ws.send_bytes(
+                    await self._ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                     )
                 except ConnectionResetError:
@@ -142,12 +142,13 @@ class Client:
     ):
 
         # Create payload
+        logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
 
         # Send the message
         logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
         try:
-            await self._ws.send_bytes(payload)
+            await self._ws.send_json(payload)
         except ConnectionResetError:
             logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await self._ws.close()
