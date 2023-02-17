@@ -72,11 +72,6 @@ class Worker:
         self.state = WorkerState(id=id, name=name, port=port)
         self.nodes_extra = collections.defaultdict(dict)
 
-        if isinstance(id, str):
-            self.id = id
-        else:
-            self.id = str(uuid.uuid4())
-
         # Instance variables
         self.has_shutdown: bool = False
         self.manager_ack: bool = False
