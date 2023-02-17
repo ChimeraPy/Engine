@@ -411,7 +411,7 @@ class Manager:
 
         # Broadcast via a ThreadPool
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(self.state.workers)
+            max_workers=len(self.state.workers) + 1
         ) as executor:
 
             def request_start(url):
