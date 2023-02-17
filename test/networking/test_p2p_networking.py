@@ -18,18 +18,18 @@ cp.debug()
         (lazy_fixture("single_node_no_connections_manager")),
         (lazy_fixture("multiple_nodes_one_worker_manager")),
         (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        # pytest.param(
-        #     lazy_fixture("dockered_single_node_no_connections_manager"),
-        #     marks=linux_run_only,
-        # ),
-        # pytest.param(
-        #     lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
-        #     marks=linux_run_only,
-        # ),
-        # pytest.param(
-        #     lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
-        #     marks=linux_run_only,
-        # ),
+        pytest.param(
+            lazy_fixture("dockered_single_node_no_connections_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+            marks=linux_run_only,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+            marks=linux_run_only,
+        ),
     ],
 )
 def test_detecting_when_all_nodes_are_ready(config_manager):

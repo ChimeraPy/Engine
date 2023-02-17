@@ -226,7 +226,7 @@ class Node(mp.Process):
         self.state.finished = True
 
         await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=asdict(self.state)
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
 
     async def start_node(self, msg: Dict):
