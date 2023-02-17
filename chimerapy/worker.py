@@ -23,7 +23,6 @@ from .states import WorkerState, NodeState
 from .utils import get_ip_address, waiting_for, async_waiting_for
 from .networking import Server, Client, DataChunk
 from .networking.enums import (
-    MANAGER_MESSAGE,
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
