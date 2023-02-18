@@ -53,7 +53,6 @@ class Manager:
                 Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
-        self.state = ManagerState(id="Manager", ip="localhost", port=port)
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
 
@@ -85,7 +84,7 @@ class Manager:
 
         # Create server
         self.server = Server(
-            port=self.port,
+            port=port,
             id="Manager",
             routes=[
                 # Manager-Front-end Routs
@@ -100,7 +99,8 @@ class Manager:
         logger.info(f"Manager started at {self.server.host}:{self.server.port}")
 
         # Updating the manager's port to the found available port
-        self.state.ip, self.state.port = self.server.host, self.server.port
+        ip, port = self.server.host, self.server.port
+        self.state = ManagerState(id="Manager", ip=ip, port=port)
 
     def __repr__(self):
         return f"<Manager @{self.host}:{self.port}>"
@@ -156,9 +156,12 @@ class Manager:
         logger.info(
             f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
         )
-        del self.state.workers[worker_state.id]
 
-        return web.HTTPOk()
+        if worker_state.id in self.state.workers:
+            del self.state.workers[worker_state.id]
+            return web.HTTPOk()
+        else:
+            return web.HTTPBadRequest()
 
     async def update_nodes_status(self, request: web.Request):
         msg = await request.json()

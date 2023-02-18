@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
@@ -32,3 +32,5 @@ class ManagerState:
     ip: str = ""
     port: int = 0
     workers: Dict[str, WorkerState] = field(default_factory=dict)
+
+    logs_subscription_port: Optional[int] = None
