@@ -33,7 +33,12 @@ def main():
     d_args = vars(args)
 
     # Create Worker and execute connect
-    worker = Worker(name=d_args["name"], delete_temp=d_args["delete"], id=d_args["id"])
+    worker = Worker(
+        name=d_args["name"],
+        delete_temp=d_args["delete"],
+        id=d_args["id"],
+        port=d_args["wport"],
+    )
     worker.connect(host=d_args["ip"], port=d_args["port"])
     worker.idle()
     worker.shutdown()

@@ -1,5 +1,6 @@
 # Built-in Imports
 import logging
+import subprocess
 import time
 import sys
 
@@ -26,6 +27,37 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
 
     # Assert that the Worker is connected
     assert dockered_worker.id in manager.workers
+    logger.info("Manager shutting down")
+    manager.shutdown()
+
+
+def test_worker_entrypoint_connect_wport(manager):
+
+    # Connect to manager from subprocess
+    worker_process = subprocess.Popen(
+        [
+            "cp-worker",
+            "--name",
+            "test",
+            "--id",
+            "test",
+            "--ip",
+            manager.host,
+            "--port",
+            str(manager.port),
+            "--wport",
+            str(9980),
+        ]
+    )
+    logger.info("Executed cmd to connect Worker to Manager.")
+
+    time.sleep(2)
+    assert "test" in manager.workers
+    assert manager.workers["test"]["http_port"] == 9980
+
+    logger.info("Killing worker subprocess")
+    worker_process.kill()
+
     logger.info("Manager shutting down")
     manager.shutdown()
 
