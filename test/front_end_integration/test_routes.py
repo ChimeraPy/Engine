@@ -23,4 +23,4 @@ def test_get_network(config_manager):
     route = f"http://{config_manager.host}:{config_manager.port}/network"
     r = requests.get(route)
     assert r.status_code == requests.codes.ok
-    assert r.json() == config_manager.dashboard_dict()
+    assert r.json() == config_manager.state.to_dict()

@@ -29,7 +29,8 @@ dependencies = [
     'simplejpeg',
     'aiohttp',
     'blosc',
-    'PyYAML'
+    'PyYAML',
+    'dataclasses-json'
 ]
 
 [project.optional-dependencies]

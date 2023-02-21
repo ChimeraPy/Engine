@@ -42,13 +42,13 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
         # Assert that the worker has their expected nodes
         expected_nodes = worker_node_map[worker_id]
         union = set(expected_nodes) | set(
-            config_manager.workers[worker_id]["nodes_status"].keys()
+            config_manager.workers[worker_id].nodes.keys()
         )
         assert len(union) == len(expected_nodes)
 
         # Assert that all the nodes should be INIT
-        for node_id in config_manager.workers[worker_id]["nodes_status"]:
-            assert config_manager.workers[worker_id]["nodes_status"][node_id]["INIT"]
+        for node_id in config_manager.workers[worker_id].nodes:
+            assert config_manager.workers[worker_id].nodes[node_id].init
             nodes_ids.append(node_id)
 
     logger.debug(f"After creation of p2p network workers: {config_manager.workers}")
@@ -59,10 +59,8 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
     # Extract all the nodes
     nodes_ids = []
     for worker_id in config_manager.workers:
-        for node_id in config_manager.workers[worker_id]["nodes_status"]:
-            assert config_manager.workers[worker_id]["nodes_status"][node_id][
-                "CONNECTED"
-            ]
+        for node_id in config_manager.workers[worker_id].nodes:
+            assert config_manager.workers[worker_id].nodes[node_id].connected
             nodes_ids.append(node_id)
 
     # The config manager should have all the nodes registered as CONNECTED
@@ -71,8 +69,8 @@ def test_detecting_when_all_nodes_are_ready(config_manager):
     # Extract all the nodes
     nodes_idss = []
     for worker_id in config_manager.workers:
-        for node_id in config_manager.workers[worker_id]["nodes_status"]:
-            assert config_manager.workers[worker_id]["nodes_status"][node_id]["READY"]
+        for node_id in config_manager.workers[worker_id].nodes:
+            assert config_manager.workers[worker_id].nodes[node_id].ready
             nodes_idss.append(node_id)
 
     # The config manager should have all the nodes registered as READY
