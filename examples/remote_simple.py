@@ -38,6 +38,7 @@ class SimpleGraph(cp.Graph):
 
         self.add_nodes_from([prod, cons])
         self.add_edge(src=prod, dst=cons)
+        self.node_ids = [prod.id, cons.id]
 
 
 if __name__ == "__main__":
@@ -46,11 +47,9 @@ if __name__ == "__main__":
     manager = cp.Manager(logdir=CWD / "runs")
     graph = SimpleGraph()
     worker = cp.Worker(name="local")
-    # worker2 = cp.Worker(name="remote")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
-    # worker2.connect(host=manager.host, port=manager.port)
 
     # Wait until workers connect
     while True:
@@ -59,7 +58,7 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {"remote": ["prod"], "local": ["cons"]}
+    mapping = {worker.id: graph.node_ids}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping)
