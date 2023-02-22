@@ -53,7 +53,7 @@ def test_worker_entrypoint_connect_wport(manager):
 
     time.sleep(2)
     assert "test" in manager.workers
-    assert manager.workers["test"]["http_port"] == 9980
+    assert manager.workers["test"].port == 9980
 
     logger.info("Killing worker subprocess")
     worker_process.kill()

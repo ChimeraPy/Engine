@@ -23,7 +23,6 @@ from .states import WorkerState, NodeState
 from .utils import get_ip_address, waiting_for, async_waiting_for
 from .networking import Server, Client, DataChunk
 from .networking.enums import (
-    MANAGER_MESSAGE,
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
@@ -221,7 +220,7 @@ class Worker:
         # Saving the node data
         self.state.nodes[node_id] = NodeState(id=node_id)
         self.nodes_extra[node_id]["response"] = False
-        self.nodes_extra[node_id]["gather"] = None
+        self.nodes_extra[node_id]["gather"] = DataChunk()
         self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
         logger.debug(f"{self}: created state for <Node {node_id}>")
 

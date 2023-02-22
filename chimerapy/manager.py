@@ -703,7 +703,7 @@ class Manager:
             # Saving the data
             data = pickle.loads(r.content)["node_data"]
             for node_id, node_data in data.items():
-                data[node_id] = node_data
+                data[node_id] = DataChunk.from_json(node_data)
 
             gather_data.update(data)
 
