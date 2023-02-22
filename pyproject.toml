@@ -30,7 +30,8 @@ dependencies = [
     'aiohttp',
     'blosc',
     'PyYAML',
-    'dataclasses-json'
+    'dataclasses-json',
+    'requests'
 ]
 
 [project.optional-dependencies]
@@ -62,6 +63,9 @@ benchmark = [
 ]
 examples = [
     'dxcam; sys_platform == "win32"'
+    'imutils',
+    'numpy',
+    'pillow'
 ]
 
 [project.urls]
