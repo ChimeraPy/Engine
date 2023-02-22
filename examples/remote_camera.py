@@ -46,6 +46,7 @@ class RemoteCameraGraph(cp.Graph):
 
         self.add_nodes_from([web, show])
         self.add_edge(src=web, dst=show)
+        self.node_ids = [web.id, show.id]
 
 
 if __name__ == "__main__":
@@ -66,7 +67,7 @@ if __name__ == "__main__":
 
     # Assuming one worker
     # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {"local": ["web", "show"]}
+    mapping = {worker.id: graph.node_ids}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping)
