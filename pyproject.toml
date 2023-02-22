@@ -47,7 +47,7 @@ test = [
     'docker',
     'numpy',
     'imutils',
-    'pillow',
+    'pillow'
 ]
 docs = [
     'sphinx',
@@ -62,7 +62,7 @@ benchmark = [
     'msgpack_numpy'
 ]
 examples = [
-    'dxcam; sys_platform == "win32"'
+    'dxcam; sys_platform == "win32"',
     'imutils',
     'numpy',
     'pillow'
