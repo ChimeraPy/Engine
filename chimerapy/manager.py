@@ -21,7 +21,6 @@ import requests
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
-from .networking.enums import MANAGER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -173,10 +172,7 @@ class Manager:
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
-        await self.server.async_broadcast(
-            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
-            data=self.state.to_dict(),
-        )
+        await self.dashboard_api.broadcast_node_update()
 
         return web.HTTPOk()
 
