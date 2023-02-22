@@ -9,6 +9,12 @@ class GENERAL_MESSAGE(Enum):  # Used only Client and Server
     CLIENT_REGISTER = 3
 
 
+# Manager --> Front-End WS
+class MANAGER_MESSAGE(Enum):
+    NODE_STATUS_UPDATE = 4
+
+
+# Worker -> Node
 class WORKER_MESSAGE(Enum):
     BROADCAST_NODE_SERVER_DATA = 21
     REQUEST_STEP = 24

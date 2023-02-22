@@ -85,19 +85,16 @@ class Server:
         if self.routes:
             self._app.add_routes(self.routes)
 
-        # WS support
-        if self.ws_handlers:
+        # Adding route for ws and other configuration
+        self._app.add_routes([web.get("/ws", self._websocket_handler)])
 
-            # Adding route for ws and other configuration
-            self._app.add_routes([web.get("/ws", self._websocket_handler)])
-
-            # Adding other essential ws handlers
-            self.ws_handlers.update(
-                {
-                    GENERAL_MESSAGE.OK.value: self._ok,
-                    GENERAL_MESSAGE.CLIENT_REGISTER.value: self._register_ws_client,
-                }
-            )
+        # Adding other essential ws handlers
+        self.ws_handlers.update(
+            {
+                GENERAL_MESSAGE.OK.value: self._ok,
+                GENERAL_MESSAGE.CLIENT_REGISTER.value: self._register_ws_client,
+            }
+        )
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
