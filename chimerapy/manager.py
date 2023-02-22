@@ -1,5 +1,6 @@
 from typing import Dict, Optional, List, Union, Any, Literal
 import pickle
+import asyncio
 import pathlib
 import os
 import time
@@ -445,6 +446,46 @@ class Manager:
 
         return all(success)
 
+    async def async_broadcast_request(
+        self,
+        htype: Literal["get", "post"],
+        route: str,
+        data: Any = {},
+        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+    ) -> bool:
+
+        # Create a new session for the moment
+        tasks: List[asyncio.Task] = []
+        sessions: List[aiohttp.ClientSession] = []
+        for worker_data in self.state.workers.values():
+            session = aiohttp.ClientSession()
+            url = f"http://{worker_data.ip}:{worker_data.port}" + route
+            logger.debug(f"{self}: Executing file transfer to {url}")
+            if htype == "get":
+                tasks.append(
+                    asyncio.create_task(session.get(url, data=json.dumps(data)))
+                )
+            elif htype == "post":
+                tasks.append(
+                    asyncio.create_task(session.post(url, data=json.dumps(data)))
+                )
+
+            # Storing sessions to later close
+            sessions.append(session)
+
+        outputs: List[aiohttp.ClientResponse] = await asyncio.gather(*tasks)
+
+        # Closing sessions
+        for session in sessions:
+            await session.close()
+
+        # Return if all outputs were successful
+        for output in outputs:
+            if output.status != 200:
+                return False
+
+        return True
+
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
@@ -709,7 +750,7 @@ class Manager:
 
         return gather_data
 
-    def start(self):
+    def start(self) -> bool:
         """Start the executiong of the cluster.
 
         Before starting, make sure that you have perform the following
@@ -725,7 +766,11 @@ class Manager:
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        return self.broadcast_request("post", "/nodes/start")
+        success = self.broadcast_request("post", "/nodes/start")
+        if success:
+            self.state.running = True
+
+        return success
 
     def stop(self):
         """Stop the executiong of the cluster.
@@ -739,7 +784,11 @@ class Manager:
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to start
-        return self.broadcast_request("post", "/nodes/stop")
+        success = self.broadcast_request("post", "/nodes/stop")
+        if success:
+            self.state.running = False
+
+        return success
 
     def collect(self, unzip: bool = True) -> bool:
         """Collect data from the Workers
