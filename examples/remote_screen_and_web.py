@@ -10,6 +10,7 @@ import imutils
 from PIL import ImageGrab
 
 import chimerapy as cp
+
 cp.debug()
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
@@ -83,6 +84,7 @@ class RemoteCameraGraph(cp.Graph):
 
         self.add_nodes_from([web, show, screen])
         self.add_edges_from([(web, show), (screen, show)])
+        self.node_ids = [web.id, screen.id, show.id]
 
 
 if __name__ == "__main__":
@@ -105,24 +107,24 @@ if __name__ == "__main__":
     # For local only
     if len(manager.workers) == 1:
         graph = RemoteCameraGraph()
-        mapping = {"local": ["web", "show", "screen"]}
+        mapping = {worker.id: graph.node_ids}
     else:
 
         # For mutliple workers (remote and local)
         graph = cp.Graph()
-        show_node = ShowWindow(name=f"local-show")
+        show_node = ShowWindow(name=f"show")
         graph.add_node(show_node)
-        mapping = {"local": ["local-show"]}
+        mapping = {worker.id: [show_node.id]}
 
-        for worker_name in manager.workers:
-            if worker_name == "local":
+        for worker_id in manager.workers:
+            if worker_id == "local":
                 continue
             else:
-                web_node = WebcamNode(name=f"{worker_name}-web")
-                screen_node = ScreenCaptureNode(name=f"{worker_name}-screen")
+                web_node = WebcamNode(name="web")
+                screen_node = ScreenCaptureNode(name="screen")
                 graph.add_nodes_from([web_node, screen_node])
                 graph.add_edges_from([(screen_node, show_node), (web_node, show_node)])
-                mapping[worker_name] = [f"{worker_name}-web", f"{worker_name}-screen"]
+                mapping[worker_id] = [web_node.id, screen_node.id]
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping)
