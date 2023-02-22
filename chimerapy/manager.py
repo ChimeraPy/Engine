@@ -37,6 +37,7 @@ class Manager:
         port: int = 9000,
         max_num_of_workers: int = 50,
         publish_logs_via_zmq: bool = False,
+        dashboard_api: bool = True,
         **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
@@ -50,6 +51,7 @@ class Manager:
             on availablity.
             max_num_of_workers (int): max_num_of_workers
             publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
+            dashboard_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
             **kwargs: Additional keyword arguments.
                 Currently, this is used to configure the ZMQ log handler.
         """
@@ -88,14 +90,19 @@ class Manager:
             port=port,
             id="Manager",
             routes=[
-                # Manager-Front-end Routs
-                web.get("/network", self.get_network),
-                # Manager-Worker Routes
                 web.post("/workers/register", self.register_worker),
                 web.post("/workers/deregister", self.deregister_worker),
                 web.post("/workers/node_status", self.update_nodes_status),
             ],
         )
+
+        # Enable Dashboard API if requested (needed to be executed after server is running)
+        if dashboard_api:
+            from .api import API
+
+            self.dashboard_api = API(self)
+
+        # Runn the Server
         self.server.serve()
         logger.info(f"Manager started at {self.server.host}:{self.server.port}")
 
@@ -124,13 +131,6 @@ class Manager:
     @property
     def workers(self) -> Dict[str, WorkerState]:
         return self.state.workers
-
-    ####################################################################
-    ## Front-End API
-    ####################################################################
-
-    async def get_network(self, request: web.Request):
-        return web.json_response(self.state.to_dict())
 
     ####################################################################
     ## Worker -> Manager Messages
