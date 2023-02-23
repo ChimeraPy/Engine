@@ -3,6 +3,7 @@ import datetime
 from aiohttp import web
 
 from .manager import Manager
+from .networking.enums import MANAGER_MESSAGE
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
@@ -19,6 +20,10 @@ class API:
                 web.post("/collect", self.post_collect),
             ]
         )
+
+    ####################################################################
+    # HTTP Routes
+    ####################################################################
 
     async def get_network(self, request: web.Request):
         return web.json_response(self.manager.state.to_dict())
@@ -84,3 +89,13 @@ class API:
             return web.HTTPOk()
         else:
             return web.HTTPError()
+
+    ####################################################################
+    # WS
+    ####################################################################
+
+    async def broadcast_node_update(self):
+        await self.manager.server.async_broadcast(
+            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
+            data=self.manager.state.to_dict(),
+        )
