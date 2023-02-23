@@ -172,6 +172,7 @@ class Manager:
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
+        await self.dashboard_api.broadcast_node_update()
 
         return web.HTTPOk()
 
