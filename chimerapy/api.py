@@ -1,5 +1,4 @@
 import datetime
-
 from aiohttp import web
 
 from .manager import Manager
