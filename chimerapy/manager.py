@@ -180,6 +180,15 @@ class Manager:
     ## Helper Methods (Cluster)
     ####################################################################
 
+    def node_to_worker_lookup(self, node_id: str) -> Optional[str]:
+
+        for worker_id in self.state.workers:
+            if node_id in self.state.workers[worker_id].nodes:
+                return worker_id
+
+        logger.error(f"{self}: Node-Worker Lookup failed: {node_id}")
+        return None
+
     def save_meta(self):
 
         # Get the times, handle Optional
@@ -682,6 +691,38 @@ class Manager:
 
         """
         return self.broadcast_request("post", "/nodes/step")
+
+    def request_registered_method(
+        self,
+        node_id: str,
+        method_name: str,
+        params: Dict[str, Any] = {},
+        timeout: Union[int, float] = 10,
+    ) -> bool:
+
+        # First, identify which worker has the node
+        worker_id = self.node_to_worker_lookup(node_id)
+
+        if not isinstance(worker_id, str):
+            return False
+
+        r = requests.post(
+            f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
+            + "/nodes/registered_methods",
+            json.dumps(
+                {
+                    "node_id": node_id,
+                    "method_name": method_name,
+                    "params": params,
+                    "timeout": timeout,
+                }
+            ),
+        )
+
+        if r.status_code == requests.codes.ok:
+            return True
+
+        return False
 
     def gather(self) -> Dict:
 

@@ -213,6 +213,27 @@ def graph(gen_node, con_node):
 
 
 @pytest.fixture
+def single_node_with_reg_methods_manager(manager, worker, node_with_reg_methods):
+
+    # Define graph
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([node_with_reg_methods])
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        simple_graph,
+        {
+            worker.id: [node_with_reg_methods.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
 def single_node_no_connections_manager(manager, worker, gen_node):
 
     # Define graph
