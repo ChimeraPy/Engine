@@ -13,12 +13,9 @@ from . import config
 
 # Interal Imports
 from .manager import Manager
-from .node import Node
+from .node import Node, register
 from .worker import Worker
 from .graph import Graph
-
-# Node API
-from .registered_methods import register
 
 # Others
 from .networking import Server, Client, Publisher, Subscriber, enums, DataChunk

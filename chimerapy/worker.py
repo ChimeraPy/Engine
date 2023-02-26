@@ -223,6 +223,7 @@ class Worker:
         self.state.nodes[node_id] = NodeState(id=node_id)
         self.nodes_extra[node_id]["response"] = False
         self.nodes_extra[node_id]["gather"] = DataChunk()
+        self.nodes_extra[node_id]["registered_methods_results"] = None
         self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
         logger.debug(f"{self}: created state for <Node {node_id}>")
 
@@ -394,16 +395,22 @@ class Worker:
         await self.server.async_send(
             client_id=node_id,
             signal=WORKER_MESSAGE.REQUEST_METHOD,
-            data={"method_name": method_name, "params": params},
+            data={"method_name": method_name, "params": params, "timeout": timeout},
         )
 
         # Then wait for the Node response
         success = await async_waiting_for(
-            condition=lambda: True == True, timeout=timeout
+            condition=lambda: self.nodes_extra[node_id]["response"] == True,
+            timeout=timeout,
         )
 
         if success:
-            return web.json_response({"success": True, "return": None})
+            return web.json_response(
+                {
+                    "success": True,
+                    "return": self.nodes_extra[node_id]["registered_method_results"],
+                }
+            )
         else:
             return web.json_response({"success": False, "return": None})
 
@@ -570,6 +577,7 @@ class Worker:
 
         node_id = msg["data"]["node_id"]
         self.nodes_extra[node_id]["response"] = True
+        self.nodes_extra[node_id]["registered_method_results"] = msg["data"]["output"]
 
     ####################################################################
     ## Helper Methods

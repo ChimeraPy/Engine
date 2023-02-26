@@ -136,26 +136,39 @@ class SlowPrepNode(cp.Node):
 
 
 class NodeWithRegisteredMethods(cp.Node):
+    def __init__(self, name: str, init_value: int = 0):
+        super().__init__(name=name)
+        self.init_value = init_value
+
     def prep(self):
-        self.value = 0
+        self.logger.debug(f"{self}: executing PREP")
+        self.value = self.init_value
 
     def step(self):
         time.sleep(0.5)
         self.value += 1
         return self.value
 
+    def teardown(self):
+        self.logger.debug(f"{self}: executing TEARDOWN")
+
+    # Default style
     @cp.register
+    async def printout(self):
+        self.logger.debug(f"{self}: logging out value: {self.value}")
+        return self.value
+
+    # Style: blocking
+    @cp.register.with_config(params={"value": "Union[int, float]"}, style="blocking")
+    async def set_value(self, value: Union[int, float]):
+        self.value = value
+        return value
+
+    # Style: Reset
+    @cp.register.with_config(style="reset")
     async def reset(self):
-        self.prep()
-        return True
-
-    # @cp.register.with_config(blocking=False)
-    # def printout(self):
-    #     self.logger.debug(f"{self}: logging out value: {self.value}")
-
-    # @cp.register.with_config(params={"value": Union[int, float]})
-    # def set_value(self, value: Union[int, float]):
-    #     self.value = value
+        self.init_value = 100
+        return 100
 
 
 @pytest.fixture

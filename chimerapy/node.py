@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional, Union, Literal, Tuple
+from typing import Dict, List, Any, Optional, Union, Literal, Tuple, Callable, Coroutine
 from multiprocessing.process import AuthenticationString
 import logging
 import queue
@@ -19,11 +19,10 @@ import pandas as pd
 import zmq
 
 # Internal Imports
-from .states import NodeState
+from .states import NodeState, RegisteredMethod
 from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
-from .registered_methods import RegisteredMethod
 from . import _logger
 
 
@@ -57,9 +56,7 @@ class Node(mp.Process):
         # Saving input parameters
         self._context = mp.get_start_method()
         self.state = NodeState(
-            id=str(uuid.uuid4()),
-            name=name,
-            registered_methods={},  # self.registered_methods
+            id=str(uuid.uuid4()), name=name, registered_methods=self.registered_methods
         )
 
         # Saving state variables
@@ -248,16 +245,48 @@ class Node(mp.Process):
         self.logger.debug(f"{self}: execute register method: {msg}")
 
         # Check first that the method exists
-        method_name, params = msg["data"]["method_name"], msg["data"]["params"]
+        method_name, params, timeout = (
+            msg["data"]["method_name"],
+            msg["data"]["params"],
+            msg["data"]["timeout"],
+        )
 
-        if method_name in self.registered_methods:
+        if method_name not in self.registered_methods:
             results = {"node_id": self.state.id, "success": False, "output": None}
+            self.logger.warning(
+                f"{self}: Worker requested execution of registered method that doesn't exists: {method_name}"
+            )
         else:
 
-            # Execute method
-            # output = await self.registered_methods[method_name].function(self, *list(params.keys()))
-            output = True
-            results = {"node_id": self.state.id, "success": True, "output": output}
+            # Extract the method
+            function: Callable[[], Coroutine] = getattr(self, method_name)
+            style = self.registered_methods[method_name].style
+            self.logger.debug(f"{self}: executing {function} with params: {params}")
+
+            # Execute method based on its style
+            success = False
+            if style == "concurrent":
+                output = await function(**params)
+                success = True
+
+            elif style == "blocking":
+                with self.step_lock:
+                    output = await function(**params)
+                    success = True
+
+            elif style == "reset":
+                with self.step_lock:
+                    output = await function(**params)
+
+                # Signal the reset event and then wait
+                self.reset_event.clear()
+                success = self.reset_event.wait(timeout=timeout)
+
+            else:
+                self.logger.error(f"Invalid registered method request: style= {style}")
+                output = None
+
+            results = {"node_id": self.state.id, "success": success, "output": output}
 
         await self.client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
@@ -397,6 +426,9 @@ class Node(mp.Process):
         self.worker_signal_start = threading.Event()
         self.worker_signal_start.clear()
         self.state.init = True
+        self.step_lock = threading.Lock()
+        self.reset_event = threading.Event()
+        self.reset_event.set()
 
         if self.networking:
 
@@ -520,7 +552,8 @@ class Node(mp.Process):
         # If no in_bound, just send data
         if len(self.p2p_info["in_bound"]) == 0:
             try:
-                output = self.step()
+                with self.step_lock:
+                    output = self.step()
             except Exception as e:
                 traceback_info = traceback.format_exc()
                 self.logger.error(traceback_info)
@@ -539,8 +572,9 @@ class Node(mp.Process):
                     self.logger.debug(f"{self}: forward processing inputs")
 
                     try:
-                        output = self.step(self.in_bound_data)
-                        break
+                        with self.step_lock:
+                            output = self.step(self.in_bound_data)
+                            break
                     except Exception as e:
                         traceback_info = traceback.format_exc()
                         self.logger.error(traceback_info)
@@ -617,6 +651,12 @@ class Node(mp.Process):
         """
         while self.running.value:
             self.forward({})
+
+            # If reset event is requested, execute user-define methods
+            if not self.reset_event.is_set():
+                self.teardown()
+                self.prep()
+                self.reset_event.set()
 
     def teardown(self):
         """User-define method.
@@ -709,3 +749,28 @@ class Node(mp.Process):
         # Also, the networking components are not being used
         if self.debug == "step":
             self._teardown()
+
+
+# Reference:
+# https://stackoverflow.com/a/69339176/13231446
+# https://stackoverflow.com/a/54316392/13231446
+# Class decorator for methods, that appends the decorated method to a cls variable
+class register:
+    def __init__(self, fn: Callable, **kwargs):
+        self.fn = fn
+        self.kwargs = dict(kwargs)
+
+    def __set_name__(self, owner: Node, name: str):
+        owner.registered_methods[name] = RegisteredMethod(**self.kwargs)
+        setattr(owner, name, self.fn)
+
+    def __call__(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def with_config(
+        cls,
+        params: Dict[str, str] = {},
+        style: Literal["concurrent", "blocking", "reset"] = "concurrent",
+    ):
+        return lambda func: cls(func, params=params, style=style)

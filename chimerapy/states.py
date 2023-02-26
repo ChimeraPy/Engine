@@ -2,7 +2,12 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
-from .registered_methods import RegisteredMethod
+
+@dataclass_json
+@dataclass
+class RegisteredMethod:
+    style: str = "concurrent"
+    params: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass_json

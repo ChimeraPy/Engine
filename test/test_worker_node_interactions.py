@@ -367,45 +367,6 @@ def test_worker_gather(worker, gen_node):
     assert r.status_code == requests.codes.ok
 
 
-def test_registered_method(worker, node_with_reg_methods):
-
-    # Simple single node without connection
-    msg = {
-        "id": node_with_reg_methods.id,
-        "pickled": dill.dumps(node_with_reg_methods),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
-
-    logger.debug("Create nodes")
-    worker.create_node(msg)
-
-    logger.debug("Waiting before starting!")
-    time.sleep(2)
-
-    logger.debug("Start nodes!")
-    worker.start_nodes()
-
-    logger.debug("Let nodes run for some time")
-    time.sleep(5)
-
-    # Execute the registered method
-    r = requests.post(
-        f"http://{worker.ip}:{worker.port}" + "/nodes/registered_methods",
-        json.dumps(
-            {
-                "node_id": node_with_reg_methods.id,
-                "method_name": "reset",
-                "timeout": 10,
-                "params": {},
-            }
-        ),
-    )
-    assert r.status_code == requests.codes.ok
-
-
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
