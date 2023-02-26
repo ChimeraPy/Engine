@@ -6,7 +6,8 @@ from dataclasses_json import dataclass_json
 @dataclass_json
 @dataclass
 class RegisteredMethod:
-    style: str = "concurrent"
+    name: str
+    style: str = "concurrent"  # Literal['concurrent', 'blocking', 'reset']
     params: Dict[str, str] = field(default_factory=dict)
 
 

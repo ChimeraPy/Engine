@@ -761,7 +761,7 @@ class register:
         self.kwargs = dict(kwargs)
 
     def __set_name__(self, owner: Node, name: str):
-        owner.registered_methods[name] = RegisteredMethod(**self.kwargs)
+        owner.registered_methods[name] = RegisteredMethod(name=name, **self.kwargs)
         setattr(owner, name, self.fn)
 
     def __call__(self, *args, **kwargs):
