@@ -22,6 +22,7 @@ class WORKER_MESSAGE(Enum):
     REQUEST_SAVING = 26
     START_NODES = 29
     STOP_NODES = 30
+    REQUEST_METHOD = 31
 
 
 # Node -> Worker

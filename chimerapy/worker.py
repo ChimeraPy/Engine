@@ -97,6 +97,7 @@ class Worker:
                 web.post("/nodes/step", self.async_step),
                 web.post("/packages/load", self.load_sent_packages),
                 web.post("/nodes/start", self.async_start_nodes),
+                web.post("/nodes/registered_methods", self.async_request_method),
                 web.post("/nodes/stop", self.async_stop_nodes),
                 web.post("/shutdown", self.async_shutdown),
             ],
@@ -368,6 +369,29 @@ class Worker:
         await self.server.async_broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
 
         return web.HTTPOk()
+
+    async def async_request_method(self, request: web.Request):
+        msg = await request.json()
+
+        # Decompose msg
+        node_id, method_name, params = msg["node_id"], msg["method_name"], msg["params"]
+
+        # First check that the Node exists and if the selected node has the registered method
+        if (node_id not in self.nodes.keys()) and (
+            method_name not in self.nodes[node_id].registered_methods
+        ):
+            return web.HTTPBadRequest()
+
+        await self.server.async_send(
+            client_id=node_id,
+            signal=WORKER_MESSAGE.REQUEST_METHOD,
+            data={"method_name": method_name, "params": params},
+        )
+
+        # Then wait for the Node response
+        ...
+
+        return web.json_response({"success": True, "return": None})
 
     async def async_shutdown(self, request: web.Request):
         self.shutdown()

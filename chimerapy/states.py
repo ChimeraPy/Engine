@@ -2,6 +2,8 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
+from .registered_methods import RegisteredMethod
+
 
 @dataclass_json
 @dataclass
@@ -13,6 +15,7 @@ class NodeState:
     ready: bool = False
     finished: bool = False
     port: int = 0
+    registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
 
 @dataclass_json

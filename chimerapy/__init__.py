@@ -17,6 +17,9 @@ from .node import Node
 from .worker import Worker
 from .graph import Graph
 
+# Node API
+from .registered_methods import register
+
 # Others
 from .networking import Server, Client, Publisher, Subscriber, enums, DataChunk
 from .data_handlers import SaveHandler

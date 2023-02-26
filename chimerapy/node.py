@@ -23,10 +23,14 @@ from .states import NodeState
 from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
+from .registered_methods import RegisteredMethod
 from . import _logger
 
 
 class Node(mp.Process):
+
+    registered_methods: Dict[str, RegisteredMethod] = {}
+
     def __init__(
         self,
         name: str,
@@ -52,7 +56,9 @@ class Node(mp.Process):
 
         # Saving input parameters
         self._context = mp.get_start_method()
-        self.state = NodeState(id=str(uuid.uuid4()), name=name)
+        self.state = NodeState(
+            id=str(uuid.uuid4()), name=name, registered_methods=self.registered_methods
+        )
 
         # Saving state variables
         self.publisher: Optional[Publisher] = None
@@ -387,6 +393,7 @@ class Node(mp.Process):
                     WORKER_MESSAGE.REQUEST_SAVING: self.provide_saving,
                     WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                     WORKER_MESSAGE.START_NODES: self.start_node,
+                    WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
                     WORKER_MESSAGE.STOP_NODES: self.stop_node,
                 },
             )

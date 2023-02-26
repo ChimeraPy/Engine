@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import time
 import logging
 import pathlib
@@ -135,6 +135,28 @@ class SlowPrepNode(cp.Node):
         return self.value
 
 
+class NodeWithRegisteredMethods(cp.Node):
+    def prep(self):
+        self.value = 0
+
+    def step(self):
+        time.sleep(0.5)
+        self.value += 1
+        return self.value
+
+    @cp.register
+    def reset(self):
+        self.prep()
+
+    @cp.register.with_config(blocking=False)
+    def printout(self):
+        self.logger.debug(f"{self}: logging out value: {self.value}")
+
+    @cp.register.with_config(params={"value": Union[int, float]})
+    def set_value(self, value: Union[int, float]):
+        self.value = value
+
+
 @pytest.fixture
 def gen_node():
     return GenNode(name="Gen1")
@@ -148,6 +170,11 @@ def con_node():
 @pytest.fixture
 def slow_node():
     return SlowPrepNode(name="Slo1")
+
+
+@pytest.fixture
+def node_with_reg_methods():
+    return NodeWithRegisteredMethods(name="RegMed1")
 
 
 @pytest.fixture
