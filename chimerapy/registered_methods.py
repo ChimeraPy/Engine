@@ -8,10 +8,9 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RegisteredMethod:
-    function: Callable
     blocking: bool = True
     reset: bool = False
-    params: Dict[str, Type] = field(default=dict)
+    params: Dict[str, str] = field(default=dict)
 
 
 # Class decorator for methods, that appends the decorated method to a cls variable
@@ -21,9 +20,7 @@ class register:
         self.kwargs = dict(kwargs)
 
     def __set_name__(self, owner: "Node", name: str):
-        owner.registered_methods[name] = RegisteredMethod(
-            function=self.fn, **self.kwargs
-        )
+        owner.registered_methods[name] = RegisteredMethod(**self.kwargs)
         setattr(owner, name, self.fn)
 
     def __call__(self, *args, **kwargs):
@@ -31,6 +28,6 @@ class register:
 
     @classmethod
     def with_config(
-        cls, blocking: bool = True, reset: bool = False, params: Dict[str, Type] = {}
+        cls, blocking: bool = True, reset: bool = False, params: Dict[str, str] = {}
     ):
         return lambda func: cls(func, blocking=blocking, reset=reset, params=params)

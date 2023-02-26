@@ -394,7 +394,14 @@ def test_registered_method(worker, node_with_reg_methods):
     # Execute the registered method
     r = requests.post(
         f"http://{worker.ip}:{worker.port}" + "/nodes/registered_methods",
-        json.dumps({"node_id": node_with_reg_methods.id, "method_name": "reset"}),
+        json.dumps(
+            {
+                "node_id": node_with_reg_methods.id,
+                "method_name": "reset",
+                "timeout": 10,
+                "params": {},
+            }
+        ),
     )
     assert r.status_code == requests.codes.ok
 

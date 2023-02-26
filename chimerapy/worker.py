@@ -104,6 +104,7 @@ class Worker:
             ws_handlers={
                 NODE_MESSAGE.STATUS: self.node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
+                NODE_MESSAGE.REPORT_RESULTS: self.node_report_results,
             },
         )
 
@@ -374,13 +375,21 @@ class Worker:
         msg = await request.json()
 
         # Decompose msg
-        node_id, method_name, params = msg["node_id"], msg["method_name"], msg["params"]
+        node_id, method_name, params, timeout = (
+            msg["node_id"],
+            msg["method_name"],
+            msg["params"],
+            msg["timeout"],
+        )
 
         # First check that the Node exists and if the selected node has the registered method
         if (node_id not in self.nodes.keys()) and (
             method_name not in self.nodes[node_id].registered_methods
         ):
             return web.HTTPBadRequest()
+
+        # Mark that the node hasn't responsed
+        self.nodes_extra[node_id]["response"] = False
 
         await self.server.async_send(
             client_id=node_id,
@@ -389,9 +398,14 @@ class Worker:
         )
 
         # Then wait for the Node response
-        ...
+        success = await async_waiting_for(
+            condition=lambda: True == True, timeout=timeout
+        )
 
-        return web.json_response({"success": True, "return": None})
+        if success:
+            return web.json_response({"success": True, "return": None})
+        else:
+            return web.json_response({"success": False, "return": None})
 
     async def async_shutdown(self, request: web.Request):
         self.shutdown()
@@ -551,6 +565,11 @@ class Worker:
                     "/workers/node_status", data=self.state.to_json()
                 ):
                     pass
+
+    async def node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
+
+        node_id = msg["data"]["node_id"]
+        self.nodes_extra[node_id]["response"] = True
 
     ####################################################################
     ## Helper Methods

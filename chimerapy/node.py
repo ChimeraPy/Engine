@@ -57,7 +57,9 @@ class Node(mp.Process):
         # Saving input parameters
         self._context = mp.get_start_method()
         self.state = NodeState(
-            id=str(uuid.uuid4()), name=name, registered_methods=self.registered_methods
+            id=str(uuid.uuid4()),
+            name=name,
+            registered_methods={},  # self.registered_methods
         )
 
         # Saving state variables
@@ -241,6 +243,23 @@ class Node(mp.Process):
 
     async def async_forward(self, msg: Dict):
         self.forward(msg)
+
+    async def execute_registered_method(self, msg: Dict):
+        self.logger.debug(f"{self}: execute register method: {msg}")
+
+        # Check first that the method exists
+        method_name, params = msg["data"]["method_name"], msg["data"]["params"]
+
+        if method_name in self.registered_methods:
+            results = {"node_id": self.state.id, "success": False, "output": None}
+        else:
+
+            # Execute method
+            # output = await self.registered_methods[method_name].function(self, *list(params.keys()))
+            output = True
+            results = {"node_id": self.state.id, "success": True, "output": output}
+
+        await self.client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
     async def stop_node(self, msg: Dict):
         self.running.value = False

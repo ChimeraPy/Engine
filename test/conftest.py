@@ -145,16 +145,17 @@ class NodeWithRegisteredMethods(cp.Node):
         return self.value
 
     @cp.register
-    def reset(self):
+    async def reset(self):
         self.prep()
+        return True
 
-    @cp.register.with_config(blocking=False)
-    def printout(self):
-        self.logger.debug(f"{self}: logging out value: {self.value}")
+    # @cp.register.with_config(blocking=False)
+    # def printout(self):
+    #     self.logger.debug(f"{self}: logging out value: {self.value}")
 
-    @cp.register.with_config(params={"value": Union[int, float]})
-    def set_value(self, value: Union[int, float]):
-        self.value = value
+    # @cp.register.with_config(params={"value": Union[int, float]})
+    # def set_value(self, value: Union[int, float]):
+    #     self.value = value
 
 
 @pytest.fixture
