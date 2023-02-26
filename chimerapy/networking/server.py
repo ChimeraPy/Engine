@@ -391,7 +391,7 @@ class Server:
         for name, filepath_dict in self.file_transfer_records.items():
             # Create a folder for the name
             named_dst = dst / name
-            os.mkdir(named_dst)
+            named_dst.mkdir(parents=True, exist_ok=True)
 
             # Move all the content inside
             for filename, file_meta in filepath_dict.items():
