@@ -231,6 +231,7 @@ class Node(mp.Process):
 
     async def start_node(self, msg: Dict):
         self.logger.debug(f"{self}: start")
+        self.start_time = datetime.datetime.now()
         self.worker_signal_start.set()
 
     async def async_forward(self, msg: Dict):
@@ -250,6 +251,7 @@ class Node(mp.Process):
             "data": data,
             "dtype": "video",
             "fps": fps,
+            "timestamp": (datetime.datetime.now() - self.start_time).total_seconds(),
         }
         self.save_queue.put(video_chunk)
 
@@ -345,6 +347,9 @@ class Node(mp.Process):
 
         # Creating initial values
         self.latest_value = None
+
+        # Timekeeping
+        self.start_time = datetime.datetime.now()
 
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``

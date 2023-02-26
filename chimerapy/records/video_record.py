@@ -34,12 +34,17 @@ class VideoRecord(Record):
         # self.video_fourcc = cv2.VideoWriter_fourcc(*'MP4V')
         self.video_fourcc = cv2.VideoWriter_fourcc("m", "p", "4", "v")
 
+        # Handling unstable FPS
+        self.frame_count: int = 0
+        self.previous_frame: np.ndarray = np.array([])
+
     def write(self, data_chunk: Dict[str, Any]):
         """Commit the unsaved changes to memory."""
 
         # Determine the size
         frame = data_chunk["data"]
         fps = data_chunk["fps"]
+        timestamp = data_chunk["timestamp"]
         h, w = frame.shape[:2]
 
         # Determine if RGB or grey video
@@ -57,10 +62,37 @@ class VideoRecord(Record):
                     str(self.video_file_path), self.video_fourcc, fps, (w, h), 0
                 )
 
+            # Write
             self.first_frame = False
+            self.video_writer.write(np.uint8(frame))
 
-        # Write
-        self.video_writer.write(np.uint8(frame))
+        else:
+
+            # Account for possible unstable fps
+            delta = timestamp - (self.frame_count / fps)
+
+            # Case 1: Too late (padd with previous frame to match)
+            num_missed_frames = int(delta // (1 / fps)) - 1
+            if num_missed_frames > 0:
+                for i in range(num_missed_frames):
+                    self.video_writer.write(self.previous_frame)
+                    self.frame_count += 1
+
+                # Then use the latest frame
+                self.video_writer.write(np.uint8(frame))
+                self.frame_count += 1
+
+            # Case 2: On-time (by a certain tolerance), write
+            elif delta / (1 / fps) >= 0.9:
+                self.video_writer.write(np.uint8(frame))
+                self.frame_count += 1
+
+            # Case 3: Too early (only update previous data)
+            else:
+                pass
+
+        # Update previous data
+        self.previous_frame = frame.astype(np.uint8)
 
     def close(self):
 
