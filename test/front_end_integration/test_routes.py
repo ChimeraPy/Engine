@@ -26,6 +26,8 @@ def test_get_network(config_manager):
     r = requests.get(route)
     assert r.status_code == requests.codes.ok
     assert r.json() == config_manager.state.to_dict()
+
+
 def test_post_registered_method(
     single_node_with_reg_methods_manager, node_with_reg_methods
 ):

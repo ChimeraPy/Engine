@@ -14,7 +14,12 @@ logger = _logger.getLogger("chimerapy")
 class API:
     def __init__(self, manager: Manager):
         self.manager = manager
-        self.manager.server.add_routes([web.get("/network", self.get_network)])
+        self.manager.server.add_routes(
+            [
+                web.get("/network", self.get_network),
+                web.post("/registered_methods", self.execute_registered_method),
+            ]
+        )
 
     ####################################################################
     # HTTP Routes
