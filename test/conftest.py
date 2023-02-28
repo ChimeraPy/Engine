@@ -1,3 +1,4 @@
+import uuid
 from typing import Dict, Any
 import time
 import logging
@@ -13,6 +14,7 @@ import docker
 import pytest
 
 import chimerapy as cp
+from chimerapy.logger.queued_handler import start_logs_queue_listener
 from .mock import DockeredWorker
 
 logger = cp._logger.getLogger("chimerapy")
@@ -58,12 +60,11 @@ def pytest_configure():
 
 
 @pytest.fixture
-def logreceiver():
-    listener = cp.LogReceiver(logger_name="chimerapy")
-    listener.start()
+def logs_queue():
+    queue_id = uuid.uuid4()
+    listener = start_logs_queue_listener(str(queue_id))
     yield listener
-    listener.shutdown()
-    listener.join()
+    listener.stop()
 
 
 @pytest.fixture(autouse=True)

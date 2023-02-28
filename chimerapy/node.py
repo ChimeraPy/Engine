@@ -24,6 +24,7 @@ from .networking import Client, Publisher, Subscriber, DataChunk
 from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .data_handlers import SaveHandler
 from . import _logger
+from .logger.queued_handler import add_queue_handler, remove_queue_handler
 
 
 class Node(mp.Process):
@@ -31,7 +32,7 @@ class Node(mp.Process):
         self,
         name: str,
         debug: Optional[Literal["step", "stream"]] = None,
-        debug_port: Optional[int] = None,
+        debug_queue_id: Optional[str] = None,
     ):
         """Create a basic unit of computation in ChimeraPy.
 
@@ -64,6 +65,7 @@ class Node(mp.Process):
 
         # Default values
         self.logging_level: int = logging.INFO
+        self.logs_queue_id: Optional[str] = None
 
         # If used for debugging, that means that it is being executed
         # not in an external process
@@ -78,8 +80,8 @@ class Node(mp.Process):
             )
 
             # Determine the port for debugging (make sure its int)
-            if not debug_port:
-                debug_port = 5555
+            if not debug_queue_id:
+                debug_queue_id = str(uuid.uuid4())
 
             # Prepare the node to be used
             self.config(
@@ -92,7 +94,7 @@ class Node(mp.Process):
                 follow=None,
                 networking=False,
                 logging_level=logging.DEBUG,
-                worker_logging_port=debug_port,
+                logs_queue_id=debug_queue_id,
             )
 
             # Only execute this if step debugging
@@ -157,12 +159,9 @@ class Node(mp.Process):
             else:
                 raise RuntimeError("Invalid multiprocessing spawn method.")
 
-        # With the logger, let's add a handler
-        l.addHandler(
-            logging.handlers.DatagramHandler(
-                host="127.0.0.1", port=self.worker_logging_port
-            )
-        )
+        # With the logger, let's add a handler (This would add this logger to the queue, provided the worker is available)
+        if self.logs_queue_id:
+            add_queue_handler(self.logs_queue_id, l, self.logging_level)
 
         return l
 
@@ -302,7 +301,7 @@ class Node(mp.Process):
         follow: Optional[str] = None,
         networking: bool = True,
         logging_level: int = logging.INFO,
-        worker_logging_port: int = 5555,
+        logs_queue_id: Optional[str] = None,
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -325,7 +324,6 @@ class Node(mp.Process):
         self.worker_host = host
         self.worker_port = port
         self.logdir = logdir / self.state.name
-        self.worker_logging_port = worker_logging_port
         os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
@@ -342,6 +340,7 @@ class Node(mp.Process):
         # Saving other parameters
         self.networking = networking
         self.logging_level = logging_level
+        self.logs_queue_id = logs_queue_id
 
         # Creating initial values
         self.latest_value = None
@@ -633,6 +632,8 @@ class Node(mp.Process):
 
             # Shutdown the client
             self.client.shutdown()
+
+        remove_queue_handler(self.logger)
 
     def run(self):
         """The actual method that is executed in the new process.

@@ -64,12 +64,12 @@ def test_multiple_threads():
     assert q.qsize() == NUM
 
 
-def test_run_node_in_debug_mode(logreceiver):
+def test_run_node_in_debug_mode(logs_queue):
 
     data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
 
     for i, node_cls in enumerate(data_nodes):
-        n = node_cls(name=f"{i}", debug="step")
+        n = node_cls(name=f"{i}", debug="step", debug_queue_id=logs_queue.id)
 
         for i in range(5):
             n.step()
@@ -77,11 +77,11 @@ def test_run_node_in_debug_mode(logreceiver):
         n.shutdown()
 
 
-def test_create_multiple_nodes_not_pickled(logreceiver):
+def test_create_multiple_nodes_not_pickled(logs_queue):
 
     ns = []
     for i in range(3):
-        n = VideoNode(name=f"G{i}", debug="stream", debug_port=logreceiver.port)
+        n = VideoNode(name=f"G{i}", debug="stream", debug_queue_id=logs_queue.id)
         n.start()
         ns.append(n)
 
@@ -94,7 +94,7 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
         # assert n.exitcode == 0
 
 
-def test_create_multiple_nodes_after_pickling(logreceiver):
+def test_create_multiple_nodes_after_pickling(logs_queue):
 
     ns = []
     for i in range(3):
@@ -111,7 +111,7 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
             follow=None,
             networking=False,
             logging_level=logging.DEBUG,
-            worker_logging_port=logreceiver.port,
+            logs_queue_id=logs_queue.id,
         )
         nn.start()
         ns.append(nn)

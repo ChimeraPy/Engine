@@ -12,10 +12,14 @@ class LogsQueueHandler:
     """A queue handler that can be used to send logs to a process safe queue."""
 
     def __init__(
-        self, handlers: Tuple[str, ...] = ("console",), level: int = logging.DEBUG
+        self,
+        queue_id: str,
+        handlers: Tuple[str, ...] = ("console",),
+        level: int = logging.DEBUG,
     ):
         queue = Queue(-1)
         super().__init__(queue)
+        self.id = queue_id
         handlers = [HandlerFactory.get(handler, level) for handler in handlers]
         self.listener = QueueListener(queue, *handlers, respect_handler_level=True)
 
@@ -41,10 +45,12 @@ class LogsQueueHandler:
         logger.addHandler(hdlr)
 
 
-def start_logs_queue_listener(queue_id: str) -> None:
+def start_logs_queue_listener(queue_id: str) -> LogsQueueHandler:
     """Register a new queue handler for the given queue_id."""
-    LISTENER_QUEUES[queue_id] = LogsQueueHandler()
+    LISTENER_QUEUES[queue_id] = LogsQueueHandler(queue_id)
     LISTENER_QUEUES[queue_id].start()
+
+    return LISTENER_QUEUES[queue_id]
 
 
 def add_queue_handler(queue_id, logger: logging.Logger):

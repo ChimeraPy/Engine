@@ -27,9 +27,10 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
-from .logreceiver import LogReceiver
 
 logger = _logger.getLogger("chimerapy-worker")
+
+from .logger.queued_handler import start_logs_queue_listener, stop_logs_queue_listener
 
 
 class Worker:
@@ -114,8 +115,7 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = LogReceiver()
-        self.log_receiver.start()
+        start_logs_queue_listener(self.id)
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -249,7 +249,7 @@ class Worker:
                 self.nodes_extra[node_id]["out_bound"],
                 self.nodes_extra[node_id]["follow"],
                 logging_level=logger.level,
-                worker_logging_port=self.log_receiver.port,
+                logs_queue_id=self.id,
             )
 
             # Before starting, over write the pid
@@ -690,13 +690,12 @@ class Worker:
 
             logger.debug(f"{self}: Nodes have joined")
 
-        # Stop the log listener
-        self.log_receiver.shutdown()
-        self.log_receiver.join()
-
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)
+
+        # Stop the log listener
+        stop_logs_queue_listener(self.id)
 
     def __del__(self):
 
