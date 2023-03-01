@@ -4,41 +4,47 @@ from typing import Tuple
 
 from .common import HandlerFactory
 from .portable_queue import PortableQueue as Queue
+import queue
+from typing import Optional
+from logging import LogRecord
 
 
-class LogsQueueListener:
+class PortableQueueListener(QueueListener):
     """A queue listener that can be used to send logs to a process safe queue."""
 
-    def __init__(
-        self,
-        queue: Queue,
-        handlers: Tuple[str, ...] = ("console",),
-        level: int = logging.DEBUG,
-    ):
-        handlers = [HandlerFactory.get(handler, level) for handler in handlers]
-        self.listener = QueueListener(queue, *handlers, respect_handler_level=True)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._should_stop = False
 
-    def start(self) -> None:
-        self.listener.start()
-
-    def stop(self) -> None:
-        self.listener.stop()
+    def dequeue(self, block: bool) -> Optional[LogRecord]:
+        while True:
+            try:
+                logobj = self.queue.get(block=False)
+                return logobj
+            except queue.Empty:
+                if self._should_stop:
+                    return None
 
     def is_listening(self) -> bool:
-        return self.listener._thread is not None and self.listener._thread.is_alive()
+        return self._thread is not None and self._thread.is_alive()
 
-    @property
-    def queue(self) -> Queue:
-        return self.listener.queue
+    def enqueue_sentinel(self) -> None:
+        self._should_stop = True
+
+    def stop(self) -> None:
+        if self.is_listening():
+            self.queue.close()
+            super().stop()
 
 
 def start_logs_queue_listener(
     handlers: Tuple[str, ...] = ("console",),
     level: int = logging.DEBUG,
-) -> LogsQueueListener:
+) -> PortableQueueListener:
     """Start a queue listener in a new thread and return it."""
     queue = Queue(-1)
-    listener = LogsQueueListener(queue, handlers, level)
+    handlers = [HandlerFactory.get(handler, level) for handler in handlers]
+    listener = PortableQueueListener(queue, *handlers, level)
     listener.start()
     return listener
 

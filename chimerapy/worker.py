@@ -691,13 +691,12 @@ class Worker:
                 self.nodes_extra[node_id]["node_object"].terminate()
 
             logger.debug(f"{self}: Nodes have joined")
+            # Stop the log listener
+            self.logs_listener.stop()
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)
-
-        # Stop the log listener
-        self.logs_listener.stop()
 
     def __del__(self):
 
