@@ -33,7 +33,8 @@ class LogsQueueListener:
 
 
 def start_logs_queue_listener(
-    handlers: Tuple[str, ...] = ("console",), level: int = logging.DEBUG
+    handlers: Tuple[str, ...] = ("console",),
+    level: int = logging.DEBUG,
 ) -> LogsQueueListener:
     """Start a queue listener in a new thread and return it."""
     queue = Queue(-1)
@@ -54,7 +55,7 @@ def add_queue_handler(queue: Queue, logger: logging.Logger) -> None:
     logger.addHandler(hdlr)
 
 
-def remove_queue_handler(logger: logging.Logger):
+def remove_queue_handler(logger: logging.Logger) -> None:
     """Given a logger, remove all queue handlers from the logger if they exist."""
     existing_handlers = filter(lambda h: isinstance(h, QueueHandler), logger.handlers)
     map(logger.removeHandler, existing_handlers)
