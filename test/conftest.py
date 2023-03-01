@@ -60,9 +60,8 @@ def pytest_configure():
 
 
 @pytest.fixture
-def logs_queue():
-    queue_id = uuid.uuid4()
-    listener = start_logs_queue_listener(str(queue_id))
+def logs_listener():
+    listener = start_logs_queue_listener()
     yield listener
     listener.stop()
 

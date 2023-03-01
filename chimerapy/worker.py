@@ -1,3 +1,4 @@
+import logging
 from typing import Union, Dict, Any, Coroutine, Optional
 import asyncio
 import collections
@@ -27,7 +28,7 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
-from .logger.queued_handler import start_logs_queue_listener, stop_logs_queue_listener
+from .logger.queued_handler import start_logs_queue_listener
 
 logger = _logger.getLogger("chimerapy-worker")
 
@@ -114,7 +115,9 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        start_logs_queue_listener(self.id)
+        self.logs_listener = start_logs_queue_listener(
+            handlers=("console",), level=logging.DEBUG
+        )
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -248,7 +251,7 @@ class Worker:
                 self.nodes_extra[node_id]["out_bound"],
                 self.nodes_extra[node_id]["follow"],
                 logging_level=logger.level,
-                logs_queue_id=self.id,
+                logging_sink_queue=self.logs_listener.queue,
             )
 
             # Before starting, over write the pid
@@ -694,7 +697,7 @@ class Worker:
             shutil.rmtree(self.tempfolder)
 
         # Stop the log listener
-        stop_logs_queue_listener(self.id)
+        self.logs_listener.stop()
 
     def __del__(self):
 
