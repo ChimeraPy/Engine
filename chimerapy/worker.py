@@ -27,10 +27,9 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
+from .logger.queued_handler import start_logs_queue_listener, stop_logs_queue_listener
 
 logger = _logger.getLogger("chimerapy-worker")
-
-from .logger.queued_handler import start_logs_queue_listener, stop_logs_queue_listener
 
 
 class Worker:

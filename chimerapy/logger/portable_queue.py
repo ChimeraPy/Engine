@@ -1,4 +1,5 @@
 import multiprocessing as mp
+from multiprocessing.queues import Queue
 import queue
 
 
@@ -28,7 +29,7 @@ class SharedCounter:
         return self.count.value
 
 
-class PortableQueue(mp.Queue):
+class PortableQueue(Queue):
     """A portable implementation of multiprocessing.Queue.
     Because of multithreading / multiprocessing semantics, Queue.qsize() may
     raise the NotImplementedError exception on Unix platforms like Mac OS X
@@ -61,7 +62,6 @@ class PortableQueue(mp.Queue):
         self.size = state[-1]
 
     def put(self, *args, **kwargs):
-
         # Have to account for timeout to make this implementation
         # faithful to the complete mp.Queue implementation.
         try:
@@ -71,7 +71,6 @@ class PortableQueue(mp.Queue):
             raise queue.Full
 
     def get(self, *args, **kwargs):
-
         # Have to account for timeout to make this implementation
         # faithful to the complete mp.Queue implementation.
         try:
