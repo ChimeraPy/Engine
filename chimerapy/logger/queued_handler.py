@@ -43,10 +43,15 @@ def start_logs_queue_listener(
 
 
 def add_queue_handler(queue: Queue, logger: logging.Logger) -> None:
-    """Add a queue handler to the given logger."""
-    remove_queue_handler(logger)
+    """Add a queue handler to the given logger.
+
+    This function will remove any existing handlers from the logger as well.
+    """
+    logger.handlers.clear()
+    logger.propagate = False  # Prevent the log messages from being duplicated in parent
     hdlr = QueueHandler(queue)
     hdlr.setLevel(logger.level)
+    logger.addHandler(hdlr)
 
 
 def remove_queue_handler(logger: logging.Logger):

@@ -162,7 +162,6 @@ class Node(mp.Process):
 
         # With the logger, let's add a handler (This would add this logger to the queue, provided the worker is available)
         if self.logging_sink_queue:
-            l.handlers.clear()
             add_queue_handler(self.logging_sink_queue, l)
 
         return l
