@@ -1,5 +1,6 @@
 import logging
 import multiprocessing
+import os
 from logging.handlers import QueueHandler, QueueListener
 from typing import Tuple
 
@@ -8,6 +9,34 @@ from .portable_queue import PortableQueue as Queue
 import queue
 from typing import Optional
 from logging import LogRecord
+
+
+class InterceptedObjectId(logging.Filter):
+    """A filter that adds the object id to the log record."""
+
+    def filter(self, record: LogRecord) -> bool:
+        record.object_id = os.getpid()
+        return True
+
+
+class MultiplexedQueueHandler(logging.Handler):
+    """A queue handler that can be used to send logs to a process safe queue."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.queue_handlers = {}
+
+    def register_queue_handler(self, q, object_id) -> None:
+        if object_id not in self.queue_handlers:
+            self.queue_handlers[object_id] = QueueHandler(q)
+
+    def deregister_queue_handler(self, object_id) -> None:
+        self.queue_handlers.pop(object_id, None)
+
+    def emit(self, record: LogRecord) -> None:
+        object_id = getattr(record, "object_id", None)
+        if object_id and self.queue_handlers.get(object_id):
+            self.queue_handlers[object_id].emit(record)
 
 
 class PortableQueueListener(QueueListener):
@@ -57,16 +86,25 @@ def add_queue_handler(
     This function will remove any existing handlers from the logger as well.
     """
     with lock:
-        logger.handlers.clear()
+        multiplexed_handler = None
+        for handler in logger.handlers:
+            if isinstance(handler, MultiplexedQueueHandler):
+                multiplexed_handler = handler
+                break
+        if not multiplexed_handler:
+            multiplexed_handler = MultiplexedQueueHandler()
+            logger.addHandler(multiplexed_handler)
+
+        multiplexed_handler.register_queue_handler(q, os.getpid())
+
         logger.propagate = (
             False  # Prevent the log messages from being duplicated in parent
         )
-        hdlr = QueueHandler(q)
-        hdlr.setLevel(logger.level)
-        logger.addHandler(hdlr)
+        logger.addFilter(InterceptedObjectId())  # Add the object id to the log record
 
 
 def remove_queue_handler(logger: logging.Logger) -> None:
     """Given a logger, remove all queue handlers from the logger if they exist."""
-    existing_handlers = filter(lambda h: isinstance(h, QueueHandler), logger.handlers)
-    map(logger.removeHandler, existing_handlers)
+    for handler in logger.handlers:
+        if isinstance(handler, MultiplexedQueueHandler):
+            handler.deregister_queue_handler(os.getpid())

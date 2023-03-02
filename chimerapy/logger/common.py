@@ -23,6 +23,6 @@ class HandlerFactory:
     @staticmethod
     def get_formatter() -> logging.Formatter:
         return Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            "%(asctime)s [%(levelname)s] %(name)s - %(object_id)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )

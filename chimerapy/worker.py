@@ -692,6 +692,7 @@ class Worker:
 
             logger.debug(f"{self}: Nodes have joined")
             # Stop the log listener
+            print(">>>>>>>>>>>>>>>> STOPPING LOGS LISTENER <<<<<<<<<<<<<<<<")
             self.logs_listener.stop()
 
         # Delete temp folder if requested

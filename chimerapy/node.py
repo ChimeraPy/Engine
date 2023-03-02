@@ -164,6 +164,8 @@ class Node(mp.Process):
         # With the logger, let's add a handler (This would add this logger to the queue, provided the worker is available)
         if self.logging_sink_queue:
             lock = Lock()
+            print(f"id of sink queue (Node ID {self.id})", id(self.logging_sink_queue))
+            print(f"id of the logger ({id(l)})", id(self.logging_sink_queue))
             add_queue_handler(lock, self.logging_sink_queue, l)
 
         return l
