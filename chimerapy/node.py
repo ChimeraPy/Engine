@@ -1,4 +1,5 @@
 from typing import Dict, List, Any, Optional, Union, Literal, Tuple
+from multiprocessing import Lock
 from multiprocessing.process import AuthenticationString
 import logging
 import queue
@@ -82,7 +83,7 @@ class Node(mp.Process):
 
             # Determine the port for debugging (make sure its int)
             if not debug_queue:
-                debug_queue = Queue()
+                debug_queue = Queue(-1)
 
             # Prepare the node to be used
             self.config(
@@ -162,7 +163,8 @@ class Node(mp.Process):
 
         # With the logger, let's add a handler (This would add this logger to the queue, provided the worker is available)
         if self.logging_sink_queue:
-            add_queue_handler(self.logging_sink_queue, l)
+            lock = Lock()
+            add_queue_handler(lock, self.logging_sink_queue, l)
 
         return l
 

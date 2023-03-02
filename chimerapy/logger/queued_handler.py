@@ -1,4 +1,5 @@
 import logging
+import multiprocessing
 from logging.handlers import QueueHandler, QueueListener
 from typing import Tuple
 
@@ -33,7 +34,6 @@ class PortableQueueListener(QueueListener):
 
     def stop(self) -> None:
         if self.is_listening():
-            self.queue.close()
             super().stop()
 
 
@@ -42,23 +42,28 @@ def start_logs_queue_listener(
     level: int = logging.DEBUG,
 ) -> PortableQueueListener:
     """Start a queue listener in a new thread and return it."""
-    queue = Queue(-1)
-    handlers = [HandlerFactory.get(handler, level) for handler in handlers]
-    listener = PortableQueueListener(queue, *handlers, level)
+    q = Queue(-1)
+    handlers = tuple(HandlerFactory.get(handler, level) for handler in handlers)
+    listener = PortableQueueListener(q, *handlers, respect_handler_level=True)
     listener.start()
     return listener
 
 
-def add_queue_handler(queue: Queue, logger: logging.Logger) -> None:
+def add_queue_handler(
+    lock: multiprocessing.Lock, q: Queue, logger: logging.Logger
+) -> None:
     """Add a queue handler to the given logger.
 
     This function will remove any existing handlers from the logger as well.
     """
-    logger.handlers.clear()
-    logger.propagate = False  # Prevent the log messages from being duplicated in parent
-    hdlr = QueueHandler(queue)
-    hdlr.setLevel(logger.level)
-    logger.addHandler(hdlr)
+    with lock:
+        logger.handlers.clear()
+        logger.propagate = (
+            False  # Prevent the log messages from being duplicated in parent
+        )
+        hdlr = QueueHandler(q)
+        hdlr.setLevel(logger.level)
+        logger.addHandler(hdlr)
 
 
 def remove_queue_handler(logger: logging.Logger) -> None:
