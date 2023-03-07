@@ -206,6 +206,7 @@ class NodeIdFilter(logging.Filter):
     """A filter that adds the node_id to the log record."""
 
     def __init__(self, node_id: str):
+        super().__init__()
         self.node_id = node_id
 
     def filter(self, record: logging.LogRecord):
@@ -244,8 +245,8 @@ def stop_process_logger():
         ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT -= 1
         if ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT == 0:
             queue_logger.queue.put(ThreadedQueueLogger._END_OF_LOGGING)
-            queue_logger.join(block=False)
-            time.sleep(0.1)  # Wait for queue to finish. This needs to be improved
+            queue_logger.join(timeout=2)
+            time.sleep(0.1)  # Wait for queue to finish
             if queue_logger.is_alive():
                 queue_logger.join()
             ThreadedQueueLogger._global_process_logger = None
