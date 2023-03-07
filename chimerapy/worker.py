@@ -112,9 +112,6 @@ class Worker:
             f"Worker {self.state.id} running HTTP server at {self.state.ip}:{self.state.port}"
         )
 
-        # Create a log listener to read Node's information
-        _logger.start_process_logger()
-
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
 
@@ -690,9 +687,6 @@ class Worker:
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)
-        logger.info(f"{self}: shutdown complete, stopping process logger")
-        _logger.stop_process_logger()
-        logger.info(f"{self}: shutdown complete, stopping process logger complete")
 
     def __del__(self):
 

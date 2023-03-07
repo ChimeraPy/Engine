@@ -2,11 +2,12 @@
 # References:
 # https://docs.python-guide.org/writing/logging/
 # https://stackoverflow.com/questions/13649664/how-to-use-logging-with-pythons-fileconfig-and-configure-the-logfile-filename
+import atexit
 import logging.config
 import logging.handlers
 import os
+import queue
 import threading
-import time
 from dataclasses import dataclass
 from logging import LogRecord
 from multiprocessing import Queue
@@ -107,6 +108,7 @@ LOGGING_CONFIG = {
 def setup():
     # Setting up the configureation
     logging.config.dictConfig(LOGGING_CONFIG)
+    atexit.register(stop_process_logger)
 
 
 def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig):
@@ -141,7 +143,8 @@ def getLogger(
     debug_loggers = os.environ.get("CHIMERAPY_DEBUG_LOGGERS", "").split(os.pathsep)
     if name in debug_loggers:
         logger.setLevel(logging.DEBUG)
-
+    if logger.name == "chimerapy-worker":
+        start_process_logger()
     return logger
 
 
@@ -150,12 +153,12 @@ class ThreadedQueueLogger(threading.Thread):
 
     _global_process_logger = None
     _END_OF_LOGGING = "END_OF_LOGGING"
-    ACTIVE_LOGGERS_COUNT = 0
 
     def __init__(self):
         super().__init__()
         self.daemon = True
         self.queue = Queue(-1)
+        self.sentinel_enqueued = False
 
     @classmethod
     def get_global_process_logger(cls) -> "ThreadedQueueLogger":
@@ -166,7 +169,6 @@ class ThreadedQueueLogger(threading.Thread):
     @classmethod
     def create_global_process_logger(cls) -> "ThreadedQueueLogger":
         cls._global_process_logger = cls()
-        cls.ACTIVE_LOGGERS_COUNT += 1
         return cls._global_process_logger
 
     @staticmethod
@@ -190,12 +192,16 @@ class ThreadedQueueLogger(threading.Thread):
         self.configure()
         while True:
             try:
-                record = self.queue.get(block=True)
+                if self.sentinel_enqueued:
+                    break
+                record = self.queue.get(block=False)
                 if record == self._END_OF_LOGGING:
                     break
                 logger = logging.getLogger("chimerapy-node-logger")
                 logger.handle(record)
-            except:
+            except queue.Empty:
+                pass
+            except Exception:
                 import sys
                 import traceback
 
@@ -216,7 +222,9 @@ class NodeIdFilter(logging.Filter):
 
 def configure_new_node(node_id):
     """Configure a new node logger."""
-    log_process_queue = get_process_logger().queue
+    process_logger = get_process_logger()
+    log_process_queue = process_logger.queue
+
     h = logging.handlers.QueueHandler(log_process_queue)
     root = list(map(lambda name: logging.getLogger(name), ["chimerapy-node"])).pop()
     root.addHandler(h)
@@ -236,17 +244,16 @@ def start_process_logger() -> ThreadedQueueLogger:
 
 
 def get_process_logger() -> ThreadedQueueLogger:
+    """Get the process logger."""
     return ThreadedQueueLogger.get_global_process_logger()
 
 
-def stop_process_logger():
+def stop_process_logger() -> None:
+    """Stop the process logger if it is started and there are no more active loggers."""
     if ThreadedQueueLogger.has_global_process_logger():
         queue_logger = ThreadedQueueLogger.get_global_process_logger()
-        ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT -= 1
-        if ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT == 0:
-            queue_logger.queue.put(ThreadedQueueLogger._END_OF_LOGGING)
-            queue_logger.join(timeout=2)
-            time.sleep(0.1)  # Wait for queue to finish
-            if queue_logger.is_alive():
-                queue_logger.join()
-            ThreadedQueueLogger._global_process_logger = None
+
+        queue_logger.queue.put(ThreadedQueueLogger._END_OF_LOGGING)
+        queue_logger.sentinel_enqueued = True
+        queue_logger.join()
+        ThreadedQueueLogger._global_process_logger = None
