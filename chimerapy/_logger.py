@@ -3,9 +3,13 @@
 # https://docs.python-guide.org/writing/logging/
 # https://stackoverflow.com/questions/13649664/how-to-use-logging-with-pythons-fileconfig-and-configure-the-logfile-filename
 import logging.config
+import logging.handlers
 import os
+import threading
+import time
 from dataclasses import dataclass
 from logging import LogRecord
+from multiprocessing import Queue
 from typing import Any, Dict
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
@@ -95,18 +99,12 @@ LOGGING_CONFIG = {
             "level": "DEBUG",
             "propagate": True,
         },
-        "chimerapy-subprocess": {
-            "handlers": [],
-            "level": "DEBUG",
-            "propagate": True,
-        },
     },
 }
 
 
 # Setup the logging configuration
 def setup():
-
     # Setting up the configureation
     logging.config.dictConfig(LOGGING_CONFIG)
 
@@ -136,7 +134,6 @@ def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig)
 def getLogger(
     name: str,
 ) -> logging.Logger:
-
     # Get the logging
     logger = logging.getLogger(name)
 
@@ -146,3 +143,109 @@ def getLogger(
         logger.setLevel(logging.DEBUG)
 
     return logger
+
+
+class ThreadedQueueLogger(threading.Thread):
+    """A threaded logger that logs messages from a queue."""
+
+    _global_process_logger = None
+    _END_OF_LOGGING = "END_OF_LOGGING"
+    ACTIVE_LOGGERS_COUNT = 0
+
+    def __init__(self):
+        super().__init__()
+        self.daemon = True
+        self.queue = Queue(-1)
+
+    @classmethod
+    def get_global_process_logger(cls) -> "ThreadedQueueLogger":
+        if cls._global_process_logger is not None:
+            return cls._global_process_logger
+        raise RuntimeError("Global process logger not set")
+
+    @classmethod
+    def create_global_process_logger(cls) -> "ThreadedQueueLogger":
+        cls._global_process_logger = cls()
+        cls.ACTIVE_LOGGERS_COUNT += 1
+        return cls._global_process_logger
+
+    @staticmethod
+    def has_global_process_logger() -> bool:
+        return ThreadedQueueLogger._global_process_logger is not None
+
+    @staticmethod
+    def configure() -> None:
+        root = logging.getLogger("chimerapy-node-logger")
+        h = logging.StreamHandler()
+        f = logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s - ID - %(node_id)s: %(message)s"
+        )  # ToDO: Can this be done better?
+        h.setFormatter(f)
+        h.setLevel(logging.DEBUG)
+        root.setLevel(logging.DEBUG)
+        root.addHandler(h)
+        root.propagate = False
+
+    def run(self) -> None:
+        self.configure()
+        while True:
+            try:
+                record = self.queue.get(block=True)
+                if record == self._END_OF_LOGGING:
+                    break
+                logger = logging.getLogger("chimerapy-node-logger")
+                logger.handle(record)
+            except:
+                import sys
+                import traceback
+
+                traceback.print_exc(file=sys.stderr)
+
+
+class NodeIdFilter(logging.Filter):
+    """A filter that adds the node_id to the log record."""
+
+    def __init__(self, node_id: str):
+        self.node_id = node_id
+
+    def filter(self, record: logging.LogRecord):
+        record.node_id = self.node_id
+        return True
+
+
+def configure_new_node(node_id):
+    """Configure a new node logger."""
+    log_process_queue = get_process_logger().queue
+    h = logging.handlers.QueueHandler(log_process_queue)
+    root = list(map(lambda name: logging.getLogger(name), ["chimerapy-node"])).pop()
+    root.addHandler(h)
+    root.propagate = False
+    root.addFilter(NodeIdFilter(str(node_id)))
+    root.setLevel(logging.DEBUG)
+    return root
+
+
+def start_process_logger() -> ThreadedQueueLogger:
+    """Start the process logger if it is not already started."""
+    if not ThreadedQueueLogger.has_global_process_logger():
+        process_logger = ThreadedQueueLogger.create_global_process_logger()
+        process_logger.start()
+
+    return ThreadedQueueLogger.get_global_process_logger()
+
+
+def get_process_logger() -> ThreadedQueueLogger:
+    return ThreadedQueueLogger.get_global_process_logger()
+
+
+def stop_process_logger():
+    if ThreadedQueueLogger.has_global_process_logger():
+        queue_logger = ThreadedQueueLogger.get_global_process_logger()
+        ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT -= 1
+        if ThreadedQueueLogger.ACTIVE_LOGGERS_COUNT == 0:
+            queue_logger.queue.put(ThreadedQueueLogger._END_OF_LOGGING)
+            queue_logger.join(block=False)
+            time.sleep(0.1)  # Wait for queue to finish. This needs to be improved
+            if queue_logger.is_alive():
+                queue_logger.join()
+            ThreadedQueueLogger._global_process_logger = None

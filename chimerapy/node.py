@@ -31,7 +31,6 @@ class Node(mp.Process):
         self,
         name: str,
         debug: Optional[Literal["step", "stream"]] = None,
-        debug_port: Optional[int] = None,
     ):
         """Create a basic unit of computation in ChimeraPy.
 
@@ -76,10 +75,7 @@ class Node(mp.Process):
             self.logger.info(
                 f"Debug Mode for Node: Generated data is stored in {temp_folder}"
             )
-
-            # Determine the port for debugging (make sure its int)
-            if not debug_port:
-                debug_port = 5555
+            _logger.start_process_logger()
 
             # Prepare the node to be used
             self.config(
@@ -92,7 +88,6 @@ class Node(mp.Process):
                 follow=None,
                 networking=False,
                 logging_level=logging.DEBUG,
-                worker_logging_port=debug_port,
             )
 
             # Only execute this if step debugging
@@ -143,26 +138,8 @@ class Node(mp.Process):
 
     def get_logger(self) -> logging.Logger:
 
-        # If running in a the main process
-        if "MainProcess" in mp.current_process().name:
-            l = _logger.getLogger("chimerapy")
-        else:
-            # Depending on the type of process, get the self.logger
-            if self._context == "spawn":
-                l = _logger.getLogger("chimerapy-subprocess")
-            elif self._context == "fork":
-                l = _logger.getLogger(
-                    "chimerapy"
-                )  # would be just chimerapy, but testing
-            else:
-                raise RuntimeError("Invalid multiprocessing spawn method.")
-
-        # With the logger, let's add a handler
-        l.addHandler(
-            logging.handlers.DatagramHandler(
-                host="127.0.0.1", port=self.worker_logging_port
-            )
-        )
+        # If the logger is not set, then set it
+        l = _logger.configure_new_node(self.name)
 
         return l
 
@@ -304,7 +281,6 @@ class Node(mp.Process):
         follow: Optional[str] = None,
         networking: bool = True,
         logging_level: int = logging.INFO,
-        worker_logging_port: int = 5555,
     ):
         """Configuring the ``Node``'s networking and meta data.
 
@@ -327,7 +303,6 @@ class Node(mp.Process):
         self.worker_host = host
         self.worker_port = port
         self.logdir = logdir / self.state.name
-        self.worker_logging_port = worker_logging_port
         os.makedirs(self.logdir, exist_ok=True)
 
         # Storing p2p information
@@ -350,6 +325,7 @@ class Node(mp.Process):
 
         # Timekeeping
         self.start_time = datetime.datetime.now()
+        self.process_logger = _logger.get_process_logger()
 
     def _prep(self):
         """Establishes the connection between ``Node`` and ``Worker``
@@ -688,3 +664,4 @@ class Node(mp.Process):
         # Also, the networking components are not being used
         if self.debug == "step":
             self._teardown()
+            _logger.stop_process_logger()

@@ -160,7 +160,7 @@ def test_save_handler_video(save_handler_and_queue):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_single_step(video_node_step, logreceiver):
+def test_node_save_video_single_step(video_node_step):
 
     # Check that the video was created
     expected_video_path = video_node_step.logdir / "test.mp4"
@@ -180,7 +180,7 @@ def test_node_save_video_single_step(video_node_step, logreceiver):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_stream(video_node_stream, logreceiver):
+def test_node_save_video_stream(video_node_stream):
 
     # Check that the video was created
     expected_video_path = video_node_stream.logdir / "test.mp4"
@@ -202,7 +202,7 @@ def test_node_save_video_stream(video_node_stream, logreceiver):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_stream_with_unstable_fps(video_node_stream, logreceiver):
+def test_node_save_video_stream_with_unstable_fps(video_node_stream):
 
     # Check that the video was created
     expected_video_path = video_node_stream.logdir / "test.mp4"

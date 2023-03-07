@@ -64,7 +64,7 @@ def test_multiple_threads():
     assert q.qsize() == NUM
 
 
-def test_run_node_in_debug_mode(logreceiver):
+def test_run_node_in_debug_mode():
 
     data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
 
@@ -77,11 +77,11 @@ def test_run_node_in_debug_mode(logreceiver):
         n.shutdown()
 
 
-def test_create_multiple_nodes_not_pickled(logreceiver):
+def test_create_multiple_nodes_not_pickled():
 
     ns = []
     for i in range(3):
-        n = VideoNode(name=f"G{i}", debug="stream", debug_port=logreceiver.port)
+        n = VideoNode(name=f"G{i}", debug="stream")
         n.start()
         ns.append(n)
 
@@ -94,9 +94,10 @@ def test_create_multiple_nodes_not_pickled(logreceiver):
         # assert n.exitcode == 0
 
 
-def test_create_multiple_nodes_after_pickling(logreceiver):
+def test_create_multiple_nodes_after_pickling():
 
     ns = []
+    cp._logger.start_process_logger()
     for i in range(3):
         n = GenNode(name=f"G{i}")
         pkl_n = dill.dumps(n)
@@ -111,7 +112,6 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
             follow=None,
             networking=False,
             logging_level=logging.DEBUG,
-            worker_logging_port=logreceiver.port,
         )
         nn.start()
         ns.append(nn)
@@ -123,6 +123,7 @@ def test_create_multiple_nodes_after_pickling(logreceiver):
         n.join(5)
         n.terminate()
         # assert n.exitcode == 0
+    cp._logger.stop_process_logger()
 
 
 def test_create_multiple_workers():

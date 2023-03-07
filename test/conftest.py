@@ -57,13 +57,13 @@ def pytest_configure():
         logger.propagate = False
 
 
-@pytest.fixture
-def logreceiver():
-    listener = cp.LogReceiver(logger_name="chimerapy")
-    listener.start()
-    yield listener
-    listener.shutdown()
-    listener.join()
+# @pytest.fixture
+# def logreceiver():
+#     listener = cp.LogReceiver(logger_name="chimerapy")
+#     listener.start()
+#     yield listener
+#     listener.shutdown()
+#     listener.join()
 
 
 @pytest.fixture(autouse=True)
