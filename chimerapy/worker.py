@@ -27,7 +27,6 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
-from .logreceiver import LogReceiver
 
 logger = _logger.getLogger("chimerapy-worker")
 
@@ -114,7 +113,7 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = LogReceiver()
+        self.log_receiver = _logger.get_zmq_pull_listener(56181)
         self.log_receiver.start()
 
     def __repr__(self):
@@ -691,8 +690,7 @@ class Worker:
             logger.debug(f"{self}: Nodes have joined")
 
         # Stop the log listener
-        self.log_receiver.shutdown()
-        self.log_receiver.join()
+        self.log_receiver.stop()
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:

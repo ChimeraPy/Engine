@@ -144,26 +144,28 @@ class Node(mp.Process):
     def get_logger(self) -> logging.Logger:
 
         # If running in a the main process
-        if "MainProcess" in mp.current_process().name:
-            l = _logger.getLogger("chimerapy")
-        else:
-            # Depending on the type of process, get the self.logger
-            if self._context == "spawn":
-                l = _logger.getLogger("chimerapy-subprocess")
-            elif self._context == "fork":
-                l = _logger.getLogger(
-                    "chimerapy"
-                )  # would be just chimerapy, but testing
-            else:
-                raise RuntimeError("Invalid multiprocessing spawn method.")
-
-        # With the logger, let's add a handler
-        l.addHandler(
-            logging.handlers.DatagramHandler(
-                host="127.0.0.1", port=self.worker_logging_port
-            )
-        )
-
+        # if "MainProcess" in mp.current_process().name:
+        #     l = _logger.getLogger("chimerapy")
+        # else:
+        #     # Depending on the type of process, get the self.logger
+        #     if self._context == "spawn":
+        #         l = _logger.getLogger("chimerapy-subprocess")
+        #     elif self._context == "fork":
+        #         l = _logger.getLogger(
+        #             "chimerapy"
+        #         )  # would be just chimerapy, but testing
+        #     else:
+        #         raise RuntimeError("Invalid multiprocessing spawn method.")
+        #
+        # # With the logger, let's add a handler
+        # l.addHandler(
+        #     logging.handlers.DatagramHandler(
+        #         host="127.0.0.1", port=self.worker_logging_port
+        #     )
+        # )
+        l = _logger.getLogger("chimerapy-node")
+        l.setLevel(self.logging_level)
+        _logger.add_zmq_push_handler(l, "127.0.0.1", self.worker_logging_port)
         return l
 
     ####################################################################

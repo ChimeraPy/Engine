@@ -9,6 +9,8 @@ from logging import LogRecord
 from typing import Any, Dict
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
+from logging import StreamHandler, Formatter
+from .logger.zmq_handlers import ZMQListener, ZMQHandler
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -146,3 +148,23 @@ def getLogger(
         logger.setLevel(logging.DEBUG)
 
     return logger
+
+
+def get_zmq_pull_listener(port):
+    """Start a ZMQ pull listener on the given port."""
+    listener = ZMQListener(port)
+    return listener
+
+
+def add_zmq_push_handler(logger: logging.Logger, ip: str, port: int) -> None:
+    """Add a ZMQ log handler to the logger.
+
+    Note:
+        Uses the same formatter as the consoleHandler in logging
+    """
+    # Add a handler to publish the logs to zmq ws
+    exists = any(isinstance(h, ZMQHandler) for h in logger.handlers)
+    if not exists:
+        handler = ZMQHandler(ip, port)
+        handler.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
