@@ -59,11 +59,10 @@ def pytest_configure():
 
 @pytest.fixture
 def logreceiver():
-    listener = cp.LogReceiver(logger_name="chimerapy")
+    listener = cp._logger.get_zmq_pull_listener()
     listener.start()
     yield listener
-    listener.shutdown()
-    listener.join()
+    listener.stop()
 
 
 @pytest.fixture(autouse=True)

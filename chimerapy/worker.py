@@ -113,8 +113,8 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = _logger.get_zmq_pull_listener(56181)
-        self.log_receiver.start()
+        self.log_receiver = self._start_log_receiver()
+        logger.debug(f"Log receiver started at port {self.log_receiver.port}")
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -701,3 +701,10 @@ class Worker:
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
+
+    @staticmethod
+    def _start_log_receiver() -> "ZMQNodeIDListener":
+        log_receiver = _logger.get_node_id_zmq_listener()
+        log_receiver.start()
+
+        return log_receiver

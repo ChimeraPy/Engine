@@ -6,11 +6,12 @@ import logging.config
 import os
 from dataclasses import dataclass
 from logging import LogRecord
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
-from logging import StreamHandler, Formatter
-from .logger.zmq_handlers import ZMQListener, ZMQHandler
+from logging import StreamHandler
+from .logger.zmq_handlers import NodeIDZMQListener, NodeIdZMQHandler
+from .logger.common import HandlerFactory
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -150,21 +151,39 @@ def getLogger(
     return logger
 
 
-def get_zmq_pull_listener(port):
-    """Start a ZMQ pull listener on the given port."""
-    listener = ZMQListener(port)
+def get_node_id_zmq_listener(port: Optional[int] = None) -> NodeIDZMQListener:
+    """Get a ZMQ pull listener on the given port."""
+    listener = NodeIDZMQListener(port)
     return listener
 
 
-def add_zmq_push_handler(logger: logging.Logger, ip: str, port: int) -> None:
+def add_console_handler(logger: logging.Logger) -> None:
+    """Add a console handler to the logger.
+
+    Note:
+        Uses the same formatter as the consoleHandler in logging
+    """
+    exists = any(isinstance(h, StreamHandler) for h in logger.handlers)
+    if not exists:
+        hdlr = HandlerFactory.get_console_handler()
+        logger.addHandler(hdlr)
+
+
+def add_node_id_zmq_push_handler(
+    logger: logging.Logger, ip: str, port: int, node_id
+) -> None:
     """Add a ZMQ log handler to the logger.
 
     Note:
         Uses the same formatter as the consoleHandler in logging
     """
     # Add a handler to publish the logs to zmq ws
-    exists = any(isinstance(h, ZMQHandler) for h in logger.handlers)
+    exists = any(isinstance(h, NodeIdZMQHandler) for h in logger.handlers)
     if not exists:
-        handler = ZMQHandler(ip, port)
+        handler = NodeIdZMQHandler(ip, port)
         handler.setLevel(logging.DEBUG)
         logger.addHandler(handler)
+    else:
+        handler = next(h for h in logger.handlers if isinstance(h, NodeIdZMQHandler))
+
+    handler.register_node_id(node_id=node_id)

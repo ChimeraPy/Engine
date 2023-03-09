@@ -12,6 +12,8 @@ class HandlerFactory:
             raise ValueError("filename must be provided if handler is 'file'")
         if name == "console":
             hdlr = HandlerFactory.get_console_handler()
+        elif name == "console-node_id":
+            hdlr = HandlerFactory.get_node_id_context_console_handler()
         elif name == "console-ip":
             hdlr = HandlerFactory.get_hostname_context_console_handler()
         elif name == "file":
@@ -25,6 +27,12 @@ class HandlerFactory:
     def get_console_handler():
         console_handler = StreamHandler()
         console_handler.setFormatter(HandlerFactory.get_formatter())
+        return console_handler
+
+    @staticmethod
+    def get_node_id_context_console_handler():
+        console_handler = StreamHandler()
+        console_handler.setFormatter(HandlerFactory.get_node_id_formatter())
         return console_handler
 
     @staticmethod
@@ -53,3 +61,10 @@ class HandlerFactory:
                 "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S",
             )
+
+    @staticmethod
+    def get_node_id_formatter():
+        return Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s(NodeID-[%(node_id)s]): %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
