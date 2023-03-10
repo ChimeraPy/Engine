@@ -113,8 +113,8 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = self._start_log_receiver()
-        logger.debug(f"Log receiver started at port {self.log_receiver.port}")
+        self.logreceiver = self._start_log_receiver()
+        logger.debug(f"Log receiver started at port {self.logreceiver.port}")
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -248,7 +248,7 @@ class Worker:
                 self.nodes_extra[node_id]["out_bound"],
                 self.nodes_extra[node_id]["follow"],
                 logging_level=logger.level,
-                worker_logging_port=self.log_receiver.port,
+                worker_logging_port=self.logreceiver.port,
             )
 
             # Before starting, over write the pid
@@ -690,7 +690,7 @@ class Worker:
             logger.debug(f"{self}: Nodes have joined")
 
         # Stop the log listener
-        self.log_receiver.stop()
+        self.logreceiver.stop()
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:

@@ -20,16 +20,18 @@ class ContainerLogsCollector(threading.Thread):
         self.output_queue = output_queue
         self.running = threading.Event()
         self.logs = []
+        self.daemon = True
 
     def __repr__(self):
         return f"<LogThread {self.name}>"
 
     def run(self):
         self.running.set()
-        while self.running.is_set():
-            for data in self.stream:
-                self.output_queue.put(data.decode())
-                self.logs.append(data.decode())
+        for data in self.stream:
+            self.output_queue.put(data.decode())
+            self.logs.append(data.decode())
+            if not self.running.is_set():
+                break
 
     def stop(self):
         self.running.clear()
@@ -83,5 +85,7 @@ class DockeredWorker:
         self.container.kill()
         self.container.wait()
         self.log_thread.stop()
-        self.log_thread.join()
-        self.log_thread.post_join()
+        # self.log_thread.join()
+
+        # FixMe: This won't work because of https://github.com/pytest-dev/pytest/issues/5502
+        # self.log_thread.post_join()

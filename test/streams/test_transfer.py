@@ -2,6 +2,8 @@
 import time
 import logging
 import collections
+import shutil
+import os
 
 # Third-party Imports
 import dill
@@ -29,6 +31,11 @@ NAME_CLASS_MAP = {
     "an": AudioNode,
 }
 NUM_OF_WORKERS = 3
+
+
+def cleanup_logs(logdir):
+    shutil.rmtree(logdir)
+    os.makedirs(logdir, exist_ok=True)
 
 
 @pytest.fixture
@@ -188,7 +195,9 @@ def test_worker_data_archiving(worker):
         ),
     ],
 )
-def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):
+def test_manager_worker_data_transfer(
+    config_manager: cp.Manager, expected_number_of_folders: int
+):
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()
@@ -207,3 +216,6 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     for worker_id in config_manager.workers:
         for node_id in config_manager.workers[worker_id].nodes:
             assert config_manager.workers[worker_id].nodes[node_id].finished
+
+    # Cleanup the logs in case repeat is used
+    cleanup_logs(config_manager.logdir)
