@@ -10,23 +10,33 @@ import chimerapy as cp
 logger = cp._logger.getLogger("chimerapy-networking")
 
 
-class LogThread(threading.Thread):
+class ContainerLogsCollector(threading.Thread):
     def __init__(self, name: str, stream, output_queue: queue.Queue):
         super().__init__()
 
         # Saving input parameters
-        self.name
+        self.name = name
         self.stream = stream
         self.output_queue = output_queue
+        self.running = threading.Event()
+        self.logs = []
 
     def __repr__(self):
         return f"<LogThread {self.name}>"
 
     def run(self):
+        self.running.set()
+        while self.running.is_set():
+            for data in self.stream:
+                self.output_queue.put(data.decode())
+                self.logs.append(data.decode())
 
-        for data in self.stream:
-            logger.debug(f"{self}: {data.decode()}")
-            self.output_queue.put(data.decode())
+    def stop(self):
+        self.running.clear()
+
+    def post_join(self):
+        for data in self.logs:
+            logger.debug(f"{self.name}: {data}")
 
 
 class DockeredWorker:
@@ -53,7 +63,7 @@ class DockeredWorker:
 
         # Execute worker connect
         self.output_queue = queue.Queue()
-        self.log_thread = LogThread(self.name, stream, self.output_queue)
+        self.log_thread = ContainerLogsCollector(self.name, stream, self.output_queue)
         self.log_thread.start()
 
         # # Wait until the connection is established
@@ -72,3 +82,6 @@ class DockeredWorker:
         # Then wait until the container is done
         self.container.kill()
         self.container.wait()
+        self.log_thread.stop()
+        self.log_thread.join()
+        self.log_thread.post_join()
