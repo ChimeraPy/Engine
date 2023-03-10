@@ -1,13 +1,12 @@
 import logging
-
-from logging import FileHandler, StreamHandler, Formatter
+from logging import FileHandler, Formatter, StreamHandler
 
 
 class HandlerFactory:
     """Utility class to create logging handlers"""
 
     @staticmethod
-    def get(name, filename=None, level=logging.DEBUG):
+    def get(name, filename: str = None, level: int = logging.DEBUG) -> logging.Handler:
         if name == "file" and not filename:
             raise ValueError("filename must be provided if handler is 'file'")
         if name == "console":
@@ -24,19 +23,19 @@ class HandlerFactory:
         return hdlr
 
     @staticmethod
-    def get_console_handler():
+    def get_console_handler() -> StreamHandler:
         console_handler = StreamHandler()
         console_handler.setFormatter(HandlerFactory.get_formatter())
         return console_handler
 
     @staticmethod
-    def get_node_id_context_console_handler():
+    def get_node_id_context_console_handler() -> StreamHandler:
         console_handler = StreamHandler()
         console_handler.setFormatter(HandlerFactory.get_node_id_formatter())
         return console_handler
 
     @staticmethod
-    def get_hostname_context_console_handler():
+    def get_hostname_context_console_handler() -> StreamHandler:
         console_handler = StreamHandler()
         console_handler.setFormatter(
             HandlerFactory.get_formatter(include_hostname=True)
@@ -44,13 +43,13 @@ class HandlerFactory:
         return console_handler
 
     @staticmethod
-    def get_file_handler(log_file_dir):
+    def get_file_handler(log_file_dir) -> FileHandler:
         file_handler = FileHandler(f"{log_file_dir}/chimerapy.log")
         file_handler.setFormatter(HandlerFactory.get_formatter())
         return file_handler
 
     @staticmethod
-    def get_formatter(include_hostname=False):
+    def get_formatter(include_hostname=False) -> Formatter:
         if include_hostname:
             return Formatter(
                 "%(asctime)s [%(levelname)s] %(name)s([%(hostname)s]): %(message)s",
@@ -63,7 +62,7 @@ class HandlerFactory:
             )
 
     @staticmethod
-    def get_node_id_formatter():
+    def get_node_id_formatter() -> Formatter:
         return Formatter(
             "%(asctime)s [%(levelname)s] %(name)s(NodeID-[%(node_id)s]): %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",

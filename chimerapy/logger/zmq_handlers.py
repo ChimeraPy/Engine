@@ -1,14 +1,31 @@
+import atexit
 import os
-from logging.handlers import QueueHandler, QueueListener
-import zmq
-
-from .utils import bind_pull_socket, connect_push_socket
-from .common import HandlerFactory
+import threading
 from logging import LogRecord, makeLogRecord
+from logging.handlers import QueueHandler
 from typing import Optional
 
+import zmq
 
-class ZMQListener(QueueListener):
+from .common import HandlerFactory
+from .utils import bind_pull_socket, connect_push_socket
+
+
+class ZMQPullListener(threading.Thread):
+    """A thread that listens for log messages.
+
+    This subclass of threading.Thread is used to listen for log messages on a ZMQ socket and pass them to the handlers.
+
+    Args:
+        port (int, optional): The port to listen on. If None, a random port will be chosen.
+        handlers (list of logging.Handlers, optional): The handlers to pass the log messages to. If None, a console handler will be used.
+        respect_handler_level (bool, optional): If True, only pass log messages to handlers that have a level. Defaults to True.
+
+    See Also:
+        chimerapy.logger.utils.bind_pull_socket
+            The function used to bind the socket.
+    """
+
     def __init__(
         self,
         port: Optional[int] = None,
@@ -16,39 +33,48 @@ class ZMQListener(QueueListener):
         respect_handler_level: bool = True,
     ):
         socket, port = bind_pull_socket(port)
-        handlers = handlers or [
+        self.handlers = handlers or [
             HandlerFactory.get("console")
         ]  # For now, only console handler
-        super().__init__(socket, *handlers, respect_handler_level=respect_handler_level)
-        self._should_stop = False
+        super().__init__()
+        self.running = threading.Event()
         self.port = port
+        self.queue = socket
+        self.respect_handler_level = respect_handler_level
+        self.daemon = True
 
-    def dequeue(self, block: bool) -> Optional[LogRecord]:
-        while True:
+    def start(self) -> None:
+        self.running.set()
+        super().start()
+        atexit.register(self.join)
+
+    def run(self) -> None:
+        while self.running.is_set():
             try:
                 logobj = self.queue.recv_json(zmq.NOBLOCK)
-                return makeLogRecord(logobj)
+                record = makeLogRecord(logobj)
+                for handler in self.handlers:
+                    if self.respect_handler_level and record.levelno < handler.level:
+                        continue
+                    handler.handle(record)
             except zmq.Again:
-                if self._should_stop:
-                    return None
-
-    def enqueue_sentinel(self) -> None:
-        self._should_stop = True
+                pass
 
     def stop(self) -> None:
-        super().stop()
-
-    def is_running(self):
-        return self._thread.is_alive()
+        self.running.clear()
 
 
-class NodeIDZMQListener(ZMQListener):
+class NodeIDZMQPullListener(ZMQPullListener):
+    """A thread that listens for log messages and adds the node_id formatted console handler."""
+
     def __init__(self, port: Optional[int] = None, respect_handler_level: bool = True):
         handlers = (HandlerFactory.get("console-node_id"),)
         super().__init__(port, handlers, respect_handler_level=respect_handler_level)
 
 
-class ZMQHandler(QueueHandler):
+class ZMQPushHandler(QueueHandler):
+    """A handler that sends log messages to a ZMQ PUSH socket."""
+
     def __init__(self, host: str, port: int):
         socket = connect_push_socket(host, port)
         super().__init__(socket)
@@ -57,7 +83,13 @@ class ZMQHandler(QueueHandler):
         self.queue.send_json(record.__dict__)
 
 
-class NodeIdZMQHandler(ZMQHandler):
+class NodeIdZMQPushHandler(ZMQPushHandler):
+    """A handler that sends log messages to a ZMQ PUSH socket and adds the node_id to the record.
+
+    Note:
+        The node_id is added to the record as an attribute. The detault node_id is queried by the process id.
+    """
+
     def __init__(
         self, host: str, port: int, node_id_callback: Optional[callable] = os.getpid
     ):
@@ -69,5 +101,5 @@ class NodeIdZMQHandler(ZMQHandler):
         record.node_id = self.node_ids.get(self.node_id_callback(), None)
         super().emit(record)
 
-    def register_node_id(self, node_id: str):
+    def register_node_id(self, node_id: str) -> None:
         self.node_ids[self.node_id_callback()] = node_id
