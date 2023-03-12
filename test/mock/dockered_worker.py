@@ -38,7 +38,8 @@ class ContainerLogsCollector(threading.Thread):
 
     def post_join(self):
         for data in self.logs:
-            logger.debug(f"{self.name}: {data}")
+            # logger.debug(f"{self.name}: {data}")
+            pass
 
 
 class DockeredWorker:
@@ -48,7 +49,7 @@ class DockeredWorker:
             auto_remove=False,
             stdin_open=True,
             detach=True,
-            # network_mode="host", # Not realistic
+            network_mode="host",  # Not realistic
         )
         self.name = name
 
@@ -58,34 +59,24 @@ class DockeredWorker:
     def connect(self, host, port):
 
         # Connect worker to Manager through entrypoint
-        _, stream = self.container.exec_run(
+        _, socket = self.container.exec_run(
             cmd=f"cp-worker --id {self.id} --ip {host} --port {port} --name {self.name} --wport 0",
-            stream=True,
+            socket=True,
         )
 
-        # Execute worker connect
-        self.output_queue = queue.Queue()
-        self.log_thread = ContainerLogsCollector(self.name, stream, self.output_queue)
-        self.log_thread.start()
+        try:
+            unknown_byte = socket._sock.recv(docker.constants.STREAM_HEADER_SIZE_BYTES)
 
-        # # Wait until the connection is established
-        while True:
-
-            try:
-                data = self.output_queue.get(timeout=10)
-            except queue.Empty:
-                raise RuntimeError("Connection failed")
-
-            if "connection successful to Manager" in data:
-                break
+            buffer_size = 4096  # 4 KiB
+            while True:
+                part = socket._sock.recv(buffer_size)
+                if "connection successful to Manager" in part.decode("utf-8"):
+                    break
+        except Exception as e:
+            raise e
 
     def shutdown(self):
 
         # Then wait until the container is done
         self.container.kill()
         self.container.wait()
-        self.log_thread.stop()
-        # self.log_thread.join()
-
-        # FixMe: This won't work because of https://github.com/pytest-dev/pytest/issues/5502
-        # self.log_thread.post_join()

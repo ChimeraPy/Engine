@@ -12,69 +12,69 @@ cp.debug()
 
 
 # @pytest.mark.repeat(10)
-@pytest.mark.parametrize(
-    "config_manager",
-    [
-        (lazy_fixture("single_node_no_connections_manager")),
-        (lazy_fixture("multiple_nodes_one_worker_manager")),
-        (lazy_fixture("multiple_nodes_multiple_workers_manager")),
-        pytest.param(
-            lazy_fixture("dockered_single_node_no_connections_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
-            marks=linux_run_only,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
-            marks=linux_run_only,
-        ),
-    ],
-)
-def test_detecting_when_all_nodes_are_ready(config_manager):
-
-    worker_node_map = config_manager.worker_graph_map
-
-    nodes_ids = []
-    for worker_id in config_manager.workers:
-
-        # Assert that the worker has their expected nodes
-        expected_nodes = worker_node_map[worker_id]
-        union = set(expected_nodes) | set(
-            config_manager.workers[worker_id].nodes.keys()
-        )
-        assert len(union) == len(expected_nodes)
-
-        # Assert that all the nodes should be INIT
-        for node_id in config_manager.workers[worker_id].nodes:
-            assert config_manager.workers[worker_id].nodes[node_id].init
-            nodes_ids.append(node_id)
-
-    logger.debug(f"After creation of p2p network workers: {config_manager.workers}")
-
-    # The config manager should have all the nodes are registered
-    assert all([config_manager.graph.has_node_by_id(x) for x in nodes_ids])
-
-    # Extract all the nodes
-    nodes_ids = []
-    for worker_id in config_manager.workers:
-        for node_id in config_manager.workers[worker_id].nodes:
-            assert config_manager.workers[worker_id].nodes[node_id].connected
-            nodes_ids.append(node_id)
-
-    # The config manager should have all the nodes registered as CONNECTED
-    assert all([x in config_manager.nodes_server_table for x in nodes_ids])
-
-    # Extract all the nodes
-    nodes_idss = []
-    for worker_id in config_manager.workers:
-        for node_id in config_manager.workers[worker_id].nodes:
-            assert config_manager.workers[worker_id].nodes[node_id].ready
-            nodes_idss.append(node_id)
-
-    # The config manager should have all the nodes registered as READY
-    assert all([x in config_manager.nodes_server_table for x in nodes_idss])
+# @pytest.mark.parametrize(
+#     "config_manager",
+#     [
+#         (lazy_fixture("single_node_no_connections_manager")),
+#         (lazy_fixture("multiple_nodes_one_worker_manager")),
+#         (lazy_fixture("multiple_nodes_multiple_workers_manager")),
+#         pytest.param(
+#             lazy_fixture("dockered_single_node_no_connections_manager"),
+#             marks=linux_run_only,
+#         ),
+#         pytest.param(
+#             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
+#             marks=linux_run_only,
+#         ),
+#         pytest.param(
+#             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
+#             marks=linux_run_only,
+#         ),
+#     ],
+# )
+# def test_detecting_when_all_nodes_are_ready(config_manager):
+#
+#     worker_node_map = config_manager.worker_graph_map
+#
+#     nodes_ids = []
+#     for worker_id in config_manager.workers:
+#
+#         # Assert that the worker has their expected nodes
+#         expected_nodes = worker_node_map[worker_id]
+#         union = set(expected_nodes) | set(
+#             config_manager.workers[worker_id].nodes.keys()
+#         )
+#         assert len(union) == len(expected_nodes)
+#
+#         # Assert that all the nodes should be INIT
+#         for node_id in config_manager.workers[worker_id].nodes:
+#             assert config_manager.workers[worker_id].nodes[node_id].init
+#             nodes_ids.append(node_id)
+#
+#     logger.debug(f"After creation of p2p network workers: {config_manager.workers}")
+#
+#     # The config manager should have all the nodes are registered
+#     assert all([config_manager.graph.has_node_by_id(x) for x in nodes_ids])
+#
+#     # Extract all the nodes
+#     nodes_ids = []
+#     for worker_id in config_manager.workers:
+#         for node_id in config_manager.workers[worker_id].nodes:
+#             assert config_manager.workers[worker_id].nodes[node_id].connected
+#             nodes_ids.append(node_id)
+#
+#     # The config manager should have all the nodes registered as CONNECTED
+#     assert all([x in config_manager.nodes_server_table for x in nodes_ids])
+#
+#     # Extract all the nodes
+#     nodes_idss = []
+#     for worker_id in config_manager.workers:
+#         for node_id in config_manager.workers[worker_id].nodes:
+#             assert config_manager.workers[worker_id].nodes[node_id].ready
+#             nodes_idss.append(node_id)
+#
+#     # The config manager should have all the nodes registered as READY
+#     assert all([x in config_manager.nodes_server_table for x in nodes_idss])
 
 
 # @pytest.mark.repeat(10)

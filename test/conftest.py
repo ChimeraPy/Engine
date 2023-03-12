@@ -63,6 +63,7 @@ def logreceiver():
     listener.start()
     yield listener
     listener.stop()
+    listener.join()
 
 
 @pytest.fixture(autouse=True)

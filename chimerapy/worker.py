@@ -689,9 +689,6 @@ class Worker:
 
             logger.debug(f"{self}: Nodes have joined")
 
-        # Stop the log listener
-        self.logreceiver.stop()
-
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)

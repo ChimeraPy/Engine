@@ -11,6 +11,9 @@ from .common import HandlerFactory
 from .utils import bind_pull_socket, connect_push_socket
 
 
+events = {}
+
+
 class ZMQPullListener(threading.Thread):
     """A thread that listens for log messages.
 
@@ -32,36 +35,38 @@ class ZMQPullListener(threading.Thread):
         handlers=None,
         respect_handler_level: bool = True,
     ):
+        super().__init__()
         socket, port = bind_pull_socket(port)
+        self.push_queue = connect_push_socket("127.0.0.1", port)
         self.handlers = handlers or [
             HandlerFactory.get("console")
         ]  # For now, only console handler
-        super().__init__()
         self.running = threading.Event()
         self.port = port
         self.queue = socket
         self.respect_handler_level = respect_handler_level
-        self.daemon = True
+        self.running.set()
+
+    def run(self) -> None:
+        while self.running.is_set():
+            logobj = self.queue.recv_json()
+            if "msg" in logobj and logobj["msg"] == "STOP":
+                break
+            record = makeLogRecord(logobj)
+            for handler in self.handlers:
+                if self.respect_handler_level and record.levelno < handler.level:
+                    continue
+                handler.handle(record)
+
+    def stop(self) -> None:
+        self.push_queue.send_json({"msg": "STOP"})
+        self.running.clear()
+        self.join(timeout=2)
 
     def start(self) -> None:
         self.running.set()
         super().start()
-        atexit.register(self.join)
-
-    def run(self) -> None:
-        while self.running.is_set():
-            try:
-                logobj = self.queue.recv_json(zmq.NOBLOCK)
-                record = makeLogRecord(logobj)
-                for handler in self.handlers:
-                    if self.respect_handler_level and record.levelno < handler.level:
-                        continue
-                    handler.handle(record)
-            except zmq.Again:
-                pass
-
-    def stop(self) -> None:
-        self.running.clear()
+        atexit.register(self.stop)
 
 
 class NodeIDZMQPullListener(ZMQPullListener):
