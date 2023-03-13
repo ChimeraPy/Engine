@@ -1,7 +1,6 @@
 import atexit
 import os
 import threading
-import time
 from logging import LogRecord, makeLogRecord
 from logging.handlers import QueueHandler
 from typing import Optional
@@ -58,7 +57,6 @@ class ZMQPullListener(threading.Thread):
                 logobj = self.queue.recv_json(zmq.NOBLOCK)
 
                 if "msg" in logobj and logobj["msg"] == "STOP":
-                    print("here")
                     break
 
                 record = makeLogRecord(logobj)
