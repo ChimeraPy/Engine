@@ -1,6 +1,7 @@
 import atexit
 import os
 import threading
+import time
 from logging import LogRecord, makeLogRecord
 from logging.handlers import QueueHandler
 from typing import Optional
@@ -29,6 +30,8 @@ class ZMQPullListener(threading.Thread):
             The function used to bind the socket.
     """
 
+    _sentinel = {"msg": "STOP"}
+
     def __init__(
         self,
         port: Optional[int] = None,
@@ -46,27 +49,41 @@ class ZMQPullListener(threading.Thread):
         self.queue = socket
         self.respect_handler_level = respect_handler_level
         self.running.set()
+        self.daemon = True
 
     def run(self) -> None:
+        """Run the LogsListener thread."""
         while self.running.is_set():
-            logobj = self.queue.recv_json()
-            if "msg" in logobj and logobj["msg"] == "STOP":
-                break
-            record = makeLogRecord(logobj)
-            for handler in self.handlers:
-                if self.respect_handler_level and record.levelno < handler.level:
-                    continue
-                handler.handle(record)
+            try:
+                logobj = self.queue.recv_json(zmq.NOBLOCK)
+
+                if "msg" in logobj and logobj["msg"] == "STOP":
+                    print("here")
+                    break
+
+                record = makeLogRecord(logobj)
+
+                for handler in self.handlers:
+                    if self.respect_handler_level and record.levelno < handler.level:
+                        continue
+                    handler.handle(record)
+
+            except zmq.Again:
+                continue
 
     def stop(self) -> None:
-        self.push_queue.send_json({"msg": "STOP"})
+        self._enqueue_sentinel()
         self.running.clear()
-        self.join(timeout=2)
 
-    def start(self) -> None:
+    def _enqueue_sentinel(self) -> None:
+        self.push_queue.send_json(self._sentinel)
+
+    def start(self, register_exit_handler=False) -> None:
         self.running.set()
         super().start()
-        atexit.register(self.stop)
+        if register_exit_handler:
+            atexit.register(self.join)
+            atexit.register(self.stop)
 
 
 class NodeIDZMQPullListener(ZMQPullListener):

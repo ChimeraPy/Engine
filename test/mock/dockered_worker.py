@@ -10,36 +10,23 @@ import chimerapy as cp
 logger = cp._logger.getLogger("chimerapy-networking")
 
 
-class ContainerLogsCollector(threading.Thread):
+class LogThread(threading.Thread):
     def __init__(self, name: str, stream, output_queue: queue.Queue):
         super().__init__()
 
         # Saving input parameters
-        self.name = name
+        self.name
         self.stream = stream
         self.output_queue = output_queue
-        self.running = threading.Event()
-        self.logs = []
-        self.daemon = True
 
     def __repr__(self):
         return f"<LogThread {self.name}>"
 
     def run(self):
-        self.running.set()
+
         for data in self.stream:
+            logger.debug(f"{self}: {data.decode()}")
             self.output_queue.put(data.decode())
-            self.logs.append(data.decode())
-            if not self.running.is_set():
-                break
-
-    def stop(self):
-        self.running.clear()
-
-    def post_join(self):
-        for data in self.logs:
-            # logger.debug(f"{self.name}: {data}")
-            pass
 
 
 class DockeredWorker:
@@ -49,7 +36,7 @@ class DockeredWorker:
             auto_remove=False,
             stdin_open=True,
             detach=True,
-            network_mode="host",  # Not realistic
+            # network_mode="host", # Not realistic
         )
         self.name = name
 
@@ -59,21 +46,26 @@ class DockeredWorker:
     def connect(self, host, port):
 
         # Connect worker to Manager through entrypoint
-        _, socket = self.container.exec_run(
+        _, stream = self.container.exec_run(
             cmd=f"cp-worker --id {self.id} --ip {host} --port {port} --name {self.name} --wport 0",
-            socket=True,
+            stream=True,
         )
 
-        try:
-            unknown_byte = socket._sock.recv(docker.constants.STREAM_HEADER_SIZE_BYTES)
+        # Execute worker connect
+        self.output_queue = queue.Queue()
+        self.log_thread = LogThread(self.name, stream, self.output_queue)
+        self.log_thread.start()
 
-            buffer_size = 4096  # 4 KiB
-            while True:
-                part = socket._sock.recv(buffer_size)
-                if "connection successful to Manager" in part.decode("utf-8"):
-                    break
-        except Exception as e:
-            raise e
+        # # Wait until the connection is established
+        while True:
+
+            try:
+                data = self.output_queue.get(timeout=10)
+            except queue.Empty:
+                raise RuntimeError("Connection failed")
+
+            if "connection successful to Manager" in data:
+                break
 
     def shutdown(self):
 

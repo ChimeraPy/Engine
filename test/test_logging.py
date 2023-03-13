@@ -4,7 +4,13 @@ import time
 import zmq
 from zmq import Context
 
-from chimerapy._logger import ZMQLogHandlerConfig, add_zmq_handler, getLogger
+from chimerapy._logger import (
+    ZMQLogHandlerConfig,
+    add_zmq_handler,
+    getLogger,
+    add_node_id_zmq_push_handler,
+    get_node_id_zmq_listener,
+)
 
 
 def test_logger_publishing():

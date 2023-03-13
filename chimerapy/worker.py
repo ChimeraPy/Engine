@@ -702,6 +702,5 @@ class Worker:
     @staticmethod
     def _start_log_receiver() -> "ZMQNodeIDListener":
         log_receiver = _logger.get_node_id_zmq_listener()
-        log_receiver.start()
-
+        log_receiver.start(register_exit_handler=True)
         return log_receiver

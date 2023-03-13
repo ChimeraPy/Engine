@@ -41,6 +41,8 @@ not_github_actions = pytest.mark.skipif(
     reason="Certain test require hardware to execute that is not available in GA",
 )
 
+flaky_test = pytest.mark.xfail(reason="Flaky test")
+
 disable_loggers = [
     "matplotlib",
     "chardet.charsetprober",
