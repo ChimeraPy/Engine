@@ -69,7 +69,7 @@ def test_run_node_in_debug_mode(logreceiver):
     data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
 
     for i, node_cls in enumerate(data_nodes):
-        n = node_cls(name=f"{i}", debug="step", debug_port=logreceiver.port)
+        n = node_cls(name=f"{i}", debug="step")
 
         for i in range(5):
             n.step()

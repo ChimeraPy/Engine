@@ -2,8 +2,6 @@
 import time
 import logging
 import collections
-import shutil
-import os
 
 # Third-party Imports
 import dill
@@ -18,7 +16,7 @@ logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
-from ..conftest import linux_run_only, flaky_test
+from ..conftest import linux_run_only, linux_expected_only
 from ..mock import DockeredWorker
 
 # References:
@@ -31,11 +29,6 @@ NAME_CLASS_MAP = {
     "an": AudioNode,
 }
 NUM_OF_WORKERS = 3
-
-
-def cleanup_logs(logdir):
-    shutil.rmtree(logdir)
-    os.makedirs(logdir, exist_ok=True)
 
 
 @pytest.fixture
@@ -181,25 +174,21 @@ def test_worker_data_archiving(worker):
 @pytest.mark.parametrize(
     "config_manager, expected_number_of_folders",
     [
-        pytest.param(lazy_fixture("single_worker_manager"), 1, marks=flaky_test),
-        pytest.param(
-            lazy_fixture("multiple_worker_manager"), NUM_OF_WORKERS, marks=flaky_test
-        ),
+        (lazy_fixture("single_worker_manager"), 1),
+        (lazy_fixture("multiple_worker_manager"), NUM_OF_WORKERS),
         pytest.param(
             lazy_fixture("dockered_single_worker_manager"),
             1,
-            marks=[linux_run_only, flaky_test],
+            marks=linux_run_only,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_worker_manager"),
             NUM_OF_WORKERS,
-            marks=[linux_run_only, flaky_test],
+            marks=linux_run_only,
         ),
     ],
 )
-def test_manager_worker_data_transfer(
-    config_manager: cp.Manager, expected_number_of_folders: int
-):
+def test_manager_worker_data_transfer(config_manager, expected_number_of_folders):
 
     # Take a single step and see if the system crashes and burns
     config_manager.start()
@@ -218,6 +207,3 @@ def test_manager_worker_data_transfer(
     for worker_id in config_manager.workers:
         for node_id in config_manager.workers[worker_id].nodes:
             assert config_manager.workers[worker_id].nodes[node_id].finished
-
-    # Cleanup the logs in case repeat is used
-    cleanup_logs(config_manager.logdir)

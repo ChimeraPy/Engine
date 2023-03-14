@@ -26,19 +26,19 @@ TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
-def video_node_step(logreceiver):
+def video_node_step():
 
     # Create a node
-    vn = VideoNode(name="vn", debug="step", debug_port=logreceiver.port)
+    vn = VideoNode(name="vn", debug="step")
 
     return vn
 
 
 @pytest.fixture
-def video_node_stream(logreceiver):
+def video_node_stream():
 
     # Create a node
-    vn = VideoNode(name="vn", debug="stream", debug_port=logreceiver.port)
+    vn = VideoNode(name="vn", debug="stream")
 
     return vn
 
@@ -160,7 +160,7 @@ def test_save_handler_video(save_handler_and_queue):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_single_step(video_node_step):
+def test_node_save_video_single_step(video_node_step, logreceiver):
 
     # Check that the video was created
     expected_video_path = video_node_step.logdir / "test.mp4"
@@ -180,7 +180,7 @@ def test_node_save_video_single_step(video_node_step):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_stream(video_node_stream):
+def test_node_save_video_stream(video_node_stream, logreceiver):
 
     # Check that the video was created
     expected_video_path = video_node_stream.logdir / "test.mp4"
@@ -202,7 +202,7 @@ def test_node_save_video_stream(video_node_stream):
     assert expected_video_path.exists()
 
 
-def test_node_save_video_stream_with_unstable_fps(video_node_stream):
+def test_node_save_video_stream_with_unstable_fps(video_node_stream, logreceiver):
 
     # Check that the video was created
     expected_video_path = video_node_stream.logdir / "test.mp4"

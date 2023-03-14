@@ -37,12 +37,10 @@ def audio_node_step():
 
 
 @pytest.fixture
-def audio_node_stream(logreceiver):
+def audio_node_stream():
 
     # Create a node
-    an = AudioNode(
-        "an", CHUNK, CHANNELS, FORMAT, RATE, debug="stream", debug_port=logreceiver.port
-    )
+    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE, debug="stream")
 
     return an
 
