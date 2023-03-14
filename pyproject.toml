@@ -41,6 +41,7 @@ test = [
     'pytest-lazy-fixture',
     'pytest-order',
     'pytest-rerunfailures',
+    'pytest-timeout',
     'auto-changelog',
     'coveralls',
     'pre-commit',
@@ -112,3 +113,7 @@ faulthandler_timeout=300
 
 # Ignore warnings
 filterwarnings = "ignore::DeprecationWarning"
+
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+]
