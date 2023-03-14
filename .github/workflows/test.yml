@@ -71,8 +71,14 @@ jobs:
 
       - name: Perform tests
         run: |
-          coverage run --source=chimerapy -m pytest --reruns 5 --reruns-delay 5 test/
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 test
           coverage combine
+
+      - name: Upload test log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: chimerapy-test-${{ env.MANUAL_OS_SET }}.log
+          path: chimerapy-test.log
 
       - name: Upload coverage data to coveralls.io
         if : matrix.os == 'ubuntu-latest'
