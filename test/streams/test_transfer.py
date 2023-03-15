@@ -19,6 +19,8 @@ from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..conftest import linux_run_only, linux_expected_only
 from ..mock import DockeredWorker
 
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
+
 # References:
 # https://www.thepythoncode.com/article/send-receive-files-using-sockets-python
 
