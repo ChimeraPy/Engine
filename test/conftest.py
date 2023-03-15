@@ -66,10 +66,10 @@ def logreceiver():
     listener.join()
 
 
-# @pytest.fixture(autouse=True)
-# def slow_interval_between_tests():
-#     yield
-#     time.sleep(0.1)
+@pytest.fixture(autouse=True)
+def slow_interval_between_tests():
+    yield
+    time.sleep(0.1)
 
 
 @pytest.fixture
