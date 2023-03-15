@@ -69,9 +69,14 @@ jobs:
           pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
-      - name: Perform tests
+      - name: Perform Faster tests
         run: |
-          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 test/networking/test_p2p_networking.py
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
+          coverage combine
+
+      - name: Perform Slower tests
+        run: |
+          coverage run --append --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
           coverage combine
 
       - name: Upload test log as artifact
