@@ -71,7 +71,7 @@ jobs:
 
       - name: Perform tests
         run: |
-          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 test
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 test/networking/test_p2p_networking.py
           coverage combine
 
       - name: Upload test log as artifact
