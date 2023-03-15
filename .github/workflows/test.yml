@@ -76,7 +76,7 @@ jobs:
 
       - name: Perform Slower tests
         run: |
-          coverage run --append --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
           coverage combine
 
       - name: Upload test log as artifact
