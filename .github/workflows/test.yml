@@ -69,12 +69,23 @@ jobs:
           pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
-      - name: Perform tests
+      - name: Perform faster tests
         run: |
-          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 test
-          coverage combine
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
+          coverage combine --append
+          mv chimerapy-test.log chimerapy-test-fast.log
 
-      - name: Upload test log as artifact
+      - name: Perform slower tests
+        run: |
+          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
+          coverage combine --append
+          mv chimerapy-test.log chimerapy-test-slow.log
+
+      - name: Combine test logs
+        run : |
+          cat chimerapy-test-*.log > chimerapy-test.log
+
+      - name: Upload test logs as artifact
         uses: actions/upload-artifact@v3
         with:
           name: chimerapy-test-${{ env.MANUAL_OS_SET }}.log
