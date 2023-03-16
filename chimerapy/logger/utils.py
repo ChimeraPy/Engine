@@ -2,6 +2,9 @@ from typing import Optional, Tuple
 
 import zmq
 
+LOGGING_MAX_PORT = 60000
+LOGGING_MIN_PORT = 50000
+
 
 def bind_pull_socket(
     port: Optional[int] = None, transport="tcp", **kwargs
@@ -13,11 +16,20 @@ def bind_pull_socket(
     if port is None:
         port = socket.bind_to_random_port(
             f"{transport}://*",
-            min_port=kwargs.get("min_port", 50000),
-            max_port=kwargs.get("max_port", 60000),
+            min_port=kwargs.get("min_port", LOGGING_MIN_PORT),
+            max_port=kwargs.get("max_port", LOGGING_MAX_PORT),
             max_tries=kwargs.get("max_tries", 20),
         )
     else:
+        if (
+            (port < LOGGING_MIN_PORT or port > LOGGING_MAX_PORT)
+            and transport == "tcp"
+            and port != 0
+        ):
+            raise ValueError(
+                f"Port {port} is out of range. Please use a port between {LOGGING_MIN_PORT} and {LOGGING_MAX_PORT} "
+                f"When using `tcp` transport."
+            )
         socket.bind(f"{transport}://*:{port}")
 
     return socket, port

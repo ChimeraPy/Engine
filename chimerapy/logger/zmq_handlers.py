@@ -1,17 +1,15 @@
 import atexit
+import logging
 import os
 import threading
 from logging import LogRecord, makeLogRecord
 from logging.handlers import QueueHandler
-from typing import Optional
+from typing import Collection, Optional
 
 import zmq
 
 from .common import HandlerFactory
 from .utils import bind_pull_socket, connect_push_socket
-
-
-events = {}
 
 
 class ZMQPullListener(threading.Thread):
@@ -70,16 +68,20 @@ class ZMQPullListener(threading.Thread):
                 continue
 
     def stop(self) -> None:
+        """Stop the LogsListener thread."""
         self._enqueue_sentinel()
         self.running.clear()
 
     def _enqueue_sentinel(self) -> None:
+        """Enqueue the sentinel message to stop the thread's run loop."""
         self.push_queue.send_json(self._sentinel)
 
-    def start(self, register_exit_handler=False) -> None:
+    def start(self, register_exit_handlers=False) -> None:
+        """Start the LogsListener thread by optionally registering exit handlers."""
         self.running.set()
         super().start()
-        if register_exit_handler:
+        if register_exit_handlers:
+            # Note the order of these two calls.
             atexit.register(self.join)
             atexit.register(self.stop)
 
@@ -87,8 +89,15 @@ class ZMQPullListener(threading.Thread):
 class NodeIDZMQPullListener(ZMQPullListener):
     """A thread that listens for log messages and adds the node_id formatted console handler."""
 
-    def __init__(self, port: Optional[int] = None, respect_handler_level: bool = True):
-        handlers = (HandlerFactory.get("console-node_id"),)
+    def __init__(
+        self,
+        port: Optional[int] = None,
+        handlers: Collection[logging.Handler] = None,
+        respect_handler_level: bool = True,
+    ):
+        if handlers is None:
+            handlers = (HandlerFactory.get("console-node_id"),)
+
         super().__init__(port, handlers, respect_handler_level=respect_handler_level)
 
 
@@ -107,7 +116,7 @@ class NodeIdZMQPushHandler(ZMQPushHandler):
     """A handler that sends log messages to a ZMQ PUSH socket and adds the node_id to the record.
 
     Note:
-        The node_id is added to the record as an attribute. The detault node_id is queried by the process id.
+        The node_id is added to the record as an attribute. The default node_id is queried by the process id.
     """
 
     def __init__(
