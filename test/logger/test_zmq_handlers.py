@@ -17,8 +17,8 @@ class LogRecordsCollector(logging.Handler):
 def test_zmq_push_pull_node_id_logging():
     handler = LogRecordsCollector()
     handler.setLevel(logging.DEBUG)
-    listener = NodeIDZMQPullListener(handlers=(handler,), respect_handler_level=True)
-    listener.start()
+    logreceiver = NodeIDZMQPullListener(handlers=[handler])
+    logreceiver.start()
     ids = [str(uuid.uuid4()) for _ in range(2)]
 
     def get_log_and_messages(port, node_id):
@@ -32,8 +32,8 @@ def test_zmq_push_pull_node_id_logging():
         for j in range(10):
             logger.debug(f"Message {j}")
 
-    p1 = Process(target=get_log_and_messages, args=(listener.port, ids[0]))
-    p2 = Process(target=get_log_and_messages, args=(listener.port, ids[1]))
+    p1 = Process(target=get_log_and_messages, args=(logreceiver.port, ids[0]))
+    p2 = Process(target=get_log_and_messages, args=(logreceiver.port, ids[1]))
 
     p1.start()
     p2.start()
@@ -43,4 +43,5 @@ def test_zmq_push_pull_node_id_logging():
 
     assert len(handler.records) == 20
     assert set(map(lambda record: record.node_id, handler.records)) == set(ids)
-    listener.stop()
+    logreceiver.stop()
+    logreceiver.join()
