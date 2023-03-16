@@ -60,7 +60,7 @@ class DockeredWorker:
         while True:
 
             try:
-                data = self.output_queue.get(timeout=10)
+                data = self.output_queue.get(timeout=15)
             except queue.Empty:
                 raise RuntimeError("Connection failed")
 

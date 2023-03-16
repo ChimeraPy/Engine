@@ -27,7 +27,6 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
-from .logreceiver import LogReceiver
 
 logger = _logger.getLogger("chimerapy-worker")
 
@@ -114,8 +113,8 @@ class Worker:
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = LogReceiver()
-        self.log_receiver.start()
+        self.logreceiver = self._start_log_receiver()
+        logger.debug(f"Log receiver started at port {self.logreceiver.port}")
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -249,7 +248,7 @@ class Worker:
                 self.nodes_extra[node_id]["out_bound"],
                 self.nodes_extra[node_id]["follow"],
                 logging_level=logger.level,
-                worker_logging_port=self.log_receiver.port,
+                worker_logging_port=self.logreceiver.port,
             )
 
             # Before starting, over write the pid
@@ -690,10 +689,6 @@ class Worker:
 
             logger.debug(f"{self}: Nodes have joined")
 
-        # Stop the log listener
-        self.log_receiver.shutdown()
-        self.log_receiver.join()
-
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.tempfolder)
@@ -703,3 +698,9 @@ class Worker:
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
+
+    @staticmethod
+    def _start_log_receiver() -> "ZMQNodeIDListener":
+        log_receiver = _logger.get_node_id_zmq_listener()
+        log_receiver.start(register_exit_handlers=True)
+        return log_receiver

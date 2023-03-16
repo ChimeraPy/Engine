@@ -5,10 +5,13 @@
 import logging.config
 import os
 from dataclasses import dataclass
-from logging import LogRecord
-from typing import Any, Dict
+from logging import LogRecord, StreamHandler
+from typing import Any, Dict, Optional
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
+
+from .logger.common import HandlerFactory
+from .logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -146,3 +149,39 @@ def getLogger(
         logger.setLevel(logging.DEBUG)
 
     return logger
+
+
+def get_node_id_zmq_listener(port: Optional[int] = None) -> NodeIDZMQPullListener:
+    """Get a ZMQ pull listener on the given (or random) port."""
+    listener = NodeIDZMQPullListener(port)
+    return listener
+
+
+def add_console_handler(logger: logging.Logger) -> None:
+    """Add a console handler to the logger.
+
+    Note:
+        Uses the same formatter as the consoleHandler in logging_config
+    """
+    exists = any(isinstance(h, StreamHandler) for h in logger.handlers)
+    if not exists:
+        hdlr = HandlerFactory.get_console_handler()
+        logger.addHandler(hdlr)
+
+
+def add_node_id_zmq_push_handler(
+    logger: logging.Logger, ip: str, port: int, node_id: str
+) -> None:
+    """Add a ZMQ log handler to the logger that publishes the node_id based LogRecord to a ZMQ push socket."""
+    # Add a handler to publish the logs to zmq ws
+    exists = any(isinstance(h, NodeIdZMQPushHandler) for h in logger.handlers)
+    if not exists:
+        handler = NodeIdZMQPushHandler(ip, port)
+        handler.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+    else:
+        handler = next(
+            h for h in logger.handlers if isinstance(h, NodeIdZMQPushHandler)
+        )
+
+    handler.register_node_id(node_id=node_id)
