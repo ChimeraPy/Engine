@@ -79,6 +79,8 @@ class Client:
 
         if parent_logger is not None:
             self.logger = _logger.fork(parent_logger, "client")
+        else:
+            self.logger = _logger.getLogger("chimerapy-networking")
 
     def __str__(self):
         return f"<Client {self.id}>"
