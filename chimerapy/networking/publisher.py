@@ -47,7 +47,6 @@ class Publisher:
 
             # Send
             self._zmq_socket.send(self._data_chunk._serialize())
-            logger.debug(f"{self}: formally sended via zmq socket")
 
             # Mark finish
             self._ready.clear()
@@ -61,7 +60,7 @@ class Publisher:
         self._zmq_context = zmq.Context()
         self._zmq_socket = self._zmq_context.socket(zmq.PUB)
         self.port = self._zmq_socket.bind_to_random_port(f"tcp://{self.host}")
-        time.sleep(config.get('comms.timeout.pub-delay'))
+        time.sleep(config.get("comms.timeout.pub-delay"))
 
         # Create send thread
         self._ready = threading.Event()
