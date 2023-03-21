@@ -1,14 +1,13 @@
 import pickle
 import time
 
+import blosc
+import lz4.block
 import numpy as np
 
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
-
-import lz4.block
-import blosc
 
 
 def lz4_com_op(payload):
@@ -50,7 +49,7 @@ def payload_compression_performance():
             c_payload = com_fun(payload)
 
             tac = time.perf_counter()
-            new_payload = dec_fun(c_payload)
+            new_payload = dec_fun(c_payload)  # noqa: F841
 
             toc = time.perf_counter()
             # assert isinstance(new_payload['img'], np.ndarray)

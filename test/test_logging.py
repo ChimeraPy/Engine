@@ -30,7 +30,7 @@ def test_logger_publishing():
 
     def log_():
         time.sleep(1)  # Wait for the subscriber to connect
-        for l in logs:
+        for l in logs:  # noqa: E741
             logger.info(l)
 
     thread = threading.Thread(target=subscribe_and_read)

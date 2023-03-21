@@ -1,8 +1,8 @@
-from typing import Dict
 import time
+from typing import Dict
 
 import pytest
-from aiohttp import web
+
 import chimerapy as cp
 from chimerapy.networking.enums import MANAGER_MESSAGE
 from chimerapy.states import ManagerState
@@ -46,7 +46,7 @@ def test_node_updates(test_ws_client, manager, worker):
 
     # Create original containers
     simple_graph = cp.Graph()
-    new_node = GenNode(name=f"Gen1")
+    new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
     mapping = {worker.id: [new_node.id]}
 

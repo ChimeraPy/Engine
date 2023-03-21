@@ -1,15 +1,13 @@
-from typing import Dict, Any
-import time
-import logging
+import multiprocessing as mp
 import os
 import sys
-import multiprocessing as mp
+import time
+from typing import Dict
 
-from PIL import ImageGrab
 import cv2
 import numpy as np
-import imutils
 import pytest
+from PIL import ImageGrab
 from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp

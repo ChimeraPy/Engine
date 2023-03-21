@@ -1,20 +1,19 @@
-from typing import Callable, Union, Optional, Any, Dict
-import queue
-import logging
-import functools
-import json
-import time
-import enum
-import pickle
-import datetime
-import uuid
-import socket
 import asyncio
+import datetime
+import enum
+import errno
+import json
+import logging
+import queue
+import socket
+import time
+import uuid
+from typing import Any, Callable, Dict, Optional, Union
+
+import netifaces as ni
 
 # Third-party
 from tqdm import tqdm
-import blosc
-import netifaces as ni
 
 # Internal
 from . import _logger
@@ -33,10 +32,10 @@ def clear_queue(input_queue: queue.Queue):
         # Make sure to account for possible atomic modification of the
         # queue
         try:
-            data = input_queue.get(timeout=0.1, block=False)
+            data = input_queue.get(timeout=0.1, block=False)  # noqa: F841
             del data
         except queue.Empty:
-            logger.debug(f"clear_queue: empty!")
+            logger.debug("clear_queue: empty!")
             return
         except EOFError:
             logger.warning("Queue EOFError --- data corruption")

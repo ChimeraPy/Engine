@@ -1,8 +1,8 @@
 # Built-in
-from typing import Coroutine, Callable, Tuple, List, Optional, Any
-import threading
 import asyncio
+import threading
 from functools import partial
+from typing import Any, Callable, Coroutine, List, Optional, Tuple
 
 # Internal Imports
 from .. import _logger

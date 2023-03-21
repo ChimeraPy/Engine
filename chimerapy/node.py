@@ -1,29 +1,28 @@
-from typing import Dict, List, Any, Optional, Union, Literal, Tuple
-from multiprocessing.process import AuthenticationString
-import logging
-import queue
-import uuid
-import pathlib
-import os
-import tempfile
 import datetime
+import logging
+import os
+import pathlib
+import queue
+import tempfile
 import threading
 import traceback
 import uuid
+from multiprocessing.process import AuthenticationString
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 # Third-party Imports
-from dataclasses import dataclass
 import multiprocess as mp
 import numpy as np
 import pandas as pd
 import zmq
 
+from . import _logger
+from .data_handlers import SaveHandler
+from .networking import Client, DataChunk, Publisher, Subscriber
+from .networking.enums import GENERAL_MESSAGE, NODE_MESSAGE, WORKER_MESSAGE
+
 # Internal Imports
 from .states import NodeState
-from .networking import Client, Publisher, Subscriber, DataChunk
-from .networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
-from .data_handlers import SaveHandler
-from . import _logger
 
 
 class Node(mp.Process):
@@ -138,7 +137,7 @@ class Node(mp.Process):
         self.__dict__.update(state)
 
     def get_logger(self) -> logging.Logger:
-        l = _logger.getLogger("chimerapy-node")
+        l = _logger.getLogger("chimerapy-node")  # noqa E741
         l.setLevel(self.logging_level)
         if self.worker_logging_port:
             _logger.add_node_id_zmq_push_handler(
@@ -482,7 +481,7 @@ class Node(mp.Process):
         if len(self.p2p_info["in_bound"]) == 0:
             try:
                 output = self.step()
-            except Exception as e:
+            except:  # noqa: E722
                 traceback_info = traceback.format_exc()
                 self.logger.error(traceback_info)
                 return None
@@ -502,7 +501,7 @@ class Node(mp.Process):
                     try:
                         output = self.step(self.in_bound_data)
                         break
-                    except Exception as e:
+                    except:  # noqa: E722
                         traceback_info = traceback.format_exc()
                         self.logger.error(traceback_info)
                         return None
@@ -641,7 +640,7 @@ class Node(mp.Process):
         # User-defined, possible error
         try:
             self.prep()
-        except Exception as e:
+        except:  # noqa: E722
             traceback_info = traceback.format_exc()
             self.logger.error(traceback_info)
             return None

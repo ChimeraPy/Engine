@@ -1,15 +1,21 @@
-# populate fields for >>>help(imagezmq)
-from .__version__ import __title__, __description__, __url__, __version__
-from .__version__ import __author__, __author_email__, __license__
-from .__version__ import __copyright__
-
+# noqa E402
 # Package Setup
 from . import _logger
+from .__version__ import (
+    __author__,
+    __author_email__,
+    __copyright__,
+    __description__,
+    __license__,
+    __title__,
+    __url__,
+    __version__,
+)
 
 _logger.setup()
 
 # Handling the configuration
-from . import config
+from . import config  # noqa F401
 
 # Interal Imports
 from .manager import Manager

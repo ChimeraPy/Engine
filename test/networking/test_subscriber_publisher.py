@@ -1,9 +1,10 @@
 # Built-in Imports
 import time
 
+import numpy as np
+
 # Third-party Imports
 import pytest
-import numpy as np
 from pytest_lazyfixture import lazy_fixture
 
 # Internal Imports

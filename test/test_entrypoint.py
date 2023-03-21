@@ -1,16 +1,14 @@
 # Built-in Imports
-import logging
 import subprocess
 import time
-import sys
 
 # Third-party Imports
-import pytest
 import chimerapy as cp
+
+from .conftest import linux_run_only
 
 # Test Import
 from .mock import DockeredWorker
-from .conftest import linux_run_only
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()

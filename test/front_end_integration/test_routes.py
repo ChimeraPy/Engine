@@ -5,9 +5,6 @@ import pytest
 import requests
 from pytest_lazyfixture import lazy_fixture
 
-# Interal Imports
-import chimerapy as cp
-
 
 @pytest.mark.parametrize(
     "config_manager",

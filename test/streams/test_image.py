@@ -1,7 +1,6 @@
 # Built-in Imports
 import os
 import pathlib
-import logging
 import time
 import uuid
 
@@ -12,8 +11,9 @@ import pytest
 # Internal Imports
 import chimerapy as cp
 
-logger = cp._logger.getLogger("chimerapy")
 from .data_nodes import ImageNode
+
+logger = cp._logger.getLogger("chimerapy")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

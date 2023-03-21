@@ -1,9 +1,6 @@
 # Built-in Imports
-import os
-import time
-import logging
 import collections
-import pathlib
+import time
 
 # Third-party Imports
 import dill
@@ -13,16 +10,14 @@ from pytest_lazyfixture import lazy_fixture
 # Internal Imports
 import chimerapy as cp
 
+from ..conftest import linux_run_only
+from ..mock import DockeredWorker
+from ..utils import cleanup_and_recreate_dir
+from .data_nodes import AudioNode, ImageNode, TabularNode, VideoNode
+
 logger = cp._logger.getLogger("chimerapy")
 # cp.debug(["chimerapy-networking"])
 cp.debug()
-
-from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
-from ..conftest import linux_run_only, linux_expected_only
-from ..mock import DockeredWorker
-from ..utils import cleanup_and_recreate_dir
-import shutil
-
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 # References:

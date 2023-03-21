@@ -1,10 +1,7 @@
-from typing import Dict, Any
-import time
-import pathlib
 import os
-
-import cv2
-import imutils
+import pathlib
+import time
+from typing import Any, Dict
 
 import chimerapy as cp
 

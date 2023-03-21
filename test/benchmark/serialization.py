@@ -1,18 +1,16 @@
-import time
-import json
-
-import numpy as np
-
-import nujson
-import orjson
-import cloudpickle
 import pickle
+import time
+
+import cloudpickle
 import msgpack
 import msgpack_numpy as m
-
-m.patch()
+import nujson
+import numpy as np
+import orjson
 
 import chimerapy as cp
+
+m.patch()
 
 logger = cp._logger.getLogger("chimerapy")
 
@@ -92,7 +90,7 @@ def payload_serial_deserial_performance():
 
             tac = time.perf_counter()
             assert type(b_payload) == bytes, f"{name}, {b_payload}"
-            new_payload = des_fun(b_payload)
+            new_payload = des_fun(b_payload)  # noqa: F841
 
             toc = time.perf_counter()
             # assert isinstance(new_payload['img'], np.ndarray)

@@ -1,30 +1,29 @@
 # Built-in
-from typing import Coroutine, Dict, Optional, Callable, Any, Union
 import asyncio
-import threading
 import collections
-import uuid
-import pathlib
-from functools import partial
-import shutil
-import time
-import tempfile
-import pickle
 import enum
 import logging
+import pathlib
+import pickle
+import shutil
+import tempfile
+import threading
+import time
+import uuid
+from functools import partial
+from typing import Any, Callable, Dict
 
 # Third-party
 import aiohttp
-from aiohttp import web
 
 # Internal Imports
 from chimerapy import config
-from .async_loop_thread import AsyncLoopThread
-from ..utils import create_payload, decode_payload, waiting_for, async_waiting_for
-from .enums import GENERAL_MESSAGE
 
 # Logging
 from .. import _logger
+from ..utils import async_waiting_for, create_payload, waiting_for
+from .async_loop_thread import AsyncLoopThread
+from .enums import GENERAL_MESSAGE
 
 logger = _logger.getLogger("chimerapy-networking")
 
@@ -190,7 +189,7 @@ class Client:
             try:
                 shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
                 break
-            except:
+            except:  # noqa: E722
                 await asyncio.sleep(delay)
                 miss_counter += 1
 
@@ -356,7 +355,7 @@ class Client:
             try:
                 shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
                 break
-            except:
+            except:  # noqa: E722
                 time.sleep(delay)
                 miss_counter += 1
 

@@ -1,16 +1,13 @@
-from typing import Dict, List
 import pathlib
-import logging
-import threading
 import queue
-import uuid
+import threading
 
 from . import _logger
 
-logger = _logger.getLogger("chimerapy")
-
 # Internal Imports
-from .records import VideoRecord, AudioRecord, TabularRecord, ImageRecord
+from .records import AudioRecord, ImageRecord, TabularRecord, VideoRecord
+
+logger = _logger.getLogger("chimerapy")
 
 
 class SaveHandler(threading.Thread):

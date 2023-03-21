@@ -1,5 +1,4 @@
 # Built-in Imports
-from typing import Dict
 
 
 class Record:

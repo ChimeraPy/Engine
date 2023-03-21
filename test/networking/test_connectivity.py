@@ -1,7 +1,7 @@
 # Built-in Imports
-import time
-import pathlib
 import os
+import pathlib
+import time
 
 # Third-party
 import pytest

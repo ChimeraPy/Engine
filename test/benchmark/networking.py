@@ -1,5 +1,5 @@
-from typing import Dict
 import socket
+from typing import Dict
 
 import chimerapy as cp
 

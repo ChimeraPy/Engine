@@ -1,13 +1,11 @@
-from typing import Sequence, Tuple
 import copy
-import logging
-import pdb
+from typing import Sequence
 
-import numpy as np
 import networkx as nx
+import numpy as np
 
-from .node import Node
 from . import _logger
+from .node import Node
 
 logger = _logger.getLogger("chimerapy")
 
@@ -91,7 +89,7 @@ class Graph:
         node_labels = {id: data["object"].name for id, data in self.G.nodes(data=True)}
 
         # Draw the networkx
-        fig = plt.figure(figsize=(20, 10))
+        fig = plt.figure(figsize=(20, 10))  # noqa F841
         nx.draw_networkx(
             self.G,
             pos,

@@ -118,3 +118,13 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "unit: marks tests as unit tests (deselect with '-m \"not unit\"')"
 ]
+
+[tool.ruff]
+ignore = ["E501"]
+ignore-init-module-imports = true
+fixable = ["I001"]  # isort fix only
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+"chimerapy/__version__.py" = ["E402"]
+"docs/conf.py" = ["E402"]

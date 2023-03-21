@@ -1,21 +1,21 @@
 # Built-in Imports
 import os
 import pathlib
-import logging
-import uuid
 import time
+import uuid
 
 # Third-party
 import numpy as np
-import pytest
 import pyaudio
+import pytest
 
 # Internal Imports
 import chimerapy as cp
 
+from .data_nodes import AudioNode
+
 logger = cp._logger.getLogger("chimerapy")
 
-from .data_nodes import AudioNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

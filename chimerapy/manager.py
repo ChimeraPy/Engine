@@ -1,29 +1,28 @@
-from typing import Dict, Optional, List, Union, Any, Literal
-import pickle
-import pathlib
-import os
-import time
+import concurrent.futures
 import datetime
 import json
+import os
+import pathlib
+import pickle
 import random
 import tempfile
 import zipfile
-import concurrent.futures
 from concurrent.futures import Future
+from typing import Any, Dict, List, Literal, Optional, Union
 
 # Third-party Imports
 import dill
-import aiohttp
-from aiohttp import web
 import networkx as nx
 import requests
+from aiohttp import web
 
 from chimerapy import config
-from .states import ManagerState, WorkerState, NodeState
-from .networking import Server, Client, DataChunk
-from .graph import Graph
-from .exceptions import CommitGraphError
+
 from . import _logger
+from .exceptions import CommitGraphError
+from .graph import Graph
+from .networking import Client, DataChunk, Server
+from .states import ManagerState, NodeState, WorkerState
 from .utils import waiting_for
 
 logger = _logger.getLogger("chimerapy")
@@ -805,7 +804,7 @@ class Manager:
                     "/shutdown",
                     timeout=config.get("manager.timeout.worker-shutdown"),
                 )
-            except:
+            except:  # noqa: E722
                 pass
             logger.debug(
                 f"{self}: requested all workers to shutdown via /shutdown route"

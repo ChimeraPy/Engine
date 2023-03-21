@@ -1,22 +1,23 @@
 # Built-in Imports
-import logging
-import pathlib
 import os
+import pathlib
 import time
-import pdb
+import wave
+
+import cv2
+import numpy as np
+import pyaudio
 
 # Third-party Import
 import pytest
-import wave
-import pyaudio
-import numpy as np
-import cv2
+
 import chimerapy as cp
+
+# Internal Testing imports
+from ..conftest import not_github_actions
 
 logger = cp._logger.getLogger("chimerapy")
 
-# Interal Testing imports
-from ..conftest import not_github_actions
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -89,7 +90,7 @@ def test_write_video():
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
         assert isinstance(frame, np.ndarray)
-    except:
+    except:  # noqa: E722
         cap = RandomGenerator()
         ret, frame = cap.read()
 

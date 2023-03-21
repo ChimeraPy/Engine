@@ -1,10 +1,11 @@
 # Build-in Imports
 import time
 
-# Third-party Imports
-import pyaudio
 import numpy as np
 import pandas as pd
+
+# Third-party Imports
+import pyaudio
 
 # Internal Imports
 import chimerapy as cp

@@ -1,8 +1,5 @@
-import logging
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
-import numpy as np
 
 import chimerapy as cp
 

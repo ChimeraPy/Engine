@@ -1,17 +1,15 @@
 # Built-in
-from typing import Optional, Union
 import threading
-import pickle
-import datetime
+from typing import Optional, Union
 
 # Third-party Imports
 import zmq
 
-# Internal Imports
-from .data_chunk import DataChunk
-
 # Logging
 from .. import _logger
+
+# Internal Imports
+from .data_chunk import DataChunk
 
 logger = _logger.getLogger("chimerapy-networking")
 

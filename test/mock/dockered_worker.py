@@ -1,10 +1,11 @@
 # Built-in Imports
-import threading
 import queue
+import threading
 import uuid
 
 # Third-party
 import docker
+
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy-networking")

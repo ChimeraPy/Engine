@@ -1,22 +1,21 @@
-import time
 import logging
-import threading
 import multiprocessing as mp
-import queue
-import sys
 import os
 import pathlib
+import queue
+import threading
+import time
 from functools import partial
-import requests
 
-import pytest
 import dill
+import pytest
+import requests
+from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-from .conftest import GenNode, ConsumeNode, linux_expected_only, linux_run_only
-from pytest_lazyfixture import lazy_fixture
-from .streams import AudioNode, VideoNode, ImageNode, TabularNode
+from .conftest import ConsumeNode, GenNode, linux_expected_only, linux_run_only
+from .streams import AudioNode, ImageNode, TabularNode, VideoNode
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
@@ -383,7 +382,7 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
 
     # Create original containers
     simple_graph = cp.Graph()
-    new_node = GenNode(name=f"Gen1")
+    new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
     mapping = {_worker.id: [new_node.id]}
 

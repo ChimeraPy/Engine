@@ -1,22 +1,20 @@
 # Built-in Imports
 import os
 import pathlib
-import platform
-import tempfile
-import logging
 import time
-import queue
 import uuid
 
 # Third-party
 import cv2
 import numpy as np
 import pytest
+
 import chimerapy as cp
 
 # Internal Imports
-logger = cp._logger.getLogger("chimerapy")
 from .data_nodes import VideoNode
+
+logger = cp._logger.getLogger("chimerapy")
 
 # cp.debug()
 

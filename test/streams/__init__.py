@@ -1,1 +1,1 @@
-from .data_nodes import AudioNode, VideoNode, ImageNode, TabularNode
+from .data_nodes import AudioNode, ImageNode, TabularNode, VideoNode

@@ -1,12 +1,11 @@
 # Built-in Imports
-from typing import Dict, Any
 import pathlib
-import os
+import wave
+from typing import Any, Dict
 
 # Third-party Imports
 import numpy as np
 import pyaudio
-import wave
 
 # Internal Imports
 from .record import Record

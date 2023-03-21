@@ -1,23 +1,12 @@
-from typing import Dict
-import time
-import socket
-import logging
-import pathlib
-import os
-import platform
-import tempfile
-import uuid
 import enum
-from aiohttp import web
-import requests
-
-from concurrent.futures import wait, Future
+import os
+import pathlib
+import time
+from typing import Dict
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
-import numpy as np
-
-import pdb
+import requests
+from aiohttp import web
 
 import chimerapy as cp
 

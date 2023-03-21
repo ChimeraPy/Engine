@@ -1,32 +1,31 @@
-from typing import Union, Dict, Any, Coroutine, Optional
-import asyncio
 import collections
 import os
-import time
-import tempfile
 import pathlib
+import pickle
 import shutil
 import sys
-import json
-import pickle
+import tempfile
+import time
 import uuid
-import collections
+from typing import Any, Coroutine, Dict, Optional, Union
+
+import aiohttp
 
 # Third-party Imports
 import dill
-import aiohttp
-from aiohttp import web
 import requests
+from aiohttp import web
 
 from chimerapy import config
-from .states import WorkerState, NodeState
-from .utils import get_ip_address, waiting_for, async_waiting_for
-from .networking import Server, Client, DataChunk
+
+from . import _logger
+from .networking import Client, DataChunk, Server
 from .networking.enums import (
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
-from . import _logger
+from .states import NodeState, WorkerState
+from .utils import async_waiting_for, get_ip_address, waiting_for
 
 logger = _logger.getLogger("chimerapy-worker")
 
@@ -179,8 +178,7 @@ class Worker:
             success = await async_waiting_for(
                 condition=lambda: self.server.file_transfer_records["Manager"][
                     f"{sent_package}.zip"
-                ]["complete"]
-                == True,
+                ]["complete"],
                 timeout=config.get("worker.timeout.package-delivery"),
             )
 
@@ -260,7 +258,7 @@ class Worker:
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].init == True,
+                condition=lambda: self.state.nodes[node_id].init,
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -275,7 +273,7 @@ class Worker:
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].ready == True,
+                condition=lambda: self.state.nodes[node_id].ready,
                 timeout=config.get("worker.timeout.info-request"),
             )
 
@@ -327,7 +325,7 @@ class Worker:
         for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].connected == True,
+                    condition=lambda: self.state.nodes[node_id].connected,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
@@ -384,7 +382,7 @@ class Worker:
             for node_id in self.nodes:
 
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].finished == True,
+                    condition=lambda: self.state.nodes[node_id].finished,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     logger.debug(
@@ -420,7 +418,7 @@ class Worker:
             for i in range(config.get("worker.allowed-failures")):
 
                 if await async_waiting_for(
-                    condition=lambda: self.nodes_extra[node_id]["response"] == True,
+                    condition=lambda: self.nodes_extra[node_id]["response"],
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     logger.debug(f"{self}: Node {node_id} responded to gather: PASS")
@@ -436,7 +434,7 @@ class Worker:
         # Gather the data from the nodes!
         gather_data = {"id": self.state.id, "node_data": {}}
         for node_id, node_data in self.nodes_extra.items():
-            if node_data["gather"] == None:
+            if node_data["gather"] is None:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
                 node_data["gather"] = data_chunk
@@ -465,7 +463,7 @@ class Worker:
                     break
                 except shutil.Error:  # File already exists!
                     break
-                except:
+                except:  # noqa E722
                     time.sleep(delay)
                     miss_counter += 1
                     if miss_counter * delay > timeout:
@@ -612,7 +610,7 @@ class Worker:
 
         success = waiting_for(
             condition=lambda: node_id in self.state.nodes
-            and self.state.nodes[node_id].ready == True,
+            and self.state.nodes[node_id].ready,
             check_period=0.1,
             timeout=config.get("manager.timeout.node-creation"),
         )
@@ -700,7 +698,7 @@ class Worker:
             self.shutdown()
 
     @staticmethod
-    def _start_log_receiver() -> "ZMQNodeIDListener":
+    def _start_log_receiver() -> "ZMQNodeIDListener":  # noqa: F821
         log_receiver = _logger.get_node_id_zmq_listener()
         log_receiver.start(register_exit_handlers=True)
         return log_receiver

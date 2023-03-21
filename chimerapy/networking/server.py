@@ -1,35 +1,34 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, Union, List
 import asyncio
-import threading
-import uuid
 import collections
-import time
-from functools import partial
-import pathlib
-import tempfile
-import shutil
-import os
-import pickle
 import enum
+import os
+import pathlib
+import pickle
+import shutil
+import tempfile
+import threading
+import time
+import uuid
+from functools import partial
+from typing import Any, Callable, Dict, List
 
 # Third-party
-from aiohttp import web, WSCloseCode
+from aiohttp import WSCloseCode, web
 
 # Internal Imports
 from chimerapy import config
-from .async_loop_thread import AsyncLoopThread
-from ..utils import (
-    decode_payload,
-    create_payload,
-    async_waiting_for,
-    waiting_for,
-    get_ip_address,
-)
-from .enums import GENERAL_MESSAGE
 
 # Logging
 from .. import _logger
+from ..utils import (
+    async_waiting_for,
+    create_payload,
+    get_ip_address,
+    waiting_for,
+)
+from .async_loop_thread import AsyncLoopThread
+from .enums import GENERAL_MESSAGE
 
 logger = _logger.getLogger("chimerapy-networking")
 

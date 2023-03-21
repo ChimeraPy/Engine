@@ -1,18 +1,16 @@
-from typing import Dict, Any
-import time
 import logging
-import pathlib
 import os
+import pathlib
 import platform
-import socket
-import pickle
-import threading
 import queue
+import time
+from typing import Dict
 
 import docker
 import pytest
 
 import chimerapy as cp
+
 from .mock import DockeredWorker
 
 logger = cp._logger.getLogger("chimerapy")
@@ -25,7 +23,7 @@ TEST_DATA_DIR = TEST_DIR / "data"
 try:
     current_platform = os.environ["MANUAL_OS_SET"]
     running_on_github_actions = os.environ["RUNNING_ON_GA"]
-except:
+except:  # noqa: E722
     current_platform = platform.system()
     running_on_github_actions = "Native"
 

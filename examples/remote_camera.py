@@ -1,9 +1,8 @@
-from typing import Dict, Any
-import time
-import pathlib
 import os
+import pathlib
+import time
+from typing import Dict
 
-import numpy as np
 import cv2
 
 import chimerapy as cp

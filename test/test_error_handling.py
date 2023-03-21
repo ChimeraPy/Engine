@@ -1,12 +1,9 @@
 # Built-in Imports
-import logging
 import time
+
 import dill
-import pathlib
-import os
 
 # Third-party Imports
-import yaml
 import pytest
 
 import chimerapy as cp

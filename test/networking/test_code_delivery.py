@@ -1,16 +1,15 @@
-import sys
-import pathlib
 import os
-import pdb
+import pathlib
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
-import chimerapy as cp
 
-cp.debug()
+import chimerapy as cp
 
 # Internal Imports
 from ..conftest import linux_run_only
+
+cp.debug()
 
 # Constant
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -65,4 +64,4 @@ def test_sending_package(manager, _worker, config_graph):
     )
 
     for node_id in config_graph.G.nodes():
-        assert manager.workers[_worker.id].nodes[node_id].init == True
+        assert manager.workers[_worker.id].nodes[node_id].init

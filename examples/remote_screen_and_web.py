@@ -1,12 +1,12 @@
-from typing import Dict, Any
-import time
-import pathlib
 import os
+import pathlib
 import platform
+import time
+from typing import Dict
 
-import numpy as np
 import cv2
 import imutils
+import numpy as np
 from PIL import ImageGrab
 
 import chimerapy as cp
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
         # For mutliple workers (remote and local)
         graph = cp.Graph()
-        show_node = ShowWindow(name=f"show")
+        show_node = ShowWindow(name="show")
         graph.add_node(show_node)
         mapping = {worker.id: [show_node.id]}
 

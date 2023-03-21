@@ -1,8 +1,4 @@
-import logging
-import sys
-
 import chimerapy as cp
-import pytest
 
 from .conftest import linux_run_only
 
