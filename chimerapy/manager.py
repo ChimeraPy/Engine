@@ -857,9 +857,6 @@ class Manager:
 
         # First, shutdown server
         self.server.shutdown()
-        # Then stop the logs sink
-        if self.logs_sink is not None:
-            self.logs_sink.shutdown()
 
     def __del__(self):
 
@@ -872,5 +869,5 @@ class Manager:
         """Start the logs sink."""
 
         logs_sink = _logger.get_distributed_logs_multiplexed_file_sink()
-        logs_sink.start()
+        logs_sink.start(register_exit_handlers=True)
         return logs_sink

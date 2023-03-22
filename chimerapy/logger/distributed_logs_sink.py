@@ -47,8 +47,8 @@ class DistributedLogsMultiplexedFileSink:
     def port(self):
         return self.listener.port
 
-    def start(self):
-        self.listener.start()
+    def start(self, register_exit_handlers: bool = False) -> None:
+        self.listener.start(register_exit_handlers)
 
     def initialize_entity(self, name, identifier, parent_dir):
         self.handler.initialize_entity(name, identifier, parent_dir)
