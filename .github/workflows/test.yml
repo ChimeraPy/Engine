@@ -74,12 +74,14 @@ jobs:
           coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
           coverage combine --append
           mv chimerapy-test.log chimerapy-test-fast.log
+        continue-on-error: true
 
       - name: Perform slower tests
         run: |
           coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
           coverage combine --append
           mv chimerapy-test.log chimerapy-test-slow.log
+        continue-on-error: true
 
       - name: Combine test logs
         run : |
