@@ -10,7 +10,6 @@ import tempfile
 import zipfile
 import concurrent.futures
 from concurrent.futures import Future
-from functools import partial
 
 # Third-party Imports
 import dill
@@ -21,7 +20,7 @@ import requests
 
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
-from .networking import Server, Client, DataChunk, AsyncLoopThread
+from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -163,13 +162,10 @@ class Manager:
             "logs_push_info": logs_collection_info,
             "config": config.config,
         }
+
         if self.logs_sink is not None:
-            self.server.submit_coroutine(
-                partial(
-                    self._register_worker_to_logs_sink,
-                    worker_state.name,
-                    worker_state.id,
-                )
+            self._register_worker_to_logs_sink(
+                worker_name=worker_state.name, worker_id=worker_state.id
             )
 
         return web.json_response(response)
@@ -201,7 +197,7 @@ class Manager:
 
         return web.HTTPOk()
 
-    async def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
+    def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
         if not self.logdir.exists():
             self.logdir.mkdir(parents=True)
         self.logs_sink.initialize_entity(worker_name, worker_id, self.logdir)

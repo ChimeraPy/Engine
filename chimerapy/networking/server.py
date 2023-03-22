@@ -445,10 +445,6 @@ class Server:
 
         return True
 
-    def submit_coroutine(self, coro: Callable[[], Coroutine]) -> None:
-        """Submit a coroutine to the server's async thread."""
-        self._thread.exec(coro)
-
     def shutdown(self):
 
         # Only shutdown for the first time

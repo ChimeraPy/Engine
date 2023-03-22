@@ -1,8 +1,7 @@
-import logging
 from datetime import datetime
-from logging import Handler, Logger, Filter
+from logging import Handler
 from pathlib import Path
-from typing import Union, Callable, Optional, Sequence
+from typing import Optional
 
 from .common import HandlerFactory
 from .zmq_handlers import ZMQPullListener
