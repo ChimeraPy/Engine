@@ -24,7 +24,6 @@ class MultiplexedFileHandler(Handler):
 
     def emit(self, record):
         if hasattr(record, "identifier"):
-            print(record.identifier, record.msg, self.handlers)
             handler = self.handlers.get(record.identifier)
             if handler is not None:
                 handler.emit(record)

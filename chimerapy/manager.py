@@ -114,8 +114,6 @@ class Manager:
             self.logs_sink = self._start_logs_sink()
         else:
             self.logs_sink = None
-        self.coroutine_executor = AsyncLoopThread()
-        self.coroutine_executor.start()
 
     def __repr__(self):
         return f"<Manager @{self.host}:{self.port}>"
@@ -166,7 +164,7 @@ class Manager:
             "config": config.config,
         }
         if self.logs_sink is not None:
-            self.coroutine_executor.exec(
+            self.server.submit_coroutine(
                 partial(
                     self._register_worker_to_logs_sink,
                     worker_state.name,
@@ -860,9 +858,8 @@ class Manager:
         # First, shutdown server
         self.server.shutdown()
         # Then stop the logs sink
-        self.logs_sink.shutdown()
-        # Then stop the coroutine executor
-        self.coroutine_executor.stop()
+        if self.logs_sink is not None:
+            self.logs_sink.shutdown()
 
     def __del__(self):
 
