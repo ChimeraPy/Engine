@@ -6,13 +6,18 @@ import logging.config
 import os
 from dataclasses import dataclass
 from logging import LogRecord, StreamHandler
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
 
 from .logger.common import HandlerFactory, IdentifierFilter
 from .logger.utils import get_unique_child_name
-from .logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
+from .logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
+from .logger.zmq_handlers import (
+    NodeIDZMQPullListener,
+    NodeIdZMQPushHandler,
+    ZMQPushHandler,
+)
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -115,6 +120,14 @@ def setup():
     logging.config.dictConfig(LOGGING_CONFIG)
 
 
+# Add the identifier filter
+def add_identifier_filter(
+    logging_entity: [logging.Logger, logging.Handler], identifier: str
+):
+    """Add an identifier filter to the logger."""
+    logging_entity.addFilter(IdentifierFilter(identifier))
+
+
 def fork(
     logger: logging.Logger, name: str, identifier: Optional[str] = None
 ) -> logging.Logger:
@@ -134,7 +147,7 @@ def fork(
     new_logger.setLevel(logger.level)
 
     if identifier:
-        new_logger.addFilter(IdentifierFilter(identifier))
+        add_identifier_filter(new_logger, identifier)
 
     return new_logger
 
@@ -182,6 +195,14 @@ def get_node_id_zmq_listener(port: Optional[int] = None) -> NodeIDZMQPullListene
     return listener
 
 
+def get_distributed_logs_multiplexed_file_sink(
+    port: Optional[int] = None,
+) -> DistributedLogsMultiplexedFileSink:
+    """Get an instance of distributed logs collector with the given handlers."""
+    sink = DistributedLogsMultiplexedFileSink(port=port)
+    return sink
+
+
 def add_console_handler(logger: logging.Logger) -> None:
     """Add a console handler to the logger.
 
@@ -210,3 +231,21 @@ def add_node_id_zmq_push_handler(
         )
 
     handler.register_node_id(node_id=node_id)
+
+
+def add_zmq_push_handler(
+    logging_entity: Union[logging.Logger, NodeIDZMQPullListener], ip: str, port: int
+) -> logging.Handler:
+    """Add a ZMQ log handler to the logger that publishes the LogRecord to a ZMQ push socket."""
+    # Add a handler to publish the logs to zmq
+    if isinstance(logging_entity, NodeIDZMQPullListener):
+        exists = False
+    else:
+        exists = any(isinstance(h, ZMQPushHandler) for h in logging_entity.handlers)
+
+    if not exists:
+        handler = ZMQPushHandler(ip, port)
+        handler.setLevel(logging.DEBUG)
+        logging_entity.addHandler(handler)
+
+    return handler

@@ -1,20 +1,33 @@
 import logging
 from logging import Formatter, StreamHandler, Filter
+from logging.handlers import RotatingFileHandler
 
 
 class HandlerFactory:
     """Utility class to create logging handlers"""
 
     @staticmethod
-    def get(name, level: int = logging.DEBUG) -> logging.Handler:
+    def get(
+        name, *, filename: str = None, level: int = logging.DEBUG
+    ) -> logging.Handler:
+        if name == "file" and filename is None:
+            raise ValueError("filename must be provided for file handler")
         if name == "console":
             hdlr = HandlerFactory.get_console_handler()
+        elif name == "file":
+            hdlr = HandlerFactory.get_file_handler(filename)
         elif name == "console-node_id":
             hdlr = HandlerFactory.get_node_id_context_console_handler()
         else:
             raise ValueError(f"Unknown handler name: {name}")
         hdlr.setLevel(level)
         return hdlr
+
+    @staticmethod
+    def get_file_handler(filename: str) -> logging.FileHandler:
+        file_handler = RotatingFileHandler(filename)
+        file_handler.setFormatter(HandlerFactory.get_vanilla_formatter())
+        return file_handler
 
     @staticmethod
     def get_console_handler() -> StreamHandler:

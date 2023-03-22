@@ -10,6 +10,7 @@ import tempfile
 import zipfile
 import concurrent.futures
 from concurrent.futures import Future
+from functools import partial
 
 # Third-party Imports
 import dill
@@ -20,7 +21,7 @@ import requests
 
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
-from .networking import Server, Client, DataChunk
+from .networking import Server, Client, DataChunk, AsyncLoopThread
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -109,6 +110,13 @@ class Manager:
         ip, port = self.server.host, self.server.port
         self.state = ManagerState(id="Manager", ip=ip, port=port)
 
+        if config.get("manager.logs-sink.enabled"):
+            self.logs_sink = self._start_logs_sink()
+        else:
+            self.logs_sink = None
+        self.coroutine_executor = AsyncLoopThread()
+        self.coroutine_executor.start()
+
     def __repr__(self):
         return f"<Manager @{self.host}:{self.port}>"
 
@@ -147,7 +155,26 @@ class Manager:
         )
         logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
-        return web.json_response(config.config)
+        logs_collection_info = {
+            "enabled": self.logs_sink is not None,
+            "host": self.host if self.logs_sink else None,
+            "port": self.logs_sink.port if self.logs_sink else None,
+        }
+
+        response = {
+            "logs_push_info": logs_collection_info,
+            "config": config.config,
+        }
+        if self.logs_sink is not None:
+            self.coroutine_executor.exec(
+                partial(
+                    self._register_worker_to_logs_sink,
+                    worker_state.name,
+                    worker_state.id,
+                )
+            )
+
+        return web.json_response(response)
 
     async def deregister_worker(self, request: web.Request):
         msg = await request.json()
@@ -175,6 +202,12 @@ class Manager:
         await self.dashboard_api.broadcast_node_update()
 
         return web.HTTPOk()
+
+    async def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
+        if not self.logdir.exists():
+            self.logdir.mkdir(parents=True)
+        self.logs_sink.initialize_entity(worker_name, worker_id, self.logdir)
+        logger.info(f"Registered worker {worker_name} to logs sink")
 
     ####################################################################
     ## Helper Methods (Cluster)
@@ -826,9 +859,21 @@ class Manager:
 
         # First, shutdown server
         self.server.shutdown()
+        # Then stop the logs sink
+        self.logs_sink.shutdown()
+        # Then stop the coroutine executor
+        self.coroutine_executor.stop()
 
     def __del__(self):
 
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
+
+    @staticmethod
+    def _start_logs_sink() -> "DistributedLogsMultiplexedFileSink":
+        """Start the logs sink."""
+
+        logs_sink = _logger.get_distributed_logs_multiplexed_file_sink()
+        logs_sink.start()
+        return logs_sink

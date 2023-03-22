@@ -11,6 +11,8 @@ config:
       node-creation: 130 # seconds
     retry:
       data-collection: 30 # seconds
+    logs-sink:
+      enabled: true
   worker:
     allowed-failures: 2
     timeout:
