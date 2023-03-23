@@ -50,6 +50,6 @@ class IdentifierFilter(Filter):
         super().__init__()
         self.identifier = identifier
 
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         record.identifier = self.identifier
         return True
