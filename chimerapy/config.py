@@ -41,5 +41,20 @@ def get(key: str) -> Any:
     return result
 
 
+def set(key: str, value: Any):
+    """Set the configuration
+
+    Args:
+        key (str): The requested key
+        value (Any): The value to set
+    """
+    keys = key.split(".")
+    result = config
+    for k in keys[:-1]:
+        result = result[k]
+
+    result[keys[-1]] = value
+
+
 # Load the defaults
 update_defaults(defaults)

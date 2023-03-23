@@ -178,6 +178,9 @@ class Manager:
             f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
         )
 
+        if self.logs_sink is not None:
+            self.logs_sink.deregister_entity(worker_state.id)
+
         if worker_state.id in self.state.workers:
             del self.state.workers[worker_state.id]
             return web.HTTPOk()

@@ -21,6 +21,12 @@ class MultiplexedFileHandler(Handler):
         )
         self.handlers[identifier] = handler
 
+    def deregister_entity(self, identifier):
+        """Deregister this handler from the entity"""
+        handler = self.handlers.pop(identifier, None)
+        if handler is not None:
+            handler.close()
+
     def emit(self, record):
         if hasattr(record, "identifier"):
             handler = self.handlers.get(record.identifier)
@@ -51,6 +57,9 @@ class DistributedLogsMultiplexedFileSink:
 
     def initialize_entity(self, name, identifier, parent_dir):
         self.handler.initialize_entity(name, identifier, parent_dir)
+
+    def deregister_entity(self, identifier):
+        self.handler.deregister_entity(identifier)
 
     def shutdown(self):
         self.listener.stop()
