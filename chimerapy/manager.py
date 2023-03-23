@@ -37,7 +37,7 @@ class Manager:
         port: int = 9000,
         max_num_of_workers: int = 50,
         publish_logs_via_zmq: bool = False,
-        dashboard_api: bool = True,
+        enable_api: bool = True,
         **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
@@ -51,13 +51,14 @@ class Manager:
             on availablity.
             max_num_of_workers (int): max_num_of_workers
             publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
-            dashboard_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
+            enable_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
             **kwargs: Additional keyword arguments.
                 Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
+        self.enable_api = enable_api
 
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -97,7 +98,7 @@ class Manager:
         )
 
         # Enable Dashboard API if requested (needed to be executed after server is running)
-        if dashboard_api:
+        if self.enable_api:
             from .api import API
 
             self.dashboard_api = API(self)
@@ -173,7 +174,8 @@ class Manager:
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
-        await self.dashboard_api.broadcast_node_update()
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
 
         return web.HTTPOk()
 
@@ -486,6 +488,31 @@ class Manager:
                 return False
 
         return True
+
+    async def async_collect(self) -> bool:
+
+        # Then, request to collect the archives
+        success = await self.async_broadcast_request(
+            htype="post",
+            route="/nodes/collect",
+            data={"path": str(self.logdir)},
+        )
+        self.state.collecting = False
+
+        if success:
+            self.server.move_transfer_files(self.logdir, True)
+            self.save_meta()
+            self.state.collection_status = "PASS"
+        else:
+            self.state.collection_status = "FAIL"
+
+        logger.info(f"{self}: finished async_collect")
+
+        # Relay information to front-end
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
+
+        return success
 
     ####################################################################
     ## Cluster Setup, Control, and Monitor API

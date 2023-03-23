@@ -8,6 +8,7 @@ from pytest_lazyfixture import lazy_fixture
 
 # Interal Imports
 import chimerapy as cp
+from chimerapy.utils import waiting_for
 
 
 @pytest.mark.parametrize(
@@ -85,6 +86,7 @@ def test_post_collect(config_manager, expected_number_of_folders):
     r = requests.post(route)
     assert r.status_code == requests.codes.ok
     assert config_manager.state.running == False
+    waiting_for(condition=lambda: config_manager.state.collecting == False, timeout=15)
 
     # Assert the behavior
     assert (
