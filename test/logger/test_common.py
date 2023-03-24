@@ -55,8 +55,7 @@ def test_multiplexed_file_handler():
 
     logs_dir = (TEST_DATA_DIR / "distributed_logs").resolve()
 
-    if logs_dir.exists():
-        cleanup_and_recreate_dir(logs_dir)
+    cleanup_and_recreate_dir(logs_dir)
 
     for j, entity_id in enumerate(loggers.keys()):
         logs_sink.initialize_entity(f"my_test_logger_{j}", entity_id, logs_dir)
