@@ -197,9 +197,10 @@ def get_node_id_zmq_listener(port: Optional[int] = None) -> NodeIDZMQPullListene
 
 def get_distributed_logs_multiplexed_file_sink(
     port: Optional[int] = None,
+    **kwargs,
 ) -> DistributedLogsMultiplexedFileSink:
     """Get an instance of distributed logs collector with the given handlers."""
-    sink = DistributedLogsMultiplexedFileSink(port=port)
+    sink = DistributedLogsMultiplexedFileSink(port=port, **kwargs)
     return sink
 
 
