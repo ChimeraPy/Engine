@@ -1,51 +1,14 @@
-from datetime import datetime
-from logging import Handler
-from pathlib import Path
 from typing import Optional
 
 from .common import HandlerFactory
 from .zmq_handlers import ZMQPullListener
 
 
-class MultiplexedFileHandler(Handler):
-    def __init__(self, name):
-        super().__init__()
-        self.handlers = {}
-        self.set_name(f"{name}")
-
-    def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path):
-        """Register this handler to"""
-        handler = HandlerFactory.get(
-            "file",
-            filename=str(parent_dir / f"{prefix}_{identifier}_{self.timestamp()}.log"),
-        )
-        self.handlers[identifier] = handler
-
-    def deregister_entity(self, identifier):
-        """Deregister this handler from the entity"""
-        handler = self.handlers.pop(identifier, None)
-        if handler is not None:
-            handler.close()
-
-    def emit(self, record):
-        if hasattr(record, "identifier"):
-            handler = self.handlers.get(record.identifier)
-            if handler is not None:
-                handler.emit(record)
-
-    @staticmethod
-    def timestamp() -> str:
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-
-HANDLERS_REGISTRY = {"file": MultiplexedFileHandler}
-
-
 class DistributedLogsMultiplexedFileSink:
     """Collects logs from all the and saves them to a file handler."""
 
-    def __init__(self, port: Optional[int]) -> None:
-        self.handler = MultiplexedFileHandler("MultiplexedFileHandler")
+    def __init__(self, port: Optional[int], **handler_kwargs) -> None:
+        self.handler = HandlerFactory.get("multiplexed-rotating-file", **handler_kwargs)
         self.listener = ZMQPullListener(port=port, handlers=[self.handler])
 
     @property
@@ -53,14 +16,18 @@ class DistributedLogsMultiplexedFileSink:
         return self.listener.port
 
     def start(self, register_exit_handlers: bool = False) -> None:
+        """Start the listener and register the exit handlers if requested."""
         self.listener.start(register_exit_handlers)
 
-    def initialize_entity(self, name, identifier, parent_dir):
+    def initialize_entity(self, name, identifier, parent_dir) -> None:
+        """Register a logging entity with the given identifier, thereby creating a new file handler for it."""
         self.handler.initialize_entity(name, identifier, parent_dir)
 
-    def deregister_entity(self, identifier):
+    def deregister_entity(self, identifier: str) -> None:
+        """Deregister a logging entity with the given identifier, thereby closing the file handler for it."""
         self.handler.deregister_entity(identifier)
 
     def shutdown(self):
+        """Shutdown the listener."""
         self.listener.stop()
         self.listener.join()

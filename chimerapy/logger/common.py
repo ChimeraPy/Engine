@@ -1,21 +1,31 @@
 import logging
-from logging import Formatter, StreamHandler, Filter
+from datetime import datetime
+from logging import Filter, Formatter, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
+
+MAX_BYTES_PER_FILE = 100 * 1024 * 1024  # 100MB
 
 
 class HandlerFactory:
-    """Utility class to create logging handlers"""
+    """Utility class to create logging handlers."""
 
     @staticmethod
     def get(
-        name, *, filename: str = None, level: int = logging.DEBUG
+        name,
+        *,
+        filename: str = None,
+        max_bytes: int = MAX_BYTES_PER_FILE,
+        level: int = logging.DEBUG,
     ) -> logging.Handler:
-        if name == "file" and filename is None:
-            raise ValueError("filename must be provided for file handler")
+        if name in {"rotating-file"} and filename is None:
+            raise ValueError("filename must be provided for file handler(s)")
         if name == "console":
             hdlr = HandlerFactory.get_console_handler()
-        elif name == "file":
-            hdlr = HandlerFactory.get_file_handler(filename)
+        elif name == "rotating-file":
+            hdlr = HandlerFactory.get_rotating_file_handler(filename, max_bytes)
+        elif name == "multiplexed-rotating-file":
+            hdlr = HandlerFactory.get_multiplexed_file_handler(name, max_bytes)
         elif name == "console-node_id":
             hdlr = HandlerFactory.get_node_id_context_console_handler()
         else:
@@ -24,9 +34,16 @@ class HandlerFactory:
         return hdlr
 
     @staticmethod
-    def get_file_handler(filename: str) -> logging.FileHandler:
-        file_handler = RotatingFileHandler(filename)
+    def get_rotating_file_handler(filename: str, max_bytes: int) -> RotatingFileHandler:
+        file_handler = RotatingFileHandler(filename, maxBytes=max_bytes, backupCount=20)
         file_handler.setFormatter(HandlerFactory.get_vanilla_formatter())
+        return file_handler
+
+    @staticmethod
+    def get_multiplexed_file_handler(
+        filename: str, max_bytes: int
+    ) -> "MultiplexedRotatingFileHandler":
+        file_handler = MultiplexedRotatingFileHandler(filename, max_bytes=max_bytes)
         return file_handler
 
     @staticmethod
@@ -66,3 +83,40 @@ class IdentifierFilter(Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.identifier = self.identifier
         return True
+
+
+class MultiplexedRotatingFileHandler(Handler):
+    """A logging handler that multiplexes the log messages to different files based on the identifier on LogRecord."""
+
+    def __init__(self, name, max_bytes: int = MAX_BYTES_PER_FILE):
+        super().__init__()
+        self.handlers = {}
+        self.set_name(f"{name}")
+        self.max_bytes_per_file = max_bytes
+
+    def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path) -> None:
+        """Register an entity with the given identifier, thereby creating a new file handler for it."""
+        handler = HandlerFactory.get(
+            "rotating-file",
+            filename=str(parent_dir / f"{prefix}_{identifier}_{self.timestamp()}.log"),
+            max_bytes=self.max_bytes_per_file,
+        )
+        self.handlers[identifier] = handler
+
+    def deregister_entity(self, identifier):
+        """Deregister this handler from the entity, thereby closing the file handler for it."""
+        handler = self.handlers.pop(identifier, None)
+        if handler is not None:
+            handler.close()
+
+    def emit(self, record):
+        """Emit the record to the appropriate file handler."""
+        if hasattr(record, "identifier"):
+            handler = self.handlers.get(record.identifier)
+            if handler is not None:
+                handler.emit(record)
+
+    @staticmethod
+    def timestamp() -> str:
+        """Return the current timestamp in the format YYYY-MM-DD_HH-MM-SS."""
+        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
