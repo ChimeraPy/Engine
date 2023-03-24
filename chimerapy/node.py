@@ -376,11 +376,9 @@ class Node(mp.Process):
                     WORKER_MESSAGE.START_NODES: self.start_node,
                     WORKER_MESSAGE.STOP_NODES: self.stop_node,
                 },
+                parent_logger=self.logger,
             )
             self.client.connect()
-
-            # Update the client's logger to be able to read it
-            self.client.setLogger(self.logger)
 
             # Creating publisher
             self.publisher = Publisher()

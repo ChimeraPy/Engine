@@ -10,7 +10,8 @@ from typing import Any, Dict, Optional
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
 
-from .logger.common import HandlerFactory
+from .logger.common import HandlerFactory, IdentifierFilter
+from .logger.utils import get_unique_child_name
 from .logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
 
 
@@ -112,6 +113,30 @@ def setup():
 
     # Setting up the configureation
     logging.config.dictConfig(LOGGING_CONFIG)
+
+
+def fork(
+    logger: logging.Logger, name: str, identifier: Optional[str] = None
+) -> logging.Logger:
+    """Fork a logger to a new name, with an optional identifier filter.
+
+    Args:
+        logger: An instance of the `logging.Logger` class. The logger to be forked.
+        name: A string representing the name of the child logger.
+        identifier: An optional string representing the identifier for the logger filter.
+
+    Returns:
+        The new logger
+    """
+
+    name = get_unique_child_name(logger, name)
+    new_logger = logger.getChild(name)
+    new_logger.setLevel(logger.level)
+
+    if identifier:
+        new_logger.addFilter(IdentifierFilter(identifier))
+
+    return new_logger
 
 
 def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig):

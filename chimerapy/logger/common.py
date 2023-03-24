@@ -1,5 +1,5 @@
 import logging
-from logging import Formatter, StreamHandler
+from logging import Formatter, StreamHandler, Filter
 
 
 class HandlerFactory:
@@ -41,3 +41,15 @@ class HandlerFactory:
             "%(asctime)s [%(levelname)s] %(name)s(NodeID-[%(node_id)s]): %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
+
+
+class IdentifierFilter(Filter):
+    """Filter to add an identifier to the log record."""
+
+    def __init__(self, identifier: str):
+        super().__init__()
+        self.identifier = identifier
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.identifier = self.identifier
+        return True
