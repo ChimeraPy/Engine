@@ -1,5 +1,5 @@
 from typing import Optional, Tuple
-
+import logging
 import zmq
 
 LOGGING_MAX_PORT = 60000
@@ -41,3 +41,15 @@ def connect_push_socket(ip: str, port: int, transport="tcp") -> zmq.Socket:
     socket = context.socket(zmq.PUSH)
     socket.connect(f"{transport}://{ip}:{port}")
     return socket
+
+
+def get_unique_child_name(logger, name: str) -> str:
+    """Get a unique child logger name."""
+    j = 1
+    unq = name
+
+    while logging.root.manager.loggerDict.get(logger.name + "." + unq):
+        unq = f"{name}_{j}"
+        j += 1
+
+    return unq

@@ -1,21 +1,13 @@
 import logging
+from logging.handlers import BufferingHandler
 import uuid
 from multiprocessing import Process
 
 from chimerapy.logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
 
 
-class LogRecordsCollector(logging.Handler):
-    def __init__(self):
-        super().__init__()
-        self.records = []
-
-    def emit(self, record):
-        self.records.append(record)
-
-
 def test_zmq_push_pull_node_id_logging():
-    handler = LogRecordsCollector()
+    handler = BufferingHandler(capacity=300)
     handler.setLevel(logging.DEBUG)
     logreceiver = NodeIDZMQPullListener(handlers=[handler])
     logreceiver.start()
@@ -41,7 +33,8 @@ def test_zmq_push_pull_node_id_logging():
     p1.join()
     p2.join()
 
-    assert len(handler.records) == 20
-    assert set(map(lambda record: record.node_id, handler.records)) == set(ids)
+    assert len(handler.buffer) == 20
+    assert set(map(lambda record: record.node_id, handler.buffer)) == set(ids)
+
     logreceiver.stop()
     logreceiver.join()

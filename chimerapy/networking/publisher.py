@@ -46,7 +46,6 @@ class Publisher:
 
             # Send
             self._zmq_socket.send(self._data_chunk._serialize())
-            logger.debug(f"{self}: formally sended via zmq socket")
 
             # Mark finish
             self._ready.clear()
