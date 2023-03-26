@@ -366,6 +366,8 @@ def test_worker_gather(worker, gen_node):
     assert r.status_code == requests.codes.ok
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(600)
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
@@ -399,6 +401,8 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     assert new_node.id in _manager.workers[_worker.id].nodes
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(600)
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
