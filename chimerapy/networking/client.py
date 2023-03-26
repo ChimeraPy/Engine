@@ -11,7 +11,7 @@ import threading
 import time
 import uuid
 from functools import partial
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 # Third-party
 import aiohttp

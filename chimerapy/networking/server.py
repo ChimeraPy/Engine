@@ -3,6 +3,7 @@ import asyncio
 import collections
 import enum
 import os
+import logging
 import pathlib
 import pickle
 import shutil
@@ -11,7 +12,7 @@ import threading
 import time
 import uuid
 from functools import partial
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 # Third-party
 from aiohttp import WSCloseCode, web
@@ -48,7 +49,7 @@ class Server:
         host: str = get_ip_address(),
         routes: List[web.RouteDef] = [],
         ws_handlers: Dict[enum.Enum, Callable] = {},
-        parent_logger: Optional["Logger"] = None,
+        parent_logger: Optional[logging.Logger] = None,
     ):
         """Create HTTP Server with WS support.
 
