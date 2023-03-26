@@ -1,9 +1,11 @@
 from typing import List
 import datetime
-from aiohttp import web
-import asyncio
-import threading
+import traceback
+from concurrent.futures import Future
 
+from aiohttp import web
+
+from chimerapy import config
 from .manager import Manager
 from .networking.enums import MANAGER_MESSAGE
 from . import _logger
@@ -22,7 +24,19 @@ class API:
                 web.post("/collect", self.post_collect),
             ]
         )
-        self.tasks: List[asyncio.Task] = []
+        self.futures: List[Future] = []
+
+    ####################################################################
+    # Helper Functions
+    ####################################################################
+
+    def future_flush(self):
+
+        for future in self.futures:
+            try:
+                future.result(timeout=config.get("manager.timeout.info-request"))
+            except Exception as e:
+                logger.error(traceback.format_exc())
 
     ####################################################################
     # HTTP Routes
@@ -71,7 +85,7 @@ class API:
 
         # First, request Nodes to save their data
         if self.manager.state.collecting:
-            return web.HTTPBadRequest()
+            return web.HTTPOk()
         else:
             self.manager.state.collecting = True
 
@@ -81,8 +95,8 @@ class API:
             logger.debug(success)
 
             if success:
-                task = asyncio.create_task(self.manager.async_collect())
-                self.tasks.append(task)
+                future = self.manager.server._thread.exec(self.manager.async_collect())
+                self.futures.append(future)
                 return web.HTTPOk()
             else:
                 return web.HTTPError()

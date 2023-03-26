@@ -11,6 +11,7 @@ import tempfile
 import zipfile
 import concurrent.futures
 from concurrent.futures import Future
+import traceback
 
 # Third-party Imports
 import dill
@@ -500,8 +501,11 @@ class Manager:
         self.state.collecting = False
 
         if success:
-            self.server.move_transfer_files(self.logdir, True)
-            self.save_meta()
+            try:
+                self.server.move_transfer_files(self.logdir, True)
+                self.save_meta()
+            except Exception as e:
+                logger.error(traceback.format_exc())
             self.state.collection_status = "PASS"
         else:
             self.state.collection_status = "FAIL"
@@ -868,6 +872,9 @@ class Manager:
             self.has_shutdown = True
 
         logger.debug(f"{self}: shutting down")
+
+        if self.enable_api:
+            self.dashboard_api.future_flush()
 
         # If workers are connected, let's notify them that the cluster is
         # shutting down

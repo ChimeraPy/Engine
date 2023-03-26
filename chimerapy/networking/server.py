@@ -347,7 +347,7 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        self._thread.exec(self._main)
+        self._thread.exec(self._main())
 
         # Wait until server is ready
         flag = self._server_ready.wait(timeout=config.get("comms.timeout.server-ready"))
@@ -367,7 +367,7 @@ class Server:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(partial(self._write_ws, client_id, msg))
+        self._thread.exec(self._write_ws(client_id, msg))
 
         if ok:
             success = waiting_for(
@@ -384,7 +384,7 @@ class Server:
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
         for client_id in self.ws_clients:
-            self._thread.exec(partial(self._write_ws, client_id, msg))
+            self._thread.exec(self._write_ws(client_id, msg))
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
@@ -446,7 +446,7 @@ class Server:
             self._server_shutdown_complete.clear()
 
             # Execute shutdown
-            self._thread.exec(self._server_shutdown)
+            self._thread.exec(self._server_shutdown())
 
             # Wait for it
             if not self._server_shutdown_complete.wait(
