@@ -1,5 +1,6 @@
 from typing import Dict, Optional, List, Union, Any, Literal
 import pickle
+import asyncio
 import pathlib
 import os
 import time
@@ -10,6 +11,7 @@ import tempfile
 import zipfile
 import concurrent.futures
 from concurrent.futures import Future
+import traceback
 
 # Third-party Imports
 import dill
@@ -36,7 +38,7 @@ class Manager:
         port: int = 9000,
         max_num_of_workers: int = 50,
         publish_logs_via_zmq: bool = False,
-        dashboard_api: bool = True,
+        enable_api: bool = True,
         **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
@@ -50,13 +52,14 @@ class Manager:
             on availablity.
             max_num_of_workers (int): max_num_of_workers
             publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
-            dashboard_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
+            enable_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
             **kwargs: Additional keyword arguments.
                 Currently, this is used to configure the ZMQ log handler.
         """
         # Saving input parameters
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
+        self.enable_api = enable_api
 
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -96,7 +99,7 @@ class Manager:
         )
 
         # Enable Dashboard API if requested (needed to be executed after server is running)
-        if dashboard_api:
+        if self.enable_api:
             from .api import API
 
             self.dashboard_api = API(self)
@@ -196,7 +199,8 @@ class Manager:
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
-        await self.dashboard_api.broadcast_node_update()
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
 
         return web.HTTPOk()
 
@@ -476,6 +480,74 @@ class Manager:
 
         return all(success)
 
+    async def async_broadcast_request(
+        self,
+        htype: Literal["get", "post"],
+        route: str,
+        data: Any = {},
+        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+    ) -> bool:
+
+        # Create a new session for the moment
+        tasks: List[asyncio.Task] = []
+        sessions: List[aiohttp.ClientSession] = []
+        for worker_data in self.state.workers.values():
+            session = aiohttp.ClientSession()
+            url = f"http://{worker_data.ip}:{worker_data.port}" + route
+            logger.debug(f"{self}: Executing file transfer to {url}")
+            if htype == "get":
+                tasks.append(
+                    asyncio.create_task(session.get(url, data=json.dumps(data)))
+                )
+            elif htype == "post":
+                tasks.append(
+                    asyncio.create_task(session.post(url, data=json.dumps(data)))
+                )
+
+            # Storing sessions to later close
+            sessions.append(session)
+
+        outputs: List[aiohttp.ClientResponse] = await asyncio.gather(*tasks)
+
+        # Closing sessions
+        for session in sessions:
+            await session.close()
+
+        # Return if all outputs were successful
+        for output in outputs:
+            if output.status != 200:
+                return False
+
+        return True
+
+    async def async_collect(self) -> bool:
+
+        # Then, request to collect the archives
+        success = await self.async_broadcast_request(
+            htype="post",
+            route="/nodes/collect",
+            data={"path": str(self.logdir)},
+        )
+        self.state.collecting = False
+
+        if success:
+            try:
+                self.server.move_transfer_files(self.logdir, True)
+                self.save_meta()
+            except Exception as e:
+                logger.error(traceback.format_exc())
+            self.state.collection_status = "PASS"
+        else:
+            self.state.collection_status = "FAIL"
+
+        logger.info(f"{self}: finished async_collect")
+
+        # Relay information to front-end
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
+
+        return success
+
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
@@ -740,7 +812,7 @@ class Manager:
 
         return gather_data
 
-    def start(self):
+    def start(self) -> bool:
         """Start the executiong of the cluster.
 
         Before starting, make sure that you have perform the following
@@ -756,7 +828,11 @@ class Manager:
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        return self.broadcast_request("post", "/nodes/start")
+        success = self.broadcast_request("post", "/nodes/start")
+        if success:
+            self.state.running = True
+
+        return success
 
     def stop(self):
         """Stop the executiong of the cluster.
@@ -770,7 +846,11 @@ class Manager:
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to start
-        return self.broadcast_request("post", "/nodes/stop")
+        success = self.broadcast_request("post", "/nodes/stop")
+        if success:
+            self.state.running = False
+
+        return success
 
     def collect(self, unzip: bool = True) -> bool:
         """Collect data from the Workers
@@ -822,6 +902,9 @@ class Manager:
             self.has_shutdown = True
 
         logger.debug(f"{self}: shutting down")
+
+        if self.enable_api:
+            self.dashboard_api.future_flush()
 
         # If workers are connected, let's notify them that the cluster is
         # shutting down
