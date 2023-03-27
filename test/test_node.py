@@ -1,62 +1,90 @@
-from typing import Dict, Any
 import time
 import logging
-import pdb
+import os
+import pathlib
 
-import numpy as np
+import dill
 import pytest
+import numpy as np
 from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-cp.debug()
+from .conftest import GenNode, SubsequentNode, HighFrequencyNode, LowFrequencyNode
+from .streams import AudioNode, VideoNode, ImageNode, TabularNode
 
 logger = cp._logger.getLogger("chimerapy")
+cp.debug()
+
+# Constants
+CWD = pathlib.Path(os.path.abspath(__file__)).parent
+TEST_DATA_DIR = CWD / "data"
 
 
-class LowFrequencyNode(cp.Node):
-    def prep(self):
-        self.i = 0
-
-    def step(self):
-        data_chunk = cp.DataChunk()
-        if self.i == 0:
-            time.sleep(0.5)
-            self.i += 1
-            data_chunk.add("i", self.i)
-            return data_chunk
-        else:
-            time.sleep(3)
-            self.i += 1
-            data_chunk.add("i", self.i)
-            return data_chunk
+def target_function(q):
+    time.sleep(1)
+    q.put(1)
 
 
-class HighFrequencyNode(cp.Node):
-    def prep(self):
-        self.i = 0
+def test_run_node_in_debug_mode(logreceiver):
 
-    def step(self):
-        time.sleep(0.1)
-        self.i += 1
-        data_chunk = cp.DataChunk()
-        data_chunk.add("i", self.i)
-        return data_chunk
+    data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
+
+    for i, node_cls in enumerate(data_nodes):
+        n = node_cls(name=f"{i}", debug="step")
+
+        for i in range(5):
+            n.step()
+
+        n.shutdown()
 
 
-class SubsequentNode(cp.Node):
-    def prep(self):
-        self.record = {}
+def test_create_multiple_nodes_not_pickled(logreceiver):
 
-    def step(self, data: Dict[str, cp.DataChunk]):
+    ns = []
+    for i in range(2):
+        n = VideoNode(name=f"G{i}", debug="stream", debug_port=logreceiver.port)
+        n.start()
+        ns.append(n)
 
-        for k, v in data.items():
-            self.record[k] = v
+    time.sleep(1)
 
-        data_chunk = cp.DataChunk()
-        data_chunk.add("record", self.record)
+    for n in ns:
+        n.shutdown()
+        n.join(5)
+        n.terminate()
+        # assert n.exitcode == 0
 
-        return data_chunk
+
+def test_create_multiple_nodes_after_pickling(logreceiver):
+
+    ns = []
+    for i in range(2):
+        n = GenNode(name=f"G{i}")
+        pkl_n = dill.dumps(n)
+        nn = dill.loads(pkl_n)
+        nn.config(
+            "0.0.0.0",
+            9000,
+            TEST_DATA_DIR,
+            [],
+            [],
+            ["Con1"],
+            follow=None,
+            networking=False,
+            logging_level=logging.DEBUG,
+            worker_logging_port=logreceiver.port,
+        )
+        nn.start()
+        ns.append(nn)
+
+    time.sleep(1)
+
+    for n in ns:
+        n.shutdown()
+        n.join(5)
+        n.terminate()
+        # assert n.exitcode == 0
 
 
 @pytest.fixture

@@ -130,7 +130,7 @@ def test_node_save_tabular_stream(tabular_node_stream):
     tabular_node_stream.start()
 
     # Wait to generate files
-    time.sleep(10)
+    time.sleep(3)
 
     tabular_node_stream.shutdown()
     tabular_node_stream.join()

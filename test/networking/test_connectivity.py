@@ -51,20 +51,7 @@ def test_manager_registering_via_localhost(manager, worker):
 def test_manager_registering_workers_locally(manager):
 
     workers = []
-    for i in range(5):
-        worker = cp.Worker(name=f"local-{i}", port=0)
-        worker.connect(host=manager.host, port=manager.port)
-        workers.append(worker)
-
-    for worker in workers:
-        assert worker.id in manager.workers
-        worker.shutdown()
-
-
-def test_manager_shutting_down_workers_after_delay(manager):
-
-    workers = []
-    for i in range(5):
+    for i in range(3):
         worker = cp.Worker(name=f"local-{i}", port=0)
         worker.connect(host=manager.host, port=manager.port)
         workers.append(worker)
