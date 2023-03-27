@@ -213,7 +213,7 @@ def test_node_save_video_stream_with_unstable_fps(video_node_stream):
 
     # Video parameters (located within the VideoNode)
     fps = 30  # actual at 1/10
-    rec_time = 5
+    rec_time = 10
 
     # Stream
     video_node_stream.start()
