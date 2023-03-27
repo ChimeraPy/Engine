@@ -1,9 +1,10 @@
 [project]
 name = "chimerapy"
-version = "0.0.9"
+version = "0.0.10"
 description = "ChimeraPy: Python Distributed MultiModal Data Framework"
 authors = [
-    {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"}
+    {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"},
+    {name = "Umesh Timalsina", email="umesh.timalsina@vanderbilt.edu"}
 ]
 license = {file = "LICENSE.txt"}
 readme = "README.md"
