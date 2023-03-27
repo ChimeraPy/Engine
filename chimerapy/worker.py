@@ -614,7 +614,7 @@ class Worker:
 
     def create_node(self, msg: Dict[str, Any]):
         node_id = msg["id"]
-        self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
+        self.server._thread.exec(self.async_create_node(node_config=msg))
 
         success = waiting_for(
             condition=lambda: node_id in self.state.nodes
