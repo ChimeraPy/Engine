@@ -26,7 +26,7 @@ from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
-from .utils import waiting_for
+from .utils import waiting_for, megabytes_to_bytes
 
 logger = _logger.getLogger("chimerapy")
 
@@ -949,7 +949,11 @@ class Manager:
     @staticmethod
     def _start_logs_sink() -> "DistributedLogsMultiplexedFileSink":
         """Start the logs sink."""
-
-        logs_sink = _logger.get_distributed_logs_multiplexed_file_sink()
+        max_bytes_per_worker = megabytes_to_bytes(
+            config.get("manager.logs-sink.max-file-size-per-worker")
+        )
+        logs_sink = _logger.get_distributed_logs_multiplexed_file_sink(
+            max_bytes=max_bytes_per_worker
+        )
         logs_sink.start(register_exit_handlers=True)
         return logs_sink

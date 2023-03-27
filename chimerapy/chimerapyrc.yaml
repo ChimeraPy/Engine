@@ -13,6 +13,7 @@ config:
       data-collection: 30 # seconds
     logs-sink:
       enabled: true
+      max-file-size-per-worker: 100 # MB
   worker:
     allowed-failures: 2
     timeout:

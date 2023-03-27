@@ -3,6 +3,7 @@ from datetime import datetime
 from logging import Filter, Formatter, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Union
 
 MAX_BYTES_PER_FILE = 100 * 1024 * 1024  # 100MB
 
@@ -17,7 +18,7 @@ class HandlerFactory:
         filename: str = None,
         max_bytes: int = MAX_BYTES_PER_FILE,
         level: int = logging.DEBUG,
-    ) -> logging.Handler:
+    ) -> Union[logging.Handler, "MultiplexedEntityHandler"]:
         if name in {"rotating-file"} and filename is None:
             raise ValueError("filename must be provided for file handler(s)")
         if name == "console":
@@ -85,13 +86,37 @@ class IdentifierFilter(Filter):
         return True
 
 
-class MultiplexedRotatingFileHandler(Handler):
+class MultiplexedEntityHandler(Handler):
+    """An abstract class for handlers that multiplex the log messages to different handlers based on the identifier on LogRecord."""
+
+    def __init__(self, name):
+        super().__init__()
+        self.set_name(f"{name}")
+
+    def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path) -> None:
+        """Register an entity with the given identifier."""
+        ...
+
+    def deregister_entity(self, identifier: str):
+        """Deregister this handler from the entity."""
+        ...
+
+    def emit(self, record: logging.LogRecord):
+        """Emit the record to the appropriate handler."""
+        ...
+
+    @staticmethod
+    def timestamp() -> str:
+        """Return the current timestamp in the format YYYY-MM-DD_HH-MM-SS."""
+        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+
+class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
     """A logging handler that multiplexes the log messages to different files based on the identifier on LogRecord."""
 
     def __init__(self, name, max_bytes: int = MAX_BYTES_PER_FILE):
-        super().__init__()
+        super().__init__(name)
         self.handlers = {}
-        self.set_name(f"{name}")
         self.max_bytes_per_file = max_bytes
 
     def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path) -> None:
@@ -103,20 +128,15 @@ class MultiplexedRotatingFileHandler(Handler):
         )
         self.handlers[identifier] = handler
 
-    def deregister_entity(self, identifier):
+    def deregister_entity(self, identifier: str) -> None:
         """Deregister this handler from the entity, thereby closing the file handler for it."""
         handler = self.handlers.pop(identifier, None)
         if handler is not None:
             handler.close()
 
-    def emit(self, record):
+    def emit(self, record: logging.LogRecord) -> None:
         """Emit the record to the appropriate file handler."""
         if hasattr(record, "identifier"):
             handler = self.handlers.get(record.identifier)
             if handler is not None:
                 handler.emit(record)
-
-    @staticmethod
-    def timestamp() -> str:
-        """Return the current timestamp in the format YYYY-MM-DD_HH-MM-SS."""
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

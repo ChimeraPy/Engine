@@ -1,6 +1,6 @@
 from typing import Optional
 
-from .common import HandlerFactory
+from .common import HandlerFactory, MultiplexedEntityHandler
 from .zmq_handlers import ZMQPullListener
 
 
@@ -9,6 +9,7 @@ class DistributedLogsMultiplexedFileSink:
 
     def __init__(self, port: Optional[int], **handler_kwargs) -> None:
         self.handler = HandlerFactory.get("multiplexed-rotating-file", **handler_kwargs)
+        assert isinstance(self.handler, MultiplexedEntityHandler)
         self.listener = ZMQPullListener(port=port, handlers=[self.handler])
 
     @property
