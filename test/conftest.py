@@ -93,6 +93,11 @@ def docker_client():
     return c
 
 
+@pytest.fixture(autouse=True)
+def disable_file_logging():
+    cp.config.set("manager.logs-sink.enabled", False)
+
+
 @pytest.fixture
 def dockered_worker(docker_client):
     logger.info(f"DOCKER WORKER: {current_platform}")
