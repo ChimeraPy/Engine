@@ -1,0 +1,53 @@
+{
+  "description": "The state machine configuration for the chimerapy pipeline manager.",
+  "states": {
+    "INITIALIZED": {
+      "description": "The manager was initialized.",
+      "allowed_transitions": {
+        "SHUTDOWN": "SHUTDOWN",
+        "COMMIT": "COMMITTED"
+      }
+    },
+    "COMMITTED": {
+      "description": "The graph was committed.",
+      "allowed_transitions": {
+        "SHUTDOWN": "SHUTDOWN",
+        "RESET": "INITIALIZED",
+        "START": "RUNNING"
+      }
+    },
+    "RUNNING": {
+      "description": "The pipeline is running.",
+      "allowed_transitions": {
+        "STOP": "STOPPED"
+      }
+    },
+    "STOPPED": {
+      "description": "The pipeline was stopped.",
+      "allowed_transitions": {
+        "RESET": "INITIALIZED",
+        "RETREAT": "COMMITTED",
+        "RESTART": "RUNNING",
+        "COLLECT": "COLLECTED"
+      }
+    },
+    "COLLECTED": {
+      "description": "The pipeline is collecting data.",
+      "allowed_transitions": {
+        "STOP": "STOPPED",
+        "SHUTDOWN": "SHUTDOWN"
+      }
+    },
+    "SHUTDOWN": {
+      "description": "The manager was shut down.",
+      "allowed_transitions": {}
+    }
+  },
+  "routes": {
+    "/start": "START",
+    "/stop": "STOP",
+    "/reset": "RESET",
+    "/collect": "COLLECT"
+  },
+  "initial_state": "INITIALIZED"
+}
