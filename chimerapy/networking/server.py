@@ -1,5 +1,5 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, Union, List, Coroutine
+from typing import Callable, Dict, Optional, Any, Union, List
 import asyncio
 import threading
 import uuid
