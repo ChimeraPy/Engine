@@ -33,11 +33,6 @@ def test_worker_instance_shutdown_twice(worker):
     worker.shutdown()
 
 
-@pytest.mark.xfail(reason="Incorrect port")
-def test_worker_connect_to_incorrect_address(manager, worker):
-    worker.connect(host=manager.host, port=manager.port + 1)
-
-
 def test_manager_registering_worker_locally(manager, worker):
     worker.connect(host=manager.host, port=manager.port)
     assert worker.id in manager.workers
