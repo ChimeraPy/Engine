@@ -305,7 +305,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     node_server_data = worker.create_node_server_data()
     logger.debug(f"Send the server data: {node_server_data}")
     worker.exec_coro(
-        partial(worker.process_node_server_data, {"data": node_server_data["nodes"]})
+        worker.process_node_server_data({"data": node_server_data["nodes"]})
     )
     time.sleep(3)
 

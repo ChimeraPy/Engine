@@ -586,13 +586,28 @@ class Worker:
         if r.status_code == requests.codes.ok:
 
             # Update the configuration of the Worker
-            config.update_defaults(r.json())
+            response = r.json()
+
+            config.update_defaults(response.get("config", {}))
+            logs_push_info = response.get("logs_push_info", {})
+
+            if logs_push_info["enabled"]:
+                self.logger.info(f"{self}: enabling logs push to Manager")
+                for logging_entity in [self.logger, self.logreceiver]:
+                    handler = _logger.add_zmq_push_handler(
+                        logging_entity,
+                        logs_push_info["host"],
+                        logs_push_info["port"],
+                    )
+                    if logging_entity is not self.logger:
+                        _logger.add_identifier_filter(handler, self.state.id)
 
             # Tracking the state and location of the manager
             self.connected_to_manager = True
             self.manager_host = host
             self.manager_port = port
             self.manager_url = f"http://{host}:{port}"
+
             self.logger.info(
                 f"{self}: connection successful to Manager located at {host}:{port}."
             )
@@ -614,7 +629,7 @@ class Worker:
 
     def create_node(self, msg: Dict[str, Any]):
         node_id = msg["id"]
-        self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
+        self.server._thread.exec(self.async_create_node(node_config=msg))
 
         success = waiting_for(
             condition=lambda: node_id in self.state.nodes

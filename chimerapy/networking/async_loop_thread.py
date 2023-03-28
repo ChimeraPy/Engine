@@ -2,7 +2,7 @@
 from typing import Coroutine, Callable, Tuple, List, Optional, Any
 import threading
 import asyncio
-from functools import partial
+from concurrent.futures import Future
 
 # Internal Imports
 from .. import _logger
@@ -40,10 +40,8 @@ class AsyncLoopThread(threading.Thread):
     def callback(self, coro: Callable[[], Coroutine]):
         self._loop.create_task(coro())
 
-    def exec(self, coro: Callable[[], Coroutine]):
-        # future = asyncio.run_coroutine_threadsafe(coro(), self._loop)
-        # self._loop.create_task(coro())
-        self._loop.call_soon_threadsafe(partial(self.callback, coro))
+    def exec(self, coro: Coroutine) -> Future:
+        return asyncio.run_coroutine_threadsafe(coro, self._loop)
 
     def exec_noncoro(
         self, callback: Callable, args: List[Any], waitable: bool = False

@@ -318,7 +318,7 @@ class Client:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(partial(self._write_ws, msg))
+        self._thread.exec(self._write_ws(msg))
 
         if ok:
 
@@ -345,7 +345,7 @@ class Client:
             filename=filepath.name,
             content_type="application/zip",
         )
-        self._thread.exec(partial(self._send_file_async, url, data))
+        self._thread.exec(self._send_file_async(url, data))
 
     def send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
 
@@ -394,8 +394,8 @@ class Client:
         self._client_ready.clear()
 
         # Start async execution
-        self.logger.debug(f"{self}: executing _main")
-        self._thread.exec(self._main)
+        logger.debug(f"{self}: executing _main")
+        self._thread.exec(self._main())
 
         # Wait until client is ready
         flag = self._client_ready.wait(timeout=config.get("comms.timeout.client-ready"))
@@ -410,7 +410,7 @@ class Client:
         if self.running.is_set():
 
             # Execute shutdown
-            self._thread.exec(self._client_shutdown)
+            self._thread.exec(self._client_shutdown())
 
             # Wait for it
             if not self._client_shutdown_complete.wait(
