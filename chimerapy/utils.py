@@ -2,6 +2,7 @@ from typing import Callable, Union, Optional, Any, Dict
 import queue
 import logging
 import functools
+import json
 import time
 import enum
 import pickle
@@ -19,6 +20,8 @@ import netifaces as ni
 from . import _logger
 
 logger = _logger.getLogger("chimerapy")
+
+BYTES_PER_MB = 1024 * 1024
 
 
 def clear_queue(input_queue: queue.Queue):
@@ -148,10 +151,14 @@ def get_ip_address() -> str:
 
     # Get gateway of the network
     gws = ni.gateways()
-    default_gw_name = gws["default"][ni.AF_INET][1]
+    try:
+        default_gw_name = gws["default"][ni.AF_INET][1]
+        # Get the ip in the default gateway
+        ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
+    except KeyError:
+        logger.warning("ChimeraPy: Couldn't find connected network, using 127.0.0.1")
+        ip = "127.0.0.1"
 
-    # Get the ip in the default gateway
-    ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
     return ip
 
 
@@ -161,18 +168,22 @@ def create_payload(
     msg_uuid: str = str(uuid.uuid4()),
     timestamp: datetime.timedelta = datetime.timedelta(),
     ok: bool = False,
-) -> bytes:
+) -> Dict[str, Any]:
 
     payload = {
-        "signal": signal,
+        "signal": signal.value,
         "timestamp": str(timestamp),
         "data": data,
         "uuid": msg_uuid,
         "ok": ok,
     }
 
-    return blosc.compress(pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL))
+    return payload
 
 
-def decode_payload(data: bytes) -> Dict[str, Any]:
-    return pickle.loads(blosc.decompress(data))
+def decode_payload(data: str) -> Dict[str, Any]:
+    return json.loads(data)
+
+
+def megabytes_to_bytes(megabytes: int) -> int:
+    return int(megabytes) * BYTES_PER_MB

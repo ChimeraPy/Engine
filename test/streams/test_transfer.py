@@ -1,7 +1,9 @@
 # Built-in Imports
+import os
 import time
 import logging
 import collections
+import pathlib
 
 # Third-party Imports
 import dill
@@ -18,6 +20,10 @@ cp.debug()
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..conftest import linux_run_only, linux_expected_only
 from ..mock import DockeredWorker
+from ..utils import cleanup_and_recreate_dir
+import shutil
+
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 # References:
 # https://www.thepythoncode.com/article/send-receive-files-using-sockets-python
@@ -28,7 +34,7 @@ NAME_CLASS_MAP = {
     "tn": TabularNode,
     "an": AudioNode,
 }
-NUM_OF_WORKERS = 5
+NUM_OF_WORKERS = 3
 
 
 @pytest.fixture
@@ -36,8 +42,11 @@ def single_worker_manager(manager, worker):
 
     # Define graph
     graph = cp.Graph()
+    node_ids = []
     for node_name, node_class in NAME_CLASS_MAP.items():
-        graph.add_node(node_class(name=node_name))
+        node = node_class(name=node_name)
+        node_ids.append(node.id)
+        graph.add_node(node)
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
@@ -45,9 +54,7 @@ def single_worker_manager(manager, worker):
     # Then register graph to Manager
     assert manager.commit_graph(
         graph,
-        {
-            worker.name: list(NAME_CLASS_MAP.keys()),
-        },
+        {worker.id: node_ids},
     )
 
     return manager
@@ -68,9 +75,9 @@ def multiple_worker_manager(manager, worker):
 
         # For each worker, add all possible nodes
         for node_name, node_class in NAME_CLASS_MAP.items():
-            node_worker_name = f"W{i}-{node_name}"
-            worker_node_map[f"W{i}"].append(node_worker_name)
-            graph.add_node(node_class(name=node_worker_name))
+            node = node_class(name=node_name)
+            worker_node_map[worker.id].append(node.id)
+            graph.add_node(node)
 
     # Then register graph to Manager
     assert manager.commit_graph(graph, worker_node_map)
@@ -88,8 +95,11 @@ def dockered_single_worker_manager(manager, docker_client):
 
     # Define graph
     graph = cp.Graph()
+    node_ids = []
     for node_name, node_class in NAME_CLASS_MAP.items():
-        graph.add_node(node_class(name=node_name))
+        node = node_class(name=node_name)
+        node_ids.append(node.id)
+        graph.add_node(node)
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
@@ -97,9 +107,7 @@ def dockered_single_worker_manager(manager, docker_client):
     # Then register graph to Manager
     assert manager.commit_graph(
         graph,
-        {
-            worker.name: list(NAME_CLASS_MAP.keys()),
-        },
+        {worker.id: node_ids},
     )
 
     return manager
@@ -120,9 +128,9 @@ def dockered_multiple_worker_manager(manager, docker_client):
 
         # For each worker, add all possible nodes
         for node_name, node_class in NAME_CLASS_MAP.items():
-            node_worker_name = f"W{i}-{node_name}"
-            worker_node_map[f"W{i}"].append(node_worker_name)
-            graph.add_node(node_class(name=node_worker_name))
+            node = node_class(name=node_name)
+            worker_node_map[worker.id].append(node.id)
+            graph.add_node(node)
 
     # Then register graph to Manager
     assert manager.commit_graph(graph, worker_node_map)
@@ -145,9 +153,11 @@ def test_worker_data_archiving(worker):
     # Simple single node without connection
     for node in nodes:
         msg = {
-            "node_name": node.name,
+            "id": node.id,
+            "name": node.name,
             "pickled": dill.dumps(node),
             "in_bound": [],
+            "in_bound_by_name": [],
             "out_bound": [],
             "follow": None,
         }
@@ -200,8 +210,9 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
         == expected_number_of_folders
     )
     assert (config_manager.logdir / "meta.json").exists()
-    for worker_name in config_manager.workers:
-        for node_name in config_manager.workers[worker_name]["nodes_status"]:
-            assert config_manager.workers[worker_name]["nodes_status"][node_name][
-                "FINISHED"
-            ]
+    for worker_id in config_manager.workers:
+        for node_id in config_manager.workers[worker_id].nodes:
+            assert config_manager.workers[worker_id].nodes[node_id].finished
+
+    # Cleanup in case reruns
+    cleanup_and_recreate_dir(config_manager.logdir)

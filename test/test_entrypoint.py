@@ -1,5 +1,6 @@
 # Built-in Imports
 import logging
+import subprocess
 import time
 import sys
 
@@ -12,6 +13,7 @@ from .mock import DockeredWorker
 from .conftest import linux_run_only
 
 logger = cp._logger.getLogger("chimerapy")
+cp.debug()
 
 
 @linux_run_only
@@ -21,10 +23,43 @@ def test_worker_entrypoint_connect(manager, dockered_worker):
     dockered_worker.connect(manager.host, manager.port)
     logger.info("Executed cmd to connect Worker to Manager.")
 
+    time.sleep(2)
+
     # Assert that the Worker is connected
-    assert dockered_worker.name in manager.workers
-    manager.shutdown()
+    assert dockered_worker.id in manager.workers
     logger.info("Manager shutting down")
+    manager.shutdown()
+
+
+def test_worker_entrypoint_connect_wport(manager):
+
+    # Connect to manager from subprocess
+    worker_process = subprocess.Popen(
+        [
+            "cp-worker",
+            "--name",
+            "test",
+            "--id",
+            "test",
+            "--ip",
+            manager.host,
+            "--port",
+            str(manager.port),
+            "--wport",
+            str(9980),
+        ]
+    )
+    logger.info("Executed cmd to connect Worker to Manager.")
+
+    time.sleep(2)
+    assert "test" in manager.workers
+    assert manager.workers["test"].port == 9980
+
+    logger.info("Killing worker subprocess")
+    worker_process.kill()
+
+    logger.info("Manager shutting down")
+    manager.shutdown()
 
 
 @linux_run_only
@@ -37,7 +72,7 @@ def test_multiple_workers_connect(manager, docker_client):
         workers.append(worker)
 
     for worker in workers:
-        assert worker.name in manager.workers
+        assert worker.id in manager.workers
 
     logger.info("Manager shutting down")
     manager.shutdown()

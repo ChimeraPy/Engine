@@ -46,7 +46,7 @@ disable_loggers = [
     "chardet.charsetprober",
     "matplotlib.font_manager",
     "PIL.PngImagePlugin",
-    "IocpProactor"
+    "IocpProactor",
 ]
 
 
@@ -59,17 +59,17 @@ def pytest_configure():
 
 @pytest.fixture
 def logreceiver():
-    listener = cp.LogReceiver(logger_name="chimerapy")
+    listener = cp._logger.get_node_id_zmq_listener()
     listener.start()
     yield listener
-    listener.shutdown()
+    listener.stop()
     listener.join()
 
 
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
     yield
-    time.sleep(0.5)
+    time.sleep(0.1)
 
 
 @pytest.fixture
@@ -91,6 +91,11 @@ def docker_client():
     logger.info(f"DOCKER CLIENT: {current_platform}")
     c = docker.DockerClient(base_url="unix://var/run/docker.sock")
     return c
+
+
+@pytest.fixture(autouse=True)
+def disable_file_logging():
+    cp.config.set("manager.logs-sink.enabled", False)
 
 
 @pytest.fixture
@@ -131,7 +136,7 @@ class SlowPrepNode(cp.Node):
 
     def step(self):
         time.sleep(0.5)
-        logger.debug(self.value)
+        self.logger.debug(self.value)
         return self.value
 
 
@@ -158,3 +163,175 @@ def save_handler_and_queue():
     save_handler.start()
 
     return (save_handler, save_queue)
+
+
+@pytest.fixture
+def graph(gen_node, con_node):
+
+    # Define graph
+    _graph = cp.Graph()
+    _graph.add_nodes_from([gen_node, con_node])
+    _graph.add_edge(src=gen_node, dst=con_node)
+
+    return _graph
+
+
+@pytest.fixture
+def single_node_no_connections_manager(manager, worker, gen_node):
+
+    # Define graph
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([gen_node])
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        simple_graph,
+        {
+            worker.id: [gen_node.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
+def multiple_nodes_one_worker_manager(manager, worker, gen_node, con_node):
+
+    # Define graph
+    graph = cp.Graph()
+    graph.add_nodes_from([gen_node, con_node])
+    graph.add_edge(gen_node, con_node)
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        graph,
+        {
+            worker.id: [gen_node.id, con_node.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
+def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
+
+    # Define graph
+    graph = cp.Graph()
+    graph.add_nodes_from([gen_node, con_node])
+    graph.add_edge(gen_node, con_node)
+
+    worker1 = cp.Worker(name="local", port=0)
+    worker2 = cp.Worker(name="local2", port=0)
+
+    worker1.connect(host=manager.host, port=manager.port)
+    worker2.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
+    )
+
+    yield manager
+
+    worker1.shutdown()
+    worker2.shutdown()
+
+
+@pytest.fixture
+def slow_single_node_single_worker_manager(manager, worker, slow_node):
+
+    # Define graph
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([slow_node])
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        simple_graph,
+        {
+            worker.id: [slow_node.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
+def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_node):
+
+    # Define graph
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([gen_node])
+
+    # Connect to the manager
+    dockered_worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        simple_graph,
+        {
+            dockered_worker.id: [gen_node.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
+def dockered_multiple_nodes_one_worker_manager(
+    dockered_worker, manager, gen_node, con_node
+):
+
+    # Define graph
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([gen_node, con_node])
+    simple_graph.add_edge(gen_node, con_node)
+
+    # Connect to the manager
+    dockered_worker.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        simple_graph,
+        {
+            dockered_worker.id: [gen_node.id, con_node.id],
+        },
+    )
+
+    return manager
+
+
+@pytest.fixture
+def dockered_multiple_nodes_multiple_workers_manager(
+    docker_client, manager, gen_node, con_node
+):
+
+    # Define graph
+    graph = cp.Graph()
+    graph.add_nodes_from([gen_node, con_node])
+    graph.add_edge(gen_node, con_node)
+
+    worker1 = DockeredWorker(docker_client, name="local")
+    worker2 = DockeredWorker(docker_client, name="local2")
+
+    worker1.connect(host=manager.host, port=manager.port)
+    worker2.connect(host=manager.host, port=manager.port)
+
+    # Then register graph to Manager
+    assert manager.commit_graph(
+        graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
+    )
+
+    yield manager
+
+    worker1.shutdown()
+    worker2.shutdown()

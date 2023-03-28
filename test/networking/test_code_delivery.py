@@ -58,11 +58,11 @@ def test_sending_package(manager, _worker, config_graph):
 
     assert manager.commit_graph(
         graph=config_graph,
-        mapping={_worker.name: list(config_graph.G.nodes())},
+        mapping={_worker.id: list(config_graph.G.nodes())},
         send_packages=[
             {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
         ],
     )
 
-    for node_name in config_graph.G.nodes():
-        assert manager.workers[_worker.name]["nodes_status"][node_name]["INIT"] == 1
+    for node_id in config_graph.G.nodes():
+        assert manager.workers[_worker.id].nodes[node_id].init == True

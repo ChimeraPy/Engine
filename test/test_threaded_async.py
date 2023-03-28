@@ -1,6 +1,7 @@
 # Built-in Imports
 import time
 import asyncio
+from functools import partial
 
 # Third-party Imports
 import pytest
@@ -21,6 +22,21 @@ def thread():
     thread.stop()
 
 
+def test_coroutine_waitable_execution(thread):
+    queue = asyncio.Queue()
+
+    async def put(queue):
+        logger.debug("PUT")
+        await asyncio.sleep(1)
+        logger.debug("AFTER SLEEP")
+        await queue.put(1)
+        logger.debug("FINISHED PUT")
+
+    finished = thread.exec(put(queue))
+    finished.result(timeout=5)
+    assert queue.qsize() == 1
+
+
 def test_callback_execution(thread):
     queue = asyncio.Queue()
 
@@ -29,7 +45,7 @@ def test_callback_execution(thread):
         queue.put_nowait(1)
 
     thread.exec_noncoro(put, args=[queue])
-    time.sleep(1)
+    time.sleep(5)
     assert queue.qsize() == 1
 
 
@@ -37,9 +53,10 @@ def test_callback_execution_with_wait(thread):
     queue = asyncio.Queue()
 
     def put(queue):
+        time.sleep(1)
         logger.debug(f"put called")
         queue.put_nowait(1)
 
     finished = thread.exec_noncoro(put, args=[queue], waitable=True)
-    assert finished.wait(timeout=1)
+    assert finished.wait(timeout=5)
     assert queue.qsize() == 1

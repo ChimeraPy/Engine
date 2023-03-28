@@ -31,7 +31,7 @@ from .enums import GENERAL_MESSAGE
 # Logging
 from .. import _logger
 
-logger = _logger.getLogger("chimerapy-networking")
+# logger = _self.logger.getLogger("chimerapy-networking")
 
 # References
 # https://gist.github.com/dmfigol/3e7d5b84a16d076df02baa9f53271058
@@ -44,16 +44,17 @@ logger = _logger.getLogger("chimerapy-networking")
 class Server:
     def __init__(
         self,
-        name: str,
+        id: str,
         port: int,
         host: str = get_ip_address(),
-        routes: Optional[List[web.RouteDef]] = None,
-        ws_handlers: Optional[Dict[enum.Enum, Callable]] = None,
+        routes: List[web.RouteDef] = [],
+        ws_handlers: Dict[enum.Enum, Callable] = {},
+        parent_logger: Optional["Logger"] = None,
     ):
         """Create HTTP Server with WS support.
 
         Args:
-            name (str): Name of the sender.
+            id (str): ID of the sender.
             port (int): Port for the web server, 0 for random.
             host (Optional[str]): The hosting IP address.
             routes (Optional[Dict[str, Callable]]): HTTP routes.
@@ -61,11 +62,11 @@ class Server:
 
         """
         # Store parameters
-        self.name = name
+        self.id = id
         self.host = host
         self.port = port
         self.routes = routes
-        self.ws_handlers = ws_handlers
+        self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
 
         # Using flag for marking if system should be running
         self.running = threading.Event()
@@ -85,26 +86,34 @@ class Server:
         if self.routes:
             self._app.add_routes(self.routes)
 
-        # WS support
-        if self.ws_handlers:
+        # Adding route for ws and other configuration
+        self._app.add_routes([web.get("/ws", self._websocket_handler)])
 
-            # Adding route for ws and other configuration
-            self._app.add_routes([web.get("/ws", self._websocket_handler)])
-
-            # Adding other essential ws handlers
-            self.ws_handlers.update(
-                {
-                    GENERAL_MESSAGE.OK: self._ok,
-                    GENERAL_MESSAGE.CLIENT_REGISTER: self._register_ws_client,
-                }
-            )
+        # Adding other essential ws handlers
+        self.ws_handlers.update(
+            {
+                GENERAL_MESSAGE.OK.value: self._ok,
+                GENERAL_MESSAGE.CLIENT_REGISTER.value: self._register_ws_client,
+            }
+        )
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
         self.file_transfer_records = collections.defaultdict(dict)
+        if parent_logger is not None:
+            self.logger = _logger.fork(parent_logger, "server")
+        else:
+            self.logger = _logger.getLogger("chimerapy-networking")
 
     def __str__(self):
-        return f"<Server {self.name}>"
+        return f"<Server {self.id}>"
+
+    ####################################################################
+    # Server Setters and Getters
+    ####################################################################
+
+    def add_routes(self, routes: List[web.RouteDef]):
+        self._app.add_routes(routes)
 
     ####################################################################
     # Server WS Handlers
@@ -115,10 +124,10 @@ class Server:
 
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
         # Storing the client information
-        self.ws_clients[msg["data"]["client_name"]] = {"ws": ws}
+        self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
-        logger.debug(f"{self}: file receive!")
+        self.logger.debug(f"{self}: file receive!")
 
         reader = await request.multipart()
 
@@ -141,7 +150,7 @@ class Server:
 
         # Create the record and mark that is not complete
         # Keep record of the files sent!
-        self.file_transfer_records[meta["sender_name"]][filename] = {
+        self.file_transfer_records[meta["sender_id"]][filename] = {
             "filename": filename,
             "dst_filepath": dst_filepath,
             "size": 0,
@@ -159,10 +168,10 @@ class Server:
                 f.write(chunk)
 
         # After finishing, mark the size and that is complete
-        self.file_transfer_records[meta["sender_name"]][filename].update(
+        self.file_transfer_records[meta["sender_id"]][filename].update(
             {"size": size, "complete": True}
         )
-        logger.debug(f"Finished updating record: {self.file_transfer_records}")
+        self.logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
         return web.Response(text=f"{filename} sized of {size} successfully stored")
 
@@ -171,15 +180,16 @@ class Server:
     ####################################################################
 
     async def _read_ws(self, ws: web.WebSocketResponse):
-        logger.debug(f"{self}: reading")
+        self.logger.debug(f"{self}: reading")
         async for aiohttp_msg in ws:
 
             # Tracking the number of messages processed
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            msg = decode_payload(aiohttp_msg.data)
-            logger.debug(f"{self}: read - {msg}")
+            self.logger.debug(f"{self}: got msg, processing now")
+            msg = aiohttp_msg.json()
+            self.logger.debug(f"{self}: read - {msg}, {type(msg)}")
 
             # Select the handler
             handler = self.ws_handlers[msg["signal"]]
@@ -187,19 +197,21 @@ class Server:
 
             # Send OK if requested
             if msg["ok"]:
-                logger.debug(f"{self}: sending OK for {msg['uuid']}")
+                self.logger.debug(f"{self}: sending OK for {msg['uuid']}")
                 try:
-                    await ws.send_bytes(
+                    await ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                     )
                 except ConnectionResetError:
-                    logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+                    self.logger.warning(
+                        f"{self}: ConnectionResetError, shutting down ws"
+                    )
                     await ws.close()
                     return None
 
-    async def _write_ws(self, client_name: str, msg: Dict):
-        logger.debug(f"{self}: client_name: {client_name},  write - {msg}")
-        ws = self.ws_clients[client_name]["ws"]
+    async def _write_ws(self, client_id: str, msg: Dict):
+        self.logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
+        ws = self.ws_clients[client_id]["ws"]
         await self._send_msg(ws, **msg)
 
     async def _websocket_handler(self, request):
@@ -235,13 +247,13 @@ class Server:
 
         # Send the message
         try:
-            await ws.send_bytes(payload)
+            await ws.send_json(payload)
         except ConnectionResetError:
-            logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+            self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await ws.close()
             return None
 
-        logger.debug(f"{self}: _send_msg -> {signal}")
+        self.logger.debug(f"{self}: _send_msg -> {signal}")
 
         # If ok, wait until ok
         if ok:
@@ -250,9 +262,9 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     ####################################################################
     # Server Async Setup and Shutdown
@@ -266,7 +278,7 @@ class Server:
         # Use an application runner to run the web server
         self._runner = web.AppRunner(self._app)
         await self._runner.setup()
-        self._site = web.TCPSite(self._runner, self.host, self.port)
+        self._site = web.TCPSite(self._runner, "0.0.0.0", self.port)
         await self._site.start()
 
         # If port selected 0, then obtain the randomly selected port
@@ -299,7 +311,7 @@ class Server:
     ####################################################################
 
     async def async_send(
-        self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False
+        self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
     ):
 
         # Create uuid
@@ -307,7 +319,7 @@ class Server:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        await self._write_ws(client_name, msg)
+        await self._write_ws(client_id, msg)
 
         if ok:
             success = await async_waiting_for(
@@ -315,16 +327,16 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
-        for client_name in self.ws_clients:
-            await self._write_ws(client_name, msg)
+        for client_id in self.ws_clients:
+            await self._write_ws(client_id, msg)
 
     ####################################################################
     # Server Sync Lifecycle API
@@ -342,27 +354,27 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        self._thread.exec(self._main)
+        self._thread.exec(self._main())
 
         # Wait until server is ready
         flag = self._server_ready.wait(timeout=config.get("comms.timeout.server-ready"))
         if flag == 0:
 
-            logger.debug(f"{self}: failed to start, shutting down!")
+            self.logger.debug(f"{self}: failed to start, shutting down!")
             self.shutdown()
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
         else:
-            logger.debug(f"{self}: running at {self.host}:{self.port}")
+            self.logger.debug(f"{self}: running at {self.host}:{self.port}")
 
-    def send(self, client_name: str, signal: enum.Enum, data: Dict, ok: bool = False):
+    def send(self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False):
 
         # Create uuid
         msg_uuid = str(uuid.uuid4())
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(partial(self._write_ws, client_name, msg))
+        self._thread.exec(self._write_ws(client_id, msg))
 
         if ok:
             success = waiting_for(
@@ -370,16 +382,16 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     def broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
-        for client_name in self.ws_clients:
-            self._thread.exec(partial(self._write_ws, client_name, msg))
+        for client_id in self.ws_clients:
+            self._thread.exec(self._write_ws(client_id, msg))
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
@@ -392,7 +404,9 @@ class Server:
             for filename, file_meta in filepath_dict.items():
 
                 # Extract data
-                logger.debug(f"{self}: move_transfer_files, file_meta = {file_meta}")
+                self.logger.debug(
+                    f"{self}: move_transfer_files, file_meta = {file_meta}"
+                )
                 filepath = file_meta["dst_filepath"]
 
                 # If not unzip, just move it
@@ -420,7 +434,7 @@ class Server:
                         time.sleep(delay)
                         miss_counter += 1
                         if timeout < delay * miss_counter:
-                            logger.error(
+                            self.logger.error(
                                 f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
                             )
                             return False
@@ -441,13 +455,13 @@ class Server:
             self._server_shutdown_complete.clear()
 
             # Execute shutdown
-            self._thread.exec(self._server_shutdown)
+            self._thread.exec(self._server_shutdown())
 
             # Wait for it
             if not self._server_shutdown_complete.wait(
                 timeout=config.get("comms.timeout.server-shutdown")
             ):
-                logger.warning(f"{self}: failed to gracefully shutdown")
+                self.logger.warning(f"{self}: failed to gracefully shutdown")
 
             # Stop the async thread
             self._thread.stop()
