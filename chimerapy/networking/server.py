@@ -409,6 +409,15 @@ class Server:
                 )
                 filepath = file_meta["dst_filepath"]
 
+                # Wait until filepath is completely written
+                success = waiting_for(
+                    condition=lambda: filepath.exists(),
+                    timeout=config.get("comms.timeout.zip-time-write"),
+                )
+
+                if not success:
+                    return False
+
                 # If not unzip, just move it
                 if not unzip:
                     shutil.move(filepath, named_dst / filename)
