@@ -31,7 +31,7 @@ from .enums import GENERAL_MESSAGE
 # Logging
 from .. import _logger
 
-logger = _logger.getLogger("chimerapy-networking")
+# logger = _self.logger.getLogger("chimerapy-networking")
 
 # References
 # https://gist.github.com/dmfigol/3e7d5b84a16d076df02baa9f53271058
@@ -49,6 +49,7 @@ class Server:
         host: str = get_ip_address(),
         routes: List[web.RouteDef] = [],
         ws_handlers: Dict[enum.Enum, Callable] = {},
+        parent_logger: Optional["Logger"] = None,
     ):
         """Create HTTP Server with WS support.
 
@@ -99,6 +100,10 @@ class Server:
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
         self.file_transfer_records = collections.defaultdict(dict)
+        if parent_logger is not None:
+            self.logger = _logger.fork(parent_logger, "server")
+        else:
+            self.logger = _logger.getLogger("chimerapy-networking")
 
     def __str__(self):
         return f"<Server {self.id}>"
@@ -122,7 +127,7 @@ class Server:
         self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
-        logger.debug(f"{self}: file receive!")
+        self.logger.debug(f"{self}: file receive!")
 
         reader = await request.multipart()
 
@@ -166,7 +171,7 @@ class Server:
         self.file_transfer_records[meta["sender_id"]][filename].update(
             {"size": size, "complete": True}
         )
-        logger.debug(f"Finished updating record: {self.file_transfer_records}")
+        self.logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
         return web.Response(text=f"{filename} sized of {size} successfully stored")
 
@@ -175,16 +180,16 @@ class Server:
     ####################################################################
 
     async def _read_ws(self, ws: web.WebSocketResponse):
-        logger.debug(f"{self}: reading")
+        self.logger.debug(f"{self}: reading")
         async for aiohttp_msg in ws:
 
             # Tracking the number of messages processed
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            logger.debug(f"{self}: got msg, processing now")
+            self.logger.debug(f"{self}: got msg, processing now")
             msg = aiohttp_msg.json()
-            logger.debug(f"{self}: read - {msg}, {type(msg)}")
+            self.logger.debug(f"{self}: read - {msg}, {type(msg)}")
 
             # Select the handler
             handler = self.ws_handlers[msg["signal"]]
@@ -192,18 +197,20 @@ class Server:
 
             # Send OK if requested
             if msg["ok"]:
-                logger.debug(f"{self}: sending OK for {msg['uuid']}")
+                self.logger.debug(f"{self}: sending OK for {msg['uuid']}")
                 try:
                     await ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                     )
                 except ConnectionResetError:
-                    logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+                    self.logger.warning(
+                        f"{self}: ConnectionResetError, shutting down ws"
+                    )
                     await ws.close()
                     return None
 
     async def _write_ws(self, client_id: str, msg: Dict):
-        logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
+        self.logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
         ws = self.ws_clients[client_id]["ws"]
         await self._send_msg(ws, **msg)
 
@@ -242,11 +249,11 @@ class Server:
         try:
             await ws.send_json(payload)
         except ConnectionResetError:
-            logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+            self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await ws.close()
             return None
 
-        logger.debug(f"{self}: _send_msg -> {signal}")
+        self.logger.debug(f"{self}: _send_msg -> {signal}")
 
         # If ok, wait until ok
         if ok:
@@ -255,9 +262,9 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     ####################################################################
     # Server Async Setup and Shutdown
@@ -320,9 +327,9 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
@@ -347,18 +354,18 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        self._thread.exec(self._main)
+        self._thread.exec(self._main())
 
         # Wait until server is ready
         flag = self._server_ready.wait(timeout=config.get("comms.timeout.server-ready"))
         if flag == 0:
 
-            logger.debug(f"{self}: failed to start, shutting down!")
+            self.logger.debug(f"{self}: failed to start, shutting down!")
             self.shutdown()
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
         else:
-            logger.debug(f"{self}: running at {self.host}:{self.port}")
+            self.logger.debug(f"{self}: running at {self.host}:{self.port}")
 
     def send(self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False):
 
@@ -367,7 +374,7 @@ class Server:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(partial(self._write_ws, client_id, msg))
+        self._thread.exec(self._write_ws(client_id, msg))
 
         if ok:
             success = waiting_for(
@@ -375,16 +382,16 @@ class Server:
                 timeout=config.get("comms.timeout.ok"),
             )
             if success:
-                logger.debug(f"{self}: receiving OK: SUCCESS")
+                self.logger.debug(f"{self}: receiving OK: SUCCESS")
             else:
-                logger.debug(f"{self}: receiving OK: FAILED")
+                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     def broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
         for client_id in self.ws_clients:
-            self._thread.exec(partial(self._write_ws, client_id, msg))
+            self._thread.exec(self._write_ws(client_id, msg))
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
@@ -397,7 +404,9 @@ class Server:
             for filename, file_meta in filepath_dict.items():
 
                 # Extract data
-                logger.debug(f"{self}: move_transfer_files, file_meta = {file_meta}")
+                self.logger.debug(
+                    f"{self}: move_transfer_files, file_meta = {file_meta}"
+                )
                 filepath = file_meta["dst_filepath"]
 
                 # If not unzip, just move it
@@ -425,7 +434,7 @@ class Server:
                         time.sleep(delay)
                         miss_counter += 1
                         if timeout < delay * miss_counter:
-                            logger.error(
+                            self.logger.error(
                                 f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
                             )
                             return False
@@ -446,13 +455,13 @@ class Server:
             self._server_shutdown_complete.clear()
 
             # Execute shutdown
-            self._thread.exec(self._server_shutdown)
+            self._thread.exec(self._server_shutdown())
 
             # Wait for it
             if not self._server_shutdown_complete.wait(
                 timeout=config.get("comms.timeout.server-shutdown")
             ):
-                logger.warning(f"{self}: failed to gracefully shutdown")
+                self.logger.warning(f"{self}: failed to gracefully shutdown")
 
             # Stop the async thread
             self._thread.stop()

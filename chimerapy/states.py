@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Literal
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
@@ -43,3 +43,6 @@ class ManagerState:
     workers: Dict[str, WorkerState] = field(default_factory=dict)
 
     logs_subscription_port: Optional[int] = None
+    running: bool = False
+    collecting: bool = False
+    collection_status: Optional[Literal["PASS", "FAIL"]] = None

@@ -1,7 +1,9 @@
 # Built-in Imports
+import os
 import time
 import logging
 import collections
+import pathlib
 
 # Third-party Imports
 import dill
@@ -18,6 +20,10 @@ cp.debug()
 from .data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..conftest import linux_run_only, linux_expected_only
 from ..mock import DockeredWorker
+from ..utils import cleanup_and_recreate_dir
+import shutil
+
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 # References:
 # https://www.thepythoncode.com/article/send-receive-files-using-sockets-python
@@ -207,3 +213,6 @@ def test_manager_worker_data_transfer(config_manager, expected_number_of_folders
     for worker_id in config_manager.workers:
         for node_id in config_manager.workers[worker_id].nodes:
             assert config_manager.workers[worker_id].nodes[node_id].finished
+
+    # Cleanup in case reruns
+    cleanup_and_recreate_dir(config_manager.logdir)

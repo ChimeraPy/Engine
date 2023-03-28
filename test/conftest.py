@@ -59,17 +59,17 @@ def pytest_configure():
 
 @pytest.fixture
 def logreceiver():
-    listener = cp.LogReceiver(logger_name="chimerapy")
+    listener = cp._logger.get_node_id_zmq_listener()
     listener.start()
     yield listener
-    listener.shutdown()
+    listener.stop()
     listener.join()
 
 
 @pytest.fixture(autouse=True)
 def slow_interval_between_tests():
     yield
-    time.sleep(3)
+    time.sleep(0.1)
 
 
 @pytest.fixture
@@ -91,6 +91,11 @@ def docker_client():
     logger.info(f"DOCKER CLIENT: {current_platform}")
     c = docker.DockerClient(base_url="unix://var/run/docker.sock")
     return c
+
+
+@pytest.fixture(autouse=True)
+def disable_file_logging():
+    cp.config.set("manager.logs-sink.enabled", False)
 
 
 @pytest.fixture
@@ -131,7 +136,7 @@ class SlowPrepNode(cp.Node):
 
     def step(self):
         time.sleep(0.5)
-        logger.debug(self.value)
+        self.logger.debug(self.value)
         return self.value
 
 

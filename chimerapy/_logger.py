@@ -5,10 +5,19 @@
 import logging.config
 import os
 from dataclasses import dataclass
-from logging import LogRecord
-from typing import Any, Dict
+from logging import LogRecord, StreamHandler
+from typing import Any, Dict, Optional, Union
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
+
+from .logger.common import HandlerFactory, IdentifierFilter
+from .logger.utils import get_unique_child_name
+from .logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
+from .logger.zmq_handlers import (
+    NodeIDZMQPullListener,
+    NodeIdZMQPushHandler,
+    ZMQPushHandler,
+)
 
 
 # FixMe: This is a hack. The ZMQ PUBHandler should be able to handle non-strings and
@@ -111,6 +120,38 @@ def setup():
     logging.config.dictConfig(LOGGING_CONFIG)
 
 
+# Add the identifier filter
+def add_identifier_filter(
+    logging_entity: [logging.Logger, logging.Handler], identifier: str
+):
+    """Add an identifier filter to the logger."""
+    logging_entity.addFilter(IdentifierFilter(identifier))
+
+
+def fork(
+    logger: logging.Logger, name: str, identifier: Optional[str] = None
+) -> logging.Logger:
+    """Fork a logger to a new name, with an optional identifier filter.
+
+    Args:
+        logger: An instance of the `logging.Logger` class. The logger to be forked.
+        name: A string representing the name of the child logger.
+        identifier: An optional string representing the identifier for the logger filter.
+
+    Returns:
+        The new logger
+    """
+
+    name = get_unique_child_name(logger, name)
+    new_logger = logger.getChild(name)
+    new_logger.setLevel(logger.level)
+
+    if identifier:
+        add_identifier_filter(new_logger, identifier)
+
+    return new_logger
+
+
 def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig):
     """Add a ZMQ log handler to the logger.
 
@@ -146,3 +187,66 @@ def getLogger(
         logger.setLevel(logging.DEBUG)
 
     return logger
+
+
+def get_node_id_zmq_listener(port: Optional[int] = None) -> NodeIDZMQPullListener:
+    """Get a ZMQ pull listener on the given (or random) port."""
+    listener = NodeIDZMQPullListener(port)
+    return listener
+
+
+def get_distributed_logs_multiplexed_file_sink(
+    port: Optional[int] = None,
+    **kwargs,
+) -> DistributedLogsMultiplexedFileSink:
+    """Get an instance of distributed logs collector with the given handlers."""
+    sink = DistributedLogsMultiplexedFileSink(port=port, **kwargs)
+    return sink
+
+
+def add_console_handler(logger: logging.Logger) -> None:
+    """Add a console handler to the logger.
+
+    Note:
+        Uses the same formatter as the consoleHandler in logging_config
+    """
+    exists = any(isinstance(h, StreamHandler) for h in logger.handlers)
+    if not exists:
+        hdlr = HandlerFactory.get_console_handler()
+        logger.addHandler(hdlr)
+
+
+def add_node_id_zmq_push_handler(
+    logger: logging.Logger, ip: str, port: int, node_id: str
+) -> None:
+    """Add a ZMQ log handler to the logger that publishes the node_id based LogRecord to a ZMQ push socket."""
+    # Add a handler to publish the logs to zmq ws
+    exists = any(isinstance(h, NodeIdZMQPushHandler) for h in logger.handlers)
+    if not exists:
+        handler = NodeIdZMQPushHandler(ip, port)
+        handler.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+    else:
+        handler = next(
+            h for h in logger.handlers if isinstance(h, NodeIdZMQPushHandler)
+        )
+
+    handler.register_node_id(node_id=node_id)
+
+
+def add_zmq_push_handler(
+    logging_entity: Union[logging.Logger, NodeIDZMQPullListener], ip: str, port: int
+) -> logging.Handler:
+    """Add a ZMQ log handler to the logger that publishes the LogRecord to a ZMQ push socket."""
+    # Add a handler to publish the logs to zmq
+    if isinstance(logging_entity, NodeIDZMQPullListener):
+        exists = False
+    else:
+        exists = any(isinstance(h, ZMQPushHandler) for h in logging_entity.handlers)
+
+    if not exists:
+        handler = ZMQPushHandler(ip, port)
+        handler.setLevel(logging.DEBUG)
+        logging_entity.addHandler(handler)
+
+    return handler

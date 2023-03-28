@@ -306,7 +306,7 @@ def test_two_nodes_connect(worker, gen_node, con_node):
     node_server_data = worker.create_node_server_data()
     logger.debug(f"Send the server data: {node_server_data}")
     worker.exec_coro(
-        partial(worker.process_node_server_data, {"data": node_server_data["nodes"]})
+        worker.process_node_server_data({"data": node_server_data["nodes"]})
     )
     time.sleep(3)
 
@@ -367,6 +367,8 @@ def test_worker_gather(worker, gen_node):
     assert r.status_code == requests.codes.ok
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(600)
 @pytest.mark.parametrize(
     "_manager,_worker",
     [
@@ -400,6 +402,8 @@ def test_manager_directing_worker_to_create_node(_manager, _worker):
     assert new_node.id in _manager.workers[_worker.id].nodes
 
 
+@pytest.mark.slow
+@pytest.mark.timeout(600)
 @pytest.mark.parametrize(
     "_manager,_worker",
     [

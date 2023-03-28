@@ -1,13 +1,10 @@
 from typing import Union, Dict, Any, Coroutine, Optional
-import asyncio
-import collections
 import os
 import time
 import tempfile
 import pathlib
 import shutil
 import sys
-import json
 import pickle
 import uuid
 import collections
@@ -27,9 +24,6 @@ from .networking.enums import (
     WORKER_MESSAGE,
 )
 from . import _logger
-from .logreceiver import LogReceiver
-
-logger = _logger.getLogger("chimerapy-worker")
 
 
 class Worker:
@@ -83,6 +77,9 @@ class Worker:
         self.delete_temp = delete_temp
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
+        parent_logger = _logger.getLogger("chimerapy-worker")
+        self.logger = _logger.fork(parent_logger, name, id)
+
         # Create server
         self.server = Server(
             port=self.state.port,
@@ -106,18 +103,20 @@ class Worker:
                 NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self.node_report_results,
             },
+            parent_logger=self.logger,
         )
 
         # Start the server and get the new port address (random if port=0)
         self.server.serve()
         self.state.ip, self.state.port = self.server.host, self.server.port
-        logger.info(
+
+        self.logger.info(
             f"Worker {self.state.id} running HTTP server at {self.state.ip}:{self.state.port}"
         )
 
         # Create a log listener to read Node's information
-        self.log_receiver = LogReceiver()
-        self.log_receiver.start()
+        self.logreceiver = self._start_log_receiver()
+        self.logger.debug(f"Log receiver started at port {self.logreceiver.port}")
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -168,9 +167,11 @@ class Worker:
             )
 
             if success:
-                logger.debug(f"{self}: Waiting for package {sent_package}: SUCCESS")
+                self.logger.debug(
+                    f"{self}: Waiting for package {sent_package}: SUCCESS"
+                )
             else:
-                logger.error(f"{self}: Waiting for package {sent_package}: FAILED")
+                self.logger.error(f"{self}: Waiting for package {sent_package}: FAILED")
                 return web.HTTPError()
 
             # Get the path
@@ -188,9 +189,9 @@ class Worker:
             )
 
             if success:
-                logger.debug(f"{self}: Package {sent_package} loading: SUCCESS")
+                self.logger.debug(f"{self}: Package {sent_package} loading: SUCCESS")
             else:
-                logger.debug(f"{self}: Package {sent_package} loading: FAILED")
+                self.logger.debug(f"{self}: Package {sent_package} loading: FAILED")
 
             assert (
                 package_zip_path.exists()
@@ -198,7 +199,7 @@ class Worker:
             sys.path.insert(0, str(package_zip_path))
 
         # Send message back to the Manager letting them know that
-        logger.info(f"{self}: Completed loading packages sent by Manager")
+        self.logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
     async def async_create_node(
@@ -217,7 +218,7 @@ class Worker:
 
         # Saving name to track it for now
         node_id = msg["id"]
-        logger.debug(f"{self}: received request for Node {id} creation: {msg}")
+        self.logger.debug(f"{self}: received request for Node {id} creation: {msg}")
 
         # Saving the node data
         self.state.nodes[node_id] = NodeState(id=node_id)
@@ -225,7 +226,7 @@ class Worker:
         self.nodes_extra[node_id]["gather"] = DataChunk()
         self.nodes_extra[node_id]["registered_methods_results"] = None
         self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
-        logger.debug(f"{self}: created state for <Node {node_id}>")
+        self.logger.debug(f"{self}: created state for <Node {node_id}>")
 
         # Keep trying to start a process until success
         success = False
@@ -235,7 +236,7 @@ class Worker:
             self.nodes_extra[node_id]["node_object"] = dill.loads(
                 self.nodes_extra[node_id]["pickled"]
             )
-            logger.debug(f"{self}: unpickled <Node {node_id}>")
+            self.logger.debug(f"{self}: unpickled <Node {node_id}>")
 
             # Record the node name
             self.state.nodes[node_id].name = self.nodes_extra[node_id][
@@ -251,8 +252,8 @@ class Worker:
                 self.nodes_extra[node_id]["in_bound_by_name"],
                 self.nodes_extra[node_id]["out_bound"],
                 self.nodes_extra[node_id]["follow"],
-                logging_level=logger.level,
-                worker_logging_port=self.log_receiver.port,
+                logging_level=self.logger.level,
+                worker_logging_port=self.logreceiver.port,
             )
 
             # Before starting, over write the pid
@@ -260,7 +261,7 @@ class Worker:
 
             # Start the node
             self.nodes_extra[node_id]["node_object"].start()
-            logger.debug(f"{self}: started <Node {node_id}>")
+            self.logger.debug(f"{self}: started <Node {node_id}>")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -269,10 +270,10 @@ class Worker:
             )
 
             if success:
-                logger.debug(f"{self}: {node_id} responding, SUCCESS")
+                self.logger.debug(f"{self}: {node_id} responding, SUCCESS")
             else:
                 # Handle failure
-                logger.debug(f"{self}: {node_id} responding, FAILED, retry")
+                self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
                 self.nodes_extra[node_id]["node_object"].shutdown()
                 self.nodes_extra[node_id]["node_object"].terminate()
                 continue
@@ -284,19 +285,19 @@ class Worker:
             )
 
             if success:
-                logger.debug(f"{self}: {node_id} fully ready, SUCCESS")
+                self.logger.debug(f"{self}: {node_id} fully ready, SUCCESS")
                 break
             else:
                 # Handle failure
-                logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
+                self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
                 self.nodes_extra[node_id]["node_object"].shutdown()
                 self.nodes_extra[node_id]["node_object"].terminate()
 
         if not success:
-            logger.error(f"{self}: Node {node_id} failed to create")
+            self.logger.error(f"{self}: Node {node_id} failed to create")
         else:
             # Mark success
-            logger.debug(f"{self}: completed node creation: {node_id}")
+            self.logger.debug(f"{self}: completed node creation: {node_id}")
 
         # Update the manager with the most up-to-date status of the nodes
         response = {
@@ -319,7 +320,7 @@ class Worker:
     async def process_node_server_data(self, request: web.Request):
         msg = await request.json()
 
-        logger.debug(f"{self}: processing node server data")
+        self.logger.debug(f"{self}: processing node server data")
 
         await self.server.async_broadcast(
             signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
@@ -334,18 +335,18 @@ class Worker:
                     condition=lambda: self.state.nodes[node_id].connected == True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
+                    self.logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
                     success.append(True)
                     break
                 else:
-                    logger.debug(f"{self}: Node {node_id} has connected: FAIL")
+                    self.logger.debug(f"{self}: Node {node_id} has connected: FAIL")
                     success.append(False)
 
         if not all(success):
-            logger.error(f"{self}: Nodes failed to establish P2P connections")
+            self.logger.error(f"{self}: Nodes failed to establish P2P connections")
 
         # After all nodes have been connected, inform the Manager
-        logger.debug(f"{self}: Informing Manager of processing completion")
+        self.logger.debug(f"{self}: Informing Manager of processing completion")
 
         return web.json_response(
             {"success": True, "worker_state": self.state.to_dict()}
@@ -433,26 +434,26 @@ class Worker:
                     condition=lambda: self.state.nodes[node_id].finished == True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to saving request: PASS"
                     )
                     success.append(True)
                     break
                 else:
-                    logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to saving request: FAIL"
                     )
                     success.append(False)
 
         if not all(success):
-            logger.error(f"{self}: Nodes failed to report to saving")
+            self.logger.error(f"{self}: Nodes failed to report to saving")
 
         # Send it back to the Manager
         return web.HTTPOk()
 
     async def report_node_gather(self, request: web.Request):
 
-        logger.debug(f"{self}: reporting to Manager gather request")
+        self.logger.debug(f"{self}: reporting to Manager gather request")
 
         for node_id in self.state.nodes:
             self.nodes_extra[node_id]["response"] = False
@@ -469,15 +470,19 @@ class Worker:
                     condition=lambda: self.nodes_extra[node_id]["response"] == True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    logger.debug(f"{self}: Node {node_id} responded to gather: PASS")
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to gather: PASS"
+                    )
                     success.append(True)
                     break
                 else:
-                    logger.debug(f"{self}: Node {node_id} responded to gather: FAIL")
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to gather: FAIL"
+                    )
                     success.append(False)
 
                 if not all(success):
-                    logger.error(f"{self}: Nodes failed to report to gather")
+                    self.logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
         gather_data = {"id": self.state.id, "node_data": {}}
@@ -499,7 +504,7 @@ class Worker:
         # If located in the same computer, just move the data
         if self.manager_host == get_ip_address():
 
-            logger.debug(f"{self}: sending archive locally")
+            self.logger.debug(f"{self}: sending archive locally")
 
             # First rename and then move
             delay = 1
@@ -523,7 +528,7 @@ class Worker:
 
         else:
 
-            logger.debug(f"{self}: sending archive via network")
+            self.logger.debug(f"{self}: sending archive via network")
 
             # Else, send the archive data to the manager via network
             try:
@@ -534,7 +539,7 @@ class Worker:
                 success = True
             except (TimeoutError, SystemError) as error:
                 self.delete_temp = False
-                logger.exception(
+                self.logger.exception(
                     f"{self}: Failed to transmit files to Manager - {error}."
                 )
                 success = False
@@ -558,7 +563,7 @@ class Worker:
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        logger.debug(f"{self}: note_status_update: ", msg)
+        self.logger.debug(f"{self}: note_status_update: ", msg)
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
@@ -632,14 +637,29 @@ class Worker:
         if r.status_code == requests.codes.ok:
 
             # Update the configuration of the Worker
-            config.update_defaults(r.json())
+            response = r.json()
+
+            config.update_defaults(response.get("config", {}))
+            logs_push_info = response.get("logs_push_info", {})
+
+            if logs_push_info["enabled"]:
+                self.logger.info(f"{self}: enabling logs push to Manager")
+                for logging_entity in [self.logger, self.logreceiver]:
+                    handler = _logger.add_zmq_push_handler(
+                        logging_entity,
+                        logs_push_info["host"],
+                        logs_push_info["port"],
+                    )
+                    if logging_entity is not self.logger:
+                        _logger.add_identifier_filter(handler, self.state.id)
 
             # Tracking the state and location of the manager
             self.connected_to_manager = True
             self.manager_host = host
             self.manager_port = port
             self.manager_url = f"http://{host}:{port}"
-            logger.info(
+
+            self.logger.info(
                 f"{self}: connection successful to Manager located at {host}:{port}."
             )
             return True
@@ -660,7 +680,7 @@ class Worker:
 
     def create_node(self, msg: Dict[str, Any]):
         node_id = msg["id"]
-        self.server._thread.exec(lambda: self.async_create_node(node_config=msg))
+        self.server._thread.exec(self.async_create_node(node_config=msg))
 
         success = waiting_for(
             condition=lambda: node_id in self.state.nodes
@@ -688,7 +708,7 @@ class Worker:
 
     def idle(self):
 
-        logger.debug(f"{self}: Idle")
+        self.logger.debug(f"{self}: Idle")
 
         while not self.has_shutdown:
             time.sleep(2)
@@ -707,19 +727,19 @@ class Worker:
         """
         # Check if shutdown has been called already
         if self.has_shutdown:
-            logger.debug(f"{self}: requested to shutdown when already shutdown.")
+            self.logger.debug(f"{self}: requested to shutdown when already shutdown.")
             return
         else:
             self.has_shutdown = True
 
-        logger.debug(f"{self}: shutting down!")
+        self.logger.debug(f"{self}: shutting down!")
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)
         if self.connected_to_manager:
             try:
                 self.deregister()
             except requests.ConnectionError:
-                logger.warning(f"{self}: shutdown didn't reach Manager")
+                self.logger.warning(f"{self}: shutdown didn't reach Manager")
 
         # Shutdown the Worker 2 Node server
         self.server.shutdown()
@@ -736,14 +756,10 @@ class Worker:
 
             # If that doesn't work, terminate
             if self.nodes_extra[node_id]["node_object"].exitcode != 0:
-                logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
                 self.nodes_extra[node_id]["node_object"].terminate()
 
-            logger.debug(f"{self}: Nodes have joined")
-
-        # Stop the log listener
-        self.log_receiver.shutdown()
-        self.log_receiver.join()
+            self.logger.debug(f"{self}: Nodes have joined")
 
         # Delete temp folder if requested
         if self.tempfolder.exists() and self.delete_temp:
@@ -754,3 +770,9 @@ class Worker:
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
+
+    @staticmethod
+    def _start_log_receiver() -> "ZMQNodeIDListener":
+        log_receiver = _logger.get_node_id_zmq_listener()
+        log_receiver.start(register_exit_handlers=True)
+        return log_receiver

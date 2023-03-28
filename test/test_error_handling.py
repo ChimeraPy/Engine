@@ -14,6 +14,8 @@ import chimerapy as cp
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
+
 
 class PlainNode(cp.Node):
     def step(self):
