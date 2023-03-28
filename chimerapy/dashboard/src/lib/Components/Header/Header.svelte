@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Navbar, NavBrand, NavLi, NavUl, NavHamburger, DarkMode } from 'flowbite-svelte';
+	import { Navbar, NavBrand, NavLi, NavUl, NavHamburger } from 'flowbite-svelte';
 
-	export let sections: { string: string }[];
-	const logo = '/ChimeraPy.png';
+	export let sections: { string: string }[], logo;
 </script>
 
 <Navbar let:hidden let:toggle>

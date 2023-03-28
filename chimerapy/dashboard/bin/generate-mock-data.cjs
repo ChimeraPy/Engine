@@ -3,6 +3,18 @@
 const { faker } = require('@faker-js/faker');
 const { v4: uuidv4 } = require('uuid');
 
+/*
+ * @typedef {import('../src/lib/models').Manager} Manager
+ * @typedef {import('../src/lib/models').Worker} Worker
+ * @typedef {import('../src/lib/models').Node} Node
+ */
+
+/**
+ * Generate test data for the dashboard
+ * @param {number} numWorkers - The number of workers to generate
+ * @param {number[]} nodesRange - [min, max] The number of nodes to generate for each worker
+ * @returns {Manager} - The generated network
+ */
 function generateNetwork(numWorkers, nodesRange) {
 	return {
 		ip: faker.internet.ip(),
@@ -14,6 +26,12 @@ function generateNetwork(numWorkers, nodesRange) {
 	};
 }
 
+/**
+ * Generate a list of workers
+ * @param {number} numWorkers - The number of workers to generate
+ * @param {number[]} nodesRange - [min, max] The number of nodes to generate for each worker
+ * @returns {Worker[]} - The generated workers
+ */
 function initializeWorkers(numWorkers, nodesRange) {
 	return range(0, numWorkers).map(() => {
 		return {
@@ -42,10 +60,22 @@ function initializeWorkers(numWorkers, nodesRange) {
 	});
 }
 
+/**
+ * Randomly sample an element from an array
+ * @template T
+ * @param {T[]} array - The array to sample from
+ * @returns {T} - A random element from the array
+ */
 function sample(array) {
 	return array[Math.floor(Math.random() * array.length)];
 }
 
+/**
+ * Generate a range of numbers
+ * @param {number} start
+ * @param end
+ * @returns {number[]}
+ */
 function range(start, end) {
 	return Array.from({ length: end - start }, (_, i) => i);
 }

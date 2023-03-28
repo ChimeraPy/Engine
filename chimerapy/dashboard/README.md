@@ -1,22 +1,30 @@
-# create-svelte
+# ChimeraPy-Dashboard
 
-Everything you need to build a Svelte project, powered by [`create-svelte`](https://github.com/sveltejs/kit/tree/master/packages/create-svelte).
+The front-end dashboard application for [`ChimeraPy`](https://github.com/oele-isis-vanderbit/ChimeraPy), written using [`svelte-kit`](https://kit.svelte.dev).
 
-## Creating a project
+The dashboard allows any ChimeraPy deployment to monitor the cluster as well as orchestrate MMLA pipeline accordingly.
 
-If you're seeing this, you've probably already done this step. Congrats!
+:warning: This project is in very early stages of development and should be considered unstable to use currently.
+
+## Installation
+
+Node `v16` or later is required. Tested and developed with `v16`.
+
+Use the following commands to install.
 
 ```bash
-# create a new project in the current directory
-npm create svelte@latest
+git clone git@github.com:oele-isis-vanderbilt/ChimeraPy.git
 
-# create a new project in my-app
-npm create svelte@latest my-app
+cd ChimeraPy/chimerapy/dashboard
+npm install
+
 ```
 
 ## Developing
 
 Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+
+The following commands will spin up the test development server at http://localhost:5173.
 
 ```bash
 npm run dev
@@ -25,14 +33,6 @@ npm run dev
 npm run dev -- --open
 ```
 
-## Building
+## Development RoadMap
 
-To create a production version of your app:
-
-```bash
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://kit.svelte.dev/docs/adapters) for your target environment.
+This is something on the works. Follow [RoadMap.md](./dev-docs/RoadMap.md) for a quick and dirty version.
