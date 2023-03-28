@@ -1,5 +1,6 @@
-from typing import Optional, Tuple
 import logging
+from typing import Optional, Tuple
+
 import zmq
 
 LOGGING_MAX_PORT = 60000
