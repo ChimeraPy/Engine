@@ -351,6 +351,9 @@ class Node(mp.Process):
         self.inputs_ready.clear()
 
         # Creating thread for saving incoming data
+        os.makedirs(
+            self.logdir, exist_ok=True
+        )  # Triple-checking that it's there (Issue #155)
         self.save_handler = SaveHandler(logdir=self.logdir, save_queue=self.save_queue)
         self.save_handler.start()
 
