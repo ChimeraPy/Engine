@@ -21,6 +21,8 @@ from . import _logger
 
 logger = _logger.getLogger("chimerapy")
 
+BYTES_PER_MB = 1024 * 1024
+
 
 def clear_queue(input_queue: queue.Queue):
     """Clear a queue.
@@ -181,3 +183,7 @@ def create_payload(
 
 def decode_payload(data: str) -> Dict[str, Any]:
     return json.loads(data)
+
+
+def megabytes_to_bytes(megabytes: int) -> int:
+    return int(megabytes) * BYTES_PER_MB

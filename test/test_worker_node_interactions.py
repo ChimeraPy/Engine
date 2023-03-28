@@ -84,7 +84,7 @@ def test_step_single_node(worker, gen_node):
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
-
+    
 
 def test_starting_node(worker, gen_node):
 

@@ -85,6 +85,12 @@ class ZMQPullListener(threading.Thread):
             atexit.register(self.join)
             atexit.register(self.stop)
 
+    def add_handler(self, handler):
+        with threading.Lock():
+            self.handlers.append(handler)
+
+    addHandler = add_handler  # Duck typing with logging.Logger
+
 
 class NodeIDZMQPullListener(ZMQPullListener):
     """A thread that listens for log messages and adds the node_id formatted console handler."""
@@ -96,7 +102,7 @@ class NodeIDZMQPullListener(ZMQPullListener):
         respect_handler_level: bool = True,
     ):
         if handlers is None:
-            handlers = (HandlerFactory.get("console-node_id"),)
+            handlers = [HandlerFactory.get("console-node_id")]
 
         super().__init__(port, handlers, respect_handler_level=respect_handler_level)
 
