@@ -218,12 +218,12 @@ class Manager:
 
         # Get the times, handle Optional
         if self.start_time:
-            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S")
+            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
         else:
             start_time = None
 
         if self.stop_time:
-            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S")
+            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
         else:
             stop_time = None
 
@@ -532,8 +532,8 @@ class Manager:
 
         if success:
             try:
-                self.server.move_transfer_files(self.logdir, True)
                 self.save_meta()
+                self.server.move_transfer_files(self.logdir, True)
             except Exception as e:
                 logger.error(traceback.format_exc())
             self.state.collection_status = "PASS"
@@ -755,6 +755,7 @@ class Manager:
         # First, test that the graph and the mapping are valid
         self.register_graph(graph)
         self.map_graph(mapping)
+        self.save_meta()
 
         # Then send requested packages
         distribute_package_success = True
@@ -832,6 +833,9 @@ class Manager:
         if success:
             self.state.running = True
 
+        # Updating meta just in case of failure
+        self.save_meta()
+
         return success
 
     def stop(self):
@@ -849,6 +853,9 @@ class Manager:
         success = self.broadcast_request("post", "/nodes/stop")
         if success:
             self.state.running = False
+
+        # Updating meta just in case of failure
+        self.save_meta()
 
         return success
 
