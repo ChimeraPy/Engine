@@ -1,8 +1,17 @@
 <script lang="ts">
 	import type { Manager } from '$lib/models';
 	import { Button, Tooltip } from 'flowbite-svelte';
-	export let manager: Manager;
+	export let manager: Manager, startHandler: () => void, stopHandler: () => void;
 	let running = false;
+
+	function handle() {
+		if (running) {
+			stopHandler();
+		} else {
+			startHandler();
+		}
+		running = !running;
+	}
 </script>
 
 <div class="flex justify-between bg-gray-900 px-2 py-2 items-center">
@@ -12,7 +21,7 @@
 		</h3>
 	</div>
 	<div>
-		<Button pill={true} size="md" class="!p-2" color="green" on:click={() => (running = !running)}>
+		<Button pill={true} disable="{running}" size="md" class="!p-2" color="green" on:click={() => handle()}>
 			{#if !running}
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -46,7 +55,7 @@
 			{/if}
 			<Tooltip>Start executing current pipeline</Tooltip>
 		</Button>
-		<Button pill={true} size="md" class="!p-2 ml-2" color="red" disabled={!running}>
+		<Button pill={true} size="md" class="!p-2 ml-2" color="red" disabled={!running} on:click={() => handle()}>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				fill="none"

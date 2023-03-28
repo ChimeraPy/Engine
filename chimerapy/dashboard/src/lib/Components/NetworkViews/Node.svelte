@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { Node } from '$lib/models';
 
-	export let node: Node, index: number;
+	export let node: Node, index: number, ip: string;
+	$: node.ip = ip;
 	import { networkEntityDetails } from '$lib/utils';
 	import { Badge } from 'flowbite-svelte';
 </script>
@@ -12,8 +13,8 @@
 	</div>
 	<div>
 		<Badge large border role="button" color="blue">Feed</Badge>
-		<Badge large border color={node.running ? 'green' : 'red'}
-			>{node.running ? 'online' : 'offline'}</Badge
+		<Badge large border color={node.ready ? 'green' : 'red'}
+			>{node.ready ? 'ready' : 'offline'}</Badge
 		>
 	</div>
 </div>

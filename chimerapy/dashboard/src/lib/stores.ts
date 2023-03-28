@@ -6,7 +6,7 @@ import type { Manager } from './models';
 
 const URL = dev ? '/api' : '';
 
-const api = new NetworkApi(URL);
+export const api = new NetworkApi(URL);
 
 // ToDo: this store is fine for now and distributed async requires the tree to be regenerated in realtime. But something diff based maybe?
 export const networkStore = writable<Manager | null>(null);

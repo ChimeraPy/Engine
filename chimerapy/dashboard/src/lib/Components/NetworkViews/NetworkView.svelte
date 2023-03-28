@@ -12,12 +12,12 @@
 	<Spinner />
 {:else}
 	<Accordion active class="w-100">
-		{#each manager?.workers || [] as worker, i}
+		{#each Object.values(manager?.workers) || [] as worker, i}
 			<AccordionItem class="font-semibold gap-2">
 				<div slot="header">{networkEntityDetails(worker, i)}</div>
-				{#if worker.nodes.length}
-					{#each worker.nodes as node, i}
-						<Node {node} index={i} />
+				{#if Object.values(worker.nodes).length}
+					{#each Object.values(worker.nodes) as node, i}
+						<Node {node} ip={worker.ip} index={i} />
 					{/each}
 				{:else}
 					<p class="mb-2 text-gray-500 dark:text-gray-400">No Active Nodes</p>

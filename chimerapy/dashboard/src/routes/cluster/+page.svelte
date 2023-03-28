@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { networkStore } from '$lib/stores';
+	import { networkStore, api } from '$lib/stores';
 	import { ZMQSubscriber } from '$lib/Services/ZMQSubscriber';
 
 	import NetworkView from '$lib/Components/NetworkViews/NetworkView.svelte';
@@ -42,9 +42,17 @@
 			unsubscribe();
 		}
 	});
+
+	async function startPipeline() {
+		await api.startPipeline();
+	}
+
+	async function stopPipeline() {
+		await api.stopPipeline();
+	}
 </script>
 
-<ManagerControls manager={$networkStore} />
+<ManagerControls manager={$networkStore} startHandler="{startPipeline}" stopHandler="{stopPipeline}"/>
 <div
 	class="h-3/5 max-h-min overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-100"
 >

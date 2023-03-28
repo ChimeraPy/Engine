@@ -24,7 +24,7 @@ export class NetworkApi extends Api {
 	async getNetworkMap(
 		fetch: (input: RequestInfo | URL, init?: RequestInit | undefined) => Promise<Response>
 	): Promise<Ok<Manager> | Err<ResponseError>> {
-		const res = await fetch('/mocks/networkMap.json');
+		const res = await fetch('api/network');
 		if (res.ok) {
 			return new Ok(await res.json());
 		} else {
@@ -55,7 +55,21 @@ export class NetworkApi extends Api {
 		return close;
 	}
 
-	async createPipeline() {}
+	async startPipeline() {
+		const res = await fetch('api/start', { method: 'POST' });
+		if (res.ok) {
+			return new Ok(await res.json());
+		} else {
+			return new Err({ message: res.statusText, code: res.status });
+		}
+	}
 
-	async deletePipeline() {}
+	async stopPipeline() {
+		const res = await fetch('api/stop', { method: 'POST' });
+		if (res.ok) {
+			return new Ok(await res.json());
+		} else {
+			return new Err({ message: res.statusText, code: res.status });
+		}
+	}
 }
