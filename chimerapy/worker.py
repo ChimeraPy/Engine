@@ -459,46 +459,10 @@ class Worker:
 
         # If located in the same computer, just move the data
         if self.manager_host == get_ip_address():
-
-            self.logger.debug(f"{self}: sending archive locally")
-
-            # First rename and then move
-            delay = 1
-            miss_counter = 0
-            timeout = 10
-            while True:
-                try:
-                    shutil.move(self.tempfolder, pathlib.Path(msg["path"]))
-                    break
-                except shutil.Error:  # File already exists!
-                    break
-                except:
-                    time.sleep(delay)
-                    miss_counter += 1
-                    if miss_counter * delay > timeout:
-                        raise TimeoutError("Nodes haven't fully finishing saving!")
-
-            old_folder_name = pathlib.Path(msg["path"]) / self.tempfolder.name
-            new_folder_name = pathlib.Path(msg["path"]) / f"{self.name}-{self.id}"
-            os.rename(old_folder_name, new_folder_name)
+            await self._send_archive_locally(pathlib.Path(msg["path"]))
 
         else:
-
-            self.logger.debug(f"{self}: sending archive via network")
-
-            # Else, send the archive data to the manager via network
-            try:
-                # Create a temporary HTTP client
-                client = Client(self.id, host=self.manager_host, port=self.manager_port)
-                # client.send_file(sender_name=self.name, filepath=zip_package_dst)
-                await client._send_folder_async(self.name, self.tempfolder)
-                success = True
-            except (TimeoutError, SystemError) as error:
-                self.delete_temp = False
-                self.logger.exception(
-                    f"{self}: Failed to transmit files to Manager - {error}."
-                )
-                success = False
+            await self._send_archive_remotely(self.manager_host, self.manager_port)
 
         # After completion, let the Manager know
         return web.json_response({"id": self.id, "success": success})
@@ -538,6 +502,48 @@ class Worker:
     ## Helper Methods
     ####################################################################
 
+    async def _send_archive_locally(self, path: pathlib.Path) -> bool:
+        self.logger.debug(f"{self}: sending archive locally")
+
+        # First rename and then move
+        delay = 1
+        miss_counter = 0
+        timeout = 10
+        while True:
+            try:
+                shutil.move(self.tempfolder, path)
+                break
+            except shutil.Error:  # File already exists!
+                break
+            except:
+                time.sleep(delay)
+                miss_counter += 1
+                if miss_counter * delay > timeout:
+                    raise TimeoutError("Nodes haven't fully finishing saving!")
+
+        old_folder_name = path / self.tempfolder.name
+        new_folder_name = path / f"{self.name}-{self.id}"
+        os.rename(old_folder_name, new_folder_name)
+        return True
+
+    async def _send_archive_remotely(self, host: str, port: int) -> bool:
+
+        self.logger.debug(f"{self}: sending archive via network")
+
+        # Else, send the archive data to the manager via network
+        try:
+            # Create a temporary HTTP client
+            client = Client(self.id, host=host, port=port)
+            await client._send_folder_async(self.name, self.tempfolder)
+            return True
+        except (TimeoutError, SystemError) as error:
+            self.delete_temp = False
+            self.logger.exception(
+                f"{self}: Failed to transmit files to Manager - {error}."
+            )
+
+        return False
+
     def create_node_server_data(self):
 
         # Construct simple data structure for Node to address information
@@ -551,7 +557,7 @@ class Worker:
         return node_server_data
 
     def exec_coro(self, coro: Coroutine):
-        self.server._thread.exec(coro)
+        return self.server._thread.exec(coro)
 
     ####################################################################
     ## Worker Sync Lifecycle API
