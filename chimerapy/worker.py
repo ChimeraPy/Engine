@@ -86,6 +86,7 @@ class Worker:
             id=self.state.id,
             routes=[
                 web.post("/nodes/create", self.async_create_node),
+                web.post("/nodes/destroy", self.async_destroy_node),
                 web.get("/nodes/server_data", self.report_node_server_data),
                 web.post("/nodes/server_data", self.process_node_server_data),
                 web.get("/nodes/gather", self.report_node_gather),
@@ -306,6 +307,35 @@ class Worker:
             return web.json_response(response)
         else:
             return success
+
+    async def async_destroy_node(self, request: web.Request):
+        msg = await request.json()
+        node_id = msg["id"]
+
+        self.logger.debug(
+            f"{self}: received request for Node {node_id} destruction: {msg}"
+        )
+        success = False
+
+        if node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].shutdown()
+            self.nodes_extra[node_id]["node_object"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
+
+            # If that doesn't work, terminate
+            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes_extra[node_id]["node_object"].terminate()
+
+            if node_id in self.state.nodes:
+                del self.state.nodes[node_id]
+
+            success = True
+
+        return web.json_response(
+            {"success": success, "worker_state": self.state.to_dict()}
+        )
 
     async def report_node_server_data(self, request: web.Request):
 

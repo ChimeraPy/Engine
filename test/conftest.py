@@ -81,7 +81,7 @@ def manager():
 
 @pytest.fixture
 def worker():
-    worker = cp.Worker(name="local", port=0)
+    worker = cp.Worker(name="local", id="local", port=0)
     yield worker
     worker.shutdown()
 
