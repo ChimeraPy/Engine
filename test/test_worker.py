@@ -9,7 +9,6 @@ import dill
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode
-from .networking.test_client_server import server
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
