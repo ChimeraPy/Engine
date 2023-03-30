@@ -371,7 +371,8 @@ class Worker:
         return web.HTTPOk()
 
     async def async_shutdown(self, request: web.Request):
-        self.shutdown()
+        # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
+        self.server._thread.exec_noncoro(self.shutdown, args=[])
 
         return web.HTTPOk()
 

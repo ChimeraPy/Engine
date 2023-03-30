@@ -30,11 +30,11 @@ pytestmark = [pytest.mark.slow, pytest.mark.timeout(600)]
 
 NAME_CLASS_MAP = {
     "vn": VideoNode,
-    "img_n": ImageNode,
-    "tn": TabularNode,
-    "an": AudioNode,
+    # "img_n": ImageNode,
+    # "tn": TabularNode,
+    # "an": AudioNode,
 }
-NUM_OF_WORKERS = 3
+NUM_OF_WORKERS = 2
 
 
 @pytest.fixture

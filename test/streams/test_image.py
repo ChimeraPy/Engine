@@ -129,7 +129,7 @@ def test_node_save_image_stream(image_node_stream):
     image_node_stream.start()
 
     # Wait to generate files
-    time.sleep(10)
+    time.sleep(3)
 
     image_node_stream.shutdown()
     image_node_stream.join()

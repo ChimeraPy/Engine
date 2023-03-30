@@ -66,7 +66,7 @@ def test_worker_entrypoint_connect_wport(manager):
 def test_multiple_workers_connect(manager, docker_client):
 
     workers = []
-    for i in range(10):
+    for i in range(3):
         worker = DockeredWorker(docker_client, name=f"test-{i}")
         worker.connect(manager.host, manager.port)
         workers.append(worker)

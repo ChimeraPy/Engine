@@ -24,7 +24,7 @@ CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
 RATE = 44100
-RECORD_SECONDS = 5
+RECORD_SECONDS = 2
 
 
 @pytest.fixture
@@ -143,7 +143,7 @@ def test_node_save_audio_stream(audio_node_stream):
     audio_node_stream.start()
 
     # Wait to generate files
-    time.sleep(10)
+    time.sleep(3)
 
     audio_node_stream.shutdown()
     audio_node_stream.join()

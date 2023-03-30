@@ -106,6 +106,51 @@ def dockered_worker(docker_client):
     dockered_worker.shutdown()
 
 
+class LowFrequencyNode(cp.Node):
+    def prep(self):
+        self.i = 0
+
+    def step(self):
+        data_chunk = cp.DataChunk()
+        if self.i == 0:
+            time.sleep(0.5)
+            self.i += 1
+            data_chunk.add("i", self.i)
+            return data_chunk
+        else:
+            time.sleep(3)
+            self.i += 1
+            data_chunk.add("i", self.i)
+            return data_chunk
+
+
+class HighFrequencyNode(cp.Node):
+    def prep(self):
+        self.i = 0
+
+    def step(self):
+        time.sleep(0.1)
+        self.i += 1
+        data_chunk = cp.DataChunk()
+        data_chunk.add("i", self.i)
+        return data_chunk
+
+
+class SubsequentNode(cp.Node):
+    def prep(self):
+        self.record = {}
+
+    def step(self, data: Dict[str, cp.DataChunk]):
+
+        for k, v in data.items():
+            self.record[k] = v
+
+        data_chunk = cp.DataChunk()
+        data_chunk.add("record", self.record)
+
+        return data_chunk
+
+
 class GenNode(cp.Node):
     def prep(self):
         self.value = 2
@@ -131,7 +176,7 @@ class ConsumeNode(cp.Node):
 
 class SlowPrepNode(cp.Node):
     def prep(self):
-        time.sleep(5)
+        time.sleep(2)
         self.value = 5
 
     def step(self):

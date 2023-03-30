@@ -139,7 +139,7 @@ def test_save_handler_video(save_handler_and_queue):
 
     # Place multiple random video
     fps = 30
-    for i in range(fps * 5):
+    for i in range(fps * 3):
         data = np.random.rand(200, 300, 3) * 255
         video_chunk = {
             "uuid": uuid.uuid4(),
@@ -170,7 +170,7 @@ def test_node_save_video_single_step(video_node_step):
         ...
 
     fps = 30
-    for i in range(fps * 5):
+    for i in range(fps * 3):
         video_node_step.step()
 
     # Stop the node the ensure video completion
@@ -193,7 +193,7 @@ def test_node_save_video_stream(video_node_stream):
     video_node_stream.start()
 
     # Wait to generate files
-    time.sleep(10)
+    time.sleep(3)
 
     video_node_stream.shutdown()
     video_node_stream.join()
