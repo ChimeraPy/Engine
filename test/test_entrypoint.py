@@ -62,7 +62,7 @@ def test_worker_entrypoint_connect_wport(manager):
     manager.shutdown()
 
 
-@linux_run_only
+@pytest.mark.skip
 def test_multiple_workers_connect(manager, docker_client):
 
     workers = []

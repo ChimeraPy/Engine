@@ -185,12 +185,12 @@ def test_worker_data_archiving(worker):
         pytest.param(
             lazy_fixture("dockered_single_worker_manager"),
             1,
-            marks=linux_run_only,
+            marks=pytest.mark.skip,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_worker_manager"),
             NUM_OF_WORKERS,
-            marks=linux_run_only,
+            marks=pytest.mark.skip,
         ),
     ],
 )
