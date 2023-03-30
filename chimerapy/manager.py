@@ -258,6 +258,9 @@ class Manager:
     def _get_worker_ip(self, worker_id: str) -> str:
         return f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
 
+    def _clear_node_server(self):
+        self.nodes_server_table: Dict = {}
+
     ####################################################################
     ## Cluster Setup, Control, and Monitor API
     ####################################################################
@@ -586,7 +589,40 @@ class Manager:
         return False
 
     async def _async_request_connection_creation(self, worker_id: str) -> bool:
-        ...
+        """Request establishing the connections between Nodes
+
+        This routine the Manager sends the Node's server data and request \
+        for Workers to organize their own nodes.
+
+        Returns:
+            bool: Returns if connection creation was successful
+        """
+
+        # Send the message to each worker and wait
+        for i in range(config.get("manager.allowed-failures")):
+
+            # Send the request to each worker
+            async with aiohttp.ClientSession() as client:
+                async with client.post(
+                    f"{self._get_worker_ip(worker_id)}/nodes/server_data",
+                    data=json.dumps(self.nodes_server_table),
+                ) as resp:
+                    if resp.ok:
+                        # Get JSON
+                        data = await resp.json()
+
+                        if data["success"]:
+                            self.state.workers[worker_id] = WorkerState.from_dict(
+                                data["worker_state"]
+                            )
+                            logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+                            logger.debug(
+                                f"{self}: receiving Worker's node server request: SUCCESS"
+                            )
+                            return True
+
+        return False
 
     async def _async_broadcast_request(
         self,
@@ -669,47 +705,8 @@ class Manager:
     def _request_node_server_data(self, worker_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_node_server_data(worker_id))
 
-    def _request_connection_creation(self, worker_id: str) -> bool:
-        """Request establishing the connections between Nodes
-
-        This routine the Manager sends the Node's server data and request \
-        for Workers to organize their own nodes.
-
-        Returns:
-            bool: Returns if connection creation was successful
-        """
-
-        # Send the message to each worker and wait
-        success = False
-        for i in range(config.get("manager.allowed-failures")):
-
-            # Send the request to each worker
-            r = requests.post(
-                f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                + "/nodes/server_data",
-                json.dumps(self.nodes_server_table),
-                timeout=config.get("manager.timeout.info-request"),
-            )
-
-            if r.status_code == requests.codes.ok:
-                data = r.json()
-                if data["success"]:
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
-
-                    logger.debug(
-                        f"{self}: receiving Worker's node server request: SUCCESS"
-                    )
-                    success = True
-                break
-
-        if not success:
-            logger.error(f"{self}: receiving Worker's node server request: FAILED")
-            return False
-
-        return True
+    def _request_connection_creation(self, worker_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_connection_creation(worker_id))
 
     def _register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.

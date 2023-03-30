@@ -347,7 +347,7 @@ class Worker:
     async def process_node_server_data(self, request: web.Request):
         msg = await request.json()
 
-        self.logger.debug(f"{self}: processing node server data")
+        self.logger.debug(f"{self}: processing node server data: {msg}")
 
         await self.server.async_broadcast(
             signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA,

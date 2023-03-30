@@ -189,6 +189,7 @@ class Node(mp.Process):
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
         )
+        self.logger.debug(f"{self}: Notifying Worker that Node is connected")
 
     async def provide_gather(self, msg: Dict):
 
