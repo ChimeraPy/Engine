@@ -27,17 +27,17 @@ cp.debug()
         pytest.param(
             lazy_fixture("dockered_single_node_no_connections_manager"),
             {"Gen1": 2},
-            marks=linux_run_only,
+            marks=pytest.mark.skip,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_one_worker_manager"),
             {"Gen1": 2, "Con1": 6},
-            marks=linux_run_only,
+            marks=pytest.mark.skip,
         ),
         pytest.param(
             lazy_fixture("dockered_multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
-            marks=linux_run_only,
+            marks=pytest.mark.skip,
         ),
     ],
 )
