@@ -438,7 +438,7 @@ class Node(mp.Process):
             self.logger.debug(f"{self}: polling inputs")
 
             # Wait until we get data from any of the subscribers
-            events = dict(self.sub_poller.poll())
+            events = dict(self.sub_poller.poll(timeout=1000))
 
             # Empty if no events
             if len(events) == 0:
@@ -622,6 +622,8 @@ class Node(mp.Process):
 
             # Shutdown the client
             self.client.shutdown()
+
+        self.logger.debug(f"{self}: completed teardown")
 
     def run(self):
         """The actual method that is executed in the new process.
