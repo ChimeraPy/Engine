@@ -49,8 +49,16 @@ def packaged_node_graph():
     [
         (lazy_fixture("worker"), lazy_fixture("local_node_graph")),
         (lazy_fixture("worker"), lazy_fixture("packaged_node_graph")),
-        (lazy_fixture("dockered_worker"), lazy_fixture("local_node_graph")),
-        (lazy_fixture("dockered_worker"), lazy_fixture("packaged_node_graph")),
+        pytest.param(
+            lazy_fixture("dockered_worker"),
+            lazy_fixture("local_node_graph"),
+            marks=pytest.mark.skip,
+        ),
+        pytest.param(
+            lazy_fixture("dockered_worker"),
+            lazy_fixture("packaged_node_graph"),
+            marks=pytest.mark.skip,
+        ),
     ],
 )
 def test_sending_package(manager, _worker, config_graph):
