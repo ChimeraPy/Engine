@@ -19,7 +19,6 @@ import dill
 import aiohttp
 from aiohttp import web
 import networkx as nx
-import requests
 
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
@@ -97,7 +96,7 @@ class Manager:
             id="Manager",
             routes=[
                 web.post("/workers/register", self._register_worker),
-                web.post("/workers/deregister", self._deregister_worker),
+                web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
             ],
         )
@@ -177,19 +176,12 @@ class Manager:
 
         return web.json_response(response)
 
-    async def _deregister_worker(self, request: web.Request):
+    async def _deregister_worker_route(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
+        success = self._deregister_worker(worker_state.id)
 
-        logger.info(
-            f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-        )
-
-        if self.logs_sink is not None:
-            self.logs_sink.deregister_entity(worker_state.id)
-
-        if worker_state.id in self.state.workers:
-            del self.state.workers[worker_state.id]
+        if success:
             return web.HTTPOk()
         else:
             return web.HTTPBadRequest()
@@ -213,7 +205,6 @@ class Manager:
     ####################################################################
 
     def _save_meta(self):
-
         # Get the times, handle Optional
         if self.start_time:
             start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
@@ -270,6 +261,22 @@ class Manager:
 
     def _clear_node_server(self):
         self.nodes_server_table: Dict = {}
+
+    def _deregister_worker(self, worker_id: str) -> bool:
+
+        if self.logs_sink is not None:
+            self.logs_sink.deregister_entity(worker_id)
+
+        if worker_id in self.state.workers:
+            state = self.state.workers[worker_id]
+            logger.info(
+                f"Manager deregistered <Worker id={worker_id} name={state.name}> from {state.ip}"
+            )
+            del self.state.workers[worker_id]
+
+            return True
+
+        return False
 
     def _register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
@@ -374,7 +381,11 @@ class Manager:
                     host=worker_data.ip,
                     port=worker_data.port,
                 )
-                client.send_file(sender_id=self.state.id, filepath=zip_package_dst)
+                await client._send_file_async(
+                    url=f"{self._get_worker_ip(worker_id)}/file/post",
+                    sender_id=self.state.id,
+                    filepath=zip_package_dst,
+                )
 
         # Wail until all workers have responded with their node server data
         success = False
@@ -382,22 +393,25 @@ class Manager:
 
             for i in range(config.get("manager.allowed-failures")):
 
-                # Send package finish confirmation
-                r = requests.post(
-                    f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                    + "/packages/load",
-                    json.dumps({"packages": [x["name"] for x in packages_meta]}),
-                    timeout=config.get("manager.timeout.package-delivery"),
-                )
+                url = f"{self._get_worker_ip(worker_id)}/packages/load"
+                data = json.dumps({"packages": [x["name"] for x in packages_meta]})
 
-                if r.status_code == requests.codes.ok:
-                    logger.debug(f"{self}: Worker {worker_id} loaded package: SUCCESS")
-                    success = True
-                    break
+                async with aiohttp.ClientSession() as client:
+                    async with client.post(
+                        url=url,
+                        data=data,
+                        timeout=config.get("manager.timeout.package-delivery"),
+                    ) as resp:
+                        if resp.ok:
+                            logger.debug(
+                                f"{self}: Worker {worker_id} loaded package: SUCCESS"
+                            )
+                            success = True
+                            break
 
             if not success:
                 logger.error(f"{self}: Worker {worker_id} loaded package: FAILED")
-                break
+                return False
 
         # If all workers pass, then yay!
         return success
@@ -651,7 +665,7 @@ class Manager:
         # Return if all outputs were successful
         return all([r.ok for r in results])
 
-    async def _async_create_p2p_network(self):
+    async def _async_create_p2p_network(self) -> bool:
         """Create the P2P Nodes in the Network
 
         This routine only creates the Node via the Workers but doesn't \
@@ -679,7 +693,7 @@ class Manager:
 
         return all(results)
 
-    async def _async_setup_p2p_connections(self):
+    async def _async_setup_p2p_connections(self) -> bool:
         """Setting up the connections between p2p nodes
 
         Returns:
@@ -1022,15 +1036,11 @@ class Manager:
                     if resp.ok:
                         logger.debug(f"{self}: Gathering Worker {worker_id}: SUCCESS")
 
-                        # Get JSON
-                        data = await resp.json()
-
-                        # And then updating the node server data
-                        node_server_data = data["node_server_data"]["nodes"]
-                        self.nodes_server_table.update(node_server_data)
+                        # Read the content
+                        content = await resp.content.read()
 
                         # Saving the data
-                        data = pickle.loads(r.content)["node_data"]
+                        data = pickle.loads(content)["node_data"]
                         for node_id, node_data in data.items():
                             data[node_id] = DataChunk.from_json(node_data)
 
@@ -1111,10 +1121,9 @@ class Manager:
             return False
 
         # If not keep Workers, then deregister all
-        if keep_workers:
+        if not keep_workers:
             for worker_id in self.state.workers:
-                ...  # TODO
-                # self._deregister_worker()
+                self._deregister_worker(worker_id)
 
         # Update variable data
         self.nodes_server_table = {}

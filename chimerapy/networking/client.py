@@ -173,7 +173,17 @@ class Client:
             else:
                 self.logger.debug(f"{self}: receiving OK: FAILED")
 
-    async def _send_file_async(self, url: str, data: aiohttp.FormData):
+    async def _send_file_async(self, url: str, sender_id: str, filepath: pathlib.Path):
+
+        # Make a post request to send the file
+        data = aiohttp.FormData()
+        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
+        data.add_field(
+            "file",
+            open(filepath, "rb"),
+            filename=filepath.name,
+            content_type="application/zip",
+        )
 
         # Create a new session for the moment
         async with aiohttp.ClientSession() as session:
@@ -213,16 +223,6 @@ class Client:
 
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
-
-        # Make a post request to send the file
-        data = aiohttp.FormData()
-        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
-        data.add_field(
-            "file",
-            open(temp_zip_file, "rb"),
-            filename=temp_zip_file.name,
-            content_type="application/zip",
-        )
 
         # Then send the file
         await self._send_file_async(url, data)
@@ -332,20 +332,9 @@ class Client:
                 self.logger.debug(f"{self}: receiving OK: FAILED")
 
     def send_file(self, sender_id: str, filepath: pathlib.Path):
-
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
-
-        # Make a post request to send the file
-        data = aiohttp.FormData()
-        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
-        data.add_field(
-            "file",
-            open(filepath, "rb"),
-            filename=filepath.name,
-            content_type="application/zip",
-        )
-        self._thread.exec(self._send_file_async(url, data))
+        self._thread.exec(self._send_file_async(url, sender_id, filepath))
 
     def send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
 

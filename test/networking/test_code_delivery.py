@@ -70,7 +70,7 @@ def test_sending_package(manager, _worker, config_graph):
         send_packages=[
             {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
         ],
-    )
+    ).result(timeout=30)
 
     for node_id in config_graph.G.nodes():
         assert manager.workers[_worker.id].nodes[node_id].init == True

@@ -237,7 +237,7 @@ def single_node_no_connections_manager(manager, worker, gen_node):
         {
             worker.id: [gen_node.id],
         },
-    )
+    ).result(timeout=30)
 
     return manager
 
@@ -259,7 +259,7 @@ def multiple_nodes_one_worker_manager(manager, worker, gen_node, con_node):
         {
             worker.id: [gen_node.id, con_node.id],
         },
-    )
+    ).result(timeout=30)
 
     return manager
 
@@ -281,7 +281,7 @@ def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
     # Then register graph to Manager
     assert manager.commit_graph(
         graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    )
+    ).result(timeout=30)
 
     yield manager
 
@@ -305,7 +305,7 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
         {
             worker.id: [slow_node.id],
         },
-    )
+    ).result(timeout=30)
 
     return manager
 
@@ -326,7 +326,7 @@ def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_no
         {
             dockered_worker.id: [gen_node.id],
         },
-    )
+    ).result(timeout=30)
 
     return manager
 
@@ -350,7 +350,7 @@ def dockered_multiple_nodes_one_worker_manager(
         {
             dockered_worker.id: [gen_node.id, con_node.id],
         },
-    )
+    ).result(timeout=30)
 
     return manager
 
@@ -374,7 +374,7 @@ def dockered_multiple_nodes_multiple_workers_manager(
     # Then register graph to Manager
     assert manager.commit_graph(
         graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    )
+    ).result(timeout=30)
 
     yield manager
 

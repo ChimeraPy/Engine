@@ -8,6 +8,7 @@ import sys
 import pickle
 import uuid
 import collections
+import asyncio
 
 # Third-party Imports
 import dill
@@ -546,7 +547,10 @@ class Worker:
             except shutil.Error:  # File already exists!
                 break
             except:
-                time.sleep(delay)
+                self.logger.error(
+                    f"{self}: failed to move tempfolder: {self.tempfolder} to dst: {path}"
+                )
+                await asyncio.sleep(delay)
                 miss_counter += 1
                 if miss_counter * delay > timeout:
                     raise TimeoutError("Nodes haven't fully finishing saving!")

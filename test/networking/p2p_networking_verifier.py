@@ -59,11 +59,11 @@ class P2PNetworkingVerifier:
         self, expected_output: Dict[str, int]
     ) -> None:
         # Take a single step and see if the system crashes and burns
-        self.manager.step()
+        assert self.manager.step().result(timeout=10)
         time.sleep(5)
 
         # Then request gather and confirm that the data is valid
-        latest_data_values = self.manager.gather()
+        latest_data_values = self.manager.gather().result(timeout=10)
 
         # Convert the expected from name to id
         expected_output_by_id = {}
@@ -81,12 +81,12 @@ class P2PNetworkingVerifier:
 
     def assert_can_start_and_stop(self, expected_output: Dict[str, int]) -> None:
         # Take a single step and see if the system crashes and burns
-        self.manager.start()
+        assert self.manager.start().result(timeout=10)
         time.sleep(5)
-        self.manager.stop()
+        assert self.manager.stop().result(timeout=10)
 
         # Then request gather and confirm that the data is valid
-        latest_data_values = self.manager.gather()
+        latest_data_values = self.manager.gather().result(timeout=10)
 
         # Convert the expected from name to id
         expected_output_by_id = {}

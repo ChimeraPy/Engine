@@ -3,12 +3,14 @@ import os
 import pathlib
 from functools import partial
 import requests
+import shutil
 
 import dill
 
 import chimerapy as cp
 
 from .conftest import GenNode, ConsumeNode
+from .networking.test_client_server import server
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
@@ -172,9 +174,11 @@ def test_send_archive_locally(worker):
             f.write("hello")
 
     dst = TEST_DATA_DIR / "test_folder"
+    new_folder_name = dst / f"{worker.name}-{worker.id}"
     os.makedirs(dst, exist_ok=True)
+    shutil.rmtree(new_folder_name)
     future = worker.exec_coro(worker._send_archive_locally(dst))
-    future.result(timeout=5)
+    assert future.result(timeout=5)
 
     dst_worker = dst / f"{worker.name}-{worker.id}"
     dst_test_file = dst_worker / "test.txt"
