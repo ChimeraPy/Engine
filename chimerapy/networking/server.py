@@ -12,6 +12,8 @@ import shutil
 import os
 import pickle
 import enum
+import traceback
+from concurrent.futures import Future
 
 # Third-party
 from aiohttp import web, WSCloseCode
@@ -209,10 +211,11 @@ class Server:
                     await ws.close()
                     return None
 
-    async def _write_ws(self, client_id: str, msg: Dict):
+    async def _write_ws(self, client_id: str, msg: Dict) -> bool:
         self.logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
         ws = self.ws_clients[client_id]["ws"]
-        await self._send_msg(ws, **msg)
+        success = await self._send_msg(ws, **msg)
+        return success
 
     async def _websocket_handler(self, request):
 
@@ -240,7 +243,7 @@ class Server:
         data: Dict,
         msg_uuid: str = str(uuid.uuid4()),
         ok: bool = False,
-    ):
+    ) -> bool:
 
         # Create payload
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
@@ -251,7 +254,7 @@ class Server:
         except ConnectionResetError:
             self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await ws.close()
-            return None
+            return False
 
         self.logger.debug(f"{self}: _send_msg -> {signal}")
 
@@ -263,14 +266,18 @@ class Server:
             )
             if success:
                 self.logger.debug(f"{self}: receiving OK: SUCCESS")
+                return True
             else:
                 self.logger.debug(f"{self}: receiving OK: FAILED")
+                return False
+
+        return True
 
     ####################################################################
     # Server Async Setup and Shutdown
     ####################################################################
 
-    async def _main(self):
+    async def _main(self) -> bool:
 
         # Create record of message uuids
         self.uuid_records = collections.deque(maxlen=100)
@@ -285,26 +292,28 @@ class Server:
         if self.port == 0:
             self.port = self._site._server.sockets[0].getsockname()[1]
 
-        # Create flag to mark that server is ready
-        self._server_ready.set()
+        return True
 
-    async def _server_shutdown(self):
+    async def _server_shutdown(self) -> bool:
 
-        self.running.clear()
+        # Only shutdown for the first time
+        if self.running.is_set():
+            self.running.clear()
 
-        for client_data in self.ws_clients.values():
-            client_ws = client_data["ws"]
-            await asyncio.wait_for(
-                client_ws.close(
-                    code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
-                ),
-                timeout=2,
-            )
+            for client_data in self.ws_clients.values():
+                client_ws = client_data["ws"]
+                await asyncio.wait_for(
+                    client_ws.close(
+                        code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
+                    ),
+                    timeout=2,
+                )
 
-        # Cleanup and signal complete
-        await asyncio.wait_for(self._runner.shutdown(), timeout=5)
-        await asyncio.wait_for(self._runner.cleanup(), timeout=5)
-        self._server_shutdown_complete.set()
+            # Cleanup and signal complete
+            await asyncio.wait_for(self._runner.shutdown(), timeout=10)
+            await asyncio.wait_for(self._runner.cleanup(), timeout=10)
+
+        return True
 
     ####################################################################
     # Server ASync Lifecycle API
@@ -319,24 +328,19 @@ class Server:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        await self._write_ws(client_id, msg)
-
-        if ok:
-            success = await async_waiting_for(
-                lambda: msg_uuid in self.uuid_records,
-                timeout=config.get("comms.timeout.ok"),
-            )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
+        success = await self._write_ws(client_id, msg)
+        return success
 
     async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
+
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
+        successes = []
         for client_id in self.ws_clients:
-            await self._write_ws(client_id, msg)
+            successes.append(await self._write_ws(client_id, msg))
+
+        return all(successes)
 
     ####################################################################
     # Server Sync Lifecycle API
@@ -345,8 +349,6 @@ class Server:
     def serve(self):
 
         # Create async loop in thread
-        self._server_ready = threading.Event()
-        self._server_ready.clear()
         self._thread = AsyncLoopThread()
         self._thread.start()
 
@@ -354,44 +356,33 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        self._thread.exec(self._main())
+        future = self._thread.exec(self._main())
 
-        # Wait until server is ready
-        flag = self._server_ready.wait(timeout=config.get("comms.timeout.server-ready"))
-        if flag == 0:
-
-            self.logger.debug(f"{self}: failed to start, shutting down!")
-            self.shutdown()
+        try:
+            success = future.result(timeout=config.get("comms.timeout.server-ready"))
+        except:
+            self.logger.error(traceback.format_exc())
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
-        else:
+        if success:
             self.logger.debug(f"{self}: running at {self.host}:{self.port}")
 
-    def send(self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False):
+    def send(
+        self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
+    ) -> Future[bool]:
+        return self._thread.exec(self.async_send(client_id, signal, data, ok))
 
-        # Create uuid
-        msg_uuid = str(uuid.uuid4())
-
-        # Create msg container and execute writing coroutine
-        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(self._write_ws(client_id, msg))
-
-        if ok:
-            success = waiting_for(
-                lambda: msg_uuid in self.uuid_records,
-                timeout=config.get("comms.timeout.ok"),
-            )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
-
-    def broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
+    def broadcast(
+        self, signal: enum.Enum, data: Dict, ok: bool = False
+    ) -> List[Future[bool]]:
         # Create msg container and execute writing coroutine for all
         # clients
         msg = {"signal": signal, "data": data, "ok": ok}
+        futures = []
         for client_id in self.ws_clients:
-            self._thread.exec(self._write_ws(client_id, msg))
+            futures.append(self._thread.exec(self._write_ws(client_id, msg)))
+
+        return futures
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
@@ -454,23 +445,18 @@ class Server:
 
         return True
 
-    def shutdown(self):
+    def shutdown(self) -> bool:
+        # Execute shutdown
+        future = self._thread.exec(self._server_shutdown())
 
-        # Only shutdown for the first time
-        if self.running.is_set():
+        success = False
+        try:
+            success = future.result(timeout=config.get("comms.timeout.server-shutdown"))
+        except:
+            self.logger.error(traceback.format_exc())
+            self.logger.warning(f"{self}: failed to gracefully shutdown")
 
-            # Use client event for shutdown
-            self._server_shutdown_complete = threading.Event()
-            self._server_shutdown_complete.clear()
+        # Stop the async thread
+        self._thread.stop()
 
-            # Execute shutdown
-            self._thread.exec(self._server_shutdown())
-
-            # Wait for it
-            if not self._server_shutdown_complete.wait(
-                timeout=config.get("comms.timeout.server-shutdown")
-            ):
-                self.logger.warning(f"{self}: failed to gracefully shutdown")
-
-            # Stop the async thread
-            self._thread.stop()
+        return success

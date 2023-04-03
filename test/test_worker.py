@@ -4,6 +4,7 @@ import pathlib
 from functools import partial
 import requests
 import shutil
+from concurrent.futures import wait
 
 import dill
 
@@ -42,7 +43,9 @@ def test_worker_create_node(worker, gen_node):
     }
 
     logger.debug("Create nodes")
-    worker.create_node(msg)
+    worker.create_node(msg).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
 
     logger.debug("Finishied creating nodes")
     assert gen_node.id in worker.nodes
@@ -68,7 +71,9 @@ def test_worker_create_unknown_node(worker):
     del UnknownNode
 
     logger.debug("Create nodes")
-    worker.create_node(msg)
+    worker.create_node(msg).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
 
     logger.debug("Finishied creating nodes")
     assert node.id in worker.nodes
@@ -88,7 +93,9 @@ def test_step_single_node(worker, gen_node):
     }
 
     logger.debug("Create nodes")
-    worker.create_node(msg)
+    worker.create_node(msg).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
 
     logger.debug("Step through")
     worker.step()
@@ -110,7 +117,9 @@ def test_starting_node(worker, gen_node):
     }
 
     logger.debug("Create nodes")
-    worker.create_node(msg)
+    worker.create_node(msg).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
 
     logger.debug("Waiting before starting!")
     time.sleep(2)
@@ -138,6 +147,7 @@ def test_worker_data_archiving(worker):
         nodes.append(node_class(name=node_name))
 
     # Simple single node without connection
+    futures = []
     for node in nodes:
         msg = {
             "id": node.id,
@@ -148,7 +158,9 @@ def test_worker_data_archiving(worker):
             "out_bound": [],
             "follow": None,
         }
-        worker.create_node(msg)
+        futures.append(worker.create_node(msg))
+
+    wait(futures)
 
     logger.debug("Waiting!")
     time.sleep(2)
@@ -180,7 +192,7 @@ def test_send_archive_locally(worker):
     if new_folder_name.exists():
         shutil.rmtree(new_folder_name)
 
-    future = worker.exec_coro(worker._send_archive_locally(dst))
+    future = worker._exec_coro(worker._send_archive_locally(dst))
     assert future.result(timeout=5)
 
     dst_worker = dst / f"{worker.name}-{worker.id}"
@@ -201,7 +213,7 @@ def test_send_archive_remotely(worker, server):
         with open(test_file, "w") as f:
             f.write("hello")
 
-    future = worker.exec_coro(worker._send_archive_remotely(server.host, server.port))
+    future = worker._exec_coro(worker._send_archive_remotely(server.host, server.port))
     future.result(timeout=10)
     logger.debug(server.file_transfer_records)
 

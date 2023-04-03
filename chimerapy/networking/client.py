@@ -12,6 +12,7 @@ import tempfile
 import pickle
 import enum
 import logging
+from concurrent.futures import Future
 
 # Third-party
 import aiohttp
@@ -173,7 +174,9 @@ class Client:
             else:
                 self.logger.debug(f"{self}: receiving OK: FAILED")
 
-    async def _send_file_async(self, url: str, sender_id: str, filepath: pathlib.Path):
+    async def _send_file_async(
+        self, url: str, sender_id: str, filepath: pathlib.Path
+    ) -> bool:
 
         # Make a post request to send the file
         data = aiohttp.FormData()
@@ -190,6 +193,8 @@ class Client:
             self.logger.debug(f"{self}: Executing file transfer to {url}")
             response = await session.post(url, data=data)
             self.logger.debug(f"{self}: File transfer response => {response}")
+
+        return True
 
     async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
 
@@ -287,7 +292,7 @@ class Client:
     # Client ASync Lifecyle API
     ####################################################################
 
-    async def async_send(self, signal: enum.Enum, data: Any, ok: bool = False):
+    async def async_send(self, signal: enum.Enum, data: Any, ok: bool = False) -> bool:
 
         # Create uuid
         msg_uuid = str(uuid.uuid4())
@@ -304,37 +309,24 @@ class Client:
             )
             if success:
                 self.logger.debug(f"{self}: receiving OK: SUCCESS")
+                return True
             else:
                 self.logger.debug(f"{self}: receiving OK: FAILED")
+                return False
+
+        return True
 
     ####################################################################
     # Client Sync Lifecyle API
     ####################################################################
 
-    def send(self, signal: enum.Enum, data: Any, ok: bool = False):
+    def send(self, signal: enum.Enum, data: Any, ok: bool = False) -> Future[bool]:
+        return self._thread.exec(self.async_send(signal, data, ok))
 
-        # Create uuid
-        msg_uuid = str(uuid.uuid4())
-
-        # Create msg container and execute writing coroutine
-        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        self._thread.exec(self._write_ws(msg))
-
-        if ok:
-
-            success = waiting_for(
-                lambda: msg_uuid in self.uuid_records,
-                timeout=config.get("comms.timeout.ok"),
-            )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
-
-    def send_file(self, sender_id: str, filepath: pathlib.Path):
+    def send_file(self, sender_id: str, filepath: pathlib.Path) -> Future[bool]:
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
-        self._thread.exec(self._send_file_async(url, sender_id, filepath))
+        return self._thread.exec(self._send_file_async(url, sender_id, filepath))
 
     def send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
 

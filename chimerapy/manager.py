@@ -924,11 +924,12 @@ class Manager:
             # Send shutdown message
             logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
             try:
-                self._broadcast_request(
+                future = self._broadcast_request(
                     "post",
                     "/shutdown",
                     timeout=config.get("manager.timeout.worker-shutdown"),
                 )
+                future.result(timeout=config.get("manager.timeout.worker-shutdown"))
             except:
                 pass
             logger.debug(

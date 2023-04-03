@@ -30,4 +30,4 @@ config:
       server-ready: 10
       client-shutdown: 10
       server-shutdown: 15
-      pub-delay: 5
+      pub-delay: 1

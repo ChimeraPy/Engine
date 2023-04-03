@@ -1,4 +1,4 @@
-from typing import Union, Dict, Any, Coroutine, Optional
+from typing import Union, Dict, Any, Coroutine, Optional, List
 import os
 import time
 import tempfile
@@ -9,6 +9,8 @@ import pickle
 import uuid
 import collections
 import asyncio
+import traceback
+from concurrent.futures import Future
 
 # Third-party Imports
 import dill
@@ -66,6 +68,9 @@ class Worker:
         # Creating state
         self.state = WorkerState(id=id, name=name, port=port)
         self.nodes_extra = collections.defaultdict(dict)
+
+        # Creating a container for task futures
+        self.task_futures: List[Future] = []
 
         # Instance variables
         self.has_shutdown: bool = False
@@ -149,7 +154,7 @@ class Worker:
         return self.state.port
 
     ####################################################################
-    ## Manager -> Worker
+    ## HTTP Routes
     ####################################################################
 
     async def load_sent_packages(self, request: web.Request):
@@ -499,7 +504,7 @@ class Worker:
         return web.json_response({"id": self.id, "success": success})
 
     ####################################################################
-    ## Worker <-> Node
+    ## WS Routes
     ####################################################################
 
     async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
@@ -590,14 +595,22 @@ class Worker:
 
         return node_server_data
 
-    def exec_coro(self, coro: Coroutine):
-        return self.server._thread.exec(coro)
+    def _exec_coro(self, coro: Coroutine) -> Future:
+        # Submitting the coroutine
+        future = self.server._thread.exec(coro)
+
+        # Saving the future for later use
+        self.task_futures.append(future)
+
+        return future
 
     ####################################################################
-    ## Worker Sync Lifecycle API
+    ## Worker ASync Lifecycle API
     ####################################################################
 
-    def connect(self, host: str, port: int, timeout: Union[int, float] = 10.0) -> bool:
+    async def async_connect(
+        self, host: str, port: int, timeout: Union[int, float] = 10.0
+    ) -> bool:
         """Connect ``Worker`` to ``Manager``.
 
         This establish server-client connections between ``Worker`` and
@@ -612,78 +625,107 @@ class Worker:
             timeout (Union[int, float]): Set timeout for the connection.
 
         Returns:
-            bool: Success in connecting to the Manager
+            Future[bool]: Success in connecting to the Manager
 
         """
 
-        # Sending message to register
-        r = requests.post(
-            f"http://{host}:{port}/workers/register",
-            data=self.state.to_json(),
-            timeout=config.get("worker.timeout.info-request"),
-        )
+        # Send the request to each worker
+        async with aiohttp.ClientSession() as client:
+            async with client.post(
+                f"http://{host}:{port}/workers/register",
+                data=self.state.to_json(),
+                timeout=config.get("worker.timeout.info-request"),
+            ) as resp:
 
-        # Check if success
-        if r.status_code == requests.codes.ok:
+                if resp.ok:
 
-            # Update the configuration of the Worker
-            response = r.json()
+                    # Get JSON
+                    data = await resp.json()
 
-            config.update_defaults(response.get("config", {}))
-            logs_push_info = response.get("logs_push_info", {})
+                    config.update_defaults(data.get("config", {}))
+                    logs_push_info = data.get("logs_push_info", {})
 
-            if logs_push_info["enabled"]:
-                self.logger.info(f"{self}: enabling logs push to Manager")
-                for logging_entity in [self.logger, self.logreceiver]:
-                    handler = _logger.add_zmq_push_handler(
-                        logging_entity,
-                        logs_push_info["host"],
-                        logs_push_info["port"],
+                    if logs_push_info["enabled"]:
+                        self.logger.info(f"{self}: enabling logs push to Manager")
+                        for logging_entity in [self.logger, self.logreceiver]:
+                            handler = _logger.add_zmq_push_handler(
+                                logging_entity,
+                                logs_push_info["host"],
+                                logs_push_info["port"],
+                            )
+                            if logging_entity is not self.logger:
+                                _logger.add_identifier_filter(handler, self.state.id)
+
+                    # Tracking the state and location of the manager
+                    self.connected_to_manager = True
+                    self.manager_host = host
+                    self.manager_port = port
+                    self.manager_url = f"http://{host}:{port}"
+
+                    self.logger.info(
+                        f"{self}: connection successful to Manager located at {host}:{port}."
                     )
-                    if logging_entity is not self.logger:
-                        _logger.add_identifier_filter(handler, self.state.id)
-
-            # Tracking the state and location of the manager
-            self.connected_to_manager = True
-            self.manager_host = host
-            self.manager_port = port
-            self.manager_url = f"http://{host}:{port}"
-
-            self.logger.info(
-                f"{self}: connection successful to Manager located at {host}:{port}."
-            )
-            return True
+                    return True
 
         return False
 
-    def deregister(self):
+    async def async_deregister(self) -> bool:
 
-        r = requests.post(
-            self.manager_url + "/workers/deregister",
-            data=self.state.to_json(),
-            timeout=config.get("worker.timeout.info-request"),
-        )
+        # Send the request to each worker
+        async with aiohttp.ClientSession() as client:
+            async with client.post(
+                self.manager_url + "/workers/deregister",
+                data=self.state.to_json(),
+                timeout=config.get("worker.timeout.info-request"),
+            ) as resp:
 
-        self.connected_to_manager = False
+                return resp.ok
 
-        return r.status_code == requests.codes.ok
+        return False
 
-    def create_node(self, msg: Dict[str, Any]):
-        node_id = msg["id"]
-        self.server._thread.exec(self.async_create_node(node_config=msg))
+    ####################################################################
+    ## Worker Sync Lifecycle API
+    ####################################################################
 
-        success = waiting_for(
-            condition=lambda: node_id in self.state.nodes
-            and self.state.nodes[node_id].ready == True,
-            check_period=0.1,
-            timeout=config.get("manager.timeout.node-creation"),
-        )
+    def connect(
+        self,
+        host: str,
+        port: int,
+        timeout: Union[int, float] = 10.0,
+        blocking: bool = True,
+    ) -> Union[bool, Future[bool]]:
+        """Connect ``Worker`` to ``Manager``.
 
-        return success
+        This establish server-client connections between ``Worker`` and
+        ``Manager``. To ensure that the connections are close correctly,
+        either the ``Manager`` or ``Worker`` should shutdown before
+        stopping your program to avoid processes and threads that do
+        not shutdown.
+
+        Args:
+            host (str): The ``Manager``'s IP address.
+            port (int): The ``Manager``'s port number
+            timeout (Union[int, float]): Set timeout for the connection.
+
+        Returns:
+            Future[bool]: Success in connecting to the Manager
+
+        """
+        future = self._exec_coro(self.async_connect(host, port, timeout))
+
+        if blocking:
+            return future.result(timeout=timeout)
+        return future
+
+    def deregister(self) -> Future[bool]:
+        return self._exec_coro(self.async_deregister())
+
+    def create_node(self, msg: Dict[str, Any]) -> Future[bool]:
+        return self._exec_coro(self.async_create_node(node_config=msg))
 
     def step(self):
 
-        # Worker tell all nodes to take a step
+        # Send message to nodes to step
         self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
 
     def start_nodes(self):
@@ -727,8 +769,11 @@ class Worker:
         # if the manager hasn't already set the client to not running)
         if self.connected_to_manager:
             try:
-                self.deregister()
-            except requests.ConnectionError:
+                self.deregister().result(
+                    timeout=config.get("worker.timeout.info-request")
+                )
+            except Exception as e:
+                self.logger.error(traceback.format_exc())
                 self.logger.warning(f"{self}: shutdown didn't reach Manager")
 
         # Shutdown the Worker 2 Node server
