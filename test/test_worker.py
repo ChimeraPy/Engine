@@ -174,9 +174,12 @@ def test_send_archive_locally(worker):
             f.write("hello")
 
     dst = TEST_DATA_DIR / "test_folder"
-    new_folder_name = dst / f"{worker.name}-{worker.id}"
     os.makedirs(dst, exist_ok=True)
-    shutil.rmtree(new_folder_name)
+
+    new_folder_name = dst / f"{worker.name}-{worker.id}"
+    if new_folder_name.exists():
+        shutil.rmtree(new_folder_name)
+
     future = worker.exec_coro(worker._send_archive_locally(dst))
     assert future.result(timeout=5)
 
