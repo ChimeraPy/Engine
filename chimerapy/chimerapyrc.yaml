@@ -25,7 +25,7 @@ config:
     timeout:
       ok: 10 # seconds
       zip-time: 10
-      zpp-time-write: 20
+      zip-time-write: 20
       client-ready: 10
       server-ready: 10
       client-shutdown: 10

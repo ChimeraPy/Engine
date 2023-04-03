@@ -225,7 +225,7 @@ class Client:
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Then send the file
-        await self._send_file_async(url, data)
+        await self._send_file_async(url, sender_id, temp_zip_file)
 
         return True
 
