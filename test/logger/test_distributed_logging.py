@@ -31,7 +31,7 @@ def test_manager_ability_to_collect_logs():
 
         worker.logger.info(f"Dummy log from worker {j}")
 
-        worker.deregister()
+        worker.deregister().result(timeout=10)
         time.sleep(2)
 
         assert worker.id not in manager.logs_sink.handler.handlers
@@ -67,7 +67,7 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
 
     worker_node_map = {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
 
-    manager.commit_graph(graph, worker_node_map)
+    manager.commit_graph(graph, worker_node_map).result(timeout=30)
 
     manager.start()
     time.sleep(3)
