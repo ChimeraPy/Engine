@@ -61,7 +61,7 @@ if __name__ == "__main__":
     mapping = {worker.id: graph.node_ids}
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping)
+    manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
 
     # Wail until user stops
     while True:
@@ -69,7 +69,7 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
-    manager.start()
+    manager.start().result(timeout=5)
 
     # Wail until user stops
     while True:
@@ -77,5 +77,5 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
-    manager.stop()
+    manager.stop().result(timeout=5)
     manager.shutdown()
