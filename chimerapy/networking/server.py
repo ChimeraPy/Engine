@@ -274,7 +274,7 @@ class Server:
         return True
 
     ####################################################################
-    # Server Async Setup and Shutdown
+    # Server Async Setup
     ####################################################################
 
     async def _main(self) -> bool:
@@ -294,7 +294,43 @@ class Server:
 
         return True
 
-    async def _server_shutdown(self) -> bool:
+    ####################################################################
+    # Server ASync Lifecycle API
+    ####################################################################
+
+    async def async_send(
+        self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
+    ) -> bool:
+
+        # Create uuid
+        msg_uuid = str(uuid.uuid4())
+
+        # Create msg container and execute writing coroutine
+        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
+        success = await self._write_ws(client_id, msg)
+        return success
+
+    async def async_broadcast(
+        self, signal: enum.Enum, data: Dict, ok: bool = False
+    ) -> bool:
+
+        # Create msg container and execute writing coroutine for all
+        # clients
+        msg = {"signal": signal, "data": data, "ok": ok}
+        coros = []
+        for client_id in self.ws_clients:
+            coros.append(self._write_ws(client_id, msg))
+
+        # Wait until all complete
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception as e:
+            self.logger.error(traceback.format_exc())
+            return False
+
+        return all(results)
+
+    async def async_shutdown(self) -> bool:
 
         # Only shutdown for the first time
         if self.running.is_set():
@@ -314,33 +350,6 @@ class Server:
             await asyncio.wait_for(self._runner.cleanup(), timeout=10)
 
         return True
-
-    ####################################################################
-    # Server ASync Lifecycle API
-    ####################################################################
-
-    async def async_send(
-        self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
-    ):
-
-        # Create uuid
-        msg_uuid = str(uuid.uuid4())
-
-        # Create msg container and execute writing coroutine
-        msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        success = await self._write_ws(client_id, msg)
-        return success
-
-    async def async_broadcast(self, signal: enum.Enum, data: Dict, ok: bool = False):
-
-        # Create msg container and execute writing coroutine for all
-        # clients
-        msg = {"signal": signal, "data": data, "ok": ok}
-        successes = []
-        for client_id in self.ws_clients:
-            successes.append(await self._write_ws(client_id, msg))
-
-        return all(successes)
 
     ####################################################################
     # Server Sync Lifecycle API
@@ -447,7 +456,7 @@ class Server:
 
     def shutdown(self) -> bool:
         # Execute shutdown
-        future = self._thread.exec(self._server_shutdown())
+        future = self._thread.exec(self.async_shutdown())
 
         success = False
         try:

@@ -17,7 +17,7 @@ from asyncio import Task
 # Third-party Imports
 import dill
 import aiohttp
-from aiohttp import web
+from aiohttp import web, client_exceptions
 import networkx as nx
 
 from chimerapy import config
@@ -26,7 +26,7 @@ from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
-from .utils import waiting_for, megabytes_to_bytes
+from .utils import async_waiting_for, megabytes_to_bytes
 
 logger = _logger.getLogger("chimerapy")
 
@@ -624,6 +624,7 @@ class Manager:
         route: str,
         data: Any = {},
         timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+        catch_exceptions: List = [],
     ) -> bool:
 
         # Create a new session for the moment
@@ -632,7 +633,7 @@ class Manager:
         for worker_data in self.state.workers.values():
             session = aiohttp.ClientSession()
             url = f"http://{worker_data.ip}:{worker_data.port}" + route
-            logger.debug(f"{self}: Executing file transfer to {url}")
+            logger.debug(f"{self}: Broadcasting request to {url}")
             if htype == "get":
                 tasks.append(
                     asyncio.create_task(session.get(url, data=json.dumps(data)))
@@ -649,21 +650,26 @@ class Manager:
         await asyncio.wait(tasks, timeout=timeout)
 
         # Get their outputs
-        results: List[aiohttp.ClientResponse] = []
+        results: List[bool] = []
         for t in tasks:
             try:
                 result = t.result()
-                results.append(result)
+                results.append(result.ok)
             except Exception as e:
-                logger.error(traceback.format_exc())
-                return False
+
+                # Disregard certain exceptions
+                if e in catch_exceptions:
+                    results.append(True)
+                else:
+                    logger.error(traceback.format_exc())
+                    return False
 
         # Closing sessions
         for session in sessions:
             await session.close()
 
         # Return if all outputs were successful
-        return all([r.ok for r in results])
+        return all(results)
 
     async def _async_create_p2p_network(self) -> bool:
         """Create the P2P Nodes in the Network
@@ -787,176 +793,6 @@ class Manager:
         return self._exec_coro(
             self._async_broadcast_request(htype, route, data, timeout)
         )
-
-    ####################################################################
-    ## Front-facing Sync API
-    ####################################################################
-
-    def commit_graph(
-        self,
-        graph: Graph,
-        mapping: Dict[str, List[str]],
-        send_packages: Optional[List[Dict[str, Any]]] = None,
-    ) -> Future[bool]:
-        """Committing ``Graph`` to the cluster.
-
-        Committing refers to how the graph itself (with its nodes and edges)
-        and the mapping is distributed to the cluster. The whole routine
-        is two steps: peer creation and peer-to-peer connection setup.
-
-        In peer creation, the ``Manager`` messages each ``Worker`` with
-        the ``Nodes`` they need to execute. The ``Workers`` configure
-        the ``Nodes``, by giving them network information. The ``Nodes``
-        are then started and report back to the ``Workers``.
-
-        With the successful creation of the ``Nodes``, the ``Manager``
-        request the ``Nodes`` servers' ip address and port numbers to
-        create an address table for all the ``Nodes``. Then this table
-        is used to inform each ``Node`` where their in-bound and out-bound
-        ``Nodes`` are located; thereby establishing the edges between
-        ``Nodes``.
-
-        Args:
-            graph (cp.Graph): The graph to deploy within the cluster.
-            mapping (Dict[str, List[str]): Mapping from ``cp.Worker`` to\
-                ``cp.Nodes`` through a dictionary. The keys are the name\
-                of the workers, while the value is a list of the nodes' \
-                names.
-            send_packages (Optional[List[Dict[str, Any]]]): An optional
-                feature for transferring a local package (typically a \
-                development package not found via PYPI or Anaconda). \
-                Provide a list of packages with each package configured \
-                via dictionary with the following key-value pairs: \
-                name:``str`` and path:``pathlit.Path``.
-
-        Returns:
-            Future[bool]: Future of success in cluster's setup
-
-        """
-        return self._exec_coro(self.async_commit(graph, mapping, send_packages))
-
-    def step(self) -> Future[bool]:
-        """Cluster step execution for offline operation.
-
-        The ``step`` function is for careful but slow operation of the
-        cluster. For online execution, ``start`` and ``stop`` are the
-        methods to be used.
-
-        Returns:
-            Future[bool]: Future of the success of step function broadcasting
-
-        """
-        return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
-
-    def gather(self) -> Future[Dict]:
-        return self._exec_coro(self.async_gather())
-
-    def start(self) -> Future[bool]:
-        """Start the executiong of the cluster.
-
-        Before starting, make sure that you have perform the following
-        steps:
-
-        - Create ``Nodes``
-        - Create ``DAG`` with ``Nodes`` and their edges
-        - Connect ``Workers`` (must be before committing ``Graph``)
-        - Register, map, and commit ``Graph``
-
-        Returns:
-            Future[bool]: Future of the success of starting the cluster
-
-        """
-        return self._exec_coro(self.async_start())
-
-    def stop(self) -> Future[bool]:
-        """Stop the executiong of the cluster.
-
-        Do not forget that you still need to execute ``shutdown`` to
-        properly shutdown processes, threads, and queues.
-
-        Returns:
-            Future[bool]: Future of the success of stopping the cluster
-
-        """
-        return self._exec_coro(self.async_stop())
-
-    def collect(self, unzip: bool = True) -> Future[bool]:
-        """Collect data from the Workers
-
-        First, we wait until all the Nodes have finished save their data.\
-        Then, manager request that Nodes' from the Workers.
-
-        Args:
-            unzip (bool): Should the .zip archives be extracted.
-
-        Returns:
-            Future[bool]: Future of success in collect data from Workers
-
-        """
-        return self._exec_coro(self.async_collect(unzip))
-
-    def reset(self, keep_workers: bool = True) -> Future[bool]:
-        return self._exec_coro(self.async_reset(keep_workers))
-
-    def shutdown(self):
-        """Proper shutting down ChimeraPy cluster.
-
-        Through this method, the ``Manager`` broadcast to all ``Workers``
-        to shutdown, in which they will stop their processes and threads safely.
-
-        """
-        # Only let shutdown happen once
-        if self.has_shutdown:
-            logger.debug(f"{self}: requested to shutdown twice, skipping.")
-            return None
-        else:
-            self.has_shutdown = True
-
-        logger.debug(f"{self}: shutting down")
-
-        if self.enable_api:
-            self.dashboard_api.future_flush()
-
-        # If workers are connected, let's notify them that the cluster is
-        # shutting down
-        if len(self.state.workers) > 0:
-
-            # Send shutdown message
-            logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
-            try:
-                future = self._broadcast_request(
-                    "post",
-                    "/shutdown",
-                    timeout=config.get("manager.timeout.worker-shutdown"),
-                )
-                future.result(timeout=config.get("manager.timeout.worker-shutdown"))
-            except:
-                pass
-            logger.debug(
-                f"{self}: requested all workers to shutdown via /shutdown route"
-            )
-
-            # Wait until all worker's deregister
-            success = waiting_for(
-                condition=lambda: len(self.state.workers) == 0,
-                check_period=0.1,
-                timeout_raise=False,
-                timeout=config.get("manager.timeout.worker-shutdown"),
-            )
-
-            if success:
-                logger.debug(f"{self}: All workers shutdown: SUCCESS")
-            else:
-                logger.warning(f"{self}: All workers shutdown: FAILED - forced")
-
-        # First, shutdown server
-        self.server.shutdown()
-
-    def __del__(self):
-
-        # Also good to shutdown anything that isn't
-        if not self.has_shutdown:
-            self.shutdown()
 
     ####################################################################
     ## Front-facing ASync API
@@ -1131,3 +967,172 @@ class Manager:
         self._deregister_graph()
 
         return all(results)
+
+    async def async_shutdown(self) -> bool:
+
+        # Only let shutdown happen once
+        if self.has_shutdown:
+            logger.debug(f"{self}: requested to shutdown twice, skipping.")
+            return True
+        else:
+            self.has_shutdown = True
+
+        logger.debug(f"{self}: shutting down")
+
+        if self.enable_api:
+            self.dashboard_api.future_flush()
+
+        # If workers are connected, let's notify them that the cluster is
+        # shutting down
+        if len(self.state.workers) > 0:
+
+            # Send shutdown message
+            logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
+            try:
+                success = await self._async_broadcast_request(
+                    "post",
+                    "/shutdown",
+                    timeout=config.get("manager.timeout.worker-shutdown"),
+                    catch_exceptions=[
+                        client_exceptions.ClientConnectorError,
+                        ConnectionRefusedError,
+                    ],
+                )
+            except:
+                success = False
+
+            if success:
+                logger.debug(f"{self}: All workers shutdown: SUCCESS")
+            else:
+                logger.warning(f"{self}: All workers shutdown: FAILED - forced")
+
+        # First, shutdown server
+        return await self.server.async_shutdown()
+
+    ####################################################################
+    ## Front-facing Sync API
+    ####################################################################
+
+    def commit_graph(
+        self,
+        graph: Graph,
+        mapping: Dict[str, List[str]],
+        send_packages: Optional[List[Dict[str, Any]]] = None,
+    ) -> Future[bool]:
+        """Committing ``Graph`` to the cluster.
+
+        Committing refers to how the graph itself (with its nodes and edges)
+        and the mapping is distributed to the cluster. The whole routine
+        is two steps: peer creation and peer-to-peer connection setup.
+
+        In peer creation, the ``Manager`` messages each ``Worker`` with
+        the ``Nodes`` they need to execute. The ``Workers`` configure
+        the ``Nodes``, by giving them network information. The ``Nodes``
+        are then started and report back to the ``Workers``.
+
+        With the successful creation of the ``Nodes``, the ``Manager``
+        request the ``Nodes`` servers' ip address and port numbers to
+        create an address table for all the ``Nodes``. Then this table
+        is used to inform each ``Node`` where their in-bound and out-bound
+        ``Nodes`` are located; thereby establishing the edges between
+        ``Nodes``.
+
+        Args:
+            graph (cp.Graph): The graph to deploy within the cluster.
+            mapping (Dict[str, List[str]): Mapping from ``cp.Worker`` to\
+                ``cp.Nodes`` through a dictionary. The keys are the name\
+                of the workers, while the value is a list of the nodes' \
+                names.
+            send_packages (Optional[List[Dict[str, Any]]]): An optional
+                feature for transferring a local package (typically a \
+                development package not found via PYPI or Anaconda). \
+                Provide a list of packages with each package configured \
+                via dictionary with the following key-value pairs: \
+                name:``str`` and path:``pathlit.Path``.
+
+        Returns:
+            Future[bool]: Future of success in cluster's setup
+
+        """
+        return self._exec_coro(self.async_commit(graph, mapping, send_packages))
+
+    def step(self) -> Future[bool]:
+        """Cluster step execution for offline operation.
+
+        The ``step`` function is for careful but slow operation of the
+        cluster. For online execution, ``start`` and ``stop`` are the
+        methods to be used.
+
+        Returns:
+            Future[bool]: Future of the success of step function broadcasting
+
+        """
+        return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
+
+    def gather(self) -> Future[Dict]:
+        return self._exec_coro(self.async_gather())
+
+    def start(self) -> Future[bool]:
+        """Start the executiong of the cluster.
+
+        Before starting, make sure that you have perform the following
+        steps:
+
+        - Create ``Nodes``
+        - Create ``DAG`` with ``Nodes`` and their edges
+        - Connect ``Workers`` (must be before committing ``Graph``)
+        - Register, map, and commit ``Graph``
+
+        Returns:
+            Future[bool]: Future of the success of starting the cluster
+
+        """
+        return self._exec_coro(self.async_start())
+
+    def stop(self) -> Future[bool]:
+        """Stop the executiong of the cluster.
+
+        Do not forget that you still need to execute ``shutdown`` to
+        properly shutdown processes, threads, and queues.
+
+        Returns:
+            Future[bool]: Future of the success of stopping the cluster
+
+        """
+        return self._exec_coro(self.async_stop())
+
+    def collect(self, unzip: bool = True) -> Future[bool]:
+        """Collect data from the Workers
+
+        First, we wait until all the Nodes have finished save their data.\
+        Then, manager request that Nodes' from the Workers.
+
+        Args:
+            unzip (bool): Should the .zip archives be extracted.
+
+        Returns:
+            Future[bool]: Future of success in collect data from Workers
+
+        """
+        return self._exec_coro(self.async_collect(unzip))
+
+    def reset(self, keep_workers: bool = True) -> Future[bool]:
+        return self._exec_coro(self.async_reset(keep_workers))
+
+    def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+        """Proper shutting down ChimeraPy cluster.
+
+        Through this method, the ``Manager`` broadcast to all ``Workers``
+        to shutdown, in which they will stop their processes and threads safely.
+
+        """
+        future = self._exec_coro(self.async_shutdown())
+        if blocking:
+            return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
+        return future
+
+    def __del__(self):
+
+        # Also good to shutdown anything that isn't
+        if not self.has_shutdown:
+            self.shutdown()

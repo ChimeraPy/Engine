@@ -91,22 +91,22 @@ class Worker:
             port=self.state.port,
             id=self.state.id,
             routes=[
-                web.post("/nodes/create", self.async_create_node),
-                web.post("/nodes/destroy", self.async_destroy_node),
-                web.get("/nodes/server_data", self.report_node_server_data),
-                web.post("/nodes/server_data", self.process_node_server_data),
-                web.get("/nodes/gather", self.report_node_gather),
-                web.post("/nodes/save", self.report_node_saving),
-                web.post("/nodes/collect", self.send_archive),
-                web.post("/nodes/step", self.async_step),
-                web.post("/packages/load", self.load_sent_packages),
-                web.post("/nodes/start", self.async_start_nodes),
-                web.post("/nodes/stop", self.async_stop_nodes),
-                web.post("/shutdown", self.async_shutdown),
+                web.post("/nodes/create", self._async_create_node_route),
+                web.post("/nodes/destroy", self._async_destroy_node_route),
+                web.get("/nodes/server_data", self._async_report_node_server_data),
+                web.post("/nodes/server_data", self._async_process_node_server_data),
+                web.get("/nodes/gather", self._async_report_node_gather),
+                web.post("/nodes/save", self._async_report_node_saving),
+                web.post("/nodes/collect", self._async_send_archive),
+                web.post("/nodes/step", self._async_step_route),
+                web.post("/packages/load", self._async_load_sent_packages),
+                web.post("/nodes/start", self._async_start_nodes_route),
+                web.post("/nodes/stop", self._async_stop_nodes_route),
+                web.post("/shutdown", self._async_shutdown_route),
             ],
             ws_handlers={
-                NODE_MESSAGE.STATUS: self.node_status_update,
-                NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
+                NODE_MESSAGE.STATUS: self._async_node_status_update,
+                NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
             },
             parent_logger=self.logger,
         )
@@ -157,7 +157,7 @@ class Worker:
     ## HTTP Routes
     ####################################################################
 
-    async def load_sent_packages(self, request: web.Request):
+    async def _async_load_sent_packages(self, request: web.Request):
         msg = await request.json()
 
         # For each package, extract it from the client's tempfolder
@@ -207,12 +207,11 @@ class Worker:
         self.logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
-    async def async_create_node(
+    async def _async_create_node_route(
         self,
         request: Optional[web.Request] = None,
         node_config: Optional[Dict[str, Any]] = None,
     ):
-
         if isinstance(request, web.Request):
             msg_bytes = await request.read()
             msg = pickle.loads(msg_bytes)
@@ -221,87 +220,8 @@ class Worker:
         else:
             raise RuntimeError("Invalid node creation, need request or msg")
 
-        # Saving name to track it for now
         node_id = msg["id"]
-        self.logger.debug(f"{self}: received request for Node {id} creation: {msg}")
-
-        # Saving the node data
-        self.state.nodes[node_id] = NodeState(id=node_id)
-        self.nodes_extra[node_id]["response"] = False
-        self.nodes_extra[node_id]["gather"] = DataChunk()
-        self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
-        self.logger.debug(f"{self}: created state for <Node {node_id}>")
-
-        # Keep trying to start a process until success
-        success = False
-        for i in range(config.get("worker.allowed-failures")):
-
-            # Decode the node object
-            self.nodes_extra[node_id]["node_object"] = dill.loads(
-                self.nodes_extra[node_id]["pickled"]
-            )
-            self.logger.debug(f"{self}: unpickled <Node {node_id}>")
-
-            # Record the node name
-            self.state.nodes[node_id].name = self.nodes_extra[node_id][
-                "node_object"
-            ].name
-
-            # Provide configuration information to the node once in the client
-            self.nodes_extra[node_id]["node_object"].config(
-                self.state.ip,
-                self.state.port,
-                self.tempfolder,
-                self.nodes_extra[node_id]["in_bound"],
-                self.nodes_extra[node_id]["in_bound_by_name"],
-                self.nodes_extra[node_id]["out_bound"],
-                self.nodes_extra[node_id]["follow"],
-                logging_level=self.logger.level,
-                worker_logging_port=self.logreceiver.port,
-            )
-
-            # Before starting, over write the pid
-            self.nodes_extra[node_id]["node_object"]._parent_pid = os.getpid()
-
-            # Start the node
-            self.nodes_extra[node_id]["node_object"].start()
-            self.logger.debug(f"{self}: started <Node {node_id}>")
-
-            # Wait until response from node
-            success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].init == True,
-                timeout=config.get("worker.timeout.node-creation"),
-            )
-
-            if success:
-                self.logger.debug(f"{self}: {node_id} responding, SUCCESS")
-            else:
-                # Handle failure
-                self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
-                continue
-
-            # Now we wait until the node has fully initialized and ready-up
-            success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].ready == True,
-                timeout=config.get("worker.timeout.info-request"),
-            )
-
-            if success:
-                self.logger.debug(f"{self}: {node_id} fully ready, SUCCESS")
-                break
-            else:
-                # Handle failure
-                self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
-
-        if not success:
-            self.logger.error(f"{self}: Node {node_id} failed to create")
-        else:
-            # Mark success
-            self.logger.debug(f"{self}: completed node creation: {node_id}")
+        success = await self.async_create_node(node_id, msg)
 
         # Update the manager with the most up-to-date status of the nodes
         response = {
@@ -309,48 +229,26 @@ class Worker:
             "node_state": self.state.nodes[node_id].to_dict(),
         }
 
-        if isinstance(request, web.Request):
-            return web.json_response(response)
-        else:
-            return success
+        return web.json_response(response)
 
-    async def async_destroy_node(self, request: web.Request):
+    async def _async_destroy_node_route(self, request: web.Request):
         msg = await request.json()
         node_id = msg["id"]
 
-        self.logger.debug(
-            f"{self}: received request for Node {node_id} destruction: {msg}"
-        )
-        success = False
-
-        if node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
-            self.nodes_extra[node_id]["node_object"].join(
-                timeout=config.get("worker.timeout.node-shutdown")
-            )
-
-            # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
-                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
-
-            if node_id in self.state.nodes:
-                del self.state.nodes[node_id]
-
-            success = True
+        success = await self.async_destroy_node(node_id)
 
         return web.json_response(
             {"success": success, "worker_state": self.state.to_dict()}
         )
 
-    async def report_node_server_data(self, request: web.Request):
+    async def _async_report_node_server_data(self, request: web.Request):
 
-        node_server_data = self.create_node_server_data()
+        node_server_data = self._create_node_server_data()
         return web.json_response(
             {"success": True, "node_server_data": node_server_data}
         )
 
-    async def process_node_server_data(self, request: web.Request):
+    async def _async_process_node_server_data(self, request: web.Request):
         msg = await request.json()
 
         self.logger.debug(f"{self}: processing node server data: {msg}")
@@ -385,34 +283,34 @@ class Worker:
             {"success": True, "worker_state": self.state.to_dict()}
         )
 
-    async def async_step(self, request: web.Request):
+    async def _async_step_route(self, request: web.Request):
 
-        # Worker tell all nodes to take a step
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
+        if await self.async_step():
+            return web.HTTPOk()
+        else:
+            return web.HTTPError()
 
-        return web.HTTPOk()
+    async def _async_start_nodes_route(self, request: web.Request):
 
-    async def async_start_nodes(self, request: web.Request):
+        if await self.async_start_nodes():
+            return web.HTTPOk()
+        else:
+            return web.HTTPError()
 
-        # Send message to nodes to start
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.START_NODES, data={})
+    async def _async_stop_nodes_route(self, request: web.Request):
 
-        return web.HTTPOk()
+        if await self.async_stop_nodes():
+            return web.HTTPOk()
+        else:
+            return web.HTTPError()
 
-    async def async_stop_nodes(self, request: web.Request):
-
-        # Send message to nodes to start
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
-
-        return web.HTTPOk()
-
-    async def async_shutdown(self, request: web.Request):
+    async def _async_shutdown_route(self, request: web.Request):
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
-        self.server._thread.exec_noncoro(self.shutdown, args=[])
+        task = asyncio.create_task(self.async_shutdown())
 
         return web.HTTPOk()
 
-    async def report_node_saving(self, request: web.Request):
+    async def _async_report_node_saving(self, request: web.Request):
 
         # Request saving from Worker to Nodes
         await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
@@ -443,7 +341,7 @@ class Worker:
         # Send it back to the Manager
         return web.HTTPOk()
 
-    async def report_node_gather(self, request: web.Request):
+    async def _async_report_node_gather(self, request: web.Request):
 
         self.logger.debug(f"{self}: reporting to Manager gather request")
 
@@ -487,7 +385,7 @@ class Worker:
 
         return web.Response(body=pickle.dumps(gather_data))
 
-    async def send_archive(self, request: web.Request):
+    async def _async_send_archive(self, request: web.Request):
         msg = await request.json()
 
         # Default value of success
@@ -495,10 +393,12 @@ class Worker:
 
         # If located in the same computer, just move the data
         if self.manager_host == get_ip_address():
-            await self._send_archive_locally(pathlib.Path(msg["path"]))
+            await self._async_send_archive_locally(pathlib.Path(msg["path"]))
 
         else:
-            await self._send_archive_remotely(self.manager_host, self.manager_port)
+            await self._async_send_archive_remotely(
+                self.manager_host, self.manager_port
+            )
 
         # After completion, let the Manager know
         return web.json_response({"id": self.id, "success": success})
@@ -507,7 +407,7 @@ class Worker:
     ## WS Routes
     ####################################################################
 
-    async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
+    async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving gathering value
         node_state = NodeState.from_dict(msg["data"]["state"])
@@ -517,7 +417,7 @@ class Worker:
         self.nodes_extra[node_id]["gather"] = msg["data"]["latest_value"]
         self.nodes_extra[node_id]["response"] = True
 
-    async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
+    async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
         self.logger.debug(f"{self}: note_status_update: ", msg)
         node_state = NodeState.from_dict(msg["data"])
@@ -538,7 +438,7 @@ class Worker:
     ## Helper Methods
     ####################################################################
 
-    async def _send_archive_locally(self, path: pathlib.Path) -> bool:
+    async def _async_send_archive_locally(self, path: pathlib.Path) -> bool:
         self.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
@@ -565,7 +465,7 @@ class Worker:
         os.rename(old_folder_name, new_folder_name)
         return True
 
-    async def _send_archive_remotely(self, host: str, port: int) -> bool:
+    async def _async_send_archive_remotely(self, host: str, port: int) -> bool:
 
         self.logger.debug(f"{self}: sending archive via network")
 
@@ -583,7 +483,7 @@ class Worker:
 
         return False
 
-    def create_node_server_data(self):
+    def _create_node_server_data(self):
 
         # Construct simple data structure for Node to address information
         node_server_data = {"id": self.state.id, "nodes": {}}
@@ -603,6 +503,12 @@ class Worker:
         self.task_futures.append(future)
 
         return future
+
+    @staticmethod
+    def _start_log_receiver() -> "ZMQNodeIDListener":
+        log_receiver = _logger.get_node_id_zmq_listener()
+        log_receiver.start(register_exit_handlers=True)
+        return log_receiver
 
     ####################################################################
     ## Worker ASync Lifecycle API
@@ -683,6 +589,179 @@ class Worker:
 
         return False
 
+    async def async_create_node(self, node_id: str, msg: Dict) -> bool:
+
+        # Saving name to track it for now
+        self.logger.debug(f"{self}: received request for Node {id} creation: {msg}")
+
+        # Saving the node data
+        self.state.nodes[node_id] = NodeState(id=node_id)
+        self.nodes_extra[node_id]["response"] = False
+        self.nodes_extra[node_id]["gather"] = DataChunk()
+        self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
+        self.logger.debug(f"{self}: created state for <Node {node_id}>")
+
+        # Keep trying to start a process until success
+        success = False
+        for i in range(config.get("worker.allowed-failures")):
+
+            # Decode the node object
+            self.nodes_extra[node_id]["node_object"] = dill.loads(
+                self.nodes_extra[node_id]["pickled"]
+            )
+            self.logger.debug(f"{self}: unpickled <Node {node_id}>")
+
+            # Record the node name
+            self.state.nodes[node_id].name = self.nodes_extra[node_id][
+                "node_object"
+            ].name
+
+            # Provide configuration information to the node once in the client
+            self.nodes_extra[node_id]["node_object"].config(
+                self.state.ip,
+                self.state.port,
+                self.tempfolder,
+                self.nodes_extra[node_id]["in_bound"],
+                self.nodes_extra[node_id]["in_bound_by_name"],
+                self.nodes_extra[node_id]["out_bound"],
+                self.nodes_extra[node_id]["follow"],
+                logging_level=self.logger.level,
+                worker_logging_port=self.logreceiver.port,
+            )
+            self.logger.debug(f"{self}: configured <Node {node_id}>")
+
+            # Before starting, over write the pid
+            self.nodes_extra[node_id]["node_object"]._parent_pid = os.getpid()
+
+            # Start the node
+            self.nodes_extra[node_id]["node_object"].start()
+            self.logger.debug(f"{self}: started <Node {node_id}>")
+
+            # Wait until response from node
+            success = await async_waiting_for(
+                condition=lambda: self.state.nodes[node_id].init == True,
+                timeout=config.get("worker.timeout.node-creation"),
+            )
+
+            if success:
+                self.logger.debug(f"{self}: {node_id} responding, SUCCESS")
+            else:
+                # Handle failure
+                self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
+                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["node_object"].terminate()
+                continue
+
+            # Now we wait until the node has fully initialized and ready-up
+            success = await async_waiting_for(
+                condition=lambda: self.state.nodes[node_id].ready == True,
+                timeout=config.get("worker.timeout.info-request"),
+            )
+
+            if success:
+                self.logger.debug(f"{self}: {node_id} fully ready, SUCCESS")
+                break
+            else:
+                # Handle failure
+                self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
+                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["node_object"].terminate()
+
+        if not success:
+            self.logger.error(f"{self}: Node {node_id} failed to create")
+        else:
+            # Mark success
+            self.logger.debug(f"{self}: completed node creation: {node_id}")
+
+        return success
+
+    async def async_destroy_node(self, node_id: str) -> bool:
+
+        self.logger.debug(f"{self}: received request for Node {node_id} destruction")
+        success = False
+
+        if node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].shutdown()
+            self.nodes_extra[node_id]["node_object"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
+
+            # If that doesn't work, terminate
+            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes_extra[node_id]["node_object"].terminate()
+
+            if node_id in self.state.nodes:
+                del self.state.nodes[node_id]
+
+            success = True
+
+        return success
+
+    async def async_start_nodes(self) -> bool:
+        # Send message to nodes to start
+        return await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.START_NODES, data={}
+        )
+
+    async def async_step(self) -> bool:
+        # Worker tell all nodes to take a step
+        return await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.REQUEST_STEP, data={}
+        )
+
+    async def async_stop_nodes(self) -> bool:
+        # Send message to nodes to start
+        return await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.STOP_NODES, data={}
+        )
+
+    async def async_shutdown(self) -> bool:
+
+        # Check if shutdown has been called already
+        if self.has_shutdown:
+            self.logger.debug(f"{self}: requested to shutdown when already shutdown.")
+            return True
+        else:
+            self.has_shutdown = True
+
+        self.logger.debug(f"{self}: shutting down!")
+
+        # Sleeping to ensure that other coroutines were executed before
+        await asyncio.sleep(0.5)
+
+        # Sending message to Manager that client is shutting down (only
+        # if the manager hasn't already set the client to not running)
+        success = False
+        if self.connected_to_manager:
+            success = await self.async_deregister()
+
+        # Shutdown the Worker 2 Node server
+        success = await self.server.async_shutdown()
+
+        # Shutdown nodes from the client (start all shutdown)
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].shutdown()
+
+        # Then wait until close, or force
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["node_object"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
+
+            # If that doesn't work, terminate
+            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes_extra[node_id]["node_object"].terminate()
+
+            self.logger.debug(f"{self}: Nodes have joined")
+
+        # Delete temp folder if requested
+        if self.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.tempfolder)
+
+        return success
+
     ####################################################################
     ## Worker Sync Lifecycle API
     ####################################################################
@@ -721,22 +800,16 @@ class Worker:
         return self._exec_coro(self.async_deregister())
 
     def create_node(self, msg: Dict[str, Any]) -> Future[bool]:
-        return self._exec_coro(self.async_create_node(node_config=msg))
+        return self._exec_coro(self.async_create_node(msg["id"], msg))
 
-    def step(self):
+    def step(self) -> Future[bool]:
+        return self._exec_coro(self.async_step())
 
-        # Send message to nodes to step
-        self.server.broadcast(signal=WORKER_MESSAGE.REQUEST_STEP, data={})
+    def start_nodes(self) -> Future[bool]:
+        return self._exec_coro(self.async_start_nodes())
 
-    def start_nodes(self):
-
-        # Send message to nodes to start
-        self.server.broadcast(signal=WORKER_MESSAGE.START_NODES, data={})
-
-    def stop_nodes(self):
-
-        # Send message to nodes to start
-        self.server.broadcast(signal=WORKER_MESSAGE.STOP_NODES, data={})
+    def stop_nodes(self) -> Future[bool]:
+        return self._exec_coro(self.async_stop_nodes())
 
     def idle(self):
 
@@ -745,7 +818,7 @@ class Worker:
         while not self.has_shutdown:
             time.sleep(2)
 
-    def shutdown(self, msg: Dict = {}):
+    def shutdown(self, blocking: bool = True) -> Union[Future[bool], bool]:
         """Shutdown ``Worker`` safely.
 
         The ``Worker`` needs to shutdown its server, client and ``Nodes``
@@ -757,57 +830,13 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
-        # Check if shutdown has been called already
-        if self.has_shutdown:
-            self.logger.debug(f"{self}: requested to shutdown when already shutdown.")
-            return
-        else:
-            self.has_shutdown = True
-
-        self.logger.debug(f"{self}: shutting down!")
-        # Sending message to Manager that client is shutting down (only
-        # if the manager hasn't already set the client to not running)
-        if self.connected_to_manager:
-            try:
-                self.deregister().result(
-                    timeout=config.get("worker.timeout.info-request")
-                )
-            except Exception as e:
-                self.logger.error(traceback.format_exc())
-                self.logger.warning(f"{self}: shutdown didn't reach Manager")
-
-        # Shutdown the Worker 2 Node server
-        self.server.shutdown()
-
-        # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
-
-        # Then wait until close, or force
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].join(
-                timeout=config.get("worker.timeout.node-shutdown")
-            )
-
-            # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
-                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
-
-            self.logger.debug(f"{self}: Nodes have joined")
-
-        # Delete temp folder if requested
-        if self.tempfolder.exists() and self.delete_temp:
-            shutil.rmtree(self.tempfolder)
+        future = self._exec_coro(self.async_shutdown())
+        if blocking:
+            return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
+        return future
 
     def __del__(self):
 
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
-
-    @staticmethod
-    def _start_log_receiver() -> "ZMQNodeIDListener":
-        log_receiver = _logger.get_node_id_zmq_listener()
-        log_receiver.start(register_exit_handlers=True)
-        return log_receiver

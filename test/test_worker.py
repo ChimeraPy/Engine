@@ -7,6 +7,8 @@ import shutil
 from concurrent.futures import wait
 
 import dill
+import pytest
+from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
@@ -30,12 +32,13 @@ NAME_CLASS_MAP = {
 }
 
 
-def test_worker_create_node(worker, gen_node):
+@pytest.mark.parametrize("node", [lazy_fixture("gen_node"), lazy_fixture("con_node")])
+def test_worker_create_node(worker, node):
 
     # Simple single node without connection
     msg = {
-        "id": gen_node.id,
-        "pickled": dill.dumps(gen_node),
+        "id": node.id,
+        "pickled": dill.dumps(node),
         "in_bound": [],
         "in_bound_by_name": [],
         "out_bound": [],
@@ -48,8 +51,8 @@ def test_worker_create_node(worker, gen_node):
     )
 
     logger.debug("Finishied creating nodes")
-    assert gen_node.id in worker.nodes
-    assert isinstance(worker.nodes_extra[gen_node.id]["node_object"], cp.Node)
+    assert node.id in worker.nodes
+    assert isinstance(worker.nodes_extra[node.id]["node_object"], cp.Node)
 
 
 def test_worker_create_unknown_node(worker):
@@ -98,7 +101,7 @@ def test_step_single_node(worker, gen_node):
     )
 
     logger.debug("Step through")
-    worker.step()
+    worker.step().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
@@ -125,7 +128,7 @@ def test_starting_node(worker, gen_node):
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.start_nodes()
+    worker.start_nodes().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
@@ -166,7 +169,7 @@ def test_worker_data_archiving(worker):
     time.sleep(2)
 
     logger.debug("Start nodes!")
-    worker.start_nodes()
+    worker.start_nodes().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(1)
@@ -192,7 +195,7 @@ def test_send_archive_locally(worker):
     if new_folder_name.exists():
         shutil.rmtree(new_folder_name)
 
-    future = worker._exec_coro(worker._send_archive_locally(dst))
+    future = worker._exec_coro(worker._async_send_archive_locally(dst))
     assert future.result(timeout=5)
 
     dst_worker = dst / f"{worker.name}-{worker.id}"
@@ -213,7 +216,9 @@ def test_send_archive_remotely(worker, server):
         with open(test_file, "w") as f:
             f.write("hello")
 
-    future = worker._exec_coro(worker._send_archive_remotely(server.host, server.port))
+    future = worker._exec_coro(
+        worker._async_send_archive_remotely(server.host, server.port)
+    )
     future.result(timeout=10)
     logger.debug(server.file_transfer_records)
 

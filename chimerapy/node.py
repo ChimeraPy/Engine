@@ -273,7 +273,7 @@ class Node(mp.Process):
         self.save_queue.put(image_chunk)
 
     ####################################################################
-    ## Node Lifecycle API
+    ## Back-End Lifecycle API
     ####################################################################
 
     def config(
@@ -366,6 +366,8 @@ class Node(mp.Process):
 
         if self.networking:
 
+            self.logger.debug(f"{self}: Prepping the networking component of the Node")
+
             # Create client to the Worker
             self.client = Client(
                 host=self.worker_host,
@@ -399,16 +401,6 @@ class Node(mp.Process):
                 data=self.state.to_dict(),
             )
 
-    def prep(self):
-        """User-defined method for ``Node`` setup.
-
-        In this method, the setup logic of the ``Node`` is executed. This
-        would include opening files, creating connections to sensors, and
-        calibrating sensors.
-
-        """
-        ...
-
     def ready(self):
 
         # Notify to the worker that the node is fully READY
@@ -435,7 +427,7 @@ class Node(mp.Process):
 
         while self.running.value:
 
-            self.logger.debug(f"{self}: polling inputs")
+            # self.logger.debug(f"{self}: polling inputs")
 
             # Wait until we get data from any of the subscribers
             events = dict(self.sub_poller.poll(timeout=1000))
@@ -444,7 +436,7 @@ class Node(mp.Process):
             if len(events) == 0:
                 continue
 
-            self.logger.debug(f"{self}: polling event processing {len(events)}")
+            # self.logger.debug(f"{self}: polling event processing {len(events)}")
 
             # Default value
             follow_event = False
@@ -452,7 +444,7 @@ class Node(mp.Process):
             # Else, update values
             for s in events:  # socket
 
-                self.logger.debug(f"{self}: processing event {s}")
+                # self.logger.debug(f"{self}: processing event {s}")
 
                 # Update
                 name, id = self.socket_to_sub_name_mapping[s]  # inbound
@@ -464,16 +456,16 @@ class Node(mp.Process):
                 if self.follow == id:
                     follow_event = True
 
-            self.logger.debug(
-                f"{self}: polling {self.in_bound_data}, follow = {follow_event}, event= {events}"
-            )
+            # self.logger.debug(
+            #     f"{self}: polling {self.in_bound_data}, follow = {follow_event}, event= {events}"
+            # )
 
             # If update on the follow and all inputs available, then use the inputs
             if follow_event and all(
                 [type(x) != type(None) for x in self.in_bound_data.values()]
             ):
                 self.inputs_ready.set()
-                self.logger.debug(f"{self}: got inputs")
+                # self.logger.debug(f"{self}: got inputs")
 
     def forward(self, msg: Dict):
 
@@ -494,12 +486,12 @@ class Node(mp.Process):
             # Else, we have to wait for inputs
             while self.running.value:
 
-                self.logger.debug(f"{self}: forward waiting for inputs")
+                # self.logger.debug(f"{self}: forward waiting for inputs")
 
                 if self.inputs_ready.wait(timeout=1):
                     # Once we get them, pass them through!
                     self.inputs_ready.clear()
-                    self.logger.debug(f"{self}: forward processing inputs")
+                    # self.logger.debug(f"{self}: forward processing inputs")
 
                     try:
                         output = self.step(self.in_bound_data)
@@ -525,7 +517,7 @@ class Node(mp.Process):
             # First, check that it is a node with outbound!
             if self.publisher:
 
-                self.logger.debug(f"{self}: got outputs to publish!")
+                # self.logger.debug(f"{self}: got outputs to publish!")
 
                 # Add timestamp and step id to the DataChunk
                 meta = output_data_chunk.get("meta")
@@ -536,7 +528,7 @@ class Node(mp.Process):
 
                 # Send out the output to the OutputsHandler
                 self.publisher.publish(output_data_chunk)
-                self.logger.debug(f"{self}: published!")
+                # self.logger.debug(f"{self}: published!")
 
             else:
 
@@ -544,28 +536,6 @@ class Node(mp.Process):
 
         # Update the counter
         self.step_id += 1
-
-    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
-        """User-define method.
-
-        In this method, the logic that is executed within the ``Node``'s
-        while loop. For data sources (no inputs), the ``step`` method
-        will execute as fast as possible; therefore, it is important to
-        add ``time.sleep`` to specify the sampling rate.
-
-        For a ``Node`` that have inputs, these will be executed when new
-        data is received.
-
-        Args:
-            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
-            parameter should not be considered (as they don't have inputs).\
-            For step and sink nodes, the ``data_dict`` must be included\
-            to avoid an error. The variable is a dictionary, where the\
-            key is the in-bound ``Node``'s name and the value is the\
-            output of the in-bound ``Node``'s ``step`` function.
-
-        """
-        ...
 
     def main(self):
         """User-possible overwritten method.
@@ -580,16 +550,6 @@ class Node(mp.Process):
         """
         while self.running.value:
             self.forward({})
-
-    def teardown(self):
-        """User-define method.
-
-        This method provides a convienient way to shutdown services, such
-        as closing files, signaling to sensors to stop, and making any
-        last minute corrections to the data.
-
-        """
-        ...
 
     def _teardown(self):
 
@@ -674,3 +634,49 @@ class Node(mp.Process):
         # Also, the networking components are not being used
         if self.debug == "step":
             self._teardown()
+
+    ####################################################################
+    ## Front-facing Node Lifecycle API
+    ####################################################################
+
+    def prep(self):
+        """User-defined method for ``Node`` setup.
+
+        In this method, the setup logic of the ``Node`` is executed. This
+        would include opening files, creating connections to sensors, and
+        calibrating sensors.
+
+        """
+        ...
+
+    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
+        """User-define method.
+
+        In this method, the logic that is executed within the ``Node``'s
+        while loop. For data sources (no inputs), the ``step`` method
+        will execute as fast as possible; therefore, it is important to
+        add ``time.sleep`` to specify the sampling rate.
+
+        For a ``Node`` that have inputs, these will be executed when new
+        data is received.
+
+        Args:
+            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
+            parameter should not be considered (as they don't have inputs).\
+            For step and sink nodes, the ``data_dict`` must be included\
+            to avoid an error. The variable is a dictionary, where the\
+            key is the in-bound ``Node``'s name and the value is the\
+            output of the in-bound ``Node``'s ``step`` function.
+
+        """
+        ...
+
+    def teardown(self):
+        """User-define method.
+
+        This method provides a convienient way to shutdown services, such
+        as closing files, signaling to sensors to stop, and making any
+        last minute corrections to the data.
+
+        """
+        ...
