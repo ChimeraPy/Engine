@@ -55,6 +55,7 @@ jobs:
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
+          brew install portaudio
           ${{ steps.cp39.outputs.python-path }} -m pip install --upgrade pip
           ${{ steps.cp39.outputs.python-path }} -m pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
