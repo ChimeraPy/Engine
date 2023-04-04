@@ -624,7 +624,7 @@ class Manager:
         route: str,
         data: Any = {},
         timeout: Union[int, float] = config.get("manager.timeout.info-request"),
-        catch_exceptions: List = [],
+        report_exceptions: bool = True,
     ) -> bool:
 
         # Create a new session for the moment
@@ -658,11 +658,11 @@ class Manager:
             except Exception as e:
 
                 # Disregard certain exceptions
-                if e in catch_exceptions:
-                    results.append(True)
-                else:
+                if report_exceptions:
                     logger.error(traceback.format_exc())
                     return False
+                else:
+                    results.append(True)
 
         # Closing sessions
         for session in sessions:
@@ -893,11 +893,17 @@ class Manager:
 
     async def async_collect(self, unzip: bool = True) -> bool:
 
+        # First, let all Workers coordinate their Nodes to save the data!
+        success = await self._async_broadcast_request(htype="post", route="/nodes/save")
+
+        # Then tell them to send the data to the Manager
         success = await self._async_broadcast_request(
             htype="post",
             route="/nodes/collect",
             data={"path": str(self.logdir)},
         )
+        await asyncio.sleep(1)
+
         self.state.collecting = False
 
         if success:
@@ -969,10 +975,7 @@ class Manager:
                     "post",
                     "/shutdown",
                     timeout=config.get("manager.timeout.worker-shutdown"),
-                    catch_exceptions=[
-                        client_exceptions.ClientConnectorError,
-                        ConnectionRefusedError,
-                    ],
+                    report_exceptions=False,
                 )
             except:
                 success = False
