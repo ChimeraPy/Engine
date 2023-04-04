@@ -647,7 +647,13 @@ class Manager:
             sessions.append(session)
 
         # Wait with a timeout
-        await asyncio.wait(tasks, timeout=timeout)
+        try:
+            await asyncio.wait(tasks, timeout=timeout)
+        except Exception as e:
+
+            # Disregard certain exceptions
+            logger.error(traceback.format_exc())
+            return False
 
         # Get their outputs
         results: List[bool] = []
@@ -901,6 +907,7 @@ class Manager:
             htype="post",
             route="/nodes/collect",
             data={"path": str(self.logdir)},
+            timeout=max(self.duration * 2, 60),
         )
         await asyncio.sleep(1)
 
