@@ -16,7 +16,6 @@ from concurrent.futures import Future
 import dill
 import aiohttp
 from aiohttp import web
-import requests
 
 from chimerapy import config
 from .states import WorkerState, NodeState
