@@ -739,34 +739,6 @@ class Manager:
 
         return all(results)
 
-    async def _async_collect(self) -> bool:
-
-        # Then, request to collect the archives
-        success = await self._async_broadcast_request(
-            htype="post",
-            route="/nodes/collect",
-            data={"path": str(self.logdir)},
-        )
-        self.state.collecting = False
-
-        if success:
-            try:
-                self._save_meta()
-                self.server.move_transfer_files(self.logdir, True)
-            except Exception as e:
-                logger.error(traceback.format_exc())
-            self.state.collection_status = "PASS"
-        else:
-            self.state.collection_status = "FAIL"
-
-        logger.info(f"{self}: finished async_collect")
-
-        # Relay information to front-end
-        if self.enable_api:
-            await self.dashboard_api.broadcast_state_update()
-
-        return success
-
     ####################################################################
     ## Sync Networking
     ####################################################################
@@ -919,27 +891,31 @@ class Manager:
 
         return success
 
-    async def async_collect(self, unzip) -> bool:
-        # Wait until the nodes first finished writing down the data
-        success = await self._async_broadcast_request("post", "/nodes/save")
-        if success:
-            for worker_id in self.state.workers:
-                for node_id in self.state.workers[worker_id].nodes:
-                    self.state.workers[worker_id].nodes[node_id].finished = True
+    async def async_collect(self, unzip: bool = True) -> bool:
 
-        # Request collecting archives
         success = await self._async_broadcast_request(
-            "post", "/nodes/collect", {"path": str(self.logdir)}
+            htype="post",
+            route="/nodes/collect",
+            data={"path": str(self.logdir)},
         )
+        self.state.collecting = False
 
-        # # Then move the tempfiles to the log runs and unzip
-        self.server.move_transfer_files(self.logdir, unzip)
-        logger.info(f"{self}: Data collection complete!")
+        if success:
+            try:
+                self._save_meta()
+                success = self.server.move_transfer_files(self.logdir, unzip)
+            except Exception as e:
+                logger.error(traceback.format_exc())
+            self.state.collection_status = "PASS"
+        else:
+            self.state.collection_status = "FAIL"
 
-        # Add the meta data to the archive
-        self._save_meta()
+        logger.info(f"{self}: finished async_collect")
 
-        # Success!
+        # Relay information to front-end
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
+
         return success
 
     async def async_reset(self, keep_workers: bool = True):

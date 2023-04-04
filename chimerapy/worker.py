@@ -734,7 +734,10 @@ class Worker:
         # if the manager hasn't already set the client to not running)
         success = False
         if self.connected_to_manager:
-            success = await self.async_deregister()
+            try:
+                success = await self.async_deregister()
+            except:
+                self.logger.warning(f"{self}: Failed to properly deregister")
 
         # Shutdown the Worker 2 Node server
         success = await self.server.async_shutdown()
