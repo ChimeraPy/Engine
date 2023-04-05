@@ -95,7 +95,7 @@ class Manager:
             port=port,
             id="Manager",
             routes=[
-                web.post("/workers/register", self._register_worker),
+                web.post("/workers/register", self._register_worker_route),
                 web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
             ],
@@ -146,35 +146,29 @@ class Manager:
     ## Worker -> Manager HTTP Messages
     ####################################################################
 
-    async def _register_worker(self, request: web.Request):
+    async def _register_worker_route(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
 
-        logger.debug(worker_state)
+        # Register worker
+        success = self._register_worker(worker_state)
 
-        self.state.workers[worker_state.id] = worker_state
-        logger.info(
-            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-        )
-        logger.debug(f"{self}: WorkerState: {self.state.workers}")
+        if success:
+            logs_collection_info = {
+                "enabled": self.logs_sink is not None,
+                "host": self.host if self.logs_sink else None,
+                "port": self.logs_sink.port if self.logs_sink else None,
+            }
 
-        logs_collection_info = {
-            "enabled": self.logs_sink is not None,
-            "host": self.host if self.logs_sink else None,
-            "port": self.logs_sink.port if self.logs_sink else None,
-        }
+            response = {
+                "logs_push_info": logs_collection_info,
+                "config": config.config,
+            }
 
-        response = {
-            "logs_push_info": logs_collection_info,
-            "config": config.config,
-        }
+            return web.json_response(response)
 
-        if self.logs_sink is not None:
-            self._register_worker_to_logs_sink(
-                worker_name=worker_state.name, worker_id=worker_state.id
-            )
-
-        return web.json_response(response)
+        else:
+            return web.HTTPError()
 
     async def _deregister_worker_route(self, request: web.Request):
         msg = await request.json()
@@ -261,6 +255,19 @@ class Manager:
 
     def _clear_node_server(self):
         self.nodes_server_table: Dict = {}
+
+    def _register_worker(self, worker_state: WorkerState) -> bool:
+
+        self.state.workers[worker_state.id] = worker_state
+        logger.info(
+            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+        if self.logs_sink is not None:
+            self._register_worker_to_logs_sink(
+                worker_name=worker_state.name, worker_id=worker_state.id
+            )
 
     def _deregister_worker(self, worker_id: str) -> bool:
 
@@ -991,6 +998,10 @@ class Manager:
                 logger.debug(f"{self}: All workers shutdown: SUCCESS")
             else:
                 logger.warning(f"{self}: All workers shutdown: FAILED - forced")
+
+        # Stop the distributed logger
+        if self.logs_sink:
+            self.logs_sink.shutdown()
 
         # First, shutdown server
         return await self.server.async_shutdown()
