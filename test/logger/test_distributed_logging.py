@@ -28,6 +28,7 @@ def test_manager_ability_to_collect_logs():
         worker = cp.Worker(name=f"worker_{j}", port=0, id=uuid())
         worker.connect(manager.host, manager.port)
         worker_ids.append(worker.id)
+        time.sleep(5)
 
         worker.logger.info(f"Dummy log from worker {j}")
 
