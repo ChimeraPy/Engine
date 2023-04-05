@@ -204,9 +204,9 @@ class Node(mp.Process):
     async def provide_saving(self, msg: Dict):
 
         # Stop the save handler
+        self.state.finished = True
         self.save_handler.shutdown()
         self.save_handler.join()
-        self.state.finished = True
 
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
@@ -228,49 +228,57 @@ class Node(mp.Process):
     ####################################################################
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
-        video_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": name,
-            "data": data,
-            "dtype": "video",
-            "fps": fps,
-            "timestamp": (datetime.datetime.now() - self.start_time).total_seconds(),
-        }
-        self.save_queue.put(video_chunk)
+
+        if self.running.value and not self.state.finished:
+            video_chunk = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "video",
+                "fps": fps,
+                "timestamp": (
+                    datetime.datetime.now() - self.start_time
+                ).total_seconds(),
+            }
+            self.save_queue.put(video_chunk)
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
     ):
-        audio_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": name,
-            "data": data,
-            "dtype": "audio",
-            "channels": channels,
-            "format": format,
-            "rate": rate,
-        }
-        self.save_queue.put(audio_chunk)
+        if self.running.value and not self.state.finished:
+            audio_chunk = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "audio",
+                "channels": channels,
+                "format": format,
+                "rate": rate,
+            }
+            self.save_queue.put(audio_chunk)
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        tabular_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": name,
-            "data": data,
-            "dtype": "tabular",
-        }
-        self.save_queue.put(tabular_chunk)
+        if self.running.value and not self.state.finished:
+            tabular_chunk = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "tabular",
+            }
+            self.save_queue.put(tabular_chunk)
 
     def save_image(self, name: str, data: np.ndarray):
-        image_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": name,
-            "data": data,
-            "dtype": "image",
-        }
-        self.save_queue.put(image_chunk)
+
+        if self.running.value and not self.state.finished:
+            image_chunk = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "image",
+            }
+            self.save_queue.put(image_chunk)
 
     ####################################################################
     ## Back-End Lifecycle API
@@ -569,9 +577,9 @@ class Node(mp.Process):
             self.logger.debug(f"{self}: subscriber shutdown")
 
         # Shutdown the inputs and outputs threads
+        self.state.finished = True
         self.save_handler.shutdown()
         self.save_handler.join()
-        self.state.finished = True
         self.logger.debug(f"{self}: save handler shutdown")
 
         # Shutting down networking

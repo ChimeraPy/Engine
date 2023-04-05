@@ -64,6 +64,6 @@ class TabularNode(cp.Node):
 
 class VideoNode(cp.Node):
     def step(self):
-        time.sleep(1 / 10)
-        rand_frame = np.random.rand(20, 30, 3) * 255
+        time.sleep(1 / 15)
+        rand_frame = np.random.rand(1920, 1080, 3) * 255
         self.save_video(name="test", data=rand_frame, fps=30)
