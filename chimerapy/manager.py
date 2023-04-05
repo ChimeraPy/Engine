@@ -269,6 +269,8 @@ class Manager:
                 worker_name=worker_state.name, worker_id=worker_state.id
             )
 
+        return True
+
     def _deregister_worker(self, worker_id: str) -> bool:
 
         if self.logs_sink is not None:
