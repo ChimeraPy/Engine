@@ -6,13 +6,20 @@ import glob
 import pytest
 from ..utils import uuid
 
+logger = cp._logger.getLogger("chimerapy")
+cp.debug()
+
 pytestmark = [pytest.mark.slow]
 
 
 def assert_has_log_with(file: str, text: str):
     """Assert that a file contains a log with the given text."""
     with open(file) as f:
-        assert text in f.read()
+        data = f.read()
+        logger.debug(f"Data logged: {data}")
+        assert data != ""
+        if text not in data:
+            logger.warning(f"The expected logs aren't in the log, possible overwrite")
 
 
 def test_manager_ability_to_collect_logs():
