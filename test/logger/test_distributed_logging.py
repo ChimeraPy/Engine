@@ -32,7 +32,7 @@ def test_manager_ability_to_collect_logs():
         worker.logger.info(f"Dummy log from worker {j}")
 
         worker.deregister().result(timeout=10)
-        time.sleep(2)
+        time.sleep(5)
 
         assert worker.id not in manager.logs_sink.handler.handlers
         worker.shutdown()
@@ -69,9 +69,9 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
 
     manager.commit_graph(graph, worker_node_map).result(timeout=30)
 
-    manager.start()
+    manager.start().result(timeout=5)
     time.sleep(3)
-    manager.stop()
+    manager.stop().result(timeout=5)
 
     manager.shutdown()
     worker1.shutdown()
