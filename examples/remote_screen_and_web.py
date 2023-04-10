@@ -17,7 +17,7 @@ CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class WebcamNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.vid = cv2.VideoCapture(0)
 
     def step(self):
@@ -33,7 +33,7 @@ class WebcamNode(cp.Node):
 
 
 class ScreenCaptureNode(cp.Node):
-    def prep(self):
+    def setup(self):
 
         if platform.system() == "Windows":
             import dxcam

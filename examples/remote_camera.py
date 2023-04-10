@@ -13,7 +13,7 @@ cp.debug()
 
 
 class WebcamNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.vid = cv2.VideoCapture(0)
 
     def step(self) -> cp.DataChunk:

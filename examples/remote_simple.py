@@ -12,7 +12,7 @@ CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class Producer(cp.Node):
-    def prep(self):
+    def setup(self):
         self.counter = 0
 
     def step(self):

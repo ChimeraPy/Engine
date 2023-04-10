@@ -16,7 +16,7 @@ Before executing the cluster and rolling a complex system to handle streams of d
             # Saving additional input parameters
             self.id = id
 
-        def prep(self):
+        def setup(self):
             # Create the generator to be used later
             self.vid = cap.VideoCapture(self.id)
 

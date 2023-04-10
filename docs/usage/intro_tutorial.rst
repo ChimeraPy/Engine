@@ -19,7 +19,7 @@ The first step to executing a data pipeline with ChimeraPy is to design your :cl
     import chimerapy as cp
 
     class WebcamNode(cp.Node):
-        def prep(self):
+        def setup(self):
             self.vid = cv2.VideoCapture(0)
 
         def step(self):
