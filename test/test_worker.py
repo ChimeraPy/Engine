@@ -103,7 +103,6 @@ def test_step_single_node(worker, gen_node):
     logger.debug("Step through")
     worker.step().result(timeout=5)
 
-    logger.debug("Let nodes run for some time")
     time.sleep(2)
 
 
@@ -123,9 +122,6 @@ def test_starting_node(worker, gen_node):
     worker.create_node(msg).result(
         timeout=cp.config.get("worker.timeout.node-creation")
     )
-
-    logger.debug("Waiting before starting!")
-    time.sleep(2)
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
@@ -165,14 +161,12 @@ def test_worker_data_archiving(worker):
 
     wait(futures)
 
-    logger.debug("Waiting!")
-    time.sleep(2)
-
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(1)
+    worker.stop_nodes().result(timeout=5)
 
     for node_name in NAME_CLASS_MAP:
         assert (worker.tempfolder / node_name).exists()

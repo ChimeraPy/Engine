@@ -21,7 +21,6 @@ dependencies = [
     'dill',
     'netifaces',
     'matplotlib',
-    'multiprocess',
     'opencv-python',
     'pyaudio',
     'pandas',

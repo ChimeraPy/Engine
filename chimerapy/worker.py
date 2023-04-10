@@ -10,6 +10,7 @@ import uuid
 import collections
 import asyncio
 import traceback
+import multiprocessing as mp
 from concurrent.futures import Future
 
 # Third-party Imports
@@ -25,6 +26,7 @@ from .networking.enums import (
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
+from .node.worker_service import WorkerService
 from . import _logger
 
 
@@ -262,7 +264,7 @@ class Worker:
         for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].connected == True,
+                    condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
@@ -320,7 +322,7 @@ class Worker:
             for node_id in self.nodes:
 
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].finished == True,
+                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(
@@ -615,8 +617,9 @@ class Worker:
                 "node_object"
             ].name
 
-            # Provide configuration information to the node once in the client
-            self.nodes_extra[node_id]["node_object"].config(
+            # Create worker service and inject to the Node
+            worker_service = WorkerService(
+                "worker",
                 self.state.ip,
                 self.state.port,
                 self.tempfolder,
@@ -627,18 +630,23 @@ class Worker:
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
-            self.logger.debug(f"{self}: configured <Node {node_id}>")
+            worker_service.inject(self.nodes_extra[node_id]["node_object"])
+            self.logger.debug(
+                f"{self}: injected {self.nodes_extra[node_id]['node_object']} with WorkerService"
+            )
 
-            # Before starting, over write the pid
-            self.nodes_extra[node_id]["node_object"]._parent_pid = os.getpid()
+            # Create a process to run the Node
+            process = mp.Process(target=self.nodes_extra[node_id]["node_object"].run)
+            self.nodes_extra[node_id]["process"] = process
 
             # Start the node
-            self.nodes_extra[node_id]["node_object"].start()
+            process.start()
             self.logger.debug(f"{self}: started <Node {node_id}>")
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].init == True,
+                condition=lambda: self.state.nodes[node_id].fsm
+                in ["INITIALIZED", "CONNECTED", "READY"],
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -648,12 +656,14 @@ class Worker:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
                 self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["process"].join()
+                self.nodes_extra[node_id]["process"].terminate()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].ready == True,
+                condition=lambda: self.state.nodes[node_id].fsm
+                in ["CONNECTED", "READY"],
                 timeout=config.get("worker.timeout.info-request"),
             )
 
@@ -664,7 +674,8 @@ class Worker:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
                 self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["process"].join()
+                self.nodes_extra[node_id]["process"].terminate()
 
         if not success:
             self.logger.error(f"{self}: Node {node_id} failed to create")
@@ -681,14 +692,14 @@ class Worker:
 
         if node_id in self.nodes_extra:
             self.nodes_extra[node_id]["node_object"].shutdown()
-            self.nodes_extra[node_id]["node_object"].join(
+            self.nodes_extra[node_id]["process"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
 
             # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+            if self.nodes_extra[node_id]["process"].exitcode != 0:
                 self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["process"].terminate()
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]
@@ -744,17 +755,18 @@ class Worker:
         # Shutdown nodes from the client (start all shutdown)
         for node_id in self.nodes_extra:
             self.nodes_extra[node_id]["node_object"].shutdown()
+            self.nodes_extra[node_id]["process"].join()
 
         # Then wait until close, or force
         for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].join(
+            self.nodes_extra[node_id]["process"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
 
             # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+            if self.nodes_extra[node_id]["process"].exitcode != 0:
                 self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["process"].terminate()
 
             self.logger.debug(f"{self}: Nodes have joined")
 

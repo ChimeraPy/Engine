@@ -107,7 +107,7 @@ def dockered_worker(docker_client):
 
 
 class LowFrequencyNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.i = 0
 
     def step(self):
@@ -125,7 +125,7 @@ class LowFrequencyNode(cp.Node):
 
 
 class HighFrequencyNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.i = 0
 
     def step(self):
@@ -137,7 +137,7 @@ class HighFrequencyNode(cp.Node):
 
 
 class SubsequentNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.record = {}
 
     def step(self, data: Dict[str, cp.DataChunk]):
@@ -152,7 +152,7 @@ class SubsequentNode(cp.Node):
 
 
 class GenNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.value = 2
 
     def step(self):
@@ -162,7 +162,7 @@ class GenNode(cp.Node):
 
 
 class ConsumeNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.coef = 3
 
     def step(self, data_chunks: Dict[str, cp.DataChunk]):
@@ -174,8 +174,8 @@ class ConsumeNode(cp.Node):
         return output
 
 
-class SlowPrepNode(cp.Node):
-    def prep(self):
+class SlowSetupNode(cp.Node):
+    def setup(self):
         time.sleep(2)
         self.value = 5
 
@@ -197,7 +197,7 @@ def con_node():
 
 @pytest.fixture
 def slow_node():
-    return SlowPrepNode(name="Slo1")
+    return SlowSetupNode(name="Slo1")
 
 
 @pytest.fixture
