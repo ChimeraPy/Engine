@@ -4,6 +4,7 @@ import os
 import logging
 import threading
 import datetime
+import traceback
 import multiprocessing as mp
 
 from ..networking import Client, DataChunk
@@ -127,7 +128,7 @@ class WorkerService(NodeService):
         # Shutdown the client
         self.client.shutdown()
 
-        self.node.logger.debug(f"{self.node}-RecordService shutdown")
+        self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Message Reactivity API
@@ -135,8 +136,13 @@ class WorkerService(NodeService):
 
     async def process_node_server_data(self, msg: Dict):
 
+        self.node.logger.debug(f"{self}: setting up connections: {msg}")
+
         # Pass the information to the Poller Service
-        self.node.services["poller"].set_connections(msg)
+        if "poller" in self.node.services:
+            self.node.services["poller"].setup_connections(msg)
+
+        self.node.state.fsm = "CONNECTED"
 
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
@@ -145,7 +151,8 @@ class WorkerService(NodeService):
 
     async def start_node(self, msg: Dict):
         self.node.logger.debug(f"{self}: start")
-        self.start_time = datetime.datetime.now()
+        self.node.start_time = datetime.datetime.now()
+        self.node.state.fsm = "RUNNING"
         self.worker_signal_start.set()
 
     async def async_step(self):
@@ -153,6 +160,8 @@ class WorkerService(NodeService):
         self.node.services["processor"].forward()
 
     async def stop_node(self, msg: Dict):
+        # Stop by using running variable
+        self.node.running = False
         self.node.state.fsm = "STOPPED"
 
     async def provide_gather(self, msg: Dict):
@@ -171,6 +180,7 @@ class WorkerService(NodeService):
 
         # Pass the information to the Record Service
         self.node.services["record"].save()
+        self.node.state.fsm = "SAVED"
 
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()

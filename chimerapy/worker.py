@@ -593,7 +593,7 @@ class Worker:
     async def async_create_node(self, node_id: str, msg: Dict) -> bool:
 
         # Saving name to track it for now
-        self.logger.debug(f"{self}: received request for Node {id} creation: {msg}")
+        self.logger.debug(f"{self}: received request for Node {node_id} creation:")
 
         # Saving the node data
         self.state.nodes[node_id] = NodeState(id=node_id)
@@ -619,14 +619,14 @@ class Worker:
 
             # Create worker service and inject to the Node
             worker_service = WorkerService(
-                "worker",
-                self.state.ip,
-                self.state.port,
-                self.tempfolder,
-                self.nodes_extra[node_id]["in_bound"],
-                self.nodes_extra[node_id]["in_bound_by_name"],
-                self.nodes_extra[node_id]["out_bound"],
-                self.nodes_extra[node_id]["follow"],
+                name="worker",
+                host=self.state.ip,
+                port=self.state.port,
+                worker_logdir=self.tempfolder,
+                in_bound=self.nodes_extra[node_id]["in_bound"],
+                in_bound_by_name=self.nodes_extra[node_id]["in_bound_by_name"],
+                out_bound=self.nodes_extra[node_id]["out_bound"],
+                follow=self.nodes_extra[node_id]["follow"],
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
@@ -646,7 +646,7 @@ class Worker:
             # Wait until response from node
             success = await async_waiting_for(
                 condition=lambda: self.state.nodes[node_id].fsm
-                in ["INITIALIZED", "CONNECTED", "READY"],
+                in ["INITIALIZED", "READY"],
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -662,8 +662,7 @@ class Worker:
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].fsm
-                in ["CONNECTED", "READY"],
+                condition=lambda: self.state.nodes[node_id].fsm == "READY",
                 timeout=config.get("worker.timeout.info-request"),
             )
 

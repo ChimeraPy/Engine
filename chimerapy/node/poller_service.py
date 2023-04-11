@@ -53,7 +53,7 @@ class PollerService(NodeService):
             sub.shutdown()
             self.node.logger.debug(f"{self}: subscriber shutdown")
 
-        self.node.logger.debug(f"{self.node}-PollerService shutdown")
+        self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Helper Methods

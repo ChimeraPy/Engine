@@ -25,10 +25,14 @@ from .processor_service import ProcessorService
 
 
 class Node:
+
+    services: ServiceGroup
+
     def __init__(
         self,
         name: str,
         debug_port: Optional[int] = None,
+        logdir: Optional[pathlib.Path] = None,
     ):
         """Create a basic unit of computation in ChimeraPy.
 
@@ -55,7 +59,12 @@ class Node:
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-node")
         self.logging_level: int = logging.DEBUG
-        self.logdir = pathlib.Path(tempfile.mkdtemp())
+        self.start_time = datetime.datetime.now()
+
+        if logdir:
+            self.logdir = logdir
+        else:
+            self.logdir = pathlib.Path(tempfile.mkdtemp())
         self.logger.debug(f"{self}: logdir located in {self.logdir}")
 
         # Saving state variables
@@ -134,13 +143,15 @@ class Node:
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
         if self.services["record"].enabled:
+            timestamp = datetime.datetime.now()
             video_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
                 "data": data,
                 "dtype": "video",
                 "fps": fps,
-                "timestamp": datetime.datetime.now(),
+                "elapsed": (timestamp - self.start_time).total_seconds(),
+                "timestamp": timestamp,
             }
             self.services["record"].submit(video_entry)
 

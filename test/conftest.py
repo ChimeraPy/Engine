@@ -168,7 +168,9 @@ class ConsumeNode(cp.Node):
     def step(self, data_chunks: Dict[str, cp.DataChunk]):
         time.sleep(0.1)
         # Extract the data
-        self.logger.debug(f"{self}: inside step, with {data_chunks}")
+        self.logger.debug(
+            f"{self}: inside step, with {data_chunks} - {data_chunks['Gen1']}"
+        )
         value = data_chunks["Gen1"].get("default")["value"]
         output = self.coef * value
         return output

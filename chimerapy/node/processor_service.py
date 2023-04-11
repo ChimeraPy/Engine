@@ -35,7 +35,7 @@ class ProcessorService(NodeService):
 
         self.safe_exec(self.node.teardown)
 
-        self.node.logger.debug(f"{self.node}-ProcessorService shutdown")
+        self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Helper Methods
@@ -73,7 +73,7 @@ class ProcessorService(NodeService):
                     self.node.services["poller"].inputs_ready.clear()
                     output = self.safe_exec(
                         self.node.step,
-                        args=(self.node.services["poller"].in_bound_data),
+                        args=[self.node.services["poller"].in_bound_data],
                     )
                     break
 
