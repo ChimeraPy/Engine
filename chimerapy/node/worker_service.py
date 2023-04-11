@@ -56,7 +56,7 @@ class WorkerService(NodeService):
         self.node._running = mp.Value("i", True)
 
         # Creating logdir after given the Node
-        self.node.logdir = self.worker_logdir / self.node.state.name
+        self.node.logdir = str(self.worker_logdir / self.node.state.name)
         os.makedirs(self.node.logdir, exist_ok=True)
 
         # If in-boudn, enable the poller service

@@ -32,7 +32,7 @@ class Node:
         self,
         name: str,
         debug_port: Optional[int] = None,
-        logdir: Optional[pathlib.Path] = None,
+        logdir: Optional[Union[str, pathlib.Path]] = None,
     ):
         """Create a basic unit of computation in ChimeraPy.
 
@@ -62,9 +62,9 @@ class Node:
         self.start_time = datetime.datetime.now()
 
         if logdir:
-            self.logdir = logdir
+            self.logdir = str(logdir)
         else:
-            self.logdir = pathlib.Path(tempfile.mkdtemp())
+            self.logdir = str(tempfile.mkdtemp())
         self.logger.debug(f"{self}: logdir located in {self.logdir}")
 
         # Saving state variables
