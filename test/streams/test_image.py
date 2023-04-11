@@ -56,7 +56,6 @@ def test_image_record():
     assert expected_image_path.exists()
 
 
-@pytest.mark.skip
 def test_node_save_image_stream(image_node):
 
     # Check that the image was created
@@ -67,13 +66,12 @@ def test_node_save_image_stream(image_node):
         ...
 
     # Stream
-    image_node.start()
+    image_node.run(blocking=False)
 
     # Wait to generate files
     time.sleep(3)
 
     image_node.shutdown()
-    image_node.join()
 
     # Check that the image was created
     assert expected_image_path.exists()

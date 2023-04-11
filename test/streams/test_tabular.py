@@ -55,7 +55,6 @@ def test_tabular_record():
     assert expected_tabular_path.exists()
 
 
-@pytest.mark.skip
 def test_node_save_tabular_stream(tabular_node):
 
     # Check that the tabular was created
@@ -66,13 +65,12 @@ def test_node_save_tabular_stream(tabular_node):
         ...
 
     # Stream
-    tabular_node.start()
+    tabular_node.run(blocking=False)
 
     # Wait to generate files
     time.sleep(3)
 
     tabular_node.shutdown()
-    tabular_node.join()
 
     # Check that the tabular was created
     assert expected_tabular_path.exists()

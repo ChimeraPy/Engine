@@ -118,7 +118,6 @@ def test_video_record_with_unstable_frames():
     assert (num_frames - expected_num_frames) / expected_num_frames <= 0.02
 
 
-@pytest.mark.skip
 def test_node_save_video_stream(video_node):
 
     # Check that the video was created
@@ -142,7 +141,6 @@ def test_node_save_video_stream(video_node):
     cap.release()
 
 
-@pytest.mark.skip
 def test_node_save_video_stream_with_unstable_fps(video_node):
 
     # Check that the video was created

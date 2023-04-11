@@ -65,7 +65,6 @@ def test_audio_record():
     assert expected_audio_path.exists()
 
 
-@pytest.mark.skip
 def test_node_save_audio_stream(audio_node):
 
     # Check that the audio was created
@@ -76,13 +75,12 @@ def test_node_save_audio_stream(audio_node):
         ...
 
     # Stream
-    audio_node.start()
+    audio_node.run(blocking=False)
 
     # Wait to generate files
     time.sleep(3)
 
     audio_node.shutdown()
-    audio_node.join()
 
     # Check that the audio was created
     assert expected_audio_path.exists()

@@ -327,6 +327,8 @@ class Node:
             self._idle()
             self._teardown()
             self.logger.debug(f"{self}: is exiting")
+        else:
+            self.state.fsm = "RUNNING"
 
     def shutdown(self, msg: Dict = {}):
         self.running = False
