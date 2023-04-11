@@ -56,8 +56,8 @@ class WorkerService(NodeService):
         self.node._running = mp.Value("i", True)
 
         # Creating logdir after given the Node
-        self.logdir = self.worker_logdir / self.node.state.name
-        os.makedirs(self.logdir, exist_ok=True)
+        self.node.logdir = self.worker_logdir / self.node.state.name
+        os.makedirs(self.node.logdir, exist_ok=True)
 
         # If in-boudn, enable the poller service
         if self.p2p_info["in_bound"]:
@@ -155,7 +155,7 @@ class WorkerService(NodeService):
         self.node.state.fsm = "RUNNING"
         self.worker_signal_start.set()
 
-    async def async_step(self):
+    async def async_step(self, msg: Dict):
         # Make the processor take a step
         self.node.services["processor"].forward()
 

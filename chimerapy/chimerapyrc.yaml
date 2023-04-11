@@ -21,6 +21,7 @@ config:
       node-creation: 60 # seconds
       node-shutdown: 10 # seconds
       package-delivery: 30 # seconds
+      deregister: 5
   comms:
     timeout:
       ok: 10 # seconds

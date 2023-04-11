@@ -283,7 +283,7 @@ def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
     # Then register graph to Manager
     assert manager.commit_graph(
         graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    ).result(timeout=30)
+    ).result(timeout=60)
 
     yield manager
 

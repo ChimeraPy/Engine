@@ -97,7 +97,7 @@ class Worker:
                 web.get("/nodes/server_data", self._async_report_node_server_data),
                 web.post("/nodes/server_data", self._async_process_node_server_data),
                 web.get("/nodes/gather", self._async_report_node_gather),
-                web.post("/nodes/save", self._async_report_node_saving),
+                # web.post("/nodes/save", self._async_report_node_saving),
                 web.post("/nodes/collect", self._async_send_archive),
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/packages/load", self._async_load_sent_packages),
@@ -311,37 +311,6 @@ class Worker:
 
         return web.HTTPOk()
 
-    async def _async_report_node_saving(self, request: web.Request):
-
-        # Request saving from Worker to Nodes
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
-
-        # Now wait until all nodes have responded as CONNECTED
-        success = []
-        for i in range(config.get("worker.allowed-failures")):
-            for node_id in self.nodes:
-
-                if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
-                    timeout=config.get("worker.timeout.info-request"),
-                ):
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: PASS"
-                    )
-                    success.append(True)
-                    break
-                else:
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: FAIL"
-                    )
-                    success.append(False)
-
-        if not all(success):
-            self.logger.error(f"{self}: Nodes failed to report to saving")
-
-        # Send it back to the Manager
-        return web.HTTPOk()
-
     async def _async_report_node_gather(self, request: web.Request):
 
         self.logger.debug(f"{self}: reporting to Manager gather request")
@@ -389,17 +358,18 @@ class Worker:
     async def _async_send_archive(self, request: web.Request):
         msg = await request.json()
 
-        # Default value of success
-        success = False
+        # Collect data from the Nodes
+        success = await self.async_collect()
 
         # If located in the same computer, just move the data
-        if self.manager_host == get_ip_address():
-            await self._async_send_archive_locally(pathlib.Path(msg["path"]))
+        if success:
+            if self.manager_host == get_ip_address():
+                await self._async_send_archive_locally(pathlib.Path(msg["path"]))
 
-        else:
-            await self._async_send_archive_remotely(
-                self.manager_host, self.manager_port
-            )
+            else:
+                await self._async_send_archive_remotely(
+                    self.manager_host, self.manager_port
+                )
 
         # After completion, let the Manager know
         return web.json_response({"id": self.id, "success": success})
@@ -583,7 +553,7 @@ class Worker:
             async with client.post(
                 self.manager_url + "/workers/deregister",
                 data=self.state.to_json(),
-                timeout=config.get("worker.timeout.info-request"),
+                timeout=config.get("worker.timeout.deregister"),
             ) as resp:
 
                 return resp.ok
@@ -725,6 +695,36 @@ class Worker:
             signal=WORKER_MESSAGE.STOP_NODES, data={}
         )
 
+    async def async_collect(self) -> bool:
+
+        # Request saving from Worker to Nodes
+        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
+
+        # Now wait until all nodes have responded as CONNECTED
+        success = []
+        for i in range(config.get("worker.allowed-failures")):
+            for node_id in self.nodes:
+
+                if await async_waiting_for(
+                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
+                    timeout=config.get("worker.timeout.info-request"),
+                ):
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: PASS"
+                    )
+                    success.append(True)
+                    break
+                else:
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: FAIL"
+                    )
+                    success.append(False)
+
+        if not all(success):
+            self.logger.error(f"{self}: Nodes failed to report to saving")
+
+        return all(success)
+
     async def async_shutdown(self) -> bool:
 
         # Check if shutdown has been called already
@@ -754,7 +754,6 @@ class Worker:
         # Shutdown nodes from the client (start all shutdown)
         for node_id in self.nodes_extra:
             self.nodes_extra[node_id]["node_object"].shutdown()
-            self.nodes_extra[node_id]["process"].join()
 
         # Then wait until close, or force
         for node_id in self.nodes_extra:
@@ -823,6 +822,9 @@ class Worker:
 
     def stop_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_stop_nodes())
+
+    def collect(self) -> Future[bool]:
+        return self._exec_coro(self.async_collect())
 
     def idle(self):
 

@@ -222,7 +222,7 @@ class Node:
         self.logger.debug(f"{self}: finished waiting")
 
     def _main(self):
-        self.state.fsm = "PREVIEWING"
+        # self.state.fsm = "PREVIEWING"
         self.services.apply(
             "main", order=["record", "publisher", "poller", "processor", "worker"]
         )

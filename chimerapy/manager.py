@@ -908,9 +908,6 @@ class Manager:
 
     async def async_collect(self, unzip: bool = True) -> bool:
 
-        # First, let all Workers coordinate their Nodes to save the data!
-        success = await self._async_broadcast_request(htype="post", route="/nodes/save")
-
         # Then tell them to send the data to the Manager
         success = await self._async_broadcast_request(
             htype="post",

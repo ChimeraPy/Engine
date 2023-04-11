@@ -61,8 +61,7 @@ class RecordService(NodeService):
 
     @property
     def enabled(self) -> bool:
-        # return self.node.state.fsm == "RUNNING"
-        return True
+        return self.node.state.fsm == "RUNNING"
 
     def submit(self, entry: Dict):
         self.save_queue.put(entry)
@@ -87,9 +86,9 @@ class RecordService(NodeService):
                 self.records[data_entry["name"]] = entry
 
             # Case 2
-            self.node.logger.debug(
-                f"{self}: Writing data entry for {data_entry['name']}"
-            )
+            # self.node.logger.debug(
+            #     f"{self}: Writing data entry for {data_entry['name']}"
+            # )
             self.records[data_entry["name"]].write(data_entry)
 
         # Ensure that all entries close
