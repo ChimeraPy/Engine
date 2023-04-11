@@ -120,6 +120,9 @@ class WorkerService(NodeService):
             if self.worker_signal_start.wait(timeout=1):
                 break
 
+        # Only do so if connected to Worker and its connected
+        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict())
+
     def teardown(self):
 
         # Inform the worker that the Node has finished its saving of data
@@ -155,6 +158,10 @@ class WorkerService(NodeService):
         self.node.state.fsm = "RUNNING"
         self.worker_signal_start.set()
 
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
+        )
+
     async def async_step(self, msg: Dict):
         # Make the processor take a step
         self.node.services["processor"].forward()
@@ -163,6 +170,9 @@ class WorkerService(NodeService):
         # Stop by using running variable
         self.node.running = False
         self.node.state.fsm = "STOPPED"
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
+        )
 
     async def provide_gather(self, msg: Dict):
 

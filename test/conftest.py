@@ -203,16 +203,6 @@ def slow_node():
 
 
 @pytest.fixture
-def save_handler_and_queue():
-
-    save_queue = queue.Queue()
-    save_handler = cp.SaveHandler(logdir=TEST_DATA_DIR, save_queue=save_queue)
-    save_handler.start()
-
-    return (save_handler, save_queue)
-
-
-@pytest.fixture
 def graph(gen_node, con_node):
 
     # Define graph

@@ -56,6 +56,8 @@ class ProcessorService(NodeService):
 
     def while_loop(self):
 
+        self.node.logger.debug(f"{self}: started processor while loop")
+
         while self.node.running:
             self.forward()
 
