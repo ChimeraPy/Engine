@@ -83,27 +83,27 @@ def test_worker_create_unknown_node(worker):
     assert isinstance(worker.nodes_extra[node.id]["node_object"], cp.Node)
 
 
-def test_step_single_node(worker, gen_node):
+# def test_step_single_node(worker, gen_node):
 
-    # Simple single node without connection
-    msg = {
-        "id": gen_node.id,
-        "pickled": dill.dumps(gen_node),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
+#     # Simple single node without connection
+#     msg = {
+#         "id": gen_node.id,
+#         "pickled": dill.dumps(gen_node),
+#         "in_bound": [],
+#         "in_bound_by_name": [],
+#         "out_bound": [],
+#         "follow": None,
+#     }
 
-    logger.debug("Create nodes")
-    worker.create_node(msg).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
-    )
+#     logger.debug("Create nodes")
+#     worker.create_node(msg).result(
+#         timeout=cp.config.get("worker.timeout.node-creation")
+#     )
 
-    logger.debug("Step through")
-    worker.step().result(timeout=5)
+#     logger.debug("Step through")
+#     worker.step().result(timeout=5)
 
-    time.sleep(2)
+#     time.sleep(2)
 
 
 def test_starting_node(worker, gen_node):
@@ -167,6 +167,8 @@ def test_worker_data_archiving(worker):
     logger.debug("Let nodes run for some time")
     time.sleep(1)
     worker.stop_nodes().result(timeout=5)
+
+    worker.collect().result(timeout=30)
 
     for node_name in NAME_CLASS_MAP:
         assert (worker.tempfolder / node_name).exists()

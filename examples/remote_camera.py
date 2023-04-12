@@ -41,12 +41,12 @@ class ShowWindow(cp.Node):
 class RemoteCameraGraph(cp.Graph):
     def __init__(self):
         super().__init__()
-        web = WebcamNode(name="web")
-        show = ShowWindow(name="show")
+        self.web = WebcamNode(name="web")
+        self.show = ShowWindow(name="show")
 
-        self.add_nodes_from([web, show])
-        self.add_edge(src=web, dst=show)
-        self.node_ids = [web.id, show.id]
+        self.add_nodes_from([self.web, self.show])
+        self.add_edge(src=self.web, dst=self.show)
+        self.node_ids = [self.web.id, self.show.id]
 
 
 if __name__ == "__main__":
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     # Create default manager and desired graph
     manager = cp.Manager(logdir=CWD / "runs")
     graph = RemoteCameraGraph()
-    worker = cp.Worker(name="local")
+    worker = cp.Worker(name="local", id="local")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -66,8 +66,8 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    # mapping = {"remote": ["web"], "local": ["show"]}
-    mapping = {worker.id: graph.node_ids}
+    mapping = {"remote": [graph.web.id], worker.id: [graph.show.id]}
+    # mapping = {worker.id: graph.node_ids}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)

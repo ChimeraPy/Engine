@@ -62,9 +62,9 @@ class Node:
         self.start_time = datetime.datetime.now()
 
         if logdir:
-            self.logdir = str(logdir)
+            self.logdir = logdir
         else:
-            self.logdir = str(tempfile.mkdtemp())
+            self.logdir = pathlib.Path(tempfile.mkdtemp())
         self.logger.debug(f"{self}: logdir located in {self.logdir}")
 
         # Saving state variables

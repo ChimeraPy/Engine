@@ -1,5 +1,6 @@
 from typing import Union, Dict, Any, Coroutine, Optional, List
 import os
+import platform
 import time
 import tempfile
 import pathlib
@@ -28,6 +29,13 @@ from .networking.enums import (
 )
 from .node.worker_service import WorkerService
 from . import _logger
+
+# Handling pathlib.Path in different OSs
+p = platform.system()
+if p == "Windows":
+    pathlib.PosixPath = pathlib.WindowsPath
+elif p in ["Linux", "Darwin"]:
+    pathlib.WindowsPath = pathlib.PosixPath
 
 
 class Worker:
@@ -97,7 +105,6 @@ class Worker:
                 web.get("/nodes/server_data", self._async_report_node_server_data),
                 web.post("/nodes/server_data", self._async_process_node_server_data),
                 web.get("/nodes/gather", self._async_report_node_gather),
-                # web.post("/nodes/save", self._async_report_node_saving),
                 web.post("/nodes/collect", self._async_send_archive),
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/packages/load", self._async_load_sent_packages),
@@ -698,7 +705,9 @@ class Worker:
     async def async_collect(self) -> bool:
 
         # Request saving from Worker to Nodes
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
+        await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}
+        )
 
         # Now wait until all nodes have responded as CONNECTED
         success = []

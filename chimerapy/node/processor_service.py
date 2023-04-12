@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 import threading
 import traceback
 import datetime
+import time
 
 from ..networking import DataChunk
 from .node_service import NodeService
@@ -59,7 +60,11 @@ class ProcessorService(NodeService):
         self.node.logger.debug(f"{self}: started processor while loop")
 
         while self.node.running:
-            self.forward()
+
+            if self.node.fsm == "RUNNING":
+                self.forward()
+            else:
+                time.sleep(0.1)
 
     def forward(self):
 

@@ -81,9 +81,7 @@ class RecordService(NodeService):
             # Case 1: new entry
             if data_entry["name"] not in self.records:
                 entry_cls = self.record_map[data_entry["dtype"]]
-                entry = entry_cls(
-                    dir=pathlib.Path(self.node.logdir), name=data_entry["name"]
-                )
+                entry = entry_cls(dir=self.node.logdir, name=data_entry["name"])
                 self.records[data_entry["name"]] = entry
 
             # Case 2

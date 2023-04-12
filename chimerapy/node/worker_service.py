@@ -45,10 +45,6 @@ class WorkerService(NodeService):
             "out_bound": out_bound,
         }
 
-        # Events
-        self.worker_signal_start = threading.Event()
-        self.worker_signal_start.clear()
-
     def inject(self, node: "Node"):
         super().inject(node)
 
@@ -56,7 +52,7 @@ class WorkerService(NodeService):
         self.node._running = mp.Value("i", True)
 
         # Creating logdir after given the Node
-        self.node.logdir = str(self.worker_logdir / self.node.state.name)
+        self.node.logdir = self.worker_logdir / self.node.state.name
         os.makedirs(self.node.logdir, exist_ok=True)
 
         # If in-boudn, enable the poller service
@@ -80,6 +76,10 @@ class WorkerService(NodeService):
 
     def setup(self):
 
+        # Events
+        self.worker_signal_start = threading.Event()
+        self.worker_signal_start.clear()
+
         self.node.logger.debug(
             f"{self}: Prepping the networking component of the Node, connecting to Worker at {self.host}:{self.port}"
         )
@@ -93,7 +93,7 @@ class WorkerService(NodeService):
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                 WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
                 WORKER_MESSAGE.REQUEST_STEP: self.async_step,
-                WORKER_MESSAGE.REQUEST_SAVING: self.provide_saving,
+                WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
                 WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                 WORKER_MESSAGE.START_NODES: self.start_node,
                 WORKER_MESSAGE.STOP_NODES: self.stop_node,
@@ -168,7 +168,6 @@ class WorkerService(NodeService):
 
     async def stop_node(self, msg: Dict):
         # Stop by using running variable
-        self.node.running = False
         self.node.state.fsm = "STOPPED"
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
@@ -186,7 +185,7 @@ class WorkerService(NodeService):
             },
         )
 
-    async def provide_saving(self, msg: Dict):
+    async def provide_collect(self, msg: Dict):
 
         # Pass the information to the Record Service
         self.node.services["record"].save()
