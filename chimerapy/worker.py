@@ -11,9 +11,11 @@ import uuid
 import collections
 import asyncio
 import traceback
+
 # import multiprocessing as mp
 import multiprocess as mp
 from concurrent.futures import Future
+from asyncio import Task
 
 # Third-party Imports
 import dill
@@ -88,6 +90,7 @@ class Worker:
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
         self.manager_url = ""
+        self.shutdown_task: Optional[Task] = None
 
         # Create temporary data folder
         self.delete_temp = delete_temp
@@ -315,7 +318,8 @@ class Worker:
 
     async def _async_shutdown_route(self, request: web.Request):
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
-        task = asyncio.create_task(self.async_shutdown())
+        await self._shutdown_misc()
+        self.shutdown_task = asyncio.create_task(self.async_shutdown())
 
         return web.HTTPOk()
 
@@ -489,6 +493,46 @@ class Worker:
         log_receiver.start(register_exit_handlers=True)
         return log_receiver
 
+    async def _shutdown_misc(self) -> bool:
+
+        # Shutdown nodes from the client (start all shutdown)
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["running"].value = False
+
+        # Then wait until close, or force
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["process"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
+
+            # If that doesn't work, terminate
+            if self.nodes_extra[node_id]["process"].exitcode != 0:
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes_extra[node_id]["process"].terminate()
+
+            self.logger.debug(f"{self}: Nodes have joined")
+
+        # Clear nodes_extra afterwards
+        self.nodes_extra = {}
+
+        # Delete temp folder if requested
+        if self.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.tempfolder)
+
+        success = False
+        if self.connected_to_manager:
+            try:
+                success = await self.async_deregister()
+            except:
+                self.logger.warning(f"{self}: Failed to properly deregister")
+
+        return success
+
+    async def _wait_async_shutdown(self):
+        if isinstance(self.shutdown_task, Task):
+            return await self.shutdown_task
+        return True
+
     ####################################################################
     ## Worker ASync Lifecycle API
     ####################################################################
@@ -564,6 +608,9 @@ class Worker:
                 timeout=config.get("worker.timeout.deregister"),
             ) as resp:
 
+                if resp.ok:
+                    self.connected_to_manager = False
+
                 return resp.ok
 
         return False
@@ -596,7 +643,7 @@ class Worker:
             ].name
 
             # Create worker service and inject to the Node
-            running = mp.Value('i', True)
+            running = mp.Value("i", True)
             worker_service = WorkerService(
                 name="worker",
                 host=self.state.ip,
@@ -615,8 +662,15 @@ class Worker:
             )
 
             # Create a process to run the Node
-            process = mp.Process(target=self.nodes_extra[node_id]["node_object"].run, args=(True, running,))
+            process = mp.Process(
+                target=self.nodes_extra[node_id]["node_object"].run,
+                args=(
+                    True,
+                    running,
+                ),
+            )
             self.nodes_extra[node_id]["process"] = process
+            self.nodes_extra[node_id]["running"] = running
 
             # Start the node
             process.start()
@@ -634,7 +688,7 @@ class Worker:
             else:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["running"].value = False
                 self.nodes_extra[node_id]["process"].join()
                 self.nodes_extra[node_id]["process"].terminate()
                 continue
@@ -651,7 +705,7 @@ class Worker:
             else:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
+                self.nodes_extra[node_id]["running"].value = False
                 self.nodes_extra[node_id]["process"].join()
                 self.nodes_extra[node_id]["process"].terminate()
 
@@ -669,7 +723,7 @@ class Worker:
         success = False
 
         if node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
+            self.nodes_extra[node_id]["running"].value = False
             self.nodes_extra[node_id]["process"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
@@ -752,36 +806,11 @@ class Worker:
 
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)
-        success = False
-        if self.connected_to_manager:
-            try:
-                success = await self.async_deregister()
-            except:
-                self.logger.warning(f"{self}: Failed to properly deregister")
+        success = await self._shutdown_misc()
 
         # Shutdown the Worker 2 Node server
         success = await self.server.async_shutdown()
-
-        # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
-
-        # Then wait until close, or force
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["process"].join(
-                timeout=config.get("worker.timeout.node-shutdown")
-            )
-
-            # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["process"].exitcode != 0:
-                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["process"].terminate()
-
-            self.logger.debug(f"{self}: Nodes have joined")
-
-        # Delete temp folder if requested
-        if self.tempfolder.exists() and self.delete_temp:
-            shutil.rmtree(self.tempfolder)
+        self.logger.debug(f"{self}: HTTP server shutdown")
 
         return success
 
@@ -856,6 +885,10 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        # Check if shutdown coroutine has been created
+        if isinstance(self.shutdown_task, Task):
+            return self._exec_coro(self._wait_async_shutdown())
+
         future = self._exec_coro(self.async_shutdown())
         if blocking:
             return future.result(timeout=config.get("manager.timeout.worker-shutdown"))

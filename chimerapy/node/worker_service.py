@@ -187,6 +187,7 @@ class WorkerService(NodeService):
         # Pass the information to the Record Service
         self.node.services["record"].save()
         self.node.state.fsm = "SAVED"
+        # self.node.running = False
 
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()

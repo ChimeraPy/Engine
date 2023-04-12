@@ -53,7 +53,7 @@ class Node:
         # Saving input parameters
         self.state = NodeState(id=str(uuid.uuid4()), name=name)
         self.debug_port = debug_port
-        self._running = True
+        self._running: Union[bool, mp.Value] = True
         self.blocking = True
 
         # Generic Node needs
@@ -311,12 +311,12 @@ class Node:
         implications.
 
         """
-        # Saving synchronized variable
-        if running:
-            self._running = running
-
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
+
+        # Saving synchronized variable
+        if type(running) != type(None):
+            self._running = running
 
         # Saving configuration
         self.blocking = blocking
@@ -335,7 +335,9 @@ class Node:
             self.state.fsm = "RUNNING"
 
     def shutdown(self, msg: Dict = {}):
+
         self.running = False
+        self.logger.debug(f"{self}: shutting down")
 
         if not self.blocking:
             self._teardown()

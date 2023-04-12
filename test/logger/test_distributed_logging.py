@@ -53,8 +53,8 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
     manager = cp.Manager(port=0, logdir=TEST_DATA_DIR)
     assert manager.logs_sink is not None
 
-    gen_node = GenNode(name="gen")
-    con_node = ConsumeNode(name="con")
+    gen_node = GenNode(name="Gen1")
+    con_node = ConsumeNode(name="Con1")
 
     graph = cp.Graph()
     graph.add_nodes_from([gen_node, con_node])
