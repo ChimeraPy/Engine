@@ -48,9 +48,6 @@ class WorkerService(NodeService):
     def inject(self, node: "Node"):
         super().inject(node)
 
-        # Overwrite the running value
-        self.node._running = mp.Value("i", True)
-
         # Creating logdir after given the Node
         self.node.logdir = self.worker_logdir / self.node.state.name
         os.makedirs(self.node.logdir, exist_ok=True)

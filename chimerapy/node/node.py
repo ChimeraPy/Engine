@@ -6,9 +6,9 @@ import datetime
 import time
 import uuid
 import tempfile
-import multiprocessing as mp
 
 # Third-party Imports
+import multiprocess as mp
 from dataclasses import dataclass
 import numpy as np
 import pandas as pd
@@ -301,7 +301,7 @@ class Node:
         """
         ...
 
-    def run(self, blocking: bool = True):
+    def run(self, blocking: bool = True, running: Optional[mp.Value] = None):
         """The actual method that is executed in the new process.
 
         When working with ``multiprocessing.Process``, it should be
@@ -311,6 +311,10 @@ class Node:
         implications.
 
         """
+        # Saving synchronized variable
+        if running:
+            self._running = running
+
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
 

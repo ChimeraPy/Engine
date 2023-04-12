@@ -12,7 +12,7 @@ from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-from .conftest import GenNode, ConsumeNode
+from .conftest import linux_run_only
 from .networking.test_client_server import server
 
 logger = cp._logger.getLogger("chimerapy")
@@ -54,7 +54,7 @@ def test_worker_create_node(worker, node):
     assert node.id in worker.nodes
     assert isinstance(worker.nodes_extra[node.id]["node_object"], cp.Node)
 
-
+@linux_run_only
 def test_worker_create_unknown_node(worker):
     class UnknownNode(cp.Node):
         def step(self):

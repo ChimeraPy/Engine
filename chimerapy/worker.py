@@ -11,7 +11,8 @@ import uuid
 import collections
 import asyncio
 import traceback
-import multiprocessing as mp
+# import multiprocessing as mp
+import multiprocess as mp
 from concurrent.futures import Future
 
 # Third-party Imports
@@ -595,6 +596,7 @@ class Worker:
             ].name
 
             # Create worker service and inject to the Node
+            running = mp.Value('i', True)
             worker_service = WorkerService(
                 name="worker",
                 host=self.state.ip,
@@ -613,7 +615,7 @@ class Worker:
             )
 
             # Create a process to run the Node
-            process = mp.Process(target=self.nodes_extra[node_id]["node_object"].run)
+            process = mp.Process(target=self.nodes_extra[node_id]["node_object"].run, args=(True, running,))
             self.nodes_extra[node_id]["process"] = process
 
             # Start the node
