@@ -20,6 +20,7 @@ logger = cp._logger.getLogger("chimerapy")
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 TEST_DATA_DIR = TEST_DIR / "data"
+TEST_SAMPLE_DATA_DIR = TEST_DIR / "mock" / "data"
 
 # Try to get Github Actions environment variable
 try:

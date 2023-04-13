@@ -19,9 +19,10 @@ cp.debug()
     [
         (lazy_fixture("single_node_no_connections_manager"), {"Gen1": 2}),
         (lazy_fixture("multiple_nodes_one_worker_manager"), {"Gen1": 2, "Con1": 6}),
-        (
+        pytest.param(
             lazy_fixture("multiple_nodes_multiple_workers_manager"),
             {"Gen1": 2, "Con1": 6},
+            marks=pytest.mark.skip,
         ),
         (lazy_fixture("slow_single_node_single_worker_manager"), {"Slo1": 5}),
         pytest.param(

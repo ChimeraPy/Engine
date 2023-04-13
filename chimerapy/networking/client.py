@@ -12,6 +12,7 @@ import tempfile
 import pickle
 import enum
 import logging
+import traceback
 from concurrent.futures import Future
 
 # Third-party
@@ -198,9 +199,11 @@ class Client:
 
     async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
 
-        assert (
-            dir.is_dir() and dir.exists()
-        ), f"Sending {dir} needs to be a folder that exists."
+        self.logger.debug(f"{self}: _send_folder_async")
+
+        if not dir.is_dir() and not dir.exists():
+            self.logger.error(f"Cannot send non-existent dir: {dir}.")
+            return False
 
         # Having continuing attempts to make the zip folder
         miss_counter = 0
@@ -210,9 +213,17 @@ class Client:
         # First, we need to archive the folder into a zip file
         while True:
             try:
+                self.logger.debug(
+                    f"{self}: creating zip folder of {dir}, by {sender_id}"
+                )
                 shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+                self.logger.debug(
+                    f"{self}: created zip folder of {dir}, by {sender_id}"
+                )
                 break
             except:
+                self.logger.warning("Temp folder couldn't be zipped.")
+                self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)
                 miss_counter += 1
 

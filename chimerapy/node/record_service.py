@@ -94,6 +94,9 @@ class RecordService(NodeService):
         for entry in self.records.values():
             entry.close()
 
+        self.node.logger.debug(f"{self}: Closed all entries")
+        self.records = {}
+
     def save(self):
 
         # Signal to stop and save

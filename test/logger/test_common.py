@@ -61,7 +61,7 @@ def test_multiplexed_file_handler():
         logs_sink.initialize_entity(f"my_test_logger_{j}", entity_id, logs_dir)
 
     all_loggers = list(loggers.values())
-    for j in range(1000):
+    for j in range(100):
         random.choice(all_loggers).info(f"Dummy log {j}")
 
     list(

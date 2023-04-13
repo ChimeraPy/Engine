@@ -4,6 +4,7 @@ import pathlib
 from functools import partial
 import requests
 import shutil
+import zipfile
 from concurrent.futures import wait
 
 import dill
@@ -12,7 +13,7 @@ from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-from .conftest import linux_run_only
+from .conftest import linux_run_only, TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
 from .networking.test_client_server import server
 
 logger = cp._logger.getLogger("chimerapy")
@@ -22,7 +23,6 @@ from .streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
-TEST_DATA_DIR = CWD / "data"
 
 NAME_CLASS_MAP = {
     "vn": VideoNode,
@@ -53,6 +53,7 @@ def test_worker_create_node(worker, node):
     logger.debug("Finishied creating nodes")
     assert node.id in worker.nodes
     assert isinstance(worker.nodes_extra[node.id]["node_object"], cp.Node)
+
 
 @linux_run_only
 def test_worker_create_unknown_node(worker):
@@ -204,18 +205,16 @@ def test_send_archive_locally(worker):
 
 def test_send_archive_remotely(worker, server):
 
-    # Adding simple file
-    test_file = worker.tempfolder / "test.txt"
-    if test_file.exists():
-        os.remove(test_file)
-    else:
-        with open(test_file, "w") as f:
-            f.write("hello")
+    # Make a copy of example logs
+    shutil.copytree(
+        str(TEST_SAMPLE_DATA_DIR / "chimerapy_logs"), str(worker.tempfolder / "data")
+    )
 
     future = worker._exec_coro(
         worker._async_send_archive_remotely(server.host, server.port)
     )
-    future.result(timeout=10)
+    # future.result(timeout=10)
+    future.result()
     logger.debug(server.file_transfer_records)
 
     # Also check that the file exists

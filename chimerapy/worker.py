@@ -375,13 +375,19 @@ class Worker:
 
         # If located in the same computer, just move the data
         if success:
-            if self.manager_host == get_ip_address():
-                await self._async_send_archive_locally(pathlib.Path(msg["path"]))
+            try:
+                if self.manager_host == get_ip_address():
+                    success = await self._async_send_archive_locally(
+                        pathlib.Path(msg["path"])
+                    )
 
-            else:
-                await self._async_send_archive_remotely(
-                    self.manager_host, self.manager_port
-                )
+                else:
+                    success = await self._async_send_archive_remotely(
+                        self.manager_host, self.manager_port
+                    )
+            except:
+                self.logger.error(traceback.format_exc())
+                return web.HTTPError()
 
         # After completion, let the Manager know
         return web.json_response({"id": self.id, "success": success})
@@ -456,8 +462,7 @@ class Worker:
         try:
             # Create a temporary HTTP client
             client = Client(self.id, host=host, port=port)
-            await client._send_folder_async(self.name, self.tempfolder)
-            return True
+            return await client._send_folder_async(self.name, self.tempfolder)
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False
             self.logger.exception(
@@ -529,6 +534,7 @@ class Worker:
         return success
 
     async def _wait_async_shutdown(self):
+
         if isinstance(self.shutdown_task, Task):
             return await self.shutdown_task
         return True

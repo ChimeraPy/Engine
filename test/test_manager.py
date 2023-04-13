@@ -2,14 +2,14 @@ import os
 import time
 from pathlib import Path
 
+from aiohttp import web
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 from chimerapy.manager import Manager
-from .conftest import TEST_DATA_DIR
-
-from .conftest import GenNode, ConsumeNode, linux_run_only
+from .conftest import TEST_DATA_DIR, GenNode, ConsumeNode
+from .streams import VideoNode, TabularNode
 
 # Constants
 TEST_DIR = Path(os.path.abspath(__file__)).parent
@@ -111,3 +111,58 @@ def test_manager_lifecycle_graph(testbed_setup):
 
     future = manager.reset(keep_workers=True)
     assert future.result(timeout=30)
+
+
+class RemoteTransferWorker(cp.Worker):
+    async def _async_send_archive(self, request: web.Request):
+        msg = await request.json()
+
+        # Collect data from the Nodes
+        success = await self.async_collect()
+
+        # If located in the same computer, just move the data
+        if success:
+            await self._async_send_archive_remotely(
+                self.manager_host, self.manager_port
+            )
+
+        # After completion, let the Manager know
+        return web.json_response({"id": self.id, "success": success})
+
+
+@pytest.mark.parametrize(
+    "node_cls",
+    [
+        # VideoNode,
+        TabularNode
+    ],
+)
+def test_manager_remote_transfer(node_cls):
+
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    remote_worker = RemoteTransferWorker(name="remote", id="remote")
+    remote_worker.connect(manager.host, manager.port)
+
+    node = node_cls(name="node")
+
+    # Define graph
+    graph = cp.Graph()
+    graph.add_nodes_from([node])
+    manager._register_graph(graph)
+
+    future = manager.commit_graph(graph=graph, mapping={remote_worker.id: [node.id]})
+    assert future.result(timeout=30)
+    assert manager.start().result()
+
+    time.sleep(5)
+
+    assert manager.stop().result()
+    assert manager.collect().result()
+
+    future = manager.reset(keep_workers=True)
+    assert future.result(timeout=30)
+
+    manager.shutdown()
+
+    # The files from the remote worker should exists!
+    assert (manager.logdir / "remote" / "node").exists()

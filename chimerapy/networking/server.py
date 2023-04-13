@@ -147,12 +147,19 @@ class Server:
         assert field.name == "file"
         filename = field.filename
 
+        # Attaching a UUID to prevent possible collision
+        id = uuid.uuid4()
+        filename_list = filename.split(".")
+        uuid_filename = str(id) + "." + filename_list[1]
+
         # Create dst filepath
-        dst_filepath = self.tempfolder / filename
+        dst_filepath = self.tempfolder / uuid_filename
 
         # Create the record and mark that is not complete
         # Keep record of the files sent!
         self.file_transfer_records[meta["sender_id"]][filename] = {
+            "uuid": id,
+            "uuid_filename": uuid_filename,
             "filename": filename,
             "dst_filepath": dst_filepath,
             "size": 0,
@@ -428,9 +435,10 @@ class Server:
                     shutil.unpack_archive(filepath, named_dst)
 
                     # Handling if temp folder includes a _ in the beginning
-                    new_filename = filepath.stem
+                    new_filename = file_meta["filename"]
                     if new_filename[0] == "_":
                         new_filename = new_filename[1:]
+                    new_filename = new_filename.split(".")[0]
 
                     new_file = named_dst / new_filename
 
