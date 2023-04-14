@@ -46,7 +46,10 @@ def test_record_direct_submit():
         record_service.submit(video_entry)
 
     record_service.teardown()
+    logger.debug("Exited teardown")
     assert expected_file.exists()
+
+    logger.debug("Finished test!")
 
 
 def test_run_record_service_from_node():

@@ -632,7 +632,9 @@ class Manager:
         htype: Literal["get", "post"],
         route: str,
         data: Any = {},
-        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+        timeout: Optional[Union[int, float]] = config.get(
+            "manager.timeout.info-request"
+        ),
         report_exceptions: bool = True,
     ) -> bool:
 
@@ -913,7 +915,7 @@ class Manager:
             htype="post",
             route="/nodes/collect",
             data={"path": str(self.logdir)},
-            timeout=max(self.duration * 2, 60),
+            # timeout=max(self.duration * 2, 60),
         )
         await asyncio.sleep(1)
 

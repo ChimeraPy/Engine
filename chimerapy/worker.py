@@ -45,7 +45,7 @@ class Worker:
     def __init__(
         self,
         name: str,
-        port: int = 10000,
+        port: int = 0,
         delete_temp: bool = True,
         id: Optional[str] = None,
     ):

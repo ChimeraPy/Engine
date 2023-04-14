@@ -3,6 +3,7 @@ import os
 import threading
 import queue
 import pathlib
+import gc
 
 from .. import _logger
 
@@ -74,6 +75,7 @@ class RecordService(NodeService):
 
             # Received data to save
             try:
+                # self.node.logger.debug(F"{self}: Checking save_queue")
                 data_entry = self.save_queue.get(timeout=1)
             except queue.Empty:
                 continue
@@ -95,7 +97,6 @@ class RecordService(NodeService):
             entry.close()
 
         self.node.logger.debug(f"{self}: Closed all entries")
-        self.records = {}
 
     def save(self):
 

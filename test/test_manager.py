@@ -127,14 +127,15 @@ class RemoteTransferWorker(cp.Worker):
             )
 
         # After completion, let the Manager know
+        self.logger.debug(f"{self}: Responded to Manager collect request!")
         return web.json_response({"id": self.id, "success": success})
 
 
 @pytest.mark.parametrize(
     "node_cls",
     [
-        # VideoNode,
-        TabularNode
+        VideoNode,
+        # TabularNode
     ],
 )
 def test_manager_remote_transfer(node_cls):
@@ -154,7 +155,7 @@ def test_manager_remote_transfer(node_cls):
     assert future.result(timeout=30)
     assert manager.start().result()
 
-    time.sleep(5)
+    time.sleep(0.5)
 
     assert manager.stop().result()
     assert manager.collect().result()

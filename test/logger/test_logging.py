@@ -10,9 +10,13 @@ from chimerapy._logger import ZMQLogHandlerConfig, add_zmq_handler, getLogger
 def test_logger_publishing():
     logger = getLogger("chimerapy")
     config = ZMQLogHandlerConfig(
-        publisher_port=8820, root_topic="chimerapy_logs", transport="ws"
+        publisher_port=0, root_topic="chimerapy_logs", transport="ws"
     )
     add_zmq_handler(logger, config)
+
+    # Determine the port
+    endpoint = logger.handlers[1].socket.getsockopt(zmq.LAST_ENDPOINT).decode()
+    port = endpoint.split(":")[-1][:-1]
 
     logs = [f"Test log {i}" for i in range(1, 10)]
     received_logs = []
@@ -20,7 +24,7 @@ def test_logger_publishing():
     def subscribe_and_read():
         context = Context()
         socket = context.socket(zmq.SUB)
-        socket.connect("ws://localhost:8820")
+        socket.connect(f"ws://localhost:{port}")
         socket.subscribe("chimerapy_logs")
         while True:
             [_, msg] = socket.recv_multipart()
