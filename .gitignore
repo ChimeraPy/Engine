@@ -2,6 +2,9 @@
 .vimspector.json
 /.vscode
 
+# Ignore all zip files
+*.zip
+
 # Ignore the test data - sensitive
 test/logs/
 test/test_output/
