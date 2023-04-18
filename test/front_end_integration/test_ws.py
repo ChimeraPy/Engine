@@ -31,7 +31,10 @@ def test_ws_client(manager):
         id="test_ws",
         host=manager.host,
         port=manager.port,
-        ws_handlers={MANAGER_MESSAGE.NODE_STATUS_UPDATE: record.node_update_counter},
+        ws_handlers={
+            MANAGER_MESSAGE.NODE_STATUS_UPDATE: record.node_update_counter,
+            MANAGER_MESSAGE.NETWORK_STATUS_UPDATE: record.node_update_counter,
+        },
     )
     client.connect()
 
@@ -57,4 +60,22 @@ def test_node_updates(test_ws_client, manager, worker):
     time.sleep(5)
 
     # New test assertations
+    assert record.network_state == manager.state
+
+
+def test_ws_client_worker(test_ws_client, manager, worker):
+    client, record = test_ws_client
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+
+    time.sleep(5)
+
+    # New test assertations
+    assert record.network_state == manager.state
+
+    worker.deregister()
+
+    time.sleep(5)
+
     assert record.network_state == manager.state

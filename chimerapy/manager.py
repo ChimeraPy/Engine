@@ -23,6 +23,7 @@ import requests
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
+from .networking.enums import MANAGER_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -171,6 +172,12 @@ class Manager:
                 worker_name=worker_state.name, worker_id=worker_state.id
             )
 
+        if self.enable_api:
+            logger.debug("Broadcasting network status update to dashboard")
+            await self.dashboard_api.broadcast_state_update(
+                signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE,
+            )
+
         return web.json_response(response)
 
     async def deregister_worker(self, request: web.Request):
@@ -186,6 +193,13 @@ class Manager:
 
         if worker_state.id in self.state.workers:
             del self.state.workers[worker_state.id]
+
+            if self.enable_api:
+                logger.debug("Broadcasting network status update to dashboard")
+                await self.dashboard_api.broadcast_state_update(
+                    signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE,
+                )
+
             return web.HTTPOk()
         else:
             return web.HTTPBadRequest()

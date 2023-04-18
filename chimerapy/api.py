@@ -105,8 +105,8 @@ class API:
     # WS
     ####################################################################
 
-    async def broadcast_state_update(self):
+    async def broadcast_state_update(self, signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE):
         await self.manager.server.async_broadcast(
-            signal=MANAGER_MESSAGE.NODE_STATUS_UPDATE,
+            signal=signal,
             data=self.manager.state.to_dict(),
         )

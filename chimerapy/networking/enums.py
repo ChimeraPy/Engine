@@ -12,6 +12,7 @@ class GENERAL_MESSAGE(Enum):  # Used only Client and Server
 # Manager --> Front-End WS
 class MANAGER_MESSAGE(Enum):
     NODE_STATUS_UPDATE = 4
+    NETWORK_STATUS_UPDATE = 5
 
 
 # Worker -> Node
