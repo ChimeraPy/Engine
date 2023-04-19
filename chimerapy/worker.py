@@ -33,13 +33,6 @@ from .networking.enums import (
 from .node.worker_service import WorkerService
 from . import _logger
 
-# Handling pathlib.Path in different OSs
-p = platform.system()
-if p == "Windows":
-    pathlib.PosixPath = pathlib.WindowsPath
-elif p in ["Linux", "Darwin"]:
-    pathlib.WindowsPath = pathlib.PosixPath
-
 
 class Worker:
     def __init__(

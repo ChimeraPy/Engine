@@ -3,9 +3,6 @@ import time
 import pathlib
 import os
 
-import cv2
-import imutils
-
 import chimerapy as cp
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
@@ -33,12 +30,12 @@ class Consumer(cp.Node):
 class SimpleGraph(cp.Graph):
     def __init__(self):
         super().__init__()
-        prod = Producer(name="prod")
-        cons = Consumer(name="cons")
+        self.prod = Producer(name="prod")
+        self.cons = Consumer(name="cons")
 
-        self.add_nodes_from([prod, cons])
-        self.add_edge(src=prod, dst=cons)
-        self.node_ids = [prod.id, cons.id]
+        self.add_nodes_from([self.prod, self.cons])
+        self.add_edge(src=self.prod, dst=self.cons)
+        self.node_ids = [self.prod.id, self.cons.id]
 
 
 if __name__ == "__main__":
@@ -58,7 +55,9 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {worker.id: graph.node_ids}
+    # mapping = {worker.id: graph.node_ids}
+    # mapping = {worker.id: [graph.prod.id], 'remote': [graph.cons.id]}
+    mapping = {worker.id: [graph.cons.id], "remote": [graph.prod.id]}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)

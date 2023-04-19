@@ -49,7 +49,7 @@ class WorkerService(NodeService):
         super().inject(node)
 
         # Creating logdir after given the Node
-        self.node.logdir = self.worker_logdir / self.node.state.name
+        self.node.logdir = str(self.worker_logdir / self.node.state.name)
         os.makedirs(self.node.logdir, exist_ok=True)
 
         # If in-boudn, enable the poller service

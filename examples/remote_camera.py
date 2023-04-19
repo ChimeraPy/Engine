@@ -19,7 +19,7 @@ class WebcamNode(cp.Node):
     def step(self) -> cp.DataChunk:
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
-        self.save_video(name="test", data=frame, fps=20)
+        self.save_video(name="test", data=frame, fps=15)
         data_chunk = cp.DataChunk()
         data_chunk.add("frame", frame, "image")
         return data_chunk

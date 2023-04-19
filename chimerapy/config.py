@@ -6,7 +6,8 @@ import os
 # Third-party Imports
 import yaml
 
-config_file = pathlib.Path(os.path.abspath(__file__)).parent / "chimerapyrc.yaml"
+# Required to be string!
+config_file = str(pathlib.Path(os.path.abspath(__file__)).parent / "chimerapyrc.yaml")
 
 with open(config_file) as f:
     defaults = yaml.safe_load(f)["config"]
