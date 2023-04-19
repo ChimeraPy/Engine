@@ -31,8 +31,7 @@ dependencies = [
     'aiohttp',
     'blosc',
     'PyYAML',
-    'dataclasses-json',
-    'requests'
+    'dataclasses-json'
 ]
 
 [project.optional-dependencies]
@@ -49,7 +48,8 @@ test = [
     'docker',
     'numpy',
     'imutils',
-    'pillow'
+    'pillow',
+    'requests'
 ]
 docs = [
     'sphinx',

@@ -1,4 +1,4 @@
-from typing import Dict, Optional, List, Union, Any, Literal
+from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
 import pickle
 import asyncio
 import pathlib
@@ -10,15 +10,15 @@ import random
 import tempfile
 import zipfile
 import concurrent.futures
-from concurrent.futures import Future
 import traceback
+from concurrent.futures import Future
+from asyncio import Task
 
 # Third-party Imports
 import dill
 import aiohttp
-from aiohttp import web
+from aiohttp import web, client_exceptions
 import networkx as nx
-import requests
 
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
@@ -26,7 +26,7 @@ from .networking import Server, Client, DataChunk
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
-from .utils import waiting_for, megabytes_to_bytes
+from .utils import async_waiting_for, megabytes_to_bytes
 
 logger = _logger.getLogger("chimerapy")
 
@@ -68,6 +68,9 @@ class Manager:
             pathlib.Path(logdir).resolve() / f"chimerapy-{timestamp}-{rand_num}"
         )
 
+        # Creating a container for task futures
+        self.task_futures: List[Future] = []
+
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
@@ -92,9 +95,9 @@ class Manager:
             port=port,
             id="Manager",
             routes=[
-                web.post("/workers/register", self.register_worker),
-                web.post("/workers/deregister", self.deregister_worker),
-                web.post("/workers/node_status", self.update_nodes_status),
+                web.post("/workers/register", self._register_worker_route),
+                web.post("/workers/deregister", self._deregister_worker_route),
+                web.post("/workers/node_status", self._update_nodes_status),
             ],
         )
 
@@ -140,57 +143,44 @@ class Manager:
         return self.state.workers
 
     ####################################################################
-    ## Worker -> Manager Messages
+    ## Worker -> Manager HTTP Messages
     ####################################################################
 
-    async def register_worker(self, request: web.Request):
+    async def _register_worker_route(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
 
-        logger.debug(worker_state)
+        # Register worker
+        success = self._register_worker(worker_state)
 
-        self.state.workers[worker_state.id] = worker_state
-        logger.info(
-            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-        )
-        logger.debug(f"{self}: WorkerState: {self.state.workers}")
+        if success:
+            logs_collection_info = {
+                "enabled": self.logs_sink is not None,
+                "host": self.host if self.logs_sink else None,
+                "port": self.logs_sink.port if self.logs_sink else None,
+            }
 
-        logs_collection_info = {
-            "enabled": self.logs_sink is not None,
-            "host": self.host if self.logs_sink else None,
-            "port": self.logs_sink.port if self.logs_sink else None,
-        }
+            response = {
+                "logs_push_info": logs_collection_info,
+                "config": config.config,
+            }
 
-        response = {
-            "logs_push_info": logs_collection_info,
-            "config": config.config,
-        }
+            return web.json_response(response)
 
-        if self.logs_sink is not None:
-            self._register_worker_to_logs_sink(
-                worker_name=worker_state.name, worker_id=worker_state.id
-            )
+        else:
+            return web.HTTPError()
 
-        return web.json_response(response)
-
-    async def deregister_worker(self, request: web.Request):
+    async def _deregister_worker_route(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
+        success = self._deregister_worker(worker_state.id)
 
-        logger.info(
-            f"Manager deregistered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
-        )
-
-        if self.logs_sink is not None:
-            self.logs_sink.deregister_entity(worker_state.id)
-
-        if worker_state.id in self.state.workers:
-            del self.state.workers[worker_state.id]
+        if success:
             return web.HTTPOk()
         else:
             return web.HTTPBadRequest()
 
-    async def update_nodes_status(self, request: web.Request):
+    async def _update_nodes_status(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
 
@@ -204,26 +194,19 @@ class Manager:
 
         return web.HTTPOk()
 
-    def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
-        if not self.logdir.exists():
-            self.logdir.mkdir(parents=True)
-        self.logs_sink.initialize_entity(worker_name, worker_id, self.logdir)
-        logger.info(f"Registered worker {worker_name} to logs sink")
-
     ####################################################################
-    ## Helper Methods (Cluster)
+    ## Utils Methods
     ####################################################################
 
-    def save_meta(self):
-
+    def _save_meta(self):
         # Get the times, handle Optional
         if self.start_time:
-            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S")
+            start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
         else:
             start_time = None
 
         if self.stop_time:
-            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S")
+            stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
         else:
             stop_time = None
 
@@ -240,145 +223,71 @@ class Manager:
         with open(self.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
-    def request_node_creation(self, worker_id: str, node_id: str) -> bool:
-        """Request creating a Node from the Graph.
+    def _exec_coro(self, coro: Coroutine) -> Future:
+        # Submitting the coroutine
+        future = self.server._thread.exec(coro)
 
-        Args:
-            worker_id (str): The targetted Worker
-            node_id (str): The id of the node to create, that is in\
-            in the graph
+        # Saving the future for later use
+        self.task_futures.append(future)
 
-        Returns:
-            bool: Success in creating the Node
+        return future
 
-        """
-        # Send request to create node
-        if isinstance(self.worker_graph_map, nx.Graph):
-            logger.warning(f"Cannot create Node {node_id} with Worker {worker_id}")
-            return False
+    def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
+        if not self.logdir.exists():
+            self.logdir.mkdir(parents=True)
+        self.logs_sink.initialize_entity(worker_name, worker_id, self.logdir)
+        logger.info(f"Registered worker {worker_name} to logs sink")
 
-        # Extract the in_bound list and provide also the node's names
-        in_bound = list(self.graph.G.predecessors(node_id))
-        node_data = self.graph.G.nodes(data=True)
-        in_bound_by_name = [node_data[x]["object"].name for x in in_bound]
-
-        # Send for the creation of the node
-        r = requests.post(
-            f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-            + "/nodes/create",
-            pickle.dumps(
-                {
-                    "worker_id": worker_id,
-                    "id": node_id,
-                    "pickled": dill.dumps(
-                        self.graph.G.nodes[node_id]["object"], recurse=True
-                    ),
-                    "in_bound": in_bound,
-                    "in_bound_by_name": in_bound_by_name,
-                    "out_bound": list(self.graph.G.successors(node_id)),
-                    "follow": self.graph.G.nodes[node_id]["follow"],
-                }
-            ),
-            timeout=config.get("manager.timeout.node-creation"),
+    @staticmethod
+    def _start_logs_sink() -> "DistributedLogsMultiplexedFileSink":
+        """Start the logs sink."""
+        max_bytes_per_worker = megabytes_to_bytes(
+            config.get("manager.logs-sink.max-file-size-per-worker")
         )
+        logs_sink = _logger.get_distributed_logs_multiplexed_file_sink(
+            max_bytes=max_bytes_per_worker
+        )
+        logs_sink.start(register_exit_handlers=True)
+        return logs_sink
 
-        # Wait until the node has been created and connected
-        # to the corresponding worker
+    def _get_worker_ip(self, worker_id: str) -> str:
+        return f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
 
-        if r.status_code == requests.codes.ok:
-            data = r.json()
-            if data["success"]:
-                logger.debug(f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS")
-                self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
-                    data["node_state"]
-                )
-                logger.debug(f"{self}: WorkerState: {self.state.workers}")
-                return True
+    def _clear_node_server(self):
+        self.nodes_server_table: Dict = {}
 
-            else:
-                logger.error(f"{self}: Node creation ({worker_id}, {node_id}): FAILED")
-                return False
+    def _register_worker(self, worker_state: WorkerState) -> bool:
 
-        else:
-            logger.error(f"{self}: Worker {worker_id} didn't respond!")
-            return False
+        self.state.workers[worker_state.id] = worker_state
+        logger.info(
+            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+        )
+        logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
-    def request_node_server_data(self, worker_id: str) -> bool:
-        """Request Workers to provide information about Node's PUBs
-
-        Returns:
-            bool: Success of obtaining the node server data
-
-        """
-        for i in range(config.get("manager.allowed-failures")):
-
-            # Send the request to each worker
-            r = requests.get(
-                f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                + "/nodes/server_data",
+        if self.logs_sink is not None:
+            self._register_worker_to_logs_sink(
+                worker_name=worker_state.name, worker_id=worker_state.id
             )
-
-            if r.status_code == requests.codes.ok:
-
-                # And then updating the node server data
-                node_server_data = r.json()["node_server_data"]["nodes"]
-                self.nodes_server_table.update(node_server_data)
-
-                logger.debug(
-                    f"{self}: Requesting Worker's node server request: SUCCESS"
-                )
-                break
-
-            else:
-                logger.error(
-                    f"{self}: Requesting Worker's node server request: NO RESPONSE"
-                )
 
         return True
 
-    def request_connection_creation(self, worker_id: str) -> bool:
-        """Request establishing the connections between Nodes
+    def _deregister_worker(self, worker_id: str) -> bool:
 
-        This routine the Manager sends the Node's server data and request \
-        for Workers to organize their own nodes.
+        if self.logs_sink is not None:
+            self.logs_sink.deregister_entity(worker_id)
 
-        Returns:
-            bool: Returns if connection creation was successful
-        """
-
-        # Send the message to each worker and wait
-        success = False
-        for i in range(config.get("manager.allowed-failures")):
-
-            # Send the request to each worker
-            r = requests.post(
-                f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                + "/nodes/server_data",
-                json.dumps(self.nodes_server_table),
-                timeout=config.get("manager.timeout.info-request"),
+        if worker_id in self.state.workers:
+            state = self.state.workers[worker_id]
+            logger.info(
+                f"Manager deregistered <Worker id={worker_id} name={state.name}> from {state.ip}"
             )
+            del self.state.workers[worker_id]
 
-            if r.status_code == requests.codes.ok:
-                data = r.json()
-                if data["success"]:
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
+            return True
 
-                    logger.debug(
-                        f"{self}: receiving Worker's node server request: SUCCESS"
-                    )
-                    success = True
-                break
+        return False
 
-        if not success:
-            logger.error(f"{self}: receiving Worker's node server request: FAILED")
-            return False
-
-        return True
-
-    def register_graph(self, graph: Graph):
+    def _register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
 
         In ChimeraPy, cycle are not allowed, this is to avoid a deadlock.
@@ -397,7 +306,10 @@ class Manager:
         # Else, let's save it
         self.graph = graph
 
-    def map_graph(self, worker_graph_map: Dict[str, List[str]]):
+    def _deregister_graph(self):
+        self.graph: Graph = Graph()
+
+    def _map_graph(self, worker_graph_map: Dict[str, List[str]]):
         """Mapping ``Node`` from graph to ``Worker`` from cluster.
 
         The mapping, a dictionary, informs ChimeraPy which ``Worker`` is
@@ -439,212 +351,11 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
-    def broadcast_request(
-        self,
-        htype: Literal["get", "post"],
-        route: str,
-        data: Any = {},
-        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
-    ) -> bool:
-
-        # Broadcast via a ThreadPool
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(self.state.workers) + 1
-        ) as executor:
-
-            def request_start(url):
-                if htype == "post":
-                    r = requests.post(url + route, json.dumps(data), timeout=timeout)
-                elif htype == "get":
-                    r = requests.get(url + route, json.dumps(data), timeout=timeout)
-                return r, url
-
-            futures = (
-                executor.submit(request_start, f"http://{worker.ip}:{worker.port}")
-                for worker in self.state.workers.values()
-            )
-            success = []
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    r, url = future.result()
-                    if r.status_code == requests.codes.ok:
-                        logger.debug(f"{self}: Worker {url + route}: SUCCESS")
-                        success.append(True)
-                    else:
-                        logger.error(f"{self}: Worker {url + route}: FAILED, retry")
-                        success.append(False)
-
-                except Exception as exc:
-                    logger.error(exc)
-                    success.append(False)
-
-        return all(success)
-
-    async def async_broadcast_request(
-        self,
-        htype: Literal["get", "post"],
-        route: str,
-        data: Any = {},
-        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
-    ) -> bool:
-
-        # Create a new session for the moment
-        tasks: List[asyncio.Task] = []
-        sessions: List[aiohttp.ClientSession] = []
-        for worker_data in self.state.workers.values():
-            session = aiohttp.ClientSession()
-            url = f"http://{worker_data.ip}:{worker_data.port}" + route
-            logger.debug(f"{self}: Executing file transfer to {url}")
-            if htype == "get":
-                tasks.append(
-                    asyncio.create_task(session.get(url, data=json.dumps(data)))
-                )
-            elif htype == "post":
-                tasks.append(
-                    asyncio.create_task(session.post(url, data=json.dumps(data)))
-                )
-
-            # Storing sessions to later close
-            sessions.append(session)
-
-        outputs: List[aiohttp.ClientResponse] = await asyncio.gather(*tasks)
-
-        # Closing sessions
-        for session in sessions:
-            await session.close()
-
-        # Return if all outputs were successful
-        for output in outputs:
-            if output.status != 200:
-                return False
-
-        return True
-
-    async def async_collect(self) -> bool:
-
-        # Then, request to collect the archives
-        success = await self.async_broadcast_request(
-            htype="post",
-            route="/nodes/collect",
-            data={"path": str(self.logdir)},
-        )
-        self.state.collecting = False
-
-        if success:
-            try:
-                self.server.move_transfer_files(self.logdir, True)
-                self.save_meta()
-            except Exception as e:
-                logger.error(traceback.format_exc())
-            self.state.collection_status = "PASS"
-        else:
-            self.state.collection_status = "FAIL"
-
-        logger.info(f"{self}: finished async_collect")
-
-        # Relay information to front-end
-        if self.enable_api:
-            await self.dashboard_api.broadcast_state_update()
-
-        return success
-
-    ####################################################################
-    ## Cluster Setup, Control, and Monitor API
-    ####################################################################
-
-    def create_p2p_network(self) -> bool:
-        """Create the P2P Nodes in the Network
-
-        This routine only creates the Node via the Workers but doesn't \
-        establish the connections.
-
-        Returns:
-            bool: Success in creating the P2P Nodes
-
-        """
-        # Send the message to each worker
-        futures: List[Future] = []
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.get("manager.misc.num-of-threads")
-        ) as executor:
-            for worker_id in self.worker_graph_map:
-                for node_id in self.worker_graph_map[worker_id]:
-
-                    # Make request to create node
-                    futures.append(
-                        executor.submit(self.request_node_creation, worker_id, node_id)
-                    )
-
-        success = []
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                success.append(future.result())
-            except Exception as exc:
-                logger.error(exc)
-                success.append(False)
-
-        return all(success)
-
-    def setup_p2p_connections(self) -> bool:
-        """Setting up the connections between p2p nodes
-
-        Returns:
-            bool: Success in creating the connections
-        """
-
-        # After all nodes have been created, get the entire graphs
-        # host and port information
-        self.nodes_server_table = {}
-
-        # Broadcast request for node server data
-        futures: List[Future] = []
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=config.get("manager.misc.num-of-threads")
-        ) as executor:
-            for worker_id in self.worker_graph_map:
-
-                # Make the request
-                futures.append(
-                    executor.submit(self.request_node_server_data, worker_id)
-                )
-
-        success = []
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                success.append(future.result())
-            except Exception as exc:
-                logger.error(exc)
-                success.append(False)
-
-        # If all success, then continue making the connection
-        if all(success):
-
-            # Distribute the entire graph's information to all the Workers
-            futures: List[Future] = []
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=config.get("manager.misc.num-of-threads")
-            ) as executor:
-                for worker_id in self.worker_graph_map:
-
-                    futures.append(
-                        executor.submit(self.request_connection_creation, worker_id)
-                    )
-
-            success = []
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    success.append(future.result())
-                except Exception as exc:
-                    logger.error(exc)
-                    success.append(False)
-
-        return all(success)
-
     ####################################################################
     ## Package and Dependency Management
     ####################################################################
 
-    def distribute_packages(self, packages_meta: List[Dict[str, Any]]) -> bool:
+    async def _distribute_packages(self, packages_meta: List[Dict[str, Any]]) -> bool:
         """Distribute packages to Workers
 
         Args:
@@ -679,7 +390,11 @@ class Manager:
                     host=worker_data.ip,
                     port=worker_data.port,
                 )
-                client.send_file(sender_id=self.state.id, filepath=zip_package_dst)
+                await client._send_file_async(
+                    url=f"{self._get_worker_ip(worker_id)}/file/post",
+                    sender_id=self.state.id,
+                    filepath=zip_package_dst,
+                )
 
         # Wail until all workers have responded with their node server data
         success = False
@@ -687,31 +402,390 @@ class Manager:
 
             for i in range(config.get("manager.allowed-failures")):
 
-                # Send package finish confirmation
-                r = requests.post(
-                    f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                    + "/packages/load",
-                    json.dumps({"packages": [x["name"] for x in packages_meta]}),
-                    timeout=config.get("manager.timeout.package-delivery"),
-                )
+                url = f"{self._get_worker_ip(worker_id)}/packages/load"
+                data = json.dumps({"packages": [x["name"] for x in packages_meta]})
 
-                if r.status_code == requests.codes.ok:
-                    logger.debug(f"{self}: Worker {worker_id} loaded package: SUCCESS")
-                    success = True
-                    break
+                async with aiohttp.ClientSession() as client:
+                    async with client.post(
+                        url=url,
+                        data=data,
+                        timeout=config.get("manager.timeout.package-delivery"),
+                    ) as resp:
+                        if resp.ok:
+                            logger.debug(
+                                f"{self}: Worker {worker_id} loaded package: SUCCESS"
+                            )
+                            success = True
+                            break
 
             if not success:
                 logger.error(f"{self}: Worker {worker_id} loaded package: FAILED")
-                break
+                return False
 
         # If all workers pass, then yay!
         return success
 
     ####################################################################
-    ## User API
+    ## Async Networking
     ####################################################################
 
-    def commit_graph(
+    async def _async_request_node_creation(self, worker_id: str, node_id: str) -> bool:
+        """Request creating a Node from the Graph.
+
+        Args:
+            worker_id (str): The targetted Worker
+            node_id (str): The id of the node to create, that is in\
+            in the graph
+
+        Returns:
+            bool: Success in creating the Node
+
+        """
+        # Send request to create node
+        if isinstance(self.worker_graph_map, nx.Graph):
+            logger.warning(f"Cannot create Node {node_id} with Worker {worker_id}")
+            return False
+        elif node_id not in self.graph.G:
+            return False
+
+        logger.debug(f"{self}: Node requested to be created: {worker_id} - {node_id}")
+
+        # Extract the in_bound list and provide also the node's names
+        in_bound = list(self.graph.G.predecessors(node_id))
+        node_data = self.graph.G.nodes(data=True)
+        in_bound_by_name = [node_data[x]["object"].name for x in in_bound]
+
+        # Create the data to be send
+        data = pickle.dumps(
+            {
+                "worker_id": worker_id,
+                "id": node_id,
+                "pickled": dill.dumps(
+                    self.graph.G.nodes[node_id]["object"], recurse=True
+                ),
+                "in_bound": in_bound,
+                "in_bound_by_name": in_bound_by_name,
+                "out_bound": list(self.graph.G.successors(node_id)),
+                "follow": self.graph.G.nodes[node_id]["follow"],
+            }
+        )
+
+        # Construct the url
+        url = f"{self._get_worker_ip(worker_id)}/nodes/create"
+        logger.debug(f"{self}: Sending request to {url}")
+
+        # Send for the creation of the node
+        async with aiohttp.ClientSession() as client:
+            async with client.post(url=url, data=data) as resp:
+                if resp.ok:
+                    data = await resp.json()
+
+                    if data["success"]:
+                        logger.debug(
+                            f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
+                        )
+                        self.state.workers[worker_id].nodes[
+                            node_id
+                        ] = NodeState.from_dict(data["node_state"])
+                        logger.debug(f"{self}: WorkerState: {self.state.workers}")
+                        return True
+
+                    else:
+                        logger.error(
+                            f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
+                        )
+                        return False
+
+        logger.error(f"{self}: Worker {worker_id} didn't respond!")
+
+        return False
+
+    async def _async_request_node_destruction(
+        self, worker_id: str, node_id: str
+    ) -> bool:
+        """Request destroying a Node from the Graph.
+
+        Args:
+            worker_id (str): The targetted Worker
+            node_id (str): The id of the node to create, that is in\
+            in the graph
+
+        Returns:
+            bool: Success in creating the Node
+
+        """
+        # Send request to create node
+        if isinstance(self.worker_graph_map, nx.Graph):
+            logger.warning(f"Cannot destroy Node {node_id} with Worker {worker_id}")
+            return False
+        elif node_id not in self.graph.G:
+            return False
+
+        logger.debug(f"{self}: Node requested to be destroyed: {worker_id} - {node_id}")
+
+        # Construct the url
+        url = f"{self._get_worker_ip(worker_id)}/nodes/destroy"
+        logger.debug(f"{self}: Sending request to {url}")
+
+        # Create the data to be send
+        data = {
+            "worker_id": worker_id,
+            "id": node_id,
+        }
+
+        # Send for the creation of the node
+        async with aiohttp.ClientSession() as client:
+            async with client.post(url=url, data=json.dumps(data)) as resp:
+                if resp.ok:
+                    data = await resp.json()
+
+                    if data["success"]:
+                        logger.debug(
+                            f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
+                        )
+                        self.state.workers[worker_id] = WorkerState.from_dict(
+                            data["worker_state"]
+                        )
+                        logger.debug(f"{self}: WorkerState: {self.state.workers}")
+                        return True
+
+                    else:
+                        logger.error(
+                            f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
+                        )
+                        return False
+
+        logger.error(f"{self}: Worker {worker_id} didn't respond!")
+
+        return False
+
+    async def _async_request_node_server_data(self, worker_id: str) -> bool:
+        """Request Workers to provide information about Node's PUBs
+
+        Returns:
+            bool: Success of obtaining the node server data
+
+        """
+        for i in range(config.get("manager.allowed-failures")):
+            async with aiohttp.ClientSession() as client:
+                async with client.get(
+                    f"{self._get_worker_ip(worker_id)}/nodes/server_data"
+                ) as resp:
+                    if resp.ok:
+                        # Get JSON
+                        data = await resp.json()
+
+                        # And then updating the node server data
+                        node_server_data = data["node_server_data"]["nodes"]
+                        self.nodes_server_table.update(node_server_data)
+
+                        logger.debug(
+                            f"{self}: Requesting Worker's node server request: SUCCESS"
+                        )
+                        return True
+
+                    else:
+                        logger.error(
+                            f"{self}: Requesting Worker's node server request: NO RESPONSE"
+                        )
+
+        return False
+
+    async def _async_request_connection_creation(self, worker_id: str) -> bool:
+        """Request establishing the connections between Nodes
+
+        This routine the Manager sends the Node's server data and request \
+        for Workers to organize their own nodes.
+
+        Returns:
+            bool: Returns if connection creation was successful
+        """
+
+        # Send the message to each worker and wait
+        for i in range(config.get("manager.allowed-failures")):
+
+            # Send the request to each worker
+            async with aiohttp.ClientSession() as client:
+                async with client.post(
+                    f"{self._get_worker_ip(worker_id)}/nodes/server_data",
+                    data=json.dumps(self.nodes_server_table),
+                ) as resp:
+                    if resp.ok:
+                        # Get JSON
+                        data = await resp.json()
+
+                        if data["success"]:
+                            self.state.workers[worker_id] = WorkerState.from_dict(
+                                data["worker_state"]
+                            )
+                            logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+                            logger.debug(
+                                f"{self}: receiving Worker's node server request: SUCCESS"
+                            )
+                            return True
+
+        return False
+
+    async def _async_broadcast_request(
+        self,
+        htype: Literal["get", "post"],
+        route: str,
+        data: Any = {},
+        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+        report_exceptions: bool = True,
+    ) -> bool:
+
+        # Create a new session for the moment
+        tasks: List[asyncio.Task] = []
+        sessions: List[aiohttp.ClientSession] = []
+        for worker_data in self.state.workers.values():
+            session = aiohttp.ClientSession()
+            url = f"http://{worker_data.ip}:{worker_data.port}" + route
+            logger.debug(f"{self}: Broadcasting request to {url}")
+            if htype == "get":
+                tasks.append(
+                    asyncio.create_task(session.get(url, data=json.dumps(data)))
+                )
+            elif htype == "post":
+                tasks.append(
+                    asyncio.create_task(session.post(url, data=json.dumps(data)))
+                )
+
+            # Storing sessions to later close
+            sessions.append(session)
+
+        # Wait with a timeout
+        try:
+            await asyncio.wait(tasks, timeout=timeout)
+        except Exception as e:
+
+            # Disregard certain exceptions
+            logger.error(traceback.format_exc())
+            return False
+
+        # Get their outputs
+        results: List[bool] = []
+        for t in tasks:
+            try:
+                result = t.result()
+                results.append(result.ok)
+            except Exception as e:
+
+                # Disregard certain exceptions
+                if report_exceptions:
+                    logger.error(traceback.format_exc())
+                    return False
+                else:
+                    results.append(True)
+
+        # Closing sessions
+        for session in sessions:
+            await session.close()
+
+        # Return if all outputs were successful
+        return all(results)
+
+    async def _async_create_p2p_network(self) -> bool:
+        """Create the P2P Nodes in the Network
+
+        This routine only creates the Node via the Workers but doesn't \
+        establish the connections.
+
+        Returns:
+            bool: Success in creating the P2P Nodes
+
+        """
+        # Send the message to each worker
+        coros: List[Coroutine] = []
+        for worker_id in self.worker_graph_map:
+            for node_id in self.worker_graph_map[worker_id]:
+
+                # Request the creation
+                coro = self._async_request_node_creation(worker_id, node_id)
+                coros.append(coro)
+
+        # Wait until all complete
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return False
+
+        return all(results)
+
+    async def _async_setup_p2p_connections(self) -> bool:
+        """Setting up the connections between p2p nodes
+
+        Returns:
+            bool: Success in creating the connections
+
+        """
+        # After all nodes have been created, get the entire graphs
+        # host and port information
+        self.nodes_server_table = {}
+
+        # Broadcast request for node server data
+        coros: List[Coroutine] = []
+        for worker_id in self.worker_graph_map:
+            coros.append(self._async_request_node_server_data(worker_id))
+
+        # Wait until all complete
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return False
+
+        if not all(results):
+            return False
+
+        # Distribute the entire graph's information to all the Workers
+        coros: List[Coroutine] = []
+        for worker_id in self.worker_graph_map:
+            coros.append(self._async_request_connection_creation(worker_id))
+
+        # Wait until all complete
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return False
+
+        return all(results)
+
+    ####################################################################
+    ## Sync Networking
+    ####################################################################
+
+    def _request_node_creation(self, worker_id: str, node_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_node_creation(worker_id, node_id))
+
+    def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
+
+    def _request_node_server_data(self, worker_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_node_server_data(worker_id))
+
+    def _request_connection_creation(self, worker_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_connection_creation(worker_id))
+
+    def _broadcast_request(
+        self,
+        htype: Literal["get", "post"],
+        route: str,
+        data: Any = {},
+        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+    ) -> Future[bool]:
+        return self._exec_coro(
+            self._async_broadcast_request(htype, route, data, timeout)
+        )
+
+    ####################################################################
+    ## Front-facing ASync API
+    ####################################################################
+
+    async def async_commit(
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
@@ -753,151 +827,151 @@ class Manager:
 
         """
         # First, test that the graph and the mapping are valid
-        self.register_graph(graph)
-        self.map_graph(mapping)
+        self._register_graph(graph)
+        self._map_graph(mapping)
+        self._save_meta()
 
         # Then send requested packages
-        distribute_package_success = True
+        success = True
         if send_packages:
-            distribute_package_success = self.distribute_packages(send_packages)
+            success = await self._distribute_packages(send_packages)
 
         # If package are sent correctly, try to create network
         # Start with the nodes and then the connections
         if (
-            distribute_package_success
-            and self.create_p2p_network()
-            and self.setup_p2p_connections()
+            success
+            and await self._async_create_p2p_network()
+            and await self._async_setup_p2p_connections()
         ):
             return True
 
         return False
 
-    def step(self) -> bool:
-        """Cluster step execution for offline operation.
-
-        The ``step`` function is for careful but slow operation of the
-        cluster. For online execution, ``start`` and ``stop`` are the
-        methods to be used.
-
-        Returns:
-            bool: Success of step function broadcasting
-
-        """
-        return self.broadcast_request("post", "/nodes/step")
-
-    def gather(self) -> Dict:
-
+    async def async_gather(self) -> Dict:
         # Wail until all workers have responded with their node server data
         gather_data = {}
         for worker_id in self.state.workers:
 
-            r = requests.get(
-                f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
-                + "/nodes/gather",
-                timeout=config.get("manager.timeout.info-request"),
-            )
-            logger.debug(r)
+            async with aiohttp.ClientSession() as client:
+                async with client.get(
+                    f"{self._get_worker_ip(worker_id)}/nodes/gather",
+                    timeout=config.get("manager.timeout.info-request"),
+                ) as resp:
+                    if resp.ok:
+                        logger.debug(f"{self}: Gathering Worker {worker_id}: SUCCESS")
 
-            if r.status_code == requests.codes.ok:
-                logger.debug(f"Worker: {worker_id}, gathering: SUCCESS")
-            else:
-                logger.error(f"Worker: {worker_id}, gathering: FAILED")
+                        # Read the content
+                        content = await resp.content.read()
 
-            # Saving the data
-            data = pickle.loads(r.content)["node_data"]
-            for node_id, node_data in data.items():
-                data[node_id] = DataChunk.from_json(node_data)
+                        # Saving the data
+                        data = pickle.loads(content)["node_data"]
+                        for node_id, node_data in data.items():
+                            data[node_id] = DataChunk.from_json(node_data)
 
-            gather_data.update(data)
+                        gather_data.update(data)
+
+                    else:
+                        logger.error(f"{self}: Gathering Worker {worker_id}: FAILED")
 
         return gather_data
 
-    def start(self) -> bool:
-        """Start the executiong of the cluster.
+    async def async_start(self) -> bool:
 
-        Before starting, make sure that you have perform the following
-        steps:
-
-        - Create ``Nodes``
-        - Create ``DAG`` with ``Nodes`` and their edges
-        - Connect ``Workers`` (must be before committing ``Graph``)
-        - Register, map, and commit ``Graph``
-
-        """
         # Mark the start time
         self.start_time = datetime.datetime.now()
 
         # Tell the cluster to start
-        success = self.broadcast_request("post", "/nodes/start")
+        success = await self._async_broadcast_request("post", "/nodes/start")
         if success:
             self.state.running = True
 
+        # Updating meta just in case of failure
+        self._save_meta()
+
         return success
 
-    def stop(self):
-        """Stop the executiong of the cluster.
+    async def async_stop(self) -> bool:
 
-        Do not forget that you still need to execute ``shutdown`` to
-        properly shutdown processes, threads, and queues.
-
-        """
         # Mark the start time
         self.stop_time = datetime.datetime.now()
         self.duration = (self.stop_time - self.start_time).total_seconds()
 
         # Tell the cluster to start
-        success = self.broadcast_request("post", "/nodes/stop")
+        success = await self._async_broadcast_request("post", "/nodes/stop")
         if success:
             self.state.running = False
 
+        # Updating meta just in case of failure
+        self._save_meta()
+
         return success
 
-    def collect(self, unzip: bool = True) -> bool:
-        """Collect data from the Workers
+    async def async_collect(self, unzip: bool = True) -> bool:
 
-        First, we wait until all the Nodes have finished save their data.\
-        Then, manager request that Nodes' from the Workers.
+        # First, let all Workers coordinate their Nodes to save the data!
+        success = await self._async_broadcast_request(htype="post", route="/nodes/save")
 
-        Args:
-            unzip (bool): Should the .zip archives be extracted.
-
-        Returns:
-            bool: Success in collect data from Workers
-
-        """
-        # Wait until the nodes first finished writing down the data
-        success = self.broadcast_request("post", "/nodes/save")
-        if success:
-            for worker_id in self.state.workers:
-                for node_id in self.state.workers[worker_id].nodes:
-                    self.state.workers[worker_id].nodes[node_id].finished = True
-
-        # Request collecting archives
-        success = self.broadcast_request(
-            "post", "/nodes/collect", {"path": str(self.logdir)}
+        # Then tell them to send the data to the Manager
+        success = await self._async_broadcast_request(
+            htype="post",
+            route="/nodes/collect",
+            data={"path": str(self.logdir)},
+            timeout=max(self.duration * 2, 60),
         )
+        await asyncio.sleep(1)
 
-        # # Then move the tempfiles to the log runs and unzip
-        self.server.move_transfer_files(self.logdir, unzip)
-        logger.info(f"{self}: Data collection complete!")
+        self.state.collecting = False
 
-        # Add the meta data to the archive
-        self.save_meta()
+        if success:
+            try:
+                self._save_meta()
+                success = self.server.move_transfer_files(self.logdir, unzip)
+            except Exception as e:
+                logger.error(traceback.format_exc())
+            self.state.collection_status = "PASS"
+        else:
+            self.state.collection_status = "FAIL"
 
-        # Success!
+        logger.info(f"{self}: finished async_collect")
+
+        # Relay information to front-end
+        if self.enable_api:
+            await self.dashboard_api.broadcast_state_update()
+
         return success
 
-    def shutdown(self):
-        """Proper shutting down ChimeraPy cluster.
+    async def async_reset(self, keep_workers: bool = True):
 
-        Through this method, the ``Manager`` broadcast to all ``Workers``
-        to shutdown, in which they will stop their processes and threads safely.
+        # Destroy Nodes safely
+        coros: List[Coroutine] = []
+        for worker_id in self.state.workers:
+            for node_id in self.state.workers[worker_id].nodes:
+                coros.append(self._async_request_node_destruction(worker_id, node_id))
 
-        """
+        # Wait until all complete
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            return False
+
+        # If not keep Workers, then deregister all
+        if not keep_workers:
+            for worker_id in self.state.workers:
+                self._deregister_worker(worker_id)
+
+        # Update variable data
+        self.nodes_server_table = {}
+        self._deregister_graph()
+
+        return all(results)
+
+    async def async_shutdown(self) -> bool:
+
         # Only let shutdown happen once
         if self.has_shutdown:
             logger.debug(f"{self}: requested to shutdown twice, skipping.")
-            return None
+            return True
         else:
             self.has_shutdown = True
 
@@ -913,47 +987,151 @@ class Manager:
             # Send shutdown message
             logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
             try:
-                self.broadcast_request(
+                success = await self._async_broadcast_request(
                     "post",
                     "/shutdown",
                     timeout=config.get("manager.timeout.worker-shutdown"),
+                    report_exceptions=False,
                 )
             except:
-                pass
-            logger.debug(
-                f"{self}: requested all workers to shutdown via /shutdown route"
-            )
-
-            # Wait until all worker's deregister
-            success = waiting_for(
-                condition=lambda: len(self.state.workers) == 0,
-                check_period=0.1,
-                timeout_raise=False,
-                timeout=config.get("manager.timeout.worker-shutdown"),
-            )
+                success = False
 
             if success:
                 logger.debug(f"{self}: All workers shutdown: SUCCESS")
             else:
                 logger.warning(f"{self}: All workers shutdown: FAILED - forced")
 
+        # Stop the distributed logger
+        if self.logs_sink:
+            self.logs_sink.shutdown()
+
         # First, shutdown server
-        self.server.shutdown()
+        return await self.server.async_shutdown()
+
+    ####################################################################
+    ## Front-facing Sync API
+    ####################################################################
+
+    def commit_graph(
+        self,
+        graph: Graph,
+        mapping: Dict[str, List[str]],
+        send_packages: Optional[List[Dict[str, Any]]] = None,
+    ) -> Future[bool]:
+        """Committing ``Graph`` to the cluster.
+
+        Committing refers to how the graph itself (with its nodes and edges)
+        and the mapping is distributed to the cluster. The whole routine
+        is two steps: peer creation and peer-to-peer connection setup.
+
+        In peer creation, the ``Manager`` messages each ``Worker`` with
+        the ``Nodes`` they need to execute. The ``Workers`` configure
+        the ``Nodes``, by giving them network information. The ``Nodes``
+        are then started and report back to the ``Workers``.
+
+        With the successful creation of the ``Nodes``, the ``Manager``
+        request the ``Nodes`` servers' ip address and port numbers to
+        create an address table for all the ``Nodes``. Then this table
+        is used to inform each ``Node`` where their in-bound and out-bound
+        ``Nodes`` are located; thereby establishing the edges between
+        ``Nodes``.
+
+        Args:
+            graph (cp.Graph): The graph to deploy within the cluster.
+            mapping (Dict[str, List[str]): Mapping from ``cp.Worker`` to\
+                ``cp.Nodes`` through a dictionary. The keys are the name\
+                of the workers, while the value is a list of the nodes' \
+                names.
+            send_packages (Optional[List[Dict[str, Any]]]): An optional
+                feature for transferring a local package (typically a \
+                development package not found via PYPI or Anaconda). \
+                Provide a list of packages with each package configured \
+                via dictionary with the following key-value pairs: \
+                name:``str`` and path:``pathlit.Path``.
+
+        Returns:
+            Future[bool]: Future of success in cluster's setup
+
+        """
+        return self._exec_coro(self.async_commit(graph, mapping, send_packages))
+
+    def step(self) -> Future[bool]:
+        """Cluster step execution for offline operation.
+
+        The ``step`` function is for careful but slow operation of the
+        cluster. For online execution, ``start`` and ``stop`` are the
+        methods to be used.
+
+        Returns:
+            Future[bool]: Future of the success of step function broadcasting
+
+        """
+        return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
+
+    def gather(self) -> Future[Dict]:
+        return self._exec_coro(self.async_gather())
+
+    def start(self) -> Future[bool]:
+        """Start the executiong of the cluster.
+
+        Before starting, make sure that you have perform the following
+        steps:
+
+        - Create ``Nodes``
+        - Create ``DAG`` with ``Nodes`` and their edges
+        - Connect ``Workers`` (must be before committing ``Graph``)
+        - Register, map, and commit ``Graph``
+
+        Returns:
+            Future[bool]: Future of the success of starting the cluster
+
+        """
+        return self._exec_coro(self.async_start())
+
+    def stop(self) -> Future[bool]:
+        """Stop the executiong of the cluster.
+
+        Do not forget that you still need to execute ``shutdown`` to
+        properly shutdown processes, threads, and queues.
+
+        Returns:
+            Future[bool]: Future of the success of stopping the cluster
+
+        """
+        return self._exec_coro(self.async_stop())
+
+    def collect(self, unzip: bool = True) -> Future[bool]:
+        """Collect data from the Workers
+
+        First, we wait until all the Nodes have finished save their data.\
+        Then, manager request that Nodes' from the Workers.
+
+        Args:
+            unzip (bool): Should the .zip archives be extracted.
+
+        Returns:
+            Future[bool]: Future of success in collect data from Workers
+
+        """
+        return self._exec_coro(self.async_collect(unzip))
+
+    def reset(self, keep_workers: bool = True) -> Future[bool]:
+        return self._exec_coro(self.async_reset(keep_workers))
+
+    def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+        """Proper shutting down ChimeraPy cluster.
+
+        Through this method, the ``Manager`` broadcast to all ``Workers``
+        to shutdown, in which they will stop their processes and threads safely.
+
+        """
+        future = self._exec_coro(self.async_shutdown())
+        if blocking:
+            return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
+        return future
 
     def __del__(self):
 
         # Also good to shutdown anything that isn't
         if not self.has_shutdown:
             self.shutdown()
-
-    @staticmethod
-    def _start_logs_sink() -> "DistributedLogsMultiplexedFileSink":
-        """Start the logs sink."""
-        max_bytes_per_worker = megabytes_to_bytes(
-            config.get("manager.logs-sink.max-file-size-per-worker")
-        )
-        logs_sink = _logger.get_distributed_logs_multiplexed_file_sink(
-            max_bytes=max_bytes_per_worker
-        )
-        logs_sink.start(register_exit_handlers=True)
-        return logs_sink

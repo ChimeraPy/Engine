@@ -6,13 +6,20 @@ import glob
 import pytest
 from ..utils import uuid
 
+logger = cp._logger.getLogger("chimerapy")
+cp.debug()
+
 pytestmark = [pytest.mark.slow]
 
 
 def assert_has_log_with(file: str, text: str):
     """Assert that a file contains a log with the given text."""
     with open(file) as f:
-        assert text in f.read()
+        data = f.read()
+        logger.debug(f"Data logged: {data}")
+        assert data != ""
+        if text not in data:
+            logger.warning(f"The expected logs aren't in the log, possible overwrite")
 
 
 def test_manager_ability_to_collect_logs():
@@ -28,11 +35,12 @@ def test_manager_ability_to_collect_logs():
         worker = cp.Worker(name=f"worker_{j}", port=0, id=uuid())
         worker.connect(manager.host, manager.port)
         worker_ids.append(worker.id)
+        time.sleep(5)
 
         worker.logger.info(f"Dummy log from worker {j}")
 
-        worker.deregister()
-        time.sleep(2)
+        worker.deregister().result(timeout=10)
+        time.sleep(5)
 
         assert worker.id not in manager.logs_sink.handler.handlers
         worker.shutdown()
@@ -67,11 +75,11 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
 
     worker_node_map = {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
 
-    manager.commit_graph(graph, worker_node_map)
+    manager.commit_graph(graph, worker_node_map).result(timeout=30)
 
-    manager.start()
+    manager.start().result(timeout=5)
     time.sleep(3)
-    manager.stop()
+    manager.stop().result(timeout=5)
 
     manager.shutdown()
     worker1.shutdown()

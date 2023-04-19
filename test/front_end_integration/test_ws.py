@@ -52,7 +52,7 @@ def test_node_updates(test_ws_client, manager, worker):
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
-    manager.commit_graph(simple_graph, mapping)
+    manager.commit_graph(simple_graph, mapping).result(timeout=30)
 
     time.sleep(5)
 
