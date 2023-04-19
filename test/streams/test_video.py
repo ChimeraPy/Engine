@@ -121,7 +121,7 @@ def test_video_record_with_unstable_frames():
 def test_node_save_video_stream(video_node):
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
+    expected_video_path = pathlib.Path(video_node.logdir) / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
@@ -144,7 +144,7 @@ def test_node_save_video_stream(video_node):
 def test_node_save_video_stream_with_unstable_fps(video_node):
 
     # Check that the video was created
-    expected_video_path = video_node.logdir / "test.mp4"
+    expected_video_path = pathlib.Path(video_node.logdir) / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:

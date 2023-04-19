@@ -58,7 +58,7 @@ def test_tabular_record():
 def test_node_save_tabular_stream(tabular_node):
 
     # Check that the tabular was created
-    expected_tabular_path = tabular_node.logdir / "test.csv"
+    expected_tabular_path = pathlib.Path(tabular_node.logdir) / "test.csv"
     try:
         os.remove(expected_tabular_path)
     except FileNotFoundError:

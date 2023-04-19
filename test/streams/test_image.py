@@ -59,7 +59,7 @@ def test_image_record():
 def test_node_save_image_stream(image_node):
 
     # Check that the image was created
-    expected_image_path = image_node.logdir / "test" / "0.png"
+    expected_image_path = pathlib.Path(image_node.logdir) / "test" / "0.png"
     try:
         os.rmdir(expected_image_path.parent)
     except OSError:

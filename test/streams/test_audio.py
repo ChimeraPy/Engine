@@ -68,7 +68,7 @@ def test_audio_record():
 def test_node_save_audio_stream(audio_node):
 
     # Check that the audio was created
-    expected_audio_path = audio_node.logdir / "test.wav"
+    expected_audio_path = pathlib.Path(audio_node.logdir) / "test.wav"
     try:
         os.remove(expected_audio_path)
     except FileNotFoundError:
