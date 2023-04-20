@@ -31,7 +31,8 @@ dependencies = [
     'aiohttp',
     'blosc',
     'PyYAML',
-    'dataclasses-json'
+    'dataclasses-json',
+    'aiofiles'
 ]
 
 [project.optional-dependencies]
