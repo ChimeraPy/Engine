@@ -23,7 +23,7 @@ import networkx as nx
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
-from .networking.enums import MANAGER_MESSAGE
+from .networking.enums import MANAGER_MESSAGE, GENERAL_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -296,7 +296,7 @@ class Manager:
             await self.dashboard_api.broadcast_state_update(
                 signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE
                 if not is_shutdown
-                else MANAGER_MESSAGE.SHUTDOWN
+                else GENERAL_MESSAGE.SHUTDOWN
             )
 
     def _register_graph(self, graph: Graph):

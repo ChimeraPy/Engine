@@ -13,7 +13,6 @@ class GENERAL_MESSAGE(Enum):  # Used only Client and Server
 class MANAGER_MESSAGE(Enum):
     NODE_STATUS_UPDATE = 4
     NETWORK_STATUS_UPDATE = 5
-    SHUTDOWN = 6
 
 
 # Worker -> Node
