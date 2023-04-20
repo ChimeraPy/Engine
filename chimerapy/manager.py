@@ -290,11 +290,13 @@ class Manager:
 
         return False
 
-    async def _broadcast_network_status_update(self):
+    async def _broadcast_network_status_update(self, is_shutdown: bool = False):
         if self.enable_api:
             logger.debug(f"{self}: Broadcasting network status update")
             await self.dashboard_api.broadcast_state_update(
                 signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE
+                if not is_shutdown
+                else MANAGER_MESSAGE.SHUTDOWN
             )
 
     def _register_graph(self, graph: Graph):
@@ -1016,7 +1018,10 @@ class Manager:
             self.logs_sink.shutdown()
 
         # First, shutdown server
-        return await self.server.async_shutdown()
+        shutdown_msg = await self.server.async_shutdown()
+        await self._broadcast_network_status_update(is_shutdown=True)
+
+        return shutdown_msg
 
     ####################################################################
     ## Front-facing Sync API
