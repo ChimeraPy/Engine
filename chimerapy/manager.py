@@ -644,7 +644,9 @@ class Manager:
         htype: Literal["get", "post"],
         route: str,
         data: Any = {},
-        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+        timeout: Optional[Union[int, float]] = config.get(
+            "manager.timeout.info-request"
+        ),
         report_exceptions: bool = True,
     ) -> bool:
 
@@ -920,15 +922,12 @@ class Manager:
 
     async def async_collect(self, unzip: bool = True) -> bool:
 
-        # First, let all Workers coordinate their Nodes to save the data!
-        success = await self._async_broadcast_request(htype="post", route="/nodes/save")
-
         # Then tell them to send the data to the Manager
         success = await self._async_broadcast_request(
             htype="post",
             route="/nodes/collect",
             data={"path": str(self.logdir)},
-            timeout=max(self.duration * 2, 60),
+            # timeout=max(self.duration * 2, 60),
         )
         await asyncio.sleep(1)
 
@@ -1018,10 +1017,7 @@ class Manager:
             self.logs_sink.shutdown()
 
         # First, shutdown server
-        shutdown_msg = await self.server.async_shutdown()
-        await self._broadcast_network_status_update(is_shutdown=True)
-
-        return shutdown_msg
+        return await self.server.async_shutdown()
 
     ####################################################################
     ## Front-facing Sync API

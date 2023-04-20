@@ -44,7 +44,7 @@ class VideoRecord(Record):
         # Determine the size
         frame = data_chunk["data"]
         fps = data_chunk["fps"]
-        timestamp = data_chunk["timestamp"]
+        elapsed = data_chunk["elapsed"]
         h, w = frame.shape[:2]
 
         # Determine if RGB or grey video
@@ -69,7 +69,7 @@ class VideoRecord(Record):
         else:
 
             # Account for possible unstable fps
-            delta = timestamp - (self.frame_count / fps)
+            delta = elapsed - (self.frame_count / fps)
 
             # Case 1: Too late (padd with previous frame to match)
             num_missed_frames = int(delta // (1 / fps)) - 1

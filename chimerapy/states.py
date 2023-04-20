@@ -8,11 +8,19 @@ from dataclasses_json import dataclass_json
 class NodeState:
     id: str
     name: str = ""
-    init: bool = False
-    connected: bool = False
-    ready: bool = False
-    finished: bool = False
     port: int = 0
+
+    fsm: Literal[
+        "NULL",
+        "INITIALIZED",
+        "CONNECTED",
+        "READY",
+        "PREVIEWING",
+        "RUNNING",
+        "STOPPED",
+        "SAVED",
+        "SHUTDOWN",
+    ] = "NULL"
 
 
 @dataclass_json
