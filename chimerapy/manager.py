@@ -23,6 +23,7 @@ import networkx as nx
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
 from .networking import Server, Client, DataChunk
+from .networking.enums import MANAGER_MESSAGE, GENERAL_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
@@ -165,6 +166,7 @@ class Manager:
                 "config": config.config,
             }
 
+            await self._broadcast_network_status_update()
             return web.json_response(response)
 
         else:
@@ -176,6 +178,7 @@ class Manager:
         success = self._deregister_worker(worker_state.id)
 
         if success:
+            await self._broadcast_network_status_update()
             return web.HTTPOk()
         else:
             return web.HTTPBadRequest()
@@ -286,6 +289,15 @@ class Manager:
             return True
 
         return False
+
+    async def _broadcast_network_status_update(self, is_shutdown: bool = False):
+        if self.enable_api:
+            logger.debug(f"{self}: Broadcasting network status update")
+            await self.dashboard_api.broadcast_state_update(
+                signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE
+                if not is_shutdown
+                else GENERAL_MESSAGE.SHUTDOWN
+            )
 
     def _register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
@@ -1006,7 +1018,10 @@ class Manager:
             self.logs_sink.shutdown()
 
         # First, shutdown server
-        return await self.server.async_shutdown()
+        shutdown_msg = await self.server.async_shutdown()
+        await self._broadcast_network_status_update(is_shutdown=True)
+
+        return shutdown_msg
 
     ####################################################################
     ## Front-facing Sync API
