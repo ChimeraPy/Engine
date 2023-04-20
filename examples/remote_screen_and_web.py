@@ -17,7 +17,7 @@ CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
 class WebcamNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.vid = cv2.VideoCapture(0)
 
     def step(self):
@@ -33,7 +33,7 @@ class WebcamNode(cp.Node):
 
 
 class ScreenCaptureNode(cp.Node):
-    def prep(self):
+    def setup(self):
 
         if platform.system() == "Windows":
             import dxcam
@@ -45,19 +45,20 @@ class ScreenCaptureNode(cp.Node):
     def step(self):
         # Noticed that screencapture methods highly depend on OS
         if platform.system() == "Windows":
-            time.sleep(1 / 30)
+            time.sleep(1 / 15)
             frame = self.camera.grab()
             if not isinstance(frame, np.ndarray):
                 return None
             else:
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         else:
+            time.sleep(1 / 15)
             frame = cv2.cvtColor(
                 np.array(ImageGrab.grab(), dtype=np.uint8), cv2.COLOR_RGB2BGR
             )
 
         # Save the frame and package it
-        self.save_video(name="screen", data=frame, fps=20)
+        self.save_video(name="screen", data=frame, fps=15)
         data_chunk = cp.DataChunk()
         data_chunk.add("frame", imutils.resize(frame, width=720), "image")
 
@@ -92,8 +93,8 @@ if __name__ == "__main__":
     cp.debug()
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs")
-    worker = cp.Worker(name="local", port=0)
+    manager = cp.Manager(logdir=CWD / "runs", port=9000)
+    worker = cp.Worker(name="local", id="local", port=0)
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -144,5 +145,5 @@ if __name__ == "__main__":
             break
 
     manager.stop().result(timeout=5)
-    manager.collect().result(timeout=30)
+    manager.collect().result(timeout=60)
     manager.shutdown()
