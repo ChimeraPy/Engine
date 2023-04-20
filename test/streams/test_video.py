@@ -193,13 +193,15 @@ def test_node_save_video_stream(video_node_stream):
     video_node_stream.start()
 
     # Wait to generate files
-    time.sleep(3)
+    time.sleep(5)
 
     video_node_stream.shutdown()
     video_node_stream.join()
 
     # Check that the video was created
     assert expected_video_path.exists()
+    cap = cv2.VideoCapture(str(expected_video_path))  # Checking if video is corrupted
+    cap.release()
 
 
 def test_node_save_video_stream_with_unstable_fps(video_node_stream):
