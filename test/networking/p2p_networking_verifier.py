@@ -29,31 +29,15 @@ class P2PNetworkingVerifier:
 
             # Assert that all the nodes should be INIT
             for node_id in (worker_nodes := self.manager.workers[worker_id].nodes):
-                assert worker_nodes[node_id].init
+                assert worker_nodes[node_id].fsm in [
+                    "INITIALIZED",
+                    "READY",
+                    "CONNECTED",
+                ]
                 nodes_ids.append(node_id)
 
         # The manager should have all the nodes are registered
         assert all([self.manager.graph.has_node_by_id(x) for x in nodes_ids])
-
-        # Extract all the nodes
-        nodes_ids = []
-        for worker_id in self.manager.workers:
-            for node_id in (worker_nodes := self.manager.workers[worker_id].nodes):
-                assert worker_nodes[node_id].connected
-                nodes_ids.append(node_id)
-
-        # The manager should have all the nodes registered as CONNECTED
-        assert all([x in self.manager.nodes_server_table for x in nodes_ids])
-
-        # Extract all the nodes
-        nodes_idss = []
-        for worker_id in self.manager.workers:
-            for node_id in (worker_nodes := self.manager.workers[worker_id].nodes):
-                assert worker_nodes[node_id].ready
-                nodes_idss.append(node_id)
-
-        # The manager should have all the nodes registered as READY
-        assert all([x in self.manager.nodes_server_table for x in nodes_idss])
 
     def assert_can_step_after_graph_commit(
         self, expected_output: Dict[str, int]

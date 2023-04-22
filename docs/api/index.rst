@@ -13,7 +13,7 @@ Node
 ------------
 
 .. autoclass:: chimerapy.Node
-   :members: __init__, prep, step, teardown, main
+   :members: __init__, setup, step, teardown, main
    :member-order: bysource
 
 Graph

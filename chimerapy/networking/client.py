@@ -1,5 +1,6 @@
 # Built-in
 from typing import Coroutine, Dict, Optional, Callable, Any, Union
+import os
 import asyncio
 import threading
 import collections
@@ -9,10 +10,12 @@ from functools import partial
 import shutil
 import time
 import tempfile
-import pickle
+import json
 import enum
 import logging
-from concurrent.futures import Future
+import traceback
+import multiprocess as mp
+from concurrent.futures import Future, ThreadPoolExecutor
 
 # Third-party
 import aiohttp
@@ -180,7 +183,11 @@ class Client:
 
         # Make a post request to send the file
         data = aiohttp.FormData()
-        data.add_field("meta", pickle.dumps({"sender_id": sender_id}))
+        data.add_field(
+            "meta",
+            json.dumps({"sender_id": sender_id, "size": os.path.getsize(filepath)}),
+            content_type="application/json",
+        )
         data.add_field(
             "file",
             open(filepath, "rb"),
@@ -198,9 +205,11 @@ class Client:
 
     async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
 
-        assert (
-            dir.is_dir() and dir.exists()
-        ), f"Sending {dir} needs to be a folder that exists."
+        self.logger.debug(f"{self}: _send_folder_async")
+
+        if not dir.is_dir() and not dir.exists():
+            self.logger.error(f"Cannot send non-existent dir: {dir}.")
+            return False
 
         # Having continuing attempts to make the zip folder
         miss_counter = 0
@@ -210,9 +219,29 @@ class Client:
         # First, we need to archive the folder into a zip file
         while True:
             try:
-                shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+                self.logger.debug(
+                    f"{self}: creating zip folder of {dir}, by {sender_id} of size: {os.path.getsize(str(dir))}"
+                )
+                process = mp.Process(
+                    target=shutil.make_archive,
+                    args=(
+                        str(dir),
+                        "zip",
+                        dir.parent,
+                        dir.name,
+                    ),
+                )
+                process.start()
+                process.join()
+                assert process.exitcode == 0
+
+                self.logger.debug(
+                    f"{self}: created zip folder of {dir}, by {sender_id}"
+                )
                 break
             except:
+                self.logger.warning("Temp folder couldn't be zipped.")
+                self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)
                 miss_counter += 1
 
@@ -222,16 +251,13 @@ class Client:
 
         zip_file = dir.parent / f"{dir.name}.zip"
 
-        # Relocate zip to the tempfolder
-        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
-        shutil.move(zip_file, temp_zip_file)
-
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Then send the file
-        await self._send_file_async(url, sender_id, temp_zip_file)
+        await self._send_file_async(url, sender_id, zip_file)
 
+        self.logger.debug(f"{self}: finished sending folder")
         return True
 
     ####################################################################
@@ -328,40 +354,13 @@ class Client:
         url = f"http://{self.host}:{self.port}/file/post"
         return self._thread.exec(self._send_file_async(url, sender_id, filepath))
 
-    def send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
+    def send_folder(self, sender_id: str, dir: pathlib.Path) -> Future[bool]:
 
         assert (
             dir.is_dir() and dir.exists()
         ), f"Sending {dir} needs to be a folder that exists."
 
-        # Having continuing attempts to make the zip folder
-        miss_counter = 0
-        delay = 1
-        zip_timeout = config.get("comms.timeout.zip-time")
-
-        # First, we need to archive the folder into a zip file
-        while True:
-            try:
-                shutil.make_archive(str(dir), "zip", dir.parent, dir.name)
-                break
-            except:
-                time.sleep(delay)
-                miss_counter += 1
-
-                if zip_timeout < delay * miss_counter:
-                    self.logger.error("Temp folder couldn't be zipped.")
-                    return False
-
-        zip_file = dir.parent / f"{dir.name}.zip"
-
-        # Relocate zip to the tempfolder
-        temp_zip_file = self.tempfolder / f"_{zip_file.name}"
-        shutil.move(zip_file, temp_zip_file)
-
-        # Then send the file
-        self.send_file(sender_id, temp_zip_file)
-
-        return True
+        return self._thread.exec(self._send_folder_async(sender_id, dir))
 
     def connect(self):
 

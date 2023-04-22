@@ -73,4 +73,4 @@ def test_sending_package(manager, _worker, config_graph):
     ).result(timeout=30)
 
     for node_id in config_graph.G.nodes():
-        assert manager.workers[_worker.id].nodes[node_id].init == True
+        assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"

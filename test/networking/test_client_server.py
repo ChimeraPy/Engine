@@ -157,7 +157,7 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
 def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    client.send_folder(sender_id="test_worker", dir=dir)
+    client.send_folder(sender_id="test_worker", dir=dir).result(timeout=10)
 
     # Get the expected behavior
     miss_counter = 0

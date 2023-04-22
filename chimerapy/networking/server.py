@@ -10,12 +10,14 @@ import pathlib
 import tempfile
 import shutil
 import os
-import pickle
+import json
 import enum
 import traceback
+import aiofiles
 from concurrent.futures import Future
 
 # Third-party
+from tqdm import tqdm
 from aiohttp import web, WSCloseCode
 
 # Internal Imports
@@ -129,7 +131,7 @@ class Server:
         self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
-        self.logger.debug(f"{self}: file receive!")
+        self.logger.debug(f"{self}: receiving file!")
 
         reader = await request.multipart()
 
@@ -140,42 +142,67 @@ class Server:
         field = await reader.next()
         assert field.name == "meta"
         meta_bytes = await field.read(decode=True)
-        meta = pickle.loads(meta_bytes)
+        meta = json.loads(meta_bytes)
 
         # Get the "file" field
         field = await reader.next()
         assert field.name == "file"
         filename = field.filename
 
+        # Attaching a UUID to prevent possible collision
+        id = uuid.uuid4()
+        filename_list = filename.split(".")
+        uuid_filename = str(id) + "." + filename_list[1]
+
         # Create dst filepath
-        dst_filepath = self.tempfolder / filename
+        dst_filepath = self.tempfolder / uuid_filename
 
         # Create the record and mark that is not complete
         # Keep record of the files sent!
         self.file_transfer_records[meta["sender_id"]][filename] = {
+            "uuid": id,
+            "uuid_filename": uuid_filename,
             "filename": filename,
             "dst_filepath": dst_filepath,
-            "size": 0,
+            "read": 0,
+            "size": meta["size"],
             "complete": False,
         }
 
         # You cannot rely on Content-Length if transfer is chunked.
-        size = 0
-        with open(dst_filepath, "wb") as f:
-            while True:
-                chunk = await field.read_chunk()  # 8192 bytes by default.
-                if not chunk:
-                    break
-                size += len(chunk)
-                f.write(chunk)
+        read = 0
+        total_size = meta["size"]
+        prev_n = 0
+
+        # Reading the buffer and writing the file
+        async with aiofiles.open(dst_filepath, "wb") as f:
+            with tqdm(
+                total=1,
+                unit="B",
+                unit_scale=True,
+                desc=f"File {field.filename}",
+                miniters=1,
+            ) as pbar:
+                while True:
+                    chunk = await field.read_chunk()  # 8192 bytes by default.
+                    if not chunk:
+                        break
+                    await f.write(chunk)
+                    read += len(chunk)
+                    pbar.update(len(chunk) / total_size)
+                    if (pbar.n - prev_n) > 0.05:
+                        self.logger.debug(f"File {field.filename}: {pbar.n:.2%}")
+                        prev_n = pbar.n
 
         # After finishing, mark the size and that is complete
         self.file_transfer_records[meta["sender_id"]][filename].update(
-            {"size": size, "complete": True}
+            {"size": total_size, "complete": True}
         )
         self.logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
-        return web.Response(text=f"{filename} sized of {size} successfully stored")
+        return web.Response(
+            text=f"{filename} sized of {total_size} successfully stored"
+        )
 
     ####################################################################
     # IO Main Methods
@@ -428,9 +455,10 @@ class Server:
                     shutil.unpack_archive(filepath, named_dst)
 
                     # Handling if temp folder includes a _ in the beginning
-                    new_filename = filepath.stem
+                    new_filename = file_meta["filename"]
                     if new_filename[0] == "_":
                         new_filename = new_filename[1:]
+                    new_filename = new_filename.split(".")[0]
 
                     new_file = named_dst / new_filename
 

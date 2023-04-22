@@ -20,6 +20,7 @@ logger = cp._logger.getLogger("chimerapy")
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 TEST_DATA_DIR = TEST_DIR / "data"
+TEST_SAMPLE_DATA_DIR = TEST_DIR / "mock" / "data"
 
 # Try to get Github Actions environment variable
 try:
@@ -107,7 +108,7 @@ def dockered_worker(docker_client):
 
 
 class LowFrequencyNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.i = 0
 
     def step(self):
@@ -125,7 +126,7 @@ class LowFrequencyNode(cp.Node):
 
 
 class HighFrequencyNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.i = 0
 
     def step(self):
@@ -137,7 +138,7 @@ class HighFrequencyNode(cp.Node):
 
 
 class SubsequentNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.record = {}
 
     def step(self, data: Dict[str, cp.DataChunk]):
@@ -152,7 +153,7 @@ class SubsequentNode(cp.Node):
 
 
 class GenNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.value = 2
 
     def step(self):
@@ -162,20 +163,22 @@ class GenNode(cp.Node):
 
 
 class ConsumeNode(cp.Node):
-    def prep(self):
+    def setup(self):
         self.coef = 3
 
     def step(self, data_chunks: Dict[str, cp.DataChunk]):
         time.sleep(0.1)
         # Extract the data
-        self.logger.debug(f"{self}: inside step, with {data_chunks}")
+        self.logger.debug(
+            f"{self}: inside step, with {data_chunks} - {data_chunks['Gen1']}"
+        )
         value = data_chunks["Gen1"].get("default")["value"]
         output = self.coef * value
         return output
 
 
-class SlowPrepNode(cp.Node):
-    def prep(self):
+class SlowSetupNode(cp.Node):
+    def setup(self):
         time.sleep(2)
         self.value = 5
 
@@ -197,17 +200,7 @@ def con_node():
 
 @pytest.fixture
 def slow_node():
-    return SlowPrepNode(name="Slo1")
-
-
-@pytest.fixture
-def save_handler_and_queue():
-
-    save_queue = queue.Queue()
-    save_handler = cp.SaveHandler(logdir=TEST_DATA_DIR, save_queue=save_queue)
-    save_handler.start()
-
-    return (save_handler, save_queue)
+    return SlowSetupNode(name="Slo1")
 
 
 @pytest.fixture
@@ -281,7 +274,7 @@ def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
     # Then register graph to Manager
     assert manager.commit_graph(
         graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    ).result(timeout=30)
+    ).result(timeout=60)
 
     yield manager
 

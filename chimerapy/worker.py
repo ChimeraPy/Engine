@@ -1,5 +1,6 @@
 from typing import Union, Dict, Any, Coroutine, Optional, List
 import os
+import platform
 import time
 import tempfile
 import pathlib
@@ -10,7 +11,9 @@ import uuid
 import collections
 import asyncio
 import traceback
+import multiprocess as mp
 from concurrent.futures import Future
+from asyncio import Task
 
 # Third-party Imports
 import dill
@@ -25,6 +28,7 @@ from .networking.enums import (
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
+from .node.worker_service import WorkerService
 from . import _logger
 
 
@@ -32,7 +36,7 @@ class Worker:
     def __init__(
         self,
         name: str,
-        port: int = 10000,
+        port: int = 0,
         delete_temp: bool = True,
         id: Optional[str] = None,
     ):
@@ -77,6 +81,7 @@ class Worker:
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
         self.manager_url = ""
+        self.shutdown_task: Optional[Task] = None
 
         # Create temporary data folder
         self.delete_temp = delete_temp
@@ -95,7 +100,6 @@ class Worker:
                 web.get("/nodes/server_data", self._async_report_node_server_data),
                 web.post("/nodes/server_data", self._async_process_node_server_data),
                 web.get("/nodes/gather", self._async_report_node_gather),
-                web.post("/nodes/save", self._async_report_node_saving),
                 web.post("/nodes/collect", self._async_send_archive),
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/packages/load", self._async_load_sent_packages),
@@ -262,7 +266,7 @@ class Worker:
         for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
                 if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].connected == True,
+                    condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
@@ -305,39 +309,9 @@ class Worker:
 
     async def _async_shutdown_route(self, request: web.Request):
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
-        task = asyncio.create_task(self.async_shutdown())
+        await self._shutdown_misc()
+        self.shutdown_task = asyncio.create_task(self.async_shutdown())
 
-        return web.HTTPOk()
-
-    async def _async_report_node_saving(self, request: web.Request):
-
-        # Request saving from Worker to Nodes
-        await self.server.async_broadcast(signal=WORKER_MESSAGE.REQUEST_SAVING, data={})
-
-        # Now wait until all nodes have responded as CONNECTED
-        success = []
-        for i in range(config.get("worker.allowed-failures")):
-            for node_id in self.nodes:
-
-                if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].finished == True,
-                    timeout=config.get("worker.timeout.info-request"),
-                ):
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: PASS"
-                    )
-                    success.append(True)
-                    break
-                else:
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: FAIL"
-                    )
-                    success.append(False)
-
-        if not all(success):
-            self.logger.error(f"{self}: Nodes failed to report to saving")
-
-        # Send it back to the Manager
         return web.HTTPOk()
 
     async def _async_report_node_gather(self, request: web.Request):
@@ -387,17 +361,24 @@ class Worker:
     async def _async_send_archive(self, request: web.Request):
         msg = await request.json()
 
-        # Default value of success
-        success = False
+        # Collect data from the Nodes
+        success = await self.async_collect()
 
         # If located in the same computer, just move the data
-        if self.manager_host == get_ip_address():
-            await self._async_send_archive_locally(pathlib.Path(msg["path"]))
+        if success:
+            try:
+                if self.manager_host == get_ip_address():
+                    success = await self._async_send_archive_locally(
+                        pathlib.Path(msg["path"])
+                    )
 
-        else:
-            await self._async_send_archive_remotely(
-                self.manager_host, self.manager_port
-            )
+                else:
+                    success = await self._async_send_archive_remotely(
+                        self.manager_host, self.manager_port
+                    )
+            except:
+                self.logger.error(traceback.format_exc())
+                return web.HTTPError()
 
         # After completion, let the Manager know
         return web.json_response({"id": self.id, "success": success})
@@ -472,8 +453,7 @@ class Worker:
         try:
             # Create a temporary HTTP client
             client = Client(self.id, host=host, port=port)
-            await client._send_folder_async(self.name, self.tempfolder)
-            return True
+            return await client._send_folder_async(self.name, self.tempfolder)
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False
             self.logger.exception(
@@ -508,6 +488,47 @@ class Worker:
         log_receiver = _logger.get_node_id_zmq_listener()
         log_receiver.start(register_exit_handlers=True)
         return log_receiver
+
+    async def _shutdown_misc(self) -> bool:
+
+        # Shutdown nodes from the client (start all shutdown)
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["running"].value = False
+
+        # Then wait until close, or force
+        for node_id in self.nodes_extra:
+            self.nodes_extra[node_id]["process"].join(
+                timeout=config.get("worker.timeout.node-shutdown")
+            )
+
+            # If that doesn't work, terminate
+            if self.nodes_extra[node_id]["process"].exitcode != 0:
+                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
+                self.nodes_extra[node_id]["process"].terminate()
+
+            self.logger.debug(f"{self}: Nodes have joined")
+
+        # Clear nodes_extra afterwards
+        self.nodes_extra = {}
+
+        # Delete temp folder if requested
+        if self.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.tempfolder)
+
+        success = False
+        if self.connected_to_manager:
+            try:
+                success = await self.async_deregister()
+            except:
+                self.logger.warning(f"{self}: Failed to properly deregister")
+
+        return success
+
+    async def _wait_async_shutdown(self):
+
+        if isinstance(self.shutdown_task, Task):
+            return await self.shutdown_task
+        return True
 
     ####################################################################
     ## Worker ASync Lifecycle API
@@ -581,8 +602,11 @@ class Worker:
             async with client.post(
                 self.manager_url + "/workers/deregister",
                 data=self.state.to_json(),
-                timeout=config.get("worker.timeout.info-request"),
+                timeout=config.get("worker.timeout.deregister"),
             ) as resp:
+
+                if resp.ok:
+                    self.connected_to_manager = False
 
                 return resp.ok
 
@@ -591,7 +615,7 @@ class Worker:
     async def async_create_node(self, node_id: str, msg: Dict) -> bool:
 
         # Saving name to track it for now
-        self.logger.debug(f"{self}: received request for Node {id} creation: {msg}")
+        self.logger.debug(f"{self}: received request for Node {node_id} creation:")
 
         # Saving the node data
         self.state.nodes[node_id] = NodeState(id=node_id)
@@ -615,30 +639,44 @@ class Worker:
                 "node_object"
             ].name
 
-            # Provide configuration information to the node once in the client
-            self.nodes_extra[node_id]["node_object"].config(
-                self.state.ip,
-                self.state.port,
-                self.tempfolder,
-                self.nodes_extra[node_id]["in_bound"],
-                self.nodes_extra[node_id]["in_bound_by_name"],
-                self.nodes_extra[node_id]["out_bound"],
-                self.nodes_extra[node_id]["follow"],
+            # Create worker service and inject to the Node
+            running = mp.Value("i", True)
+            worker_service = WorkerService(
+                name="worker",
+                host=self.state.ip,
+                port=self.state.port,
+                worker_logdir=self.tempfolder,
+                in_bound=self.nodes_extra[node_id]["in_bound"],
+                in_bound_by_name=self.nodes_extra[node_id]["in_bound_by_name"],
+                out_bound=self.nodes_extra[node_id]["out_bound"],
+                follow=self.nodes_extra[node_id]["follow"],
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
-            self.logger.debug(f"{self}: configured <Node {node_id}>")
+            worker_service.inject(self.nodes_extra[node_id]["node_object"])
+            self.logger.debug(
+                f"{self}: injected {self.nodes_extra[node_id]['node_object']} with WorkerService"
+            )
 
-            # Before starting, over write the pid
-            self.nodes_extra[node_id]["node_object"]._parent_pid = os.getpid()
+            # Create a process to run the Node
+            process = mp.Process(
+                target=self.nodes_extra[node_id]["node_object"].run,
+                args=(
+                    True,
+                    running,
+                ),
+            )
+            self.nodes_extra[node_id]["process"] = process
+            self.nodes_extra[node_id]["running"] = running
 
             # Start the node
-            self.nodes_extra[node_id]["node_object"].start()
+            process.start()
             self.logger.debug(f"{self}: started <Node {node_id}>")
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].init == True,
+                condition=lambda: self.state.nodes[node_id].fsm
+                in ["INITIALIZED", "READY"],
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -647,13 +685,14 @@ class Worker:
             else:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} responding, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["running"].value = False
+                self.nodes_extra[node_id]["process"].join()
+                self.nodes_extra[node_id]["process"].terminate()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.state.nodes[node_id].ready == True,
+                condition=lambda: self.state.nodes[node_id].fsm == "READY",
                 timeout=config.get("worker.timeout.info-request"),
             )
 
@@ -663,8 +702,9 @@ class Worker:
             else:
                 # Handle failure
                 self.logger.debug(f"{self}: {node_id} fully ready, FAILED, retry")
-                self.nodes_extra[node_id]["node_object"].shutdown()
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["running"].value = False
+                self.nodes_extra[node_id]["process"].join()
+                self.nodes_extra[node_id]["process"].terminate()
 
         if not success:
             self.logger.error(f"{self}: Node {node_id} failed to create")
@@ -680,15 +720,15 @@ class Worker:
         success = False
 
         if node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
-            self.nodes_extra[node_id]["node_object"].join(
+            self.nodes_extra[node_id]["running"].value = False
+            self.nodes_extra[node_id]["process"].join(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
 
             # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
+            if self.nodes_extra[node_id]["process"].exitcode != 0:
                 self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
+                self.nodes_extra[node_id]["process"].terminate()
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]
@@ -715,6 +755,38 @@ class Worker:
             signal=WORKER_MESSAGE.STOP_NODES, data={}
         )
 
+    async def async_collect(self) -> bool:
+
+        # Request saving from Worker to Nodes
+        await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}
+        )
+
+        # Now wait until all nodes have responded as CONNECTED
+        success = []
+        for i in range(config.get("worker.allowed-failures")):
+            for node_id in self.nodes:
+
+                if await async_waiting_for(
+                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
+                    timeout=config.get("worker.timeout.info-request"),
+                ):
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: PASS"
+                    )
+                    success.append(True)
+                    break
+                else:
+                    self.logger.debug(
+                        f"{self}: Node {node_id} responded to saving request: FAIL"
+                    )
+                    success.append(False)
+
+        if not all(success):
+            self.logger.error(f"{self}: Nodes failed to report to saving")
+
+        return all(success)
+
     async def async_shutdown(self) -> bool:
 
         # Check if shutdown has been called already
@@ -731,36 +803,11 @@ class Worker:
 
         # Sending message to Manager that client is shutting down (only
         # if the manager hasn't already set the client to not running)
-        success = False
-        if self.connected_to_manager:
-            try:
-                success = await self.async_deregister()
-            except:
-                self.logger.warning(f"{self}: Failed to properly deregister")
+        success = await self._shutdown_misc()
 
         # Shutdown the Worker 2 Node server
         success = await self.server.async_shutdown()
-
-        # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].shutdown()
-
-        # Then wait until close, or force
-        for node_id in self.nodes_extra:
-            self.nodes_extra[node_id]["node_object"].join(
-                timeout=config.get("worker.timeout.node-shutdown")
-            )
-
-            # If that doesn't work, terminate
-            if self.nodes_extra[node_id]["node_object"].exitcode != 0:
-                self.logger.warning(f"{self}: Node {node_id} forced shutdown")
-                self.nodes_extra[node_id]["node_object"].terminate()
-
-            self.logger.debug(f"{self}: Nodes have joined")
-
-        # Delete temp folder if requested
-        if self.tempfolder.exists() and self.delete_temp:
-            shutil.rmtree(self.tempfolder)
+        self.logger.debug(f"{self}: HTTP server shutdown")
 
         return success
 
@@ -813,6 +860,9 @@ class Worker:
     def stop_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_stop_nodes())
 
+    def collect(self) -> Future[bool]:
+        return self._exec_coro(self.async_collect())
+
     def idle(self):
 
         self.logger.debug(f"{self}: Idle")
@@ -832,6 +882,10 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        # Check if shutdown coroutine has been created
+        if isinstance(self.shutdown_task, Task):
+            return self._exec_coro(self._wait_async_shutdown())
+
         future = self._exec_coro(self.async_shutdown())
         if blocking:
             return future.result(timeout=config.get("manager.timeout.worker-shutdown"))

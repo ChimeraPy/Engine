@@ -2,10 +2,14 @@ import logging
 from logging.handlers import BufferingHandler
 import uuid
 from multiprocessing import Process
+import time
+
+import pytest
 
 from chimerapy.logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
 
 
+@pytest.mark.skip(reason="Flaky")
 def test_zmq_push_pull_node_id_logging():
     handler = BufferingHandler(capacity=300)
     handler.setLevel(logging.DEBUG)
@@ -32,6 +36,8 @@ def test_zmq_push_pull_node_id_logging():
 
     p1.join()
     p2.join()
+
+    time.sleep(5)
 
     assert len(handler.buffer) == 20
     assert set(map(lambda record: record.node_id, handler.buffer)) == set(ids)

@@ -8,14 +8,14 @@ For the basics, we start with the smallest component of the system, the :class:`
 Creating a Custom Node
 **********************
 
-To create a custom :class:`Node<chimerapy.Node>`, we overwrite the ``prep``, ``step``, and ``teardown`` methods. Below is an example of a :class:`Node<chimerapy.Node>` that generates a sequence of random numbers::
+To create a custom :class:`Node<chimerapy.Node>`, we overwrite the ``setup``, ``step``, and ``teardown`` methods. Below is an example of a :class:`Node<chimerapy.Node>` that generates a sequence of random numbers::
 
     import chimerapy as cp
     import numpy as np
 
     class RandomNode(cp.Node):
 
-        def prep(self):
+        def setup(self):
             # Create the generator to be used later
             self.rng = np.random.default_rng(0)
 
@@ -67,7 +67,7 @@ The creation of a DAG is done through the :class:`Graph<chimerapy.Graph>` class.
     import chimerapy as cp
 
     class SourceNode(cp.Node):
-        def prep(self):
+        def setup(self):
             self.value = 2
 
         def step(self):
@@ -75,7 +75,7 @@ The creation of a DAG is done through the :class:`Graph<chimerapy.Graph>` class.
             return self.value
 
     class StepNode(cp.Node):
-        def prep(self):
+        def setup(self):
             self.coef = 3
 
         def step(self, data: Dict[str, cp.DataChunk]):
