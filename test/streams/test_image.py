@@ -12,6 +12,7 @@ import pytest
 
 # Internal Imports
 import chimerapy as cp
+from chimerapy.records.image_record import ImageRecord
 
 logger = cp._logger.getLogger("chimerapy")
 
@@ -39,7 +40,7 @@ def test_image_record():
         ...
 
     # Create the record
-    img_r = cp.records.ImageRecord(dir=TEST_DATA_DIR, name="test")
+    img_r = ImageRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to image file
     for i in range(5):

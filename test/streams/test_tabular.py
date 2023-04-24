@@ -9,6 +9,7 @@ import time
 # Third-party
 import pytest
 import chimerapy as cp
+from chimerapy.records.tabular_record import TabularRecord
 
 # Internal Imports
 logger = cp._logger.getLogger("chimerapy")
@@ -37,7 +38,7 @@ def test_tabular_record():
         ...
 
     # Create the record
-    tr = cp.records.TabularRecord(dir=TEST_DATA_DIR, name="test")
+    tr = TabularRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to tabular file
     for i in range(5):

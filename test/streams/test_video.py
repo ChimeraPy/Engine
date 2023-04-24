@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import pytest
 import chimerapy as cp
+from chimerapy.records.video_record import VideoRecord
 
 # Internal Imports
 logger = cp._logger.getLogger("chimerapy")
@@ -41,7 +42,7 @@ def test_video_record():
         ...
 
     # Create the record
-    vr = cp.records.VideoRecord(dir=TEST_DATA_DIR, name="test")
+    vr = VideoRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to video file
     fps = 30
@@ -80,7 +81,7 @@ def test_video_record_with_unstable_frames():
         ...
 
     # Create the record
-    vr = cp.records.VideoRecord(dir=TEST_DATA_DIR, name="test")
+    vr = VideoRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to video file
     fps = 30

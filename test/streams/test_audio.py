@@ -13,6 +13,7 @@ import pyaudio
 
 # Internal Imports
 import chimerapy as cp
+from chimerapy.records.audio_record import AudioRecord
 
 logger = cp._logger.getLogger("chimerapy")
 
@@ -45,7 +46,7 @@ def test_audio_record():
         ...
 
     # Create the record
-    ar = cp.records.AudioRecord(dir=TEST_DATA_DIR, name="test")
+    ar = AudioRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to audio file
     for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
