@@ -155,7 +155,7 @@ def test_worker_data_archiving(worker):
         }
         futures.append(worker.create_node(msg))
 
-    wait(futures)
+    assert wait(futures, timeout=10)
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)

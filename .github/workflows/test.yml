@@ -25,14 +25,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
 
     # The process
     steps:
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
+        id: cp39
         with:
-          python-version: '3.9'
+          python-version: 3.9
 
       - uses: actions/checkout@v2
 
@@ -42,8 +43,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install ffmpeg libsm6 libxext6 -y
           sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
-          pip install --upgrade pip
-          pip install '.[test]'
+          ${{ steps.cp39.outputs.python-path }} -m pip install --upgrade pip
+          ${{ steps.cp39.outputs.python-path }} -m pip install '.[test]'
           docker build -t chimerapy .
           echo "MANUAL_OS_SET=Linux" >> $GITHUB_ENV
 
@@ -54,31 +55,28 @@ jobs:
       - name: Install MacOS dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
-          pip install --upgrade pip
-          pip install '.[test]'
+          brew install portaudio
+          ${{ steps.cp39.outputs.python-path }} -m pip install --upgrade pip
+          ${{ steps.cp39.outputs.python-path }} -m pip install '.[test]'
           echo "MANUAL_OS_SET=Darwin" >> $GITHUB_ENV
 
       - name: Install Windows dependencies
         if: matrix.os == 'windows-latest'
         run: |
-          sudo apt-get update
-          sudo apt-get install libportaudio2 libportaudiocpp0 portaudio19-dev libasound-dev libsndfile1-dev portaudio19-dev python3-pyaudio -y
-          pip install --upgrade pip
-          pip install .[test]
+          ${{ steps.cp39.outputs.python-path }} -m pip install --upgrade pip
+          ${{ steps.cp39.outputs.python-path }} -m pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
       - name: Perform faster tests
         run: |
-          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
-          coverage combine --append
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
+          ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
           mv chimerapy-test.log chimerapy-test-fast.log
 
       - name: Perform slower tests
         run: |
-          coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
-          coverage combine --append
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
+          ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
           mv chimerapy-test.log chimerapy-test-slow.log
 
       - name: Combine test logs
@@ -109,7 +107,7 @@ jobs:
     steps:
     - name: Finished
       run: |
-        pip3 install --upgrade coveralls
+        ${{ steps.cp39.outputs.python-path }} -m pip install --upgrade coveralls
         coveralls --service=github --finish
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
