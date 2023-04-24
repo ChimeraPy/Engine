@@ -1,6 +1,5 @@
 import json
 
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
 

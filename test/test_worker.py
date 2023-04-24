@@ -1,29 +1,24 @@
+from .conftest import linux_run_only, TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
+from .streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
+from .networking.test_client_server import server
+
 import time
 import os
-import pathlib
-from functools import partial
 import requests
 import shutil
-import zipfile
 from concurrent.futures import wait
 
 import dill
 import pytest
 from pytest_lazyfixture import lazy_fixture
-
 import chimerapy as cp
-
-from .conftest import linux_run_only, TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
-from .networking.test_client_server import server
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
-from .streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 
 # Constants
-CWD = pathlib.Path(os.path.abspath(__file__)).parent
-
+assert server
 NAME_CLASS_MAP = {
     "vn": VideoNode,
     "img_n": ImageNode,

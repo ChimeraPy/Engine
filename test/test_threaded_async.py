@@ -1,13 +1,12 @@
 # Built-in Imports
 import time
 import asyncio
-from functools import partial
 
 # Third-party Imports
 import pytest
 
 # ChimeraPy Imports
-from chimerapy.networking import AsyncLoopThread
+from chimerapy.networking.async_loop_thread import AsyncLoopThread
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
@@ -41,7 +40,7 @@ def test_callback_execution(thread):
     queue = asyncio.Queue()
 
     def put(queue):
-        logger.debug(f"put called")
+        logger.debug("put called")
         queue.put_nowait(1)
 
     thread.exec_noncoro(put, args=[queue])
@@ -54,7 +53,7 @@ def test_callback_execution_with_wait(thread):
 
     def put(queue):
         time.sleep(1)
-        logger.debug(f"put called")
+        logger.debug("put called")
         queue.put_nowait(1)
 
     finished = thread.exec_noncoro(put, args=[queue], waitable=True)

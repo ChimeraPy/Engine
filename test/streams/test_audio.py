@@ -1,7 +1,8 @@
+from .data_nodes import AudioNode
+
 # Built-in Imports
 import os
 import pathlib
-import logging
 import uuid
 import time
 
@@ -14,8 +15,6 @@ import pyaudio
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
-
-from .data_nodes import AudioNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

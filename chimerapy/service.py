@@ -1,4 +1,4 @@
-from typing import Type, Union, Dict, List
+from typing import Dict, List
 from collections import UserDict
 
 

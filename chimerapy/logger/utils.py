@@ -28,7 +28,8 @@ def bind_pull_socket(
             and port != 0
         ):
             raise ValueError(
-                f"Port {port} is out of range. Please use a port between {LOGGING_MIN_PORT} and {LOGGING_MAX_PORT} "
+                f"Port {port} is out of range. Please use a port between \
+                {LOGGING_MIN_PORT} and {LOGGING_MAX_PORT} "
                 f"When using `tcp` transport."
             )
         socket.bind(f"{transport}://*:{port}")

@@ -1,17 +1,13 @@
 import time
-import logging
 import os
 import pathlib
 
 import dill
-import pytest
-import numpy as np
-from pytest_lazyfixture import lazy_fixture
 import multiprocessing as mp
 
 import chimerapy as cp
 
-from ..conftest import GenNode, SubsequentNode, HighFrequencyNode, LowFrequencyNode
+from ..conftest import GenNode
 from ..streams import AudioNode, VideoNode, ImageNode, TabularNode
 
 logger = cp._logger.getLogger("chimerapy")
@@ -40,7 +36,7 @@ def test_run_node_in_debug_mode(logreceiver):
 
 def test_create_node_and_run_in_process(logreceiver):
 
-    n = VideoNode(name=f"Video", debug_port=logreceiver.port)
+    n = VideoNode(name="Video", debug_port=logreceiver.port)
 
     # Adding shared variable that would be typically added by the Worker
     n._running = mp.Value("i", True)

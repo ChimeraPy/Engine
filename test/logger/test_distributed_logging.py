@@ -19,7 +19,7 @@ def assert_has_log_with(file: str, text: str):
         logger.debug(f"Data logged: {data}")
         assert data != ""
         if text not in data:
-            logger.warning(f"The expected logs aren't in the log, possible overwrite")
+            logger.warning("The expected logs aren't in the log, possible overwrite")
 
 
 def test_manager_ability_to_collect_logs():

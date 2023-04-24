@@ -1,7 +1,5 @@
-from typing import Sequence, Tuple
+from typing import Sequence
 import copy
-import logging
-import pdb
 
 import numpy as np
 import networkx as nx
@@ -91,7 +89,7 @@ class Graph:
         node_labels = {id: data["object"].name for id, data in self.G.nodes(data=True)}
 
         # Draw the networkx
-        fig = plt.figure(figsize=(20, 10))
+        plt.figure(figsize=(20, 10))
         nx.draw_networkx(
             self.G,
             pos,

@@ -1,2 +1,5 @@
 from .dockered_worker import DockeredWorker
-from . import test_package
+
+__all__ = [
+    "DockeredWorker",
+]

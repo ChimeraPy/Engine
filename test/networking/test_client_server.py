@@ -1,23 +1,14 @@
+from chimerapy.networking import Server, Client
+
 from typing import Dict
 import time
-import socket
-import logging
 import pathlib
 import os
-import platform
-import tempfile
-import uuid
 import enum
-from aiohttp import web
 import requests
-
-from concurrent.futures import wait, Future
+from aiohttp import web
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
-import numpy as np
-
-import pdb
 
 import chimerapy as cp
 
@@ -44,7 +35,7 @@ async def echo(msg: Dict, ws: web.WebSocketResponse = None):
 
 @pytest.fixture
 def server():
-    server = cp.Server(
+    server = Server(
         id="test_server",
         port=0,
         routes=[web.get("/", hello)],
@@ -57,7 +48,7 @@ def server():
 
 @pytest.fixture
 def client(server):
-    client = cp.Client(
+    client = Client(
         id="test_client",
         host=server.host,
         port=server.port,
@@ -73,7 +64,7 @@ def client_list(server):
 
     clients = []
     for i in range(NUMBER_OF_CLIENTS):
-        client = cp.Client(
+        client = Client(
             host=server.host,
             port=server.port,
             id=f"test-{i}",

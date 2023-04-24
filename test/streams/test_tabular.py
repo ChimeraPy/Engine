@@ -1,19 +1,17 @@
+from .data_nodes import TabularNode
+
 # Built-in Imports
 import os
 import pathlib
-import logging
 import uuid
 import time
 
 # Third-party
-import pandas as pd
-import numpy as np
 import pytest
 import chimerapy as cp
 
 # Internal Imports
 logger = cp._logger.getLogger("chimerapy")
-from .data_nodes import TabularNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

@@ -49,7 +49,7 @@ class ProcessorService(NodeService):
 
         try:
             output = func(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             traceback_info = traceback.format_exc()
             self.node.logger.error(traceback_info)
 

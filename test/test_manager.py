@@ -1,19 +1,13 @@
-import os
-import time
-from pathlib import Path
-
-from aiohttp import web
-import pytest
-from pytest_lazyfixture import lazy_fixture
-
-import chimerapy as cp
-from chimerapy.manager import Manager
 from .conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 from .streams import VideoNode, TabularNode
 
-# Constants
-TEST_DIR = Path(os.path.abspath(__file__)).parent
-TEST_DATA_DIR = TEST_DIR / "data"
+import time
+
+from aiohttp import web
+import pytest
+
+import chimerapy as cp
+from chimerapy.manager import Manager
 
 
 @pytest.fixture(scope="module")
@@ -115,7 +109,7 @@ def test_manager_lifecycle_graph(testbed_setup):
 
 class RemoteTransferWorker(cp.Worker):
     async def _async_send_archive(self, request: web.Request):
-        msg = await request.json()
+        await request.json()
 
         # Collect data from the Nodes
         success = await self.async_collect()
@@ -133,10 +127,7 @@ class RemoteTransferWorker(cp.Worker):
 
 @pytest.mark.parametrize(
     "node_cls",
-    [
-        VideoNode,
-        # TabularNode
-    ],
+    [VideoNode, TabularNode],
 )
 def test_manager_remote_transfer(node_cls):
 

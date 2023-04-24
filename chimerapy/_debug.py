@@ -13,7 +13,7 @@ def debug(loggers: Optional[List[str]] = None):
     if type(loggers) == type(None):
         loggers = [x for x in LOGGING_CONFIG["loggers"]]
 
-    assert loggers != None
+    assert loggers is not None
 
     # Change env variable and configurations
     os.environ["CHIMERAPY_DEBUG_LOGGERS"] = os.pathsep.join(loggers)

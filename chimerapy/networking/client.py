@@ -1,30 +1,27 @@
 # Built-in
-from typing import Coroutine, Dict, Optional, Callable, Any, Union
+from typing import Dict, Optional, Callable, Any
 import os
 import asyncio
 import threading
 import collections
 import uuid
 import pathlib
-from functools import partial
 import shutil
-import time
 import tempfile
 import json
 import enum
 import logging
 import traceback
 import multiprocess as mp
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 
 # Third-party
 import aiohttp
-from aiohttp import web
 
 # Internal Imports
 from chimerapy import config
 from .async_loop_thread import AsyncLoopThread
-from ..utils import create_payload, decode_payload, waiting_for, async_waiting_for
+from ..utils import create_payload, async_waiting_for
 from .enums import GENERAL_MESSAGE
 
 # Logging
@@ -220,7 +217,8 @@ class Client:
         while True:
             try:
                 self.logger.debug(
-                    f"{self}: creating zip folder of {dir}, by {sender_id} of size: {os.path.getsize(str(dir))}"
+                    f"{self}: creating zip folder of {dir}, by {sender_id} of size: \
+                    {os.path.getsize(str(dir))}"
                 )
                 process = mp.Process(
                     target=shutil.make_archive,
@@ -239,7 +237,7 @@ class Client:
                     f"{self}: created zip folder of {dir}, by {sender_id}"
                 )
                 break
-            except:
+            except Exception:
                 self.logger.warning("Temp folder couldn't be zipped.")
                 self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)

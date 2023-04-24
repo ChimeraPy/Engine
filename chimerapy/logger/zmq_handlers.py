@@ -15,12 +15,16 @@ from .utils import bind_pull_socket, connect_push_socket
 class ZMQPullListener(threading.Thread):
     """A thread that listens for log messages.
 
-    This subclass of threading.Thread is used to listen for log messages on a ZMQ socket and pass them to the handlers.
+    This subclass of threading.Thread is used to listen for log messages on a ZMQ \
+    socket and pass them to the handlers.
 
     Args:
-        port (int, optional): The port to listen on. If None, a random port will be chosen.
-        handlers (list of logging.Handlers, optional): The handlers to pass the log messages to. If None, a console handler will be used.
-        respect_handler_level (bool, optional): If True, only pass log messages to handlers that have a level. Defaults to True.
+        port (int, optional): The port to listen on. If None, a random port will be \
+            chosen.
+        handlers (list of logging.Handlers, optional): The handlers to pass the log \
+            messages to. If None, a console handler will be used.
+        respect_handler_level (bool, optional): If True, only pass log messages to \
+            handlers that have a level. Defaults to True.
 
     See Also:
         chimerapy.logger.utils.bind_pull_socket
@@ -93,7 +97,8 @@ class ZMQPullListener(threading.Thread):
 
 
 class NodeIDZMQPullListener(ZMQPullListener):
-    """A thread that listens for log messages and adds the node_id formatted console handler."""
+    """A thread that listens for log messages and adds the node_id formatted console \
+    handler."""
 
     def __init__(
         self,
@@ -119,10 +124,12 @@ class ZMQPushHandler(QueueHandler):
 
 
 class NodeIdZMQPushHandler(ZMQPushHandler):
-    """A handler that sends log messages to a ZMQ PUSH socket and adds the node_id to the record.
+    """A handler that sends log messages to a ZMQ PUSH socket and adds the node_id to \
+    the record.
 
     Note:
-        The node_id is added to the record as an attribute. The default node_id is queried by the process id.
+        The node_id is added to the record as an attribute. The default node_id is \
+        queried by the process id.
     """
 
     def __init__(

@@ -1,6 +1,5 @@
 # Built-in Imports
 import threading
-import pickle
 import time
 
 # Third-party Imports

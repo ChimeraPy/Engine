@@ -35,7 +35,7 @@ class API:
         for future in self.futures:
             try:
                 future.result(timeout=config.get("manager.timeout.info-request"))
-            except Exception as e:
+            except Exception:
                 logger.error(traceback.format_exc())
 
     ####################################################################

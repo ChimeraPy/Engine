@@ -21,7 +21,7 @@ def test_record_direct_submit():
     expected_file = TEST_DATA_DIR / "record_service_test" / "test.mp4"
     try:
         os.remove(expected_file)
-    except:
+    except Exception:
         ...
 
     gen_node = GenNode(name="Gen", logdir=TEST_DATA_DIR / "record_service_test")
@@ -58,7 +58,7 @@ def test_run_record_service_from_node():
     expected_file = TEST_DATA_DIR / "record_service_test" / "test.mp4"
     try:
         os.remove(expected_file)
-    except:
+    except Exception:
         ...
 
     node = VideoNode(name="video", logdir=TEST_DATA_DIR / "record_service_test")
