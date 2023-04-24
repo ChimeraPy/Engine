@@ -6,6 +6,7 @@ config:
       num-of-threads: 100
     timeout:
       info-request: 55 # seconds
+      zeroconf-setup: 10 # seconds
       package-delivery: 60 # seconds
       worker-shutdown: 10 # seconds
       node-creation: 130 # seconds
@@ -18,6 +19,7 @@ config:
     allowed-failures: 2
     timeout:
       info-request: 45 # seconds
+      zeroconf-search: 30 # seconds
       node-creation: 60 # seconds
       node-shutdown: 10 # seconds
       package-delivery: 30 # seconds

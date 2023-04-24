@@ -33,7 +33,7 @@ def test_manager_ability_to_collect_logs():
 
     for j in range(5):
         worker = cp.Worker(name=f"worker_{j}", port=0, id=uuid())
-        worker.connect(manager.host, manager.port)
+        worker.connect(method="ip", host=manager.host, port=manager.port)
         worker_ids.append(worker.id)
         time.sleep(5)
 
@@ -68,10 +68,10 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
     graph.add_edge(gen_node, con_node)
 
     worker1 = cp.Worker(name="worker1", port=0, id=uuid())
-    worker1.connect(manager.host, manager.port)
+    worker1.connect(method="ip", host=manager.host, port=manager.port)
 
     worker2 = cp.Worker(name="worker2", port=0, id=uuid())
-    worker2.connect(manager.host, manager.port)
+    worker2.connect(method="ip", host=manager.host, port=manager.port)
 
     worker_node_map = {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
 

@@ -9,6 +9,7 @@ import random
 import tempfile
 import zipfile
 import traceback
+import socket
 from concurrent.futures import Future
 
 # Third-party Imports
@@ -16,6 +17,7 @@ import dill
 import aiohttp
 from aiohttp import web
 import networkx as nx
+from zeroconf import ServiceInfo, Zeroconf
 
 from chimerapy import config
 from .states import ManagerState, WorkerState, NodeState
@@ -38,6 +40,7 @@ class Manager:
         max_num_of_workers: int = 50,
         publish_logs_via_zmq: bool = False,
         enable_api: bool = True,
+        enable_zeroconf: bool = True,
         **kwargs,
     ):
         """Create ``Manager``, the controller of the cluster.
@@ -54,6 +57,8 @@ class Manager:
                 Defaults to False.
             enable_api (bool): Enable front-end API entrypoints to controll cluster. \
                 Defaults to True.
+            enable_zeroconf (bool): Enable the Zeroconf connection method for Workers. \
+                Defauls to True.
 
             **kwargs: Additional keyword arguments.
                 Currently, this is used to configure the ZMQ log handler.
@@ -62,6 +67,7 @@ class Manager:
         self.max_num_of_workers = max_num_of_workers
         self.has_shutdown = False
         self.enable_api = enable_api
+        self.enable_zeroconf = enable_zeroconf
 
         # Create log directory to store data
         timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -112,6 +118,26 @@ class Manager:
         # Runn the Server
         self.server.serve()
         logger.info(f"Manager started at {self.server.host}:{self.server.port}")
+
+        # After creating the server and if enabled, setup zeroconf
+        if self.enable_zeroconf:
+
+            # Create service information
+            self.zeroconf_info = ServiceInfo(
+                "_http._tcp.local.",
+                f"chimerapy-{rand_num}._http._tcp.local.",
+                addresses=[socket.inet_aton(self.server.host)],
+                port=self.server.port,
+                properties={"path": str(self.logdir), "timestamp": timestamp},
+            )
+
+            # Start Zeroconf Service
+            self.zeroconf = Zeroconf()
+            self.zeroconf.register_service(self.zeroconf_info, ttl=60)
+            logger.info(
+                f"Manager started Zeroconf Service named \
+                chimerapy-{rand_num}._http._tcp.local."
+            )
 
         # Updating the manager's port to the found available port
         ip, port = self.server.host, self.server.port
@@ -997,6 +1023,11 @@ class Manager:
 
         if self.enable_api:
             self.dashboard_api.future_flush()
+
+        if self.enable_zeroconf:
+            # Unregister the service and close the zeroconf instance
+            self.zeroconf.unregister_service(self.zeroconf_info)
+            self.zeroconf.close()
 
         # If workers are connected, let's notify them that the cluster is
         # shutting down

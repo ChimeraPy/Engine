@@ -16,10 +16,13 @@ def main():
 
     # Adding the arguments
     parser.add_argument("--name", type=str, help="Name of the Worker", required=True)
-    parser.add_argument("--ip", type=str, help="Manager's IP Address", required=True)
-    parser.add_argument("--port", type=int, help="Manager's Port", required=True)
+    parser.add_argument(
+        "--zeroconf", type=bool, help="Use Zeroconf to find Manager", default=False
+    )
+    parser.add_argument("--ip", type=str, help="Manager's IP Address", default="")
+    parser.add_argument("--port", type=int, help="Manager's Port", default=-1)
     parser.add_argument("--id", type=str, help="ID of the Worker", default=None)
-    parser.add_argument("--wport", type=int, help="Worker's Port", default=8080)
+    parser.add_argument("--wport", type=int, help="Worker's Port", default=0)
     parser.add_argument(
         "--delete",
         type=bool,
@@ -39,7 +42,20 @@ def main():
         id=d_args["id"],
         port=d_args["wport"],
     )
-    worker.connect(host=d_args["ip"], port=d_args["port"])
+    if d_args["zeroconf"]:
+        worker.connect(method="zeroconf")
+    else:
+
+        # Check inputs
+        if d_args["ip"] == "" or d_args["port"] == -1:
+            worker.shutdown()
+            raise argparse.ArgumentError(
+                "When not using Zeroconf, an ``ip`` and ``port`` are needed"
+            )
+
+        worker.connect(method="ip", host=d_args["ip"], port=d_args["port"])
+
+    # Wait until told to shutdown
     worker.idle()
     worker.shutdown()
 

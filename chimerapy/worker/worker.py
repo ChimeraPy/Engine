@@ -1,6 +1,7 @@
-from typing import Union, Dict, Any, Coroutine, Optional, List
+from typing import Union, Dict, Any, Coroutine, Optional, List, Literal
 import os
 import time
+import socket
 import tempfile
 import pathlib
 import shutil
@@ -18,18 +19,20 @@ from asyncio import Task
 import dill
 import aiohttp
 from aiohttp import web
+from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy import config
-from .logger.zmq_handlers import NodeIDZMQPullListener
-from .states import WorkerState, NodeState
-from .utils import get_ip_address, async_waiting_for
-from .networking import Server, Client, DataChunk
-from .networking.enums import (
+from ..logger.zmq_handlers import NodeIDZMQPullListener
+from ..states import WorkerState, NodeState
+from ..utils import get_ip_address, async_waiting_for
+from ..networking import Server, Client, DataChunk
+from ..networking.enums import (
     NODE_MESSAGE,
     WORKER_MESSAGE,
 )
-from .node.worker_service import WorkerService
-from . import _logger
+from ..node.worker_service import WorkerService
+from .. import _logger
+from .manager_listener import ManagerListener
 
 
 class Worker:
@@ -419,6 +422,98 @@ class Worker:
     ## Helper Methods
     ####################################################################
 
+    async def _async_connect_via_ip(
+        self,
+        host: str,
+        port: int,
+        timeout: Union[int, float] = config.get("worker.timeout.info-request"),
+    ) -> bool:
+
+        # Send the request to each worker
+        async with aiohttp.ClientSession() as client:
+            async with client.post(
+                f"http://{host}:{port}/workers/register",
+                data=self.state.to_json(),
+                timeout=timeout,
+            ) as resp:
+
+                if resp.ok:
+
+                    # Get JSON
+                    data = await resp.json()
+
+                    config.update_defaults(data.get("config", {}))
+                    logs_push_info = data.get("logs_push_info", {})
+
+                    if logs_push_info["enabled"]:
+                        self.logger.info(f"{self}: enabling logs push to Manager")
+                        for logging_entity in [self.logger, self.logreceiver]:
+                            handler = _logger.add_zmq_push_handler(
+                                logging_entity,
+                                logs_push_info["host"],
+                                logs_push_info["port"],
+                            )
+                            if logging_entity is not self.logger:
+                                _logger.add_identifier_filter(handler, self.state.id)
+
+                    # Tracking the state and location of the manager
+                    self.connected_to_manager = True
+                    self.manager_host = host
+                    self.manager_port = port
+                    self.manager_url = f"http://{host}:{port}"
+
+                    self.logger.info(
+                        f"{self}: connection successful to Manager @ {host}:{port}."
+                    )
+                    return True
+
+        return False
+
+    async def _async_connect_via_zeroconf(
+        self, timeout: Union[int, float] = config.get("worker.timeout.zeroconf-search")
+    ) -> bool:
+
+        # Create the Zeroconf instance and the listener
+        zeroconf = Zeroconf()
+        listener = ManagerListener(stop_service_name="chimerapy", logger=self.logger)
+
+        # Browse for services
+        browser = ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
+
+        # Wait for a certain service to be found or 10 seconds, whichever comes first
+        delay = 0.1
+        miss = 0
+        success = False
+        while True:
+
+            # Check if ChimeraPy service was found
+            if listener.is_service_found:
+
+                # Extract the information
+                host = socket.inet_ntoa(listener.service_info.addresses[0])
+                port = listener.service_info.port
+
+                # Connect
+                success = await self._async_connect_via_ip(
+                    host=host, port=port, timeout=timeout
+                )
+                break
+
+            # If not, wait
+            await asyncio.sleep(delay)
+            miss += 1
+
+            if (miss + 1) * delay > timeout:
+                break
+
+        # Clean up
+        browser.cancel()
+        zeroconf.close()
+
+        self.logger.debug(f"{self}: connected via zeroconf: {success}")
+
+        return success
+
     async def _async_send_archive_locally(self, path: pathlib.Path) -> bool:
         self.logger.debug(f"{self}: sending archive locally")
 
@@ -534,7 +629,11 @@ class Worker:
     ####################################################################
 
     async def async_connect(
-        self, host: str, port: int, timeout: Union[int, float] = 10.0
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        method: Optional[Literal["ip", "zeroconf"]] = "ip",
+        timeout: Union[int, float] = config.get("worker.timeout.info-request"),
     ) -> bool:
         """Connect ``Worker`` to ``Manager``.
 
@@ -545,6 +644,8 @@ class Worker:
         not shutdown.
 
         Args:
+            method (Literal['ip', 'zeroconf']): The approach to connecting to \
+                ``Manager``
             host (str): The ``Manager``'s IP address.
             port (int): The ``Manager``'s port number
             timeout (Union[int, float]): Set timeout for the connection.
@@ -554,45 +655,24 @@ class Worker:
 
         """
 
-        # Send the request to each worker
-        async with aiohttp.ClientSession() as client:
-            async with client.post(
-                f"http://{host}:{port}/workers/register",
-                data=self.state.to_json(),
-                timeout=config.get("worker.timeout.info-request"),
-            ) as resp:
+        # Standard direct IP connection
+        if method == "ip":
+            if not isinstance(host, str) or not isinstance(port, int):
+                raise RuntimeError(
+                    f"Invalid mode ``{method}`` with missing parameters: host={host}, \
+                    port={port}"
+                )
+            return await self._async_connect_via_ip(host, port, timeout)
 
-                if resp.ok:
+        # Using Zeroconf
+        elif method == "zeroconf":
+            success = await self._async_connect_via_zeroconf(timeout)
+            self.logger.debug(f"{self}: successful zeroconf: {success}")
+            return success
 
-                    # Get JSON
-                    data = await resp.json()
-
-                    config.update_defaults(data.get("config", {}))
-                    logs_push_info = data.get("logs_push_info", {})
-
-                    if logs_push_info["enabled"]:
-                        self.logger.info(f"{self}: enabling logs push to Manager")
-                        for logging_entity in [self.logger, self.logreceiver]:
-                            handler = _logger.add_zmq_push_handler(
-                                logging_entity,
-                                logs_push_info["host"],
-                                logs_push_info["port"],
-                            )
-                            if logging_entity is not self.logger:
-                                _logger.add_identifier_filter(handler, self.state.id)
-
-                    # Tracking the state and location of the manager
-                    self.connected_to_manager = True
-                    self.manager_host = host
-                    self.manager_port = port
-                    self.manager_url = f"http://{host}:{port}"
-
-                    self.logger.info(
-                        f"{self}: connection successful to Manager @ {host}:{port}."
-                    )
-                    return True
-
-        return False
+        # Invalid option
+        else:
+            raise RuntimeError(f"Invalid connect type: {method}")
 
     async def async_deregister(self) -> bool:
 
@@ -817,8 +897,9 @@ class Worker:
 
     def connect(
         self,
-        host: str,
-        port: int,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        method: Optional[Literal["ip", "zeroconf"]] = "ip",
         timeout: Union[int, float] = 10.0,
         blocking: bool = True,
     ) -> Union[bool, Future[bool]]:
@@ -839,7 +920,7 @@ class Worker:
             Future[bool]: Success in connecting to the Manager
 
         """
-        future = self._exec_coro(self.async_connect(host, port, timeout))
+        future = self._exec_coro(self.async_connect(host, port, method, timeout))
 
         if blocking:
             return future.result(timeout=timeout)

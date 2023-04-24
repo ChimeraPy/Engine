@@ -9,6 +9,7 @@ from .networking import DataChunk
 # Utils Imports
 from . import utils
 from ._debug import debug
+from . import config
 
 # Logger setup
 _logger.setup()
@@ -21,4 +22,5 @@ __all__ = [
     "DataChunk",
     "debug",
     "utils",
+    "config",
 ]

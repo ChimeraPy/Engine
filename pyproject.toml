@@ -32,7 +32,8 @@ dependencies = [
     'blosc',
     'PyYAML',
     'dataclasses-json',
-    'aiofiles'
+    'aiofiles',
+    'zeroconf'
 ]
 
 [project.optional-dependencies]
