@@ -125,7 +125,8 @@ class PollerService(NodeService):
                     follow_event = True
 
             # self.logger.debug(
-            #     f"{self}: polling {self.in_bound_data}, follow = {follow_event}, event= {events}"
+            #     f"{self}: polling {self.in_bound_data}, follow = {follow_event}, \
+            #     event= {events}"
             # )
 
             # If update on the follow and all inputs available, then use the inputs

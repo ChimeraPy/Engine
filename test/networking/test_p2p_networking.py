@@ -5,7 +5,6 @@ from pytest_lazyfixture import lazy_fixture
 
 import chimerapy as cp
 
-from ..conftest import linux_run_only
 from .p2p_networking_verifier import P2PNetworkingVerifier
 
 logger = cp._logger.getLogger("chimerapy")

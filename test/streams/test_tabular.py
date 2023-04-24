@@ -1,19 +1,18 @@
+from .data_nodes import TabularNode
+
 # Built-in Imports
 import os
 import pathlib
-import logging
 import uuid
 import time
 
 # Third-party
-import pandas as pd
-import numpy as np
 import pytest
 import chimerapy as cp
+from chimerapy.records.tabular_record import TabularRecord
 
 # Internal Imports
 logger = cp._logger.getLogger("chimerapy")
-from .data_nodes import TabularNode
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -39,7 +38,7 @@ def test_tabular_record():
         ...
 
     # Create the record
-    tr = cp.records.TabularRecord(dir=TEST_DATA_DIR, name="test")
+    tr = TabularRecord(dir=TEST_DATA_DIR, name="test")
 
     # Write to tabular file
     for i in range(5):

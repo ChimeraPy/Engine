@@ -1,11 +1,11 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, Union, List
+from typing import Callable, Dict, Optional, Any, List
 import asyncio
+import logging
 import threading
 import uuid
 import collections
 import time
-from functools import partial
 import pathlib
 import tempfile
 import shutil
@@ -24,7 +24,6 @@ from aiohttp import web, WSCloseCode
 from chimerapy import config
 from .async_loop_thread import AsyncLoopThread
 from ..utils import (
-    decode_payload,
     create_payload,
     async_waiting_for,
     waiting_for,
@@ -53,7 +52,7 @@ class Server:
         host: str = get_ip_address(),
         routes: List[web.RouteDef] = [],
         ws_handlers: Dict[enum.Enum, Callable] = {},
-        parent_logger: Optional["Logger"] = None,
+        parent_logger: Optional[logging.Logger] = None,
     ):
         """Create HTTP Server with WS support.
 
@@ -351,7 +350,7 @@ class Server:
         # Wait until all complete
         try:
             results = await asyncio.gather(*coros)
-        except Exception as e:
+        except Exception:
             self.logger.error(traceback.format_exc())
             return False
 
@@ -396,7 +395,7 @@ class Server:
 
         try:
             success = future.result(timeout=config.get("comms.timeout.server-ready"))
-        except:
+        except Exception:
             self.logger.error(traceback.format_exc())
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
@@ -472,7 +471,8 @@ class Server:
                         miss_counter += 1
                         if timeout < delay * miss_counter:
                             self.logger.error(
-                                f"File zip unpacking took too long! - {name}:{filepath}:{new_file}"
+                                f"File zip unpacking took too long! - \
+                                {name}:{filepath}:{new_file}"
                             )
                             return False
 
@@ -489,7 +489,7 @@ class Server:
         success = False
         try:
             success = future.result(timeout=config.get("comms.timeout.server-shutdown"))
-        except:
+        except Exception:
             self.logger.error(traceback.format_exc())
             self.logger.warning(f"{self}: failed to gracefully shutdown")
 

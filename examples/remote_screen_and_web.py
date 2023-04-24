@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict
 import time
 import pathlib
 import os
@@ -113,7 +113,7 @@ if __name__ == "__main__":
 
         # For mutliple workers (remote and local)
         graph = cp.Graph()
-        show_node = ShowWindow(name=f"show")
+        show_node = ShowWindow(name="show")
         graph.add_node(show_node)
         mapping = {worker.id: [show_node.id]}
 

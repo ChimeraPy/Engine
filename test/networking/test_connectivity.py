@@ -4,7 +4,6 @@ import pathlib
 import os
 
 # Third-party
-import pytest
 
 # Internal
 import chimerapy as cp

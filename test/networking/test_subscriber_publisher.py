@@ -8,6 +8,8 @@ from pytest_lazyfixture import lazy_fixture
 
 # Internal Imports
 import chimerapy as cp
+from chimerapy.networking.publisher import Publisher
+from chimerapy.networking.subscriber import Subscriber
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
@@ -15,7 +17,7 @@ cp.debug()
 
 @pytest.fixture
 def publisher():
-    pub = cp.Publisher()
+    pub = Publisher()
     pub.start()
     yield pub
     pub.shutdown()
@@ -23,7 +25,7 @@ def publisher():
 
 @pytest.fixture
 def subscriber(publisher):
-    sub = cp.Subscriber(host=publisher.host, port=publisher.port)
+    sub = Subscriber(host=publisher.host, port=publisher.port)
     sub.start()
     yield sub
     sub.shutdown()

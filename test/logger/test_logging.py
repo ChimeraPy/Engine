@@ -34,8 +34,8 @@ def test_logger_publishing():
 
     def log_():
         time.sleep(1)  # Wait for the subscriber to connect
-        for l in logs:
-            logger.info(l)
+        for log in logs:
+            logger.info(log)
 
     thread = threading.Thread(target=subscribe_and_read)
     thread.start()

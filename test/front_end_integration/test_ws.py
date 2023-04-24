@@ -1,13 +1,14 @@
-from typing import Dict
+from ..conftest import GenNode
+
 import time
+from typing import Dict
 
 import pytest
-from aiohttp import web
 import chimerapy as cp
+from chimerapy.networking import Client
 from chimerapy.networking.enums import MANAGER_MESSAGE
 from chimerapy.states import ManagerState
 
-from ..conftest import GenNode
 
 logger = cp._logger.getLogger("chimerapy")
 
@@ -27,7 +28,7 @@ def test_ws_client(manager):
     record = Record()
 
     # Simulating a front-end client with a Python WS client
-    client = cp.Client(
+    client = Client(
         id="test_ws",
         host=manager.host,
         port=manager.port,
@@ -49,7 +50,7 @@ def test_node_updates(test_ws_client, manager, worker):
 
     # Create original containers
     simple_graph = cp.Graph()
-    new_node = GenNode(name=f"Gen1")
+    new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
     mapping = {worker.id: [new_node.id]}
 

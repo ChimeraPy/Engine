@@ -17,15 +17,18 @@ class DistributedLogsMultiplexedFileSink:
         return self.listener.port
 
     def start(self, register_exit_handlers: bool = False) -> None:
-        """Start the listener and register the exit handlers if requested."""
+        """Start the listener and register the exit handlers if \
+        requested."""
         self.listener.start(register_exit_handlers)
 
     def initialize_entity(self, name, identifier, parent_dir) -> None:
-        """Register a logging entity with the given identifier, thereby creating a new file handler for it."""
+        """Register a logging entity with the given identifier, \
+        thereby creating a new file handler for it."""
         self.handler.initialize_entity(name, identifier, parent_dir)
 
     def deregister_entity(self, identifier: str) -> None:
-        """Deregister a logging entity with the given identifier, thereby closing the file handler for it."""
+        """Deregister a logging entity with the given identifier, thereby closing the \
+        file handler for it."""
         self.handler.deregister_entity(identifier)
 
     def shutdown(self):

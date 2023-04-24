@@ -1,17 +1,16 @@
-from typing import List, Optional, Dict
+from ..networking import Client
+from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
+from .node_service import NodeService
+from .poller_service import PollerService
+from .publisher_service import PublisherService
+from .node import Node
+
 import pathlib
 import os
 import logging
 import threading
 import datetime
-import traceback
-import multiprocessing as mp
-
-from ..networking import Client, DataChunk
-from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
-from .node_service import NodeService
-from .poller_service import PollerService
-from .publisher_service import PublisherService
+from typing import List, Optional, Dict
 
 
 class WorkerService(NodeService):
@@ -45,7 +44,7 @@ class WorkerService(NodeService):
             "out_bound": out_bound,
         }
 
-    def inject(self, node: "Node"):
+    def inject(self, node: Node):
         super().inject(node)
 
         # Creating logdir after given the Node
@@ -78,7 +77,8 @@ class WorkerService(NodeService):
         self.worker_signal_start.clear()
 
         self.node.logger.debug(
-            f"{self}: Prepping the networking component of the Node, connecting to Worker at {self.host}:{self.port}"
+            f"{self}: Prepping the networking component of the Node, connecting to \
+            Worker at {self.host}:{self.port}"
         )
 
         # Create client to the Worker
@@ -88,7 +88,7 @@ class WorkerService(NodeService):
             id=self.node.state.id,
             ws_handlers={
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
-                WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA: self.process_node_server_data,
+                WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_server_data,
                 WORKER_MESSAGE.REQUEST_STEP: self.async_step,
                 WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
                 WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,

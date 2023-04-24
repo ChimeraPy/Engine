@@ -8,7 +8,7 @@ class NodeService(Service):
     def __repr__(self):
         return f"{self.node}-{self.__class__.__name__}"
 
-    def inject(self, node: "Node"):
+    def inject(self, node):
         self.node = node
         self.node.services[self.name] = self
 

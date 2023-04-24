@@ -87,7 +87,9 @@ class IdentifierFilter(Filter):
 
 
 class MultiplexedEntityHandler(Handler):
-    """An abstract class for handlers that multiplex the log messages to different handlers based on the identifier on LogRecord."""
+    """An abstract class for handlers that multiplex the log messages to different \
+    handlers based on the identifier on LogRecord.
+    """
 
     def __init__(self, name):
         super().__init__()
@@ -112,7 +114,9 @@ class MultiplexedEntityHandler(Handler):
 
 
 class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
-    """A logging handler that multiplexes the log messages to different files based on the identifier on LogRecord."""
+    """A logging handler that multiplexes the log messages to different files based on \
+    the identifier on LogRecord.
+    """
 
     def __init__(self, name, max_bytes: int = MAX_BYTES_PER_FILE):
         super().__init__(name)
@@ -120,7 +124,9 @@ class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
         self.max_bytes_per_file = max_bytes
 
     def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path) -> None:
-        """Register an entity with the given identifier, thereby creating a new file handler for it."""
+        """Register an entity with the given identifier, thereby creating a new file \
+        handler for it.
+        """
         handler = HandlerFactory.get(
             "rotating-file",
             filename=str(parent_dir / f"{prefix}_{identifier}_{self.timestamp()}.log"),
@@ -129,7 +135,9 @@ class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
         self.handlers[identifier] = handler
 
     def deregister_entity(self, identifier: str) -> None:
-        """Deregister this handler from the entity, thereby closing the file handler for it."""
+        """Deregister this handler from the entity, thereby closing the file handler \
+        for it.
+        """
         handler = self.handlers.pop(identifier, None)
         if handler is not None:
             handler.close()

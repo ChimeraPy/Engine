@@ -1,6 +1,5 @@
 from typing import Union, Dict, Any, Coroutine, Optional, List
 import os
-import platform
 import time
 import tempfile
 import pathlib
@@ -21,8 +20,9 @@ import aiohttp
 from aiohttp import web
 
 from chimerapy import config
+from .logger.zmq_handlers import NodeIDZMQPullListener
 from .states import WorkerState, NodeState
-from .utils import get_ip_address, waiting_for, async_waiting_for
+from .utils import get_ip_address, async_waiting_for
 from .networking import Server, Client, DataChunk
 from .networking.enums import (
     NODE_MESSAGE,
@@ -119,7 +119,8 @@ class Worker:
         self.state.ip, self.state.port = self.server.host, self.server.port
 
         self.logger.info(
-            f"Worker {self.state.id} running HTTP server at {self.state.ip}:{self.state.port}"
+            f"Worker {self.state.id} running HTTP server at \
+            {self.state.ip}:{self.state.port}"
         )
 
         # Create a log listener to read Node's information
@@ -192,7 +193,7 @@ class Worker:
                 condition=lambda: self.server.file_transfer_records["Manager"][
                     f"{sent_package}.zip"
                 ]["complete"]
-                == True,
+                is True,
                 timeout=config.get("worker.timeout.package-delivery"),
             )
 
@@ -257,7 +258,7 @@ class Worker:
         self.logger.debug(f"{self}: processing node server data: {msg}")
 
         await self.server.async_broadcast(
-            signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER_DATA,
+            signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
             data=msg,
         )
 
@@ -330,7 +331,7 @@ class Worker:
             for i in range(config.get("worker.allowed-failures")):
 
                 if await async_waiting_for(
-                    condition=lambda: self.nodes_extra[node_id]["response"] == True,
+                    condition=lambda: self.nodes_extra[node_id]["response"] is True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(
@@ -350,7 +351,7 @@ class Worker:
         # Gather the data from the nodes!
         gather_data = {"id": self.state.id, "node_data": {}}
         for node_id, node_data in self.nodes_extra.items():
-            if node_data["gather"] == None:
+            if node_data["gather"] is None:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
                 node_data["gather"] = data_chunk
@@ -376,7 +377,7 @@ class Worker:
                     success = await self._async_send_archive_remotely(
                         self.manager_host, self.manager_port
                     )
-            except:
+            except Exception:
                 self.logger.error(traceback.format_exc())
                 return web.HTTPError()
 
@@ -431,10 +432,8 @@ class Worker:
                 break
             except shutil.Error:  # File already exists!
                 break
-            except:
-                self.logger.error(
-                    f"{self}: failed to move tempfolder: {self.tempfolder} to dst: {path}"
-                )
+            except Exception:
+                self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)
                 miss_counter += 1
                 if miss_counter * delay > timeout:
@@ -484,7 +483,7 @@ class Worker:
         return future
 
     @staticmethod
-    def _start_log_receiver() -> "ZMQNodeIDListener":
+    def _start_log_receiver() -> NodeIDZMQPullListener:
         log_receiver = _logger.get_node_id_zmq_listener()
         log_receiver.start(register_exit_handlers=True)
         return log_receiver
@@ -519,7 +518,7 @@ class Worker:
         if self.connected_to_manager:
             try:
                 success = await self.async_deregister()
-            except:
+            except Exception:
                 self.logger.warning(f"{self}: Failed to properly deregister")
 
         return success
@@ -589,7 +588,7 @@ class Worker:
                     self.manager_url = f"http://{host}:{port}"
 
                     self.logger.info(
-                        f"{self}: connection successful to Manager located at {host}:{port}."
+                        f"{self}: connection successful to Manager @ {host}:{port}."
                     )
                     return True
 
@@ -655,7 +654,8 @@ class Worker:
             )
             worker_service.inject(self.nodes_extra[node_id]["node_object"])
             self.logger.debug(
-                f"{self}: injected {self.nodes_extra[node_id]['node_object']} with WorkerService"
+                f"{self}: injected {self.nodes_extra[node_id]['node_object']} with \
+                WorkerService"
             )
 
             # Create a process to run the Node

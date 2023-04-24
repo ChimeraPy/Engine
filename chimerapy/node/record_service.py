@@ -1,17 +1,15 @@
-from typing import Dict
+# Internal Imports
+from .. import _logger
+from ..records import VideoRecord, AudioRecord, TabularRecord, ImageRecord
+from .node_service import NodeService
+
 import os
 import threading
 import queue
 import pathlib
-import gc
-
-from .. import _logger
+from typing import Dict
 
 logger = _logger.getLogger("chimerapy")
-
-# Internal Imports
-from ..records import VideoRecord, AudioRecord, TabularRecord, ImageRecord
-from .node_service import NodeService
 
 
 class RecordService(NodeService):

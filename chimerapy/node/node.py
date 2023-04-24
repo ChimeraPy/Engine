@@ -1,15 +1,13 @@
-from typing import Dict, List, Any, Optional, Union, Literal, Tuple
+from typing import Dict, Any, Optional, Union
 import pathlib
 import logging
 import uuid
 import datetime
 import time
-import uuid
 import tempfile
 
 # Third-party Imports
 import multiprocess as mp
-from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
@@ -117,8 +115,8 @@ class Node:
     def get_logger(self) -> logging.Logger:
 
         # Get Logger
-        l = _logger.getLogger("chimerapy-node")
-        l.setLevel(self.logging_level)
+        logger = _logger.getLogger("chimerapy-node")
+        logger.setLevel(self.logging_level)
 
         # If worker, add zmq handler
         if "worker" in self.services or self.debug_port:
@@ -130,11 +128,13 @@ class Node:
             else:
                 logging_port = 5555
 
-            _logger.add_node_id_zmq_push_handler(l, "127.0.0.1", logging_port, self.id)
+            _logger.add_node_id_zmq_push_handler(
+                logger, "127.0.0.1", logging_port, self.id
+            )
         else:
-            _logger.add_console_handler(l)
+            _logger.add_console_handler(logger)
 
-        return l
+        return logger
 
     ####################################################################
     ## Saving Data Stream API

@@ -3,21 +3,18 @@ import pickle
 import asyncio
 import pathlib
 import os
-import time
 import datetime
 import json
 import random
 import tempfile
 import zipfile
-import concurrent.futures
 import traceback
 from concurrent.futures import Future
-from asyncio import Task
 
 # Third-party Imports
 import dill
 import aiohttp
-from aiohttp import web, client_exceptions
+from aiohttp import web
 import networkx as nx
 
 from chimerapy import config
@@ -27,7 +24,8 @@ from .networking.enums import MANAGER_MESSAGE, GENERAL_MESSAGE
 from .graph import Graph
 from .exceptions import CommitGraphError
 from . import _logger
-from .utils import async_waiting_for, megabytes_to_bytes
+from .logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
+from .utils import megabytes_to_bytes
 
 logger = _logger.getLogger("chimerapy")
 
@@ -50,10 +48,13 @@ class Manager:
 
         Args:
             port (int): Referred port, might return a different one based\
-            on availablity.
-            max_num_of_workers (int): max_num_of_workers
-            publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. Defaults to False.
-            enable_api (bool): Enable front-end API entrypoints to controll cluster. Defaults to True.
+                on availablity.
+            max_num_of_workers (int): Maximum number of allowed Workers
+            publish_logs_via_zmq (bool, optional): Whether to publish logs via ZMQ. \
+                Defaults to False.
+            enable_api (bool): Enable front-end API entrypoints to controll cluster. \
+                Defaults to True.
+
             **kwargs: Additional keyword arguments.
                 Currently, this is used to configure the ZMQ log handler.
         """
@@ -102,7 +103,7 @@ class Manager:
             ],
         )
 
-        # Enable Dashboard API if requested (needed to be executed after server is running)
+        # Enable Dashboard API if requested
         if self.enable_api:
             from .api import API
 
@@ -242,7 +243,7 @@ class Manager:
         logger.info(f"Registered worker {worker_name} to logs sink")
 
     @staticmethod
-    def _start_logs_sink() -> "DistributedLogsMultiplexedFileSink":
+    def _start_logs_sink() -> DistributedLogsMultiplexedFileSink:
         """Start the logs sink."""
         max_bytes_per_worker = megabytes_to_bytes(
             config.get("manager.logs-sink.max-file-size-per-worker")
@@ -254,7 +255,8 @@ class Manager:
         return logs_sink
 
     def _get_worker_ip(self, worker_id: str) -> str:
-        return f"http://{self.state.workers[worker_id].ip}:{self.state.workers[worker_id].port}"
+        worker_info = self.state.workers[worker_id]
+        return f"http://{worker_info.ip}:{worker_info.port}"
 
     def _clear_node_server(self):
         self.nodes_server_table: Dict = {}
@@ -263,7 +265,8 @@ class Manager:
 
         self.state.workers[worker_state.id] = worker_state
         logger.info(
-            f"Manager registered <Worker id={worker_state.id} name={worker_state.name}> from {worker_state.ip}"
+            f"Manager registered <Worker id={worker_state.id} \
+            name={worker_state.name}> from {worker_state.ip}"
         )
         logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
@@ -282,7 +285,8 @@ class Manager:
         if worker_id in self.state.workers:
             state = self.state.workers[worker_id]
             logger.info(
-                f"Manager deregistered <Worker id={worker_id} name={state.name}> from {state.ip}"
+                f"Manager deregistered <Worker id={worker_id} name={state.name}> \
+                from {state.ip}"
             )
             del self.state.workers[worker_id]
 
@@ -598,7 +602,8 @@ class Manager:
 
                     else:
                         logger.error(
-                            f"{self}: Requesting Worker's node server request: NO RESPONSE"
+                            f"{self}: Requesting Worker's node server request: NO \
+                            RESPONSE"
                         )
 
         return False
@@ -633,7 +638,8 @@ class Manager:
                             logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
                             logger.debug(
-                                f"{self}: receiving Worker's node server request: SUCCESS"
+                                f"{self}: receiving Worker's node server request: \
+                                SUCCESS"
                             )
                             return True
 
@@ -672,7 +678,7 @@ class Manager:
         # Wait with a timeout
         try:
             await asyncio.wait(tasks, timeout=timeout)
-        except Exception as e:
+        except Exception:
 
             # Disregard certain exceptions
             logger.error(traceback.format_exc())
@@ -684,7 +690,7 @@ class Manager:
             try:
                 result = t.result()
                 results.append(result.ok)
-            except Exception as e:
+            except Exception:
 
                 # Disregard certain exceptions
                 if report_exceptions:
@@ -722,7 +728,7 @@ class Manager:
         # Wait until all complete
         try:
             results = await asyncio.gather(*coros)
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
             return False
 
@@ -747,7 +753,7 @@ class Manager:
         # Wait until all complete
         try:
             results = await asyncio.gather(*coros)
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
             return False
 
@@ -762,7 +768,7 @@ class Manager:
         # Wait until all complete
         try:
             results = await asyncio.gather(*coros)
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
             return False
 
@@ -927,6 +933,7 @@ class Manager:
             htype="post",
             route="/nodes/collect",
             data={"path": str(self.logdir)},
+            timeout=None
             # timeout=max(self.duration * 2, 60),
         )
         await asyncio.sleep(1)
@@ -937,7 +944,7 @@ class Manager:
             try:
                 self._save_meta()
                 success = self.server.move_transfer_files(self.logdir, unzip)
-            except Exception as e:
+            except Exception:
                 logger.error(traceback.format_exc())
             self.state.collection_status = "PASS"
         else:
@@ -962,7 +969,7 @@ class Manager:
         # Wait until all complete
         try:
             results = await asyncio.gather(*coros)
-        except Exception as e:
+        except Exception:
             logger.error(traceback.format_exc())
             return False
 
@@ -1004,7 +1011,7 @@ class Manager:
                     timeout=config.get("manager.timeout.worker-shutdown"),
                     report_exceptions=False,
                 )
-            except:
+            except Exception:
                 success = False
 
             if success:

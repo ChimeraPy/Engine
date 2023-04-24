@@ -1,9 +1,9 @@
+from ..conftest import not_github_actions
+
 # Built-in Imports
-import logging
 import pathlib
 import os
 import time
-import pdb
 
 # Third-party Import
 import pytest
@@ -14,9 +14,6 @@ import cv2
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
-
-# Interal Testing imports
-from ..conftest import not_github_actions
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -89,7 +86,7 @@ def test_write_video():
         cap = cv2.VideoCapture(0)
         ret, frame = cap.read()
         assert isinstance(frame, np.ndarray)
-    except:
+    except Exception:
         cap = RandomGenerator()
         ret, frame = cap.read()
 

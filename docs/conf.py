@@ -19,7 +19,6 @@ sys.path.insert(0, os.path.abspath("./source/"))
 
 # As recommended by SO form:
 # https://stackoverflow.com/questions/63261090/github-sphinx-action-cant-find-target-python-modules-and-builds-an-empty-sphinx
-import chimerapy
 
 # -- Project information -----------------------------------------------------
 

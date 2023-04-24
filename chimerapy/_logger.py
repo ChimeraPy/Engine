@@ -136,7 +136,8 @@ def fork(
     Args:
         logger: An instance of the `logging.Logger` class. The logger to be forked.
         name: A string representing the name of the child logger.
-        identifier: An optional string representing the identifier for the logger filter.
+        identifier: An optional string representing the identifier for the \
+            logger filter.
 
     Returns:
         The new logger
@@ -219,7 +220,9 @@ def add_console_handler(logger: logging.Logger) -> None:
 def add_node_id_zmq_push_handler(
     logger: logging.Logger, ip: str, port: int, node_id: str
 ) -> None:
-    """Add a ZMQ log handler to the logger that publishes the node_id based LogRecord to a ZMQ push socket."""
+    """Add a ZMQ log handler to the logger that publishes the node_id based \
+    LogRecord to a ZMQ push socket.
+    """
     # Add a handler to publish the logs to zmq ws
     exists = any(isinstance(h, NodeIdZMQPushHandler) for h in logger.handlers)
     if not exists:
@@ -237,7 +240,9 @@ def add_node_id_zmq_push_handler(
 def add_zmq_push_handler(
     logging_entity: Union[logging.Logger, NodeIDZMQPullListener], ip: str, port: int
 ) -> logging.Handler:
-    """Add a ZMQ log handler to the logger that publishes the LogRecord to a ZMQ push socket."""
+    """Add a ZMQ log handler to the logger that publishes the LogRecord to a \
+    ZMQ push socket.
+    """
     # Add a handler to publish the logs to zmq
     if isinstance(logging_entity, NodeIDZMQPullListener):
         exists = False

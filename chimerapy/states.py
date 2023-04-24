@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional, Literal
+from typing import Dict, Optional, Literal
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
