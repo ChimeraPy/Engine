@@ -72,7 +72,7 @@ def slow_interval_between_tests():
 
 @pytest.fixture
 def manager():
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0, enable_zeroconf=False)
     yield manager
     manager.shutdown()
 
@@ -265,8 +265,8 @@ def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
     worker1 = cp.Worker(name="local", port=0)
     worker2 = cp.Worker(name="local2", port=0)
 
-    worker1.connect(host=manager.host, port=manager.port)
-    worker2.connect(host=manager.host, port=manager.port)
+    worker1.connect(method="ip", host=manager.host, port=manager.port)
+    worker2.connect(method="ip", host=manager.host, port=manager.port)
 
     # Then register graph to Manager
     assert manager.commit_graph(

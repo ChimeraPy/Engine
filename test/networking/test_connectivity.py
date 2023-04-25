@@ -47,7 +47,7 @@ def test_manager_registering_workers_locally(manager):
     workers = []
     for i in range(3):
         worker = cp.Worker(name=f"local-{i}", port=0)
-        worker.connect(host=manager.host, port=manager.port)
+        worker.connect(method="ip", host=manager.host, port=manager.port)
         workers.append(worker)
 
     time.sleep(1)
@@ -61,11 +61,11 @@ def test_manager_shutting_down_gracefully():
     # While this one should not!
 
     # Create the actors
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0, enable_zeroconf=False)
     worker = cp.Worker(name="local", port=0)
 
     # Connect to the Manager
-    worker.connect(host=manager.host, port=manager.port)
+    worker.connect(method="ip", host=manager.host, port=manager.port)
 
     # Wait and then shutdown system through the manager
     worker.shutdown()
@@ -76,12 +76,22 @@ def test_manager_shutting_down_ungracefully():
     # While this one should not!
 
     # Create the actors
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0, enable_zeroconf=False)
     worker = cp.Worker(name="local", port=0)
 
     # Connect to the Manager
-    worker.connect(host=manager.host, port=manager.port)
+    worker.connect(method="ip", host=manager.host, port=manager.port)
 
     # Only shutting Manager
     manager.shutdown()
     worker.shutdown()
+
+
+def test_zeroconf_connect(worker):
+
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+
+    worker.connect(method="zeroconf")
+    assert worker.id in manager.workers
+
+    manager.shutdown()

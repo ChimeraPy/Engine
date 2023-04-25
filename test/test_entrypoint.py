@@ -1,6 +1,6 @@
 # Test Import
 from .mock import DockeredWorker
-from .conftest import linux_run_only
+from .conftest import linux_run_only, TEST_DATA_DIR
 
 # Built-in Imports
 import subprocess
@@ -52,6 +52,34 @@ def test_worker_entrypoint_connect_wport(manager):
     time.sleep(2)
     assert "test" in manager.workers
     assert manager.workers["test"].port == 9980
+
+    logger.info("Killing worker subprocess")
+    worker_process.kill()
+
+    logger.info("Manager shutting down")
+    manager.shutdown()
+
+
+def test_worker_entrypoint_zeroconf_connect():
+
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+
+    # Connect to manager from subprocess
+    worker_process = subprocess.Popen(
+        [
+            "cp-worker",
+            "--name",
+            "test",
+            "--id",
+            "test",
+            "--zeroconf",
+            "true",
+        ]
+    )
+    logger.info("Executed cmd to connect Worker to Manager.")
+
+    time.sleep(3)
+    assert "test" in manager.workers
 
     logger.info("Killing worker subprocess")
     worker_process.kill()
