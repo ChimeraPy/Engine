@@ -149,6 +149,10 @@ def test_manager_remote_transfer(node_cls):
 
     time.sleep(0.5)
 
+    assert manager.record().result()
+
+    time.sleep(0.5)
+
     assert manager.stop().result()
     assert manager.collect().result()
 

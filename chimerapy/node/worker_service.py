@@ -93,6 +93,7 @@ class WorkerService(NodeService):
                 WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
                 WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
                 WORKER_MESSAGE.START_NODES: self.start_node,
+                WORKER_MESSAGE.RECORD_NODES: self.record_node,
                 WORKER_MESSAGE.STOP_NODES: self.stop_node,
             },
             parent_logger=self.node.logger,
@@ -150,9 +151,17 @@ class WorkerService(NodeService):
         self.node.logger.debug(f"{self}: Notifying Worker that Node is connected")
 
     async def start_node(self, msg: Dict):
+        self.node.state.fsm = "PREVIEWING"
+        self.worker_signal_start.set()
+
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
+        )
+
+    async def record_node(self, msg: Dict):
         self.node.logger.debug(f"{self}: start")
         self.node.start_time = datetime.datetime.now()
-        self.node.state.fsm = "RUNNING"
+        self.node.state.fsm = "RECORDING"
         self.worker_signal_start.set()
 
         await self.client.async_send(

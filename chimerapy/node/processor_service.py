@@ -61,7 +61,7 @@ class ProcessorService(NodeService):
 
         while self.node.running:
 
-            if self.node.state.fsm == "RUNNING":
+            if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
                 self.forward()
             else:
                 time.sleep(0.1)

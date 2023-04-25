@@ -121,6 +121,7 @@ def test_starting_node(worker, gen_node):
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
+    worker.record_nodes().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(2)
@@ -159,9 +160,14 @@ def test_worker_data_archiving(worker):
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
-
     logger.debug("Let nodes run for some time")
     time.sleep(1)
+
+    logger.debug("Recording nodes!")
+    worker.record_nodes().result(timeout=5)
+    logger.debug("Let nodes run for some time")
+    time.sleep(1)
+
     worker.stop_nodes().result(timeout=5)
 
     worker.collect().result(timeout=30)

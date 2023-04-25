@@ -107,6 +107,7 @@ class Worker:
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/nodes/start", self._async_start_nodes_route),
+                web.post("/nodes/record", self._async_record_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -300,6 +301,13 @@ class Worker:
     async def _async_start_nodes_route(self, request: web.Request):
 
         if await self.async_start_nodes():
+            return web.HTTPOk()
+        else:
+            return web.HTTPError()
+
+    async def _async_record_route(self, request: web.Request):
+
+        if await self.async_record_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
@@ -823,6 +831,12 @@ class Worker:
             signal=WORKER_MESSAGE.START_NODES, data={}
         )
 
+    async def async_record_nodes(self) -> bool:
+        # Send message to nodes to start
+        return await self.server.async_broadcast(
+            signal=WORKER_MESSAGE.RECORD_NODES, data={}
+        )
+
     async def async_step(self) -> bool:
         # Worker tell all nodes to take a step
         return await self.server.async_broadcast(
@@ -937,6 +951,9 @@ class Worker:
 
     def start_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_start_nodes())
+
+    def record_nodes(self) -> Future[bool]:
+        return self._exec_coro(self.async_record_nodes())
 
     def stop_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_stop_nodes())

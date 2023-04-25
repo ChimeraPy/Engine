@@ -16,7 +16,7 @@ class NodeState:
         "CONNECTED",
         "READY",
         "PREVIEWING",
-        "RUNNING",
+        "RECORDING",
         "STOPPED",
         "SAVED",
         "SHUTDOWN",
