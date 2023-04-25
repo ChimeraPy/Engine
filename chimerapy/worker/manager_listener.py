@@ -52,7 +52,7 @@ class ManagerListener:
                     # Get the latest info
                     try:
                         latest_info = zeroconf.get_service_info(type, name)
-                    except zeroconf._exceptions.EventLoopBlocked:
+                    except Exception:
                         continue
 
                     if b"timestamp" not in info.properties:
