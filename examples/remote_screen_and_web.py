@@ -145,5 +145,5 @@ if __name__ == "__main__":
             break
 
     manager.stop().result(timeout=5)
-    manager.collect().result(timeout=60)
+    manager.collect().result()
     manager.shutdown()

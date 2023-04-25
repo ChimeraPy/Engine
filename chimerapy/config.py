@@ -12,6 +12,8 @@ config_file = str(pathlib.Path(os.path.abspath(__file__)).parent / "chimerapyrc.
 with open(config_file) as f:
     defaults = yaml.safe_load(f)["config"]
 
+del f
+
 config: Dict[str, Any] = {}
 
 
