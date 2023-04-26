@@ -25,6 +25,7 @@ def test_record_direct_submit():
         ...
 
     gen_node = GenNode(name="Gen", logdir=TEST_DATA_DIR / "record_service_test")
+    gen_node.state.fsm = "RECORDING"
 
     record_service = RecordService(name="record")
     record_service.inject(gen_node)
@@ -86,6 +87,7 @@ def test_run_record_service_from_worker(worker):
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
+    worker.record_nodes().result(timeout=5)
 
     logger.debug("Let nodes run for some time")
     time.sleep(5)

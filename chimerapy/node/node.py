@@ -332,7 +332,7 @@ class Node:
             self._teardown()
             self.logger.debug(f"{self}: is exiting")
         else:
-            self.state.fsm = "RUNNING"
+            self.state.fsm = "RECORDING"
 
     def shutdown(self, msg: Dict = {}):
 

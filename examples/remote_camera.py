@@ -65,11 +65,12 @@ if __name__ == "__main__":
             break
 
     # Assuming one worker
-    mapping = {"remote": [graph.web.id], worker.id: [graph.show.id]}
-    # mapping = {worker.id: graph.node_ids}
+    # mapping = {"remote": [graph.web.id], worker.id: [graph.show.id]}
+    mapping = {worker.id: graph.node_ids}
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
+    manager.start().result(timeout=5)
 
     # Wail until user stops
     while True:
@@ -77,7 +78,7 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
-    manager.start().result(timeout=5)
+    manager.record().result(timeout=5)
 
     # Wail until user stops
     while True:

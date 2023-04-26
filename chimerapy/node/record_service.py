@@ -59,7 +59,7 @@ class RecordService(NodeService):
 
     @property
     def enabled(self) -> bool:
-        return self.node.state.fsm == "RUNNING"
+        return self.node.state.fsm == "RECORDING"
 
     def submit(self, entry: Dict):
         self.save_queue.put(entry)

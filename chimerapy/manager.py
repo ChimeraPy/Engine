@@ -936,6 +936,21 @@ class Manager:
 
         return success
 
+    async def async_record(self) -> bool:
+
+        # Mark the start time
+        self.start_time = datetime.datetime.now()
+
+        # Tell the cluster to start
+        success = await self._async_broadcast_request("post", "/nodes/record")
+        if success:
+            self.state.running = True
+
+        # Updating meta just in case of failure
+        self._save_meta()
+
+        return success
+
     async def async_stop(self) -> bool:
 
         # Mark the start time
@@ -1121,7 +1136,7 @@ class Manager:
         return self._exec_coro(self.async_gather())
 
     def start(self) -> Future[bool]:
-        """Start the executiong of the cluster.
+        """Start the executing of the cluster.
 
         Before starting, make sure that you have perform the following
         steps:
@@ -1136,6 +1151,10 @@ class Manager:
 
         """
         return self._exec_coro(self.async_start())
+
+    def record(self) -> Future[bool]:
+        """Start a recording data collection by the cluster."""
+        return self._exec_coro(self.async_record())
 
     def stop(self) -> Future[bool]:
         """Stop the executiong of the cluster.
