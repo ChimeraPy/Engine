@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Callable, Coroutine, Union, Any
+from typing import Dict, List, Optional, Callable, Coroutine, Any
 import threading
 import traceback
 import datetime
@@ -52,7 +52,6 @@ class ProcessorService(NodeService):
         self,
         method_name: str,
         params: Dict,
-        timeout: Optional[Union[int, float]] = None,
     ) -> Dict[str, Any]:
 
         # Extract the method
@@ -78,7 +77,7 @@ class ProcessorService(NodeService):
 
             # Signal the reset event and then wait
             self.reset_event.clear()
-            success = self.node.reset_event.wait(timeout=timeout)
+            success = self.reset_event.wait()
 
         else:
             self.node.logger.error(f"Invalid registered method request: style={style}")
@@ -117,9 +116,9 @@ class ProcessorService(NodeService):
 
             # Allow the execution of user-defined registered methods
             if not self.reset_event.is_set():
-                self.safe_exec(self.teardown())
-                self.safe_exec(self.setup())
-                self.reset_event.clear()
+                self.safe_exec(self.node.teardown)
+                self.safe_exec(self.node.setup)
+                self.reset_event.set()
 
     def forward(self):
 
