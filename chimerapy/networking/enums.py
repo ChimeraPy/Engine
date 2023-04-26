@@ -24,6 +24,7 @@ class WORKER_MESSAGE(Enum):
     START_NODES = 24
     RECORD_NODES = 25
     STOP_NODES = 26
+    REQUEST_METHOD = 27
 
 
 # Node -> Worker
@@ -31,3 +32,4 @@ class NODE_MESSAGE(Enum):
     STATUS = 50
     REPORT_GATHER = 51
     REPORT_SAVING = 52
+    REPORT_RESULTS = 53

@@ -1,4 +1,4 @@
-from typing import Union, Dict, Any, Coroutine, Optional, List, Literal
+from typing import Union, Dict, Any, Coroutine, Optional, List, Literal, Tuple
 import os
 import time
 import socket
@@ -108,12 +108,14 @@ class Worker:
                 web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/nodes/start", self._async_start_nodes_route),
                 web.post("/nodes/record", self._async_record_route),
+                # web.post("/nodes/registered_methods", self._async_request_method),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
             ws_handlers={
                 NODE_MESSAGE.STATUS: self._async_node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
+                NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
             },
             parent_logger=self.logger,
         )
@@ -426,6 +428,13 @@ class Worker:
                 ):
                     pass
 
+    async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
+
+        self.logger.debug(f"{self}: node report results: {msg}")
+        node_id = msg["data"]["node_id"]
+        self.nodes_extra[node_id]["registered_method_results"] = msg["data"]["output"]
+        self.nodes_extra[node_id]["response"] = True
+
     ####################################################################
     ## Helper Methods
     ####################################################################
@@ -708,6 +717,7 @@ class Worker:
         self.state.nodes[node_id] = NodeState(id=node_id)
         self.nodes_extra[node_id]["response"] = False
         self.nodes_extra[node_id]["gather"] = DataChunk()
+        self.nodes_extra[node_id]["registered_method_results"] = None
         self.nodes_extra[node_id].update({k: v for k, v in msg.items() if k != "id"})
         self.logger.debug(f"{self}: created state for <Node {node_id}>")
 
@@ -849,6 +859,34 @@ class Worker:
             signal=WORKER_MESSAGE.STOP_NODES, data={}
         )
 
+    async def async_request_registered_method(
+        self, node_id: str, method_name: str, params: Dict = {}
+    ) -> Dict[str, Any]:
+
+        # Mark that the node hasn't responsed
+        self.nodes_extra[node_id]["response"] = False
+        self.logger.debug(
+            f"{self}: Requesting registered method: {method_name}@{node_id}"
+        )
+
+        success = True
+
+        await self.server.async_send(
+            client_id=node_id,
+            signal=WORKER_MESSAGE.REQUEST_METHOD,
+            data={"method_name": method_name, "params": params},
+        )
+
+        # Then wait for the Node response
+        success = await async_waiting_for(
+            condition=lambda: self.nodes_extra[node_id]["response"] is True,
+        )
+
+        return {
+            "success": success,
+            "output": self.nodes_extra[node_id]["registered_method_results"],
+        }
+
     async def async_collect(self) -> bool:
 
         # Request saving from Worker to Nodes
@@ -954,6 +992,18 @@ class Worker:
 
     def record_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_record_nodes())
+
+    def request_registered_method(
+        self,
+        node_id: str,
+        method_name: str,
+        params: Dict = {},
+    ) -> Future[Tuple[bool, Any]]:
+        return self._exec_coro(
+            self.async_request_registered_method(
+                node_id=node_id, method_name=method_name, params=params
+            )
+        )
 
     def stop_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_stop_nodes())

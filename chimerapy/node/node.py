@@ -18,6 +18,7 @@ from ..networking import DataChunk
 from ..service import ServiceGroup
 
 # Service Imports
+from .registered_method import RegisteredMethod
 from .record_service import RecordService
 from .processor_service import ProcessorService
 
@@ -25,6 +26,7 @@ from .processor_service import ProcessorService
 class Node:
 
     services: ServiceGroup
+    registered_methods: Dict[str, RegisteredMethod] = {}
 
     def __init__(
         self,
@@ -49,7 +51,9 @@ class Node:
         """
 
         # Saving input parameters
-        self.state = NodeState(id=str(uuid.uuid4()), name=name)
+        self.state = NodeState(
+            id=str(uuid.uuid4()), name=name, registered_methods=self.registered_methods
+        )
         self.debug_port = debug_port
         self._running: Union[bool, mp.Value] = True
         self.blocking = True
