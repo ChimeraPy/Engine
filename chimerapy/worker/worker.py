@@ -108,7 +108,7 @@ class Worker:
                 web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/nodes/start", self._async_start_nodes_route),
                 web.post("/nodes/record", self._async_record_route),
-                # web.post("/nodes/registered_methods", self._async_request_method),
+                web.post("/nodes/registered_methods", self._async_request_method),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -314,6 +314,18 @@ class Worker:
         else:
             return web.HTTPError()
 
+    async def _async_request_method(self, request: web.Request):
+        msg = await request.json()
+        node_id = msg["data"]["node_id"]
+        method_name = msg["data"]["method_name"]
+        params = msg["data"]["params"]
+
+        await self.async_request_registered_method(node_id, method_name, params)
+
+        return web.json_response(
+            {"success": True, "worker_state": self.state.to_dict()}
+        )
+
     async def _async_stop_nodes_route(self, request: web.Request):
 
         if await self.async_stop_nodes():
@@ -429,8 +441,8 @@ class Worker:
                     pass
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-
         self.logger.debug(f"{self}: node report results: {msg}")
+
         node_id = msg["data"]["node_id"]
         self.nodes_extra[node_id]["registered_method_results"] = msg["data"]["output"]
         self.nodes_extra[node_id]["response"] = True
