@@ -122,11 +122,11 @@ class ProcessorService(NodeService):
                 else:
                     time.sleep(0.1)
 
-            # Allow the execution of user-defined registered methods
-            if not self.reset_event.is_set():
-                self.safe_exec(self.node.teardown)
-                self.safe_exec(self.node.setup)
-                self.reset_event.set()
+                # Allow the execution of user-defined registered methods
+                if not self.reset_event.is_set():
+                    self.safe_exec(self.node.teardown)
+                    self.safe_exec(self.node.setup)
+                    self.reset_event.set()
 
     def forward(self):
 

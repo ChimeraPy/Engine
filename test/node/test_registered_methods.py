@@ -144,6 +144,7 @@ def test_registered_method_with_reset_style(worker_with_reg, node_with_reg_metho
 def test_manager_requesting_registered_methods(single_node_with_reg_methods_manager):
     manager, worker, node = single_node_with_reg_methods_manager
     assert manager.start().result(timeout=10)
+
     results = manager.request_registered_method(
         node_id=node.id, method_name="printout"
     ).result(timeout=20)
