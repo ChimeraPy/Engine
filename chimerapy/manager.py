@@ -393,6 +393,15 @@ class Manager:
         # Save the worker graph
         self.worker_graph_map = worker_graph_map
 
+    def node_to_worker_lookup(self, node_id: str) -> Optional[str]:
+
+        for worker_id in self.state.workers:
+            if node_id in self.state.workers[worker_id].nodes:
+                return worker_id
+
+        logger.error(f"{self}: Node-Worker Lookup failed: {node_id}")
+        return None
+
     ####################################################################
     ## Package and Dependency Management
     ####################################################################
@@ -951,6 +960,40 @@ class Manager:
 
         return success
 
+    async def async_request_registered_method(
+        self, node_id: str, method_name: str, params: Dict[str, Any] = {}
+    ) -> Dict[str, Any]:
+
+        # First, identify which worker has the node
+        worker_id = self.node_to_worker_lookup(node_id)
+
+        if not isinstance(worker_id, str):
+            return {"success": False, "output": None}
+
+        data = {
+            "node_id": str(node_id),
+            "method_name": str(method_name),
+            "params": dict(params),
+        }
+
+        async with aiohttp.ClientSession() as client:
+            async with client.post(
+                f"{self._get_worker_ip(worker_id)}/nodes/registered_methods",
+                data=json.dumps(data),
+            ) as resp:
+
+                if resp.ok:
+                    logger.debug(
+                        f"{self}: Registered Method for Worker {worker_id}: SUCCESS"
+                    )
+                    resp_data = await resp.json()
+                    return resp_data
+                else:
+                    logger.debug(
+                        f"{self}: Registered Method for Worker {worker_id}: FAILED"
+                    )
+                    return {"success": False, "output": None}
+
     async def async_stop(self) -> bool:
 
         # Mark the start time
@@ -1155,6 +1198,15 @@ class Manager:
     def record(self) -> Future[bool]:
         """Start a recording data collection by the cluster."""
         return self._exec_coro(self.async_record())
+
+    def request_registered_method(
+        self, node_id: str, method_name: str, params: Dict[str, Any] = {}
+    ) -> Future[Dict[str, Any]]:
+        return self._exec_coro(
+            self.async_request_registered_method(
+                node_id=node_id, method_name=method_name, params=params
+            )
+        )
 
     def stop(self) -> Future[bool]:
         """Stop the executiong of the cluster.

@@ -1,5 +1,5 @@
 # Class Imports
-from .node import Node
+from .node import Node, register
 from .worker import Worker
 from .manager import Manager
 from .graph import Graph
@@ -23,4 +23,5 @@ __all__ = [
     "debug",
     "utils",
     "config",
+    "register",
 ]

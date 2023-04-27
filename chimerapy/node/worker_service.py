@@ -95,6 +95,7 @@ class WorkerService(NodeService):
                 WORKER_MESSAGE.START_NODES: self.start_node,
                 WORKER_MESSAGE.RECORD_NODES: self.record_node,
                 WORKER_MESSAGE.STOP_NODES: self.stop_node,
+                WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
             },
             parent_logger=self.node.logger,
         )
@@ -167,6 +168,33 @@ class WorkerService(NodeService):
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
         )
+
+    async def execute_registered_method(self, msg: Dict):
+        self.node.logger.debug(f"{self}: execute register method: {msg}")
+
+        # Check first that the method exists
+        method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
+
+        if method_name not in self.node.registered_methods:
+            results = {
+                "node_id": self.node.id,
+                "node_state": self.node.state.to_json(),
+                "success": False,
+                "output": None,
+            }
+            self.node.logger.warning(
+                f"{self}: Worker requested execution of registered method that doesn't \
+                exists: {method_name}"
+            )
+        else:
+            results = await self.node.services["processor"].execute_registered_method(
+                method_name, params
+            )
+            results.update(
+                {"node_id": self.node.id, "node_state": self.node.state.to_json()}
+            )
+
+        await self.client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
     async def async_step(self, msg: Dict):
         # Make the processor take a step

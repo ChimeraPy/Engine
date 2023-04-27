@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable, Coroutine, Any
 import threading
 import traceback
 import datetime
@@ -21,6 +21,12 @@ class ProcessorService(NodeService):
     ####################################################################
 
     def setup(self):
+        # Create threading information
+        self.step_lock = threading.Lock()
+        self.reset_event = threading.Event()
+        self.reset_event.set()
+
+        # Executing setup
         self.safe_exec(self.node.setup)
 
     def main(self):
@@ -37,6 +43,47 @@ class ProcessorService(NodeService):
         self.safe_exec(self.node.teardown)
 
         self.node.logger.debug(f"{self}: shutdown")
+
+    ####################################################################
+    ## Async Registered Methods
+    ####################################################################
+
+    async def execute_registered_method(
+        self,
+        method_name: str,
+        params: Dict,
+    ) -> Dict[str, Any]:
+
+        # Extract the method
+        function: Callable[[], Coroutine] = getattr(self.node, method_name)
+        style = self.node.registered_methods[method_name].style
+        self.node.logger.debug(f"{self}: executing {function} with params: {params}")
+
+        # Execute method based on its style
+        success = False
+        if style == "concurrent":
+            output = await function(**params)
+            success = True
+
+        elif style == "blocking":
+            with self.step_lock:
+                output = await function(**params)
+                success = True
+
+        elif style == "reset":
+            with self.step_lock:
+                output = await function(**params)
+                success = True
+
+            # Signal the reset event and then wait
+            self.reset_event.clear()
+            success = self.reset_event.wait()
+
+        else:
+            self.node.logger.error(f"Invalid registered method request: style={style}")
+            output = None
+
+        return {"success": success, "output": output}
 
     ####################################################################
     ## Helper Methods
@@ -75,6 +122,12 @@ class ProcessorService(NodeService):
                 else:
                     time.sleep(0.1)
 
+                # Allow the execution of user-defined registered methods
+                if not self.reset_event.is_set():
+                    self.safe_exec(self.node.teardown)
+                    self.safe_exec(self.node.setup)
+                    self.reset_event.set()
+
     def forward(self):
 
         # Default value
@@ -87,14 +140,16 @@ class ProcessorService(NodeService):
 
                     # Once we get them, pass them through!
                     self.node.services["poller"].inputs_ready.clear()
-                    output = self.safe_exec(
-                        self.node.step,
-                        args=[self.node.services["poller"].in_bound_data],
-                    )
+                    with self.step_lock:
+                        output = self.safe_exec(
+                            self.node.step,
+                            args=[self.node.services["poller"].in_bound_data],
+                        )
                     break
 
         else:
-            output = self.safe_exec(self.node.step)
+            with self.step_lock:
+                output = self.safe_exec(self.node.step)
 
         # If output generated, send it!
         if output:

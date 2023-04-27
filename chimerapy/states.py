@@ -2,6 +2,8 @@ from typing import Dict, Optional, Literal
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
+from .node.registered_method import RegisteredMethod
+
 
 @dataclass_json
 @dataclass
@@ -21,6 +23,8 @@ class NodeState:
         "SAVED",
         "SHUTDOWN",
     ] = "NULL"
+
+    registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
 
 @dataclass_json
