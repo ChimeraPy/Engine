@@ -106,13 +106,21 @@ class ProcessorService(NodeService):
 
         self.node.logger.debug(f"{self}: started processor while loop")
 
-        while self.node.running:
+        # If using main method
+        if self.node.__class__.__bases__[0].main.__code__ != self.node.main.__code__:
+            self.node.logger.debug(f"{self}: Using ``main`` method")
+            self.safe_exec(self.node.main)
 
-            # Execute forward if running
-            if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
-                self.forward()
-            else:
-                time.sleep(0.1)
+        # Else, step method
+        else:
+            self.node.logger.debug(f"{self}: Using ``step`` method")
+
+            while self.node.running:
+
+                if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
+                    self.forward()
+                else:
+                    time.sleep(0.1)
 
             # Allow the execution of user-defined registered methods
             if not self.reset_event.is_set():
