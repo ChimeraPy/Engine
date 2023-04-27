@@ -961,7 +961,7 @@ class Manager:
         return success
 
     async def async_request_registered_method(
-        self, node_id: str, method_name: str, params: Dict[str, Any]
+        self, node_id: str, method_name: str, params: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
 
         # First, identify which worker has the node
@@ -970,24 +970,29 @@ class Manager:
         if not isinstance(worker_id, str):
             return {"success": False, "output": None}
 
-        data = json.dumps(
-            {
-                "node_id": node_id,
-                "method_name": method_name,
-                "params": params,
-            }
-        )
+        data = {
+            "node_id": str(node_id),
+            "method_name": str(method_name),
+            "params": dict(params),
+        }
 
         async with aiohttp.ClientSession() as client:
             async with client.post(
                 f"{self._get_worker_ip(worker_id)}/nodes/registered_methods",
-                timeout=config.get("manager.timeout.info-request"),
-                data=data,
+                data=json.dumps(data),
             ) as resp:
-                if resp.ok:
-                    logger.debug(f"{self}: Gathering Worker {worker_id}: SUCCESS")
 
-        return {"success": False, "output": None}
+                if resp.ok:
+                    logger.debug(
+                        f"{self}: Registered Method for Worker {worker_id}: SUCCESS"
+                    )
+                    resp_data = await resp.json()
+                    return resp_data
+                else:
+                    logger.debug(
+                        f"{self}: Registered Method for Worker {worker_id}: FAILED"
+                    )
+                    return {"success": False, "output": None}
 
     async def async_stop(self) -> bool:
 
@@ -1195,7 +1200,7 @@ class Manager:
         return self._exec_coro(self.async_record())
 
     def request_registered_method(
-        self, node_id: str, method_name: str, params: Dict[str, Any]
+        self, node_id: str, method_name: str, params: Dict[str, Any] = {}
     ) -> Future[Dict[str, Any]]:
         return self._exec_coro(
             self.async_request_registered_method(

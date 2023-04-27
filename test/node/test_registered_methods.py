@@ -16,7 +16,7 @@ class NodeWithRegisteredMethods(cp.Node):
         self.init_value = init_value
 
     def setup(self):
-        self.logger.debug(f"{self}: executing PREP")
+        self.logger.debug(f"{self}: executing SETUP")
         self.value = self.init_value
 
     def step(self):
@@ -90,9 +90,9 @@ def single_node_with_reg_methods_manager(manager, worker, node_with_reg_methods)
         {
             worker.id: [node_with_reg_methods.id],
         },
-    )
+    ).result(timeout=30)
 
-    return manager
+    return manager, worker, node_with_reg_methods
 
 
 def test_registered_method_with_concurrent_style(
@@ -141,23 +141,24 @@ def test_registered_method_with_reset_style(worker_with_reg, node_with_reg_metho
     )
 
 
-@pytest.mark.xfail
-def test_manager_requesting_registered_methods(
-    single_node_with_reg_methods_manager, node_with_reg_methods
-):
-    assert single_node_with_reg_methods_manager.start().result(timeout=10)
-    assert single_node_with_reg_methods_manager.request_registered_method(
-        node_id=node_with_reg_methods.id, method_name="printout"
-    )
-    time.sleep(2)
+def test_manager_requesting_registered_methods(single_node_with_reg_methods_manager):
+    manager, worker, node = single_node_with_reg_methods_manager
+    assert manager.start().result(timeout=10)
+    results = manager.request_registered_method(
+        node_id=node.id, method_name="printout"
+    ).result(timeout=20)
+    assert results["success"] and isinstance(results["output"], int)
 
-    assert single_node_with_reg_methods_manager.request_registered_method(
-        node_id=node_with_reg_methods.id,
+    results = manager.request_registered_method(
+        node_id=node.id,
         method_name="set_value",
         params={"value": -100},
-    )
-    time.sleep(2)
+    ).result(timeout=20)
+    assert results["success"] and results["output"] <= -100
 
-    assert single_node_with_reg_methods_manager.request_registered_method(
-        node_id=node_with_reg_methods.id, method_name="reset", timeout=10
-    )
+    results = manager.request_registered_method(
+        node_id=node.id, method_name="reset"
+    ).result(timeout=20)
+    assert results["success"] and results["output"] >= 100
+
+    assert manager.stop().result(timeout=10)
