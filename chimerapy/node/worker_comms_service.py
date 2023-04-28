@@ -13,7 +13,7 @@ import datetime
 from typing import List, Optional, Dict
 
 
-class WorkerService(NodeService):
+class WorkerCommsService(NodeService):
     def __init__(
         self,
         name: str,

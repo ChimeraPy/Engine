@@ -67,3 +67,6 @@ class AsyncLoopThread(threading.Thread):
 
         # Then stop the loop
         self._loop.stop()
+
+    def __del__(self):
+        self.stop()
