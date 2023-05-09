@@ -194,7 +194,7 @@ class NodeHandlerService(WorkerService):
 
     async def async_process_node_server_data(self, msg: Dict) -> bool:
 
-        await self.worker.services["http_server"].async_broadcast(
+        await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
             data=msg,
         )
@@ -228,25 +228,25 @@ class NodeHandlerService(WorkerService):
 
     async def async_start_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"].async_broadcast(
+        return await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.START_NODES, data={}
         )
 
     async def async_record_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"].async_broadcast(
+        return await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.RECORD_NODES, data={}
         )
 
     async def async_step(self) -> bool:
         # Worker tell all nodes to take a step
-        return await self.worker.services["http_server"].async_broadcast(
+        return await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.REQUEST_STEP, data={}
         )
 
     async def async_stop_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"].async_broadcast(
+        return await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.STOP_NODES, data={}
         )
 
@@ -286,7 +286,7 @@ class NodeHandlerService(WorkerService):
             self.nodes_extra[node_id]["response"] = False
 
         # Request gather from Worker to Nodes
-        await self.worker.services["http_server"].async_broadcast(
+        await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.REQUEST_GATHER, data={}
         )
 
@@ -329,7 +329,7 @@ class NodeHandlerService(WorkerService):
     async def async_collect(self) -> bool:
 
         # Request saving from Worker to Nodes
-        await self.worker.services["http_server"].async_broadcast(
+        await self.worker.services["http_server"]._async_broadcast(
             signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}
         )
 

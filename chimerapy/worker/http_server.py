@@ -3,6 +3,7 @@ import pickle
 import asyncio
 import pathlib
 import traceback
+import enum
 from typing import Dict, Optional
 
 from aiohttp import web
@@ -69,6 +70,9 @@ class HttpServerService(WorkerService):
     ####################################################################
     ## Helper Functions
     ####################################################################
+
+    async def _async_broadcast(self, signal: enum.Enum, data: Dict):
+        await self.server.async_broadcast(signal=signal, data=data)
 
     def _create_node_server_data(self):
 
