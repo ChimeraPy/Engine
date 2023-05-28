@@ -162,4 +162,6 @@ def test_manager_remote_transfer(node_cls):
     manager.shutdown()
 
     # The files from the remote worker should exists!
-    assert (manager.logdir / "remote" / "node").exists()
+    assert (
+        manager.logdir / f"{remote_worker.id}-{remote_worker.name}" / node.name
+    ).exists()

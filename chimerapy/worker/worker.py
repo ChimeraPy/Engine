@@ -222,6 +222,9 @@ class Worker:
             node_id=node_id, method_name=method_name, params=params
         )
 
+    async def async_gather(self) -> Dict:
+        return await self.services["node_handler"].async_gather()
+
     async def async_collect(self) -> bool:
         return await self.services["node_handler"].async_collect()
 
@@ -314,6 +317,9 @@ class Worker:
 
     def stop_nodes(self) -> Future[bool]:
         return self._exec_coro(self.async_stop_nodes())
+
+    def gather(self) -> Future[Dict]:
+        return self._exec_coro(self.async_gather())
 
     def collect(self) -> Future[bool]:
         return self._exec_coro(self.async_collect())

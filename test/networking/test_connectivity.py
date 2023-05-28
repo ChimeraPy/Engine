@@ -24,10 +24,6 @@ def test_manager_instance_shutdown_twice(manager):
     manager.shutdown()
 
 
-def test_worker_instance(worker):
-    ...
-
-
 def test_worker_instance_shutdown_twice(worker):
     worker.shutdown()
 

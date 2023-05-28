@@ -71,10 +71,15 @@ class HttpServerService(WorkerService):
     ## Helper Functions
     ####################################################################
 
-    async def _async_broadcast(self, signal: enum.Enum, data: Dict):
-        await self.server.async_broadcast(signal=signal, data=data)
+    async def _async_send(self, client_id: str, signal: enum.Enum, data: Dict) -> bool:
+        return await self.server.async_send(
+            client_id=client_id, signal=signal, data=data
+        )
 
-    def _create_node_server_data(self):
+    async def _async_broadcast(self, signal: enum.Enum, data: Dict) -> bool:
+        return await self.server.async_broadcast(signal=signal, data=data)
+
+    def _create_node_server_data(self) -> Dict:
 
         # Construct simple data structure for Node to address information
         node_server_data = {"id": self.worker.state.id, "nodes": {}}
@@ -90,7 +95,7 @@ class HttpServerService(WorkerService):
     ## HTTP Routes
     ####################################################################
 
-    async def _async_load_sent_packages(self, request: web.Request):
+    async def _async_load_sent_packages(self, request: web.Request) -> web.Response:
         msg = await request.json()
 
         # For each package, extract it from the client's tempfolder
@@ -146,7 +151,7 @@ class HttpServerService(WorkerService):
         self.worker.logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
-    async def _async_create_node_route(self, request: web.Request):
+    async def _async_create_node_route(self, request: web.Request) -> web.Response:
         msg_bytes = await request.read()
         msg = pickle.loads(msg_bytes)
 
@@ -163,7 +168,7 @@ class HttpServerService(WorkerService):
 
         return web.json_response(response)
 
-    async def _async_destroy_node_route(self, request: web.Request):
+    async def _async_destroy_node_route(self, request: web.Request) -> web.Response:
         msg = await request.json()
         node_id = msg["id"]
 
@@ -173,22 +178,26 @@ class HttpServerService(WorkerService):
             {"success": success, "worker_state": self.worker.state.to_dict()}
         )
 
-    async def _async_report_node_server_data(self, request: web.Request):
+    async def _async_report_node_server_data(
+        self, request: web.Request
+    ) -> web.Response:
 
         node_server_data = self._create_node_server_data()
         return web.json_response(
             {"success": True, "node_server_data": node_server_data}
         )
 
-    async def _async_process_node_server_data(self, request: web.Request):
+    async def _async_process_node_server_data(
+        self, request: web.Request
+    ) -> web.Response:
         msg = await request.json()
 
         self.worker.logger.debug(f"{self}: processing node server data: {msg}")
 
         # Broadcasting the node server data
-        success = self.worker.services["node_handler"].async_process_node_server_data(
-            msg
-        )
+        success = await self.worker.services[
+            "node_handler"
+        ].async_process_node_server_data(msg)
 
         # After all nodes have been connected, inform the Manager
         self.worker.logger.debug(f"{self}: Informing Manager of processing completion")
@@ -197,28 +206,28 @@ class HttpServerService(WorkerService):
             {"success": success, "worker_state": self.worker.state.to_dict()}
         )
 
-    async def _async_step_route(self, request: web.Request):
+    async def _async_step_route(self, request: web.Request) -> web.Response:
 
         if await self.worker.services["node_handler"].async_step():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
-    async def _async_start_nodes_route(self, request: web.Request):
+    async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
 
         if await self.worker.services["node_handler"].async_start_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
-    async def _async_record_route(self, request: web.Request):
+    async def _async_record_route(self, request: web.Request) -> web.Response:
 
         if await self.worker.services["node_handler"].async_record_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
-    async def _async_request_method_route(self, request: web.Request):
+    async def _async_request_method_route(self, request: web.Request) -> web.Response:
         msg = await request.json()
 
         # Get information
@@ -233,25 +242,25 @@ class HttpServerService(WorkerService):
 
         return web.json_response(results)
 
-    async def _async_stop_nodes_route(self, request: web.Request):
+    async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
 
         if await self.worker.services["node_handler"].async_stop_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
-    async def _async_shutdown_route(self, request: web.Request):
+    async def _async_shutdown_route(self, request: web.Request) -> web.Response:
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
         self.worker.shutdown_task = asyncio.create_task(self.worker.async_shutdown())
 
         return web.HTTPOk()
 
-    async def _async_report_node_gather(self, request: web.Request):
+    async def _async_report_node_gather(self, request: web.Request) -> web.Response:
 
-        gather_data = await self.worker.service["node_handler"].async_gather()
+        gather_data = await self.worker.services["node_handler"].async_gather()
         return web.Response(body=pickle.dumps(gather_data))
 
-    async def _async_send_archive(self, request: web.Request):
+    async def _async_send_archive(self, request: web.Request) -> web.Response:
         msg = await request.json()
 
         # Collect data from the Nodes
@@ -291,8 +300,8 @@ class HttpServerService(WorkerService):
         self.worker.state.nodes[node_id] = node_state
 
         # Update Manager on the new nodes status
-        if self.worker.serivces["manager_client"].connected_to_manager:
-            self.worker.services["manager_client"]._async_node_status_update()
+        if self.worker.services["manager_client"].connected_to_manager:
+            await self.worker.services["manager_client"]._async_node_status_update()
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 

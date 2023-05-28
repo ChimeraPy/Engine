@@ -141,6 +141,8 @@ class NodeHandlerService(WorkerService):
                 self.nodes_extra[node_id]["process"].terminate()
                 continue
 
+            self.worker.logger.debug(f"{self}: {self.worker.state}")
+
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
                 condition=lambda: self.worker.state.nodes[node_id].fsm == "READY",
@@ -262,7 +264,7 @@ class NodeHandlerService(WorkerService):
 
         success = True
 
-        await self.worker.services["http_server"].async_send(
+        await self.worker.services["http_server"]._async_send(
             client_id=node_id,
             signal=WORKER_MESSAGE.REQUEST_METHOD,
             data={"method_name": method_name, "params": params},

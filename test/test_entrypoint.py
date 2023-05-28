@@ -78,7 +78,7 @@ def test_worker_entrypoint_zeroconf_connect():
     )
     logger.info("Executed cmd to connect Worker to Manager.")
 
-    time.sleep(3)
+    time.sleep(5)
     assert "test" in manager.workers
 
     logger.info("Killing worker subprocess")

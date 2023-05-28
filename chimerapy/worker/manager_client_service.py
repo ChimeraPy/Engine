@@ -228,7 +228,7 @@ class ManagerClientService(WorkerService):
                     raise TimeoutError("Nodes haven't fully finishing saving!")
 
         old_folder_name = path / self.worker.tempfolder.name
-        new_folder_name = path / f"{self.name}-{self.worker.id}"
+        new_folder_name = path / f"{self.worker.name}-{self.worker.id}"
         os.rename(old_folder_name, new_folder_name)
         return True
 
@@ -240,7 +240,9 @@ class ManagerClientService(WorkerService):
         try:
             # Create a temporary HTTP client
             client = Client(self.worker.id, host=host, port=port)
-            return await client._send_folder_async(self.name, self.worker.tempfolder)
+            return await client._send_folder_async(
+                self.worker.name, self.worker.tempfolder
+            )
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False
             self.worker.logger.exception(
@@ -249,10 +251,11 @@ class ManagerClientService(WorkerService):
 
         return False
 
-    async def _async_node_status_update(self):
+    async def _async_node_status_update(self) -> bool:
 
         async with aiohttp.ClientSession(self.manager_url) as session:
             async with session.post(
                 "/workers/node_status", data=self.worker.state.to_json()
-            ):
-                pass
+            ) as resp:
+
+                return resp.ok

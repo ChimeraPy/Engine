@@ -149,6 +149,7 @@ def test_manager_requesting_registered_methods(single_node_with_reg_methods_mana
         node_id=node.id, method_name="printout"
     ).result(timeout=20)
     assert results["success"] and isinstance(results["output"], int)
+    logger.debug("Concurrent style complete")
 
     results = manager.request_registered_method(
         node_id=node.id,
@@ -156,10 +157,12 @@ def test_manager_requesting_registered_methods(single_node_with_reg_methods_mana
         params={"value": -100},
     ).result(timeout=20)
     assert results["success"] and results["output"] <= -100
+    logger.debug("Blocking style complete")
 
     results = manager.request_registered_method(
         node_id=node.id, method_name="reset"
     ).result(timeout=20)
     assert results["success"] and results["output"] >= 100
+    logger.debug("Resetting style complete")
 
     assert manager.stop().result(timeout=10)
