@@ -14,15 +14,12 @@ from ..networking.async_loop_thread import AsyncLoopThread
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState, NodeState
 from .. import _logger
-from ..service import ServiceGroup
-from .manager_client_service import ManagerClientService
-from .node_handler_service import NodeHandlerService
-from .http_server import HttpServerService
+from .worker_services_group import WorkerServicesGroup
 
 
 class Worker:
 
-    services: ServiceGroup
+    services: WorkerServicesGroup
 
     def __init__(
         self,
@@ -82,25 +79,16 @@ class Worker:
         self.logreceiver = self._start_log_receiver()
         self.logger.debug(f"Log receiver started at port {self.logreceiver.port}")
 
-        # Saving state variables
-        self.services = ServiceGroup()
-
         # Create with thread
         self._thread = AsyncLoopThread()
         self._thread.start()
 
-        # Services to be established
-        for s_cls, s_params in {
-            NodeHandlerService: {"name": "node_handler"},
-            ManagerClientService: {"name": "manager_client"},
-            HttpServerService: {"name": "http_server", "thread": self._thread},
-        }.items():
-            s = s_cls(**s_params)
-            s.inject(self)
+        # Saving state variables
+        self.services = WorkerServicesGroup(worker=self, thread=self._thread)
 
         # Start all services
         self.services.apply(
-            "start", order=["node_handler", "manager_client", "http_server"]
+            "start", order=["node_handler", "http_client", "http_server"]
         )
 
     def __repr__(self):
@@ -188,45 +176,45 @@ class Worker:
             bool: Success in connecting to the Manager
 
         """
-        return await self.services["manager_client"].async_connect(
+        return await self.services.http_client.async_connect(
             host=host, port=port, method=method, timeout=timeout
         )
 
     async def async_deregister(self) -> bool:
-        return await self.services["manager_client"].async_deregister()
+        return await self.services.http_client.async_deregister()
 
     async def async_create_node(self, node_id: str, msg: Dict) -> bool:
-        return await self.services["node_handler"].async_create_node(
+        return await self.services.node_handler.async_create_node(
             node_id=node_id, msg=msg
         )
 
     async def async_destroy_node(self, node_id: str) -> bool:
-        return await self.services["node_handler"].async_destroy_node(node_id=node_id)
+        return await self.services.node_handler.async_destroy_node(node_id=node_id)
 
     async def async_start_nodes(self) -> bool:
-        return await self.services["node_handler"].async_start_nodes()
+        return await self.services.node_handler.async_start_nodes()
 
     async def async_record_nodes(self) -> bool:
-        return await self.services["node_handler"].async_record_nodes()
+        return await self.services.node_handler.async_record_nodes()
 
     async def async_step(self) -> bool:
-        return await self.services["node_handler"].async_step()
+        return await self.services.node_handler.async_step()
 
     async def async_stop_nodes(self) -> bool:
-        return await self.services["node_handler"].async_stop_nodes()
+        return await self.services.node_handler.async_stop_nodes()
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict = {}
     ) -> Dict[str, Any]:
-        return await self.services["node_handler"].async_request_registered_method(
+        return await self.services.node_handler.async_request_registered_method(
             node_id=node_id, method_name=method_name, params=params
         )
 
     async def async_gather(self) -> Dict:
-        return await self.services["node_handler"].async_gather()
+        return await self.services.node_handler.async_gather()
 
     async def async_collect(self) -> bool:
-        return await self.services["node_handler"].async_collect()
+        return await self.services.node_handler.async_collect()
 
     async def async_shutdown(self) -> bool:
 
@@ -343,6 +331,12 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        # Only execute if thread exists
+        if not hasattr(self, "_thread"):
+            future = Future()
+            future.set_result(True)
+            return future
+
         # Check if shutdown coroutine has been created
         if isinstance(self.shutdown_task, Task):
             return self._exec_coro(self._wait_async_shutdown())

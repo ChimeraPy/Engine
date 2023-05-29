@@ -42,9 +42,7 @@ def test_send_archive_locally(worker):
     if new_folder_name.exists():
         shutil.rmtree(new_folder_name)
 
-    future = worker._exec_coro(
-        worker.services["manager_client"]._async_send_archive_locally(dst)
-    )
+    future = worker._exec_coro(worker.services.http_client._send_archive_locally(dst))
     assert future.result(timeout=5)
 
     dst_worker = dst / f"{worker.name}-{worker.id}"
@@ -63,9 +61,7 @@ def test_send_archive_remotely(worker, server):
     )
 
     future = worker._exec_coro(
-        worker.services["manager_client"]._async_send_archive_remotely(
-            server.host, server.port
-        )
+        worker.services.http_client._send_archive_remotely(server.host, server.port)
     )
     # future.result(timeout=10)
     future.result()

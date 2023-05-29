@@ -10,7 +10,6 @@ class WorkerService(Service):
 
     def inject(self, worker):
         self.worker = worker
-        self.worker.services[self.name] = self
 
     def start(self):
         ...

@@ -156,7 +156,7 @@ class HttpServerService(WorkerService):
         msg = pickle.loads(msg_bytes)
 
         node_id = msg["id"]
-        success = await self.worker.services["node_handler"].async_create_node(
+        success = await self.worker.services.node_handler.async_create_node(
             node_id, msg
         )
 
@@ -172,7 +172,7 @@ class HttpServerService(WorkerService):
         msg = await request.json()
         node_id = msg["id"]
 
-        success = await self.worker.services["node_handler"].async_destroy_node(node_id)
+        success = await self.worker.services.node_handler.async_destroy_node(node_id)
 
         return web.json_response(
             {"success": success, "worker_state": self.worker.state.to_dict()}
@@ -195,9 +195,9 @@ class HttpServerService(WorkerService):
         self.worker.logger.debug(f"{self}: processing node server data: {msg}")
 
         # Broadcasting the node server data
-        success = await self.worker.services[
-            "node_handler"
-        ].async_process_node_server_data(msg)
+        success = (
+            await self.worker.services.node_handler.async_process_node_server_data(msg)
+        )
 
         # After all nodes have been connected, inform the Manager
         self.worker.logger.debug(f"{self}: Informing Manager of processing completion")
@@ -208,21 +208,21 @@ class HttpServerService(WorkerService):
 
     async def _async_step_route(self, request: web.Request) -> web.Response:
 
-        if await self.worker.services["node_handler"].async_step():
+        if await self.worker.services.node_handler.async_step():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
     async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
 
-        if await self.worker.services["node_handler"].async_start_nodes():
+        if await self.worker.services.node_handler.async_start_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
 
-        if await self.worker.services["node_handler"].async_record_nodes():
+        if await self.worker.services.node_handler.async_record_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
@@ -236,15 +236,17 @@ class HttpServerService(WorkerService):
         params = msg["params"]
 
         # # Make the request and get results
-        results = await self.worker.services[
-            "node_handler"
-        ].async_request_registered_method(node_id, method_name, params)
+        results = (
+            await self.worker.services.node_handler.async_request_registered_method(
+                node_id, method_name, params
+            )
+        )
 
         return web.json_response(results)
 
     async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
 
-        if await self.worker.services["node_handler"].async_stop_nodes():
+        if await self.worker.services.node_handler.async_stop_nodes():
             return web.HTTPOk()
         else:
             return web.HTTPError()
@@ -257,28 +259,32 @@ class HttpServerService(WorkerService):
 
     async def _async_report_node_gather(self, request: web.Request) -> web.Response:
 
-        gather_data = await self.worker.services["node_handler"].async_gather()
+        gather_data = await self.worker.services.node_handler.async_gather()
         return web.Response(body=pickle.dumps(gather_data))
 
     async def _async_send_archive(self, request: web.Request) -> web.Response:
         msg = await request.json()
 
         # Collect data from the Nodes
-        success = await self.worker.services["node_handler"].async_collect()
+        success = await self.worker.services.node_handler.async_collect()
 
         # If located in the same computer, just move the data
         if success:
-            host, port = self.worker.services["manager_client"].get_address()
+            host, port = self.worker.services.http_client.get_address()
             try:
                 if host == get_ip_address():
-                    success = await self.worker.services[
-                        "manager_client"
-                    ]._async_send_archive_locally(pathlib.Path(msg["path"]))
+                    success = (
+                        await self.worker.services.http_client._send_archive_locally(
+                            pathlib.Path(msg["path"])
+                        )
+                    )
 
                 else:
-                    success = await self.worker.services[
-                        "manager_client"
-                    ]._async_send_archive_remotely(host, port)
+                    success = (
+                        await self.worker.services.http_client._send_archive_remotely(
+                            host, port
+                        )
+                    )
             except Exception:
                 self.worker.logger.error(traceback.format_exc())
                 return web.HTTPError()
@@ -300,8 +306,8 @@ class HttpServerService(WorkerService):
         self.worker.state.nodes[node_id] = node_state
 
         # Update Manager on the new nodes status
-        if self.worker.services["manager_client"].connected_to_manager:
-            await self.worker.services["manager_client"]._async_node_status_update()
+        if self.worker.services.http_client.connected_to_manager:
+            await self.worker.services.http_client._async_node_status_update()
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
@@ -310,7 +316,7 @@ class HttpServerService(WorkerService):
         node_id = node_state.id
         self.worker.state.nodes[node_id] = node_state
 
-        self.worker.services["node_handler"].update_gather(
+        self.worker.services.node_handler.update_gather(
             node_id, msg["data"]["latest_value"]
         )
 
@@ -318,6 +324,4 @@ class HttpServerService(WorkerService):
         self.worker.logger.debug(f"{self}: node report results: {msg}")
 
         node_id = msg["data"]["node_id"]
-        self.worker.services["node_handler"].update_results(
-            node_id, msg["data"]["output"]
-        )
+        self.worker.services.node_handler.update_results(node_id, msg["data"]["output"])

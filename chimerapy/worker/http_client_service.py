@@ -10,13 +10,13 @@ import aiohttp
 from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy import config
-from .worker_service import WorkerService
 from ..networking import Client
-from .manager_listener import ManagerListener
 from .. import _logger
+from .worker_service import WorkerService
+from .zeroconf_listener import ZeroconfListener
 
 
-class ManagerClientService(WorkerService):
+class HttpClientService(WorkerService):
     def __init__(self, name: str):
         super().__init__(name=name)
         self.manager_ack: bool = False
@@ -166,7 +166,7 @@ class ManagerClientService(WorkerService):
 
         # Create the Zeroconf instance and the listener
         zeroconf = Zeroconf()
-        listener = ManagerListener(
+        listener = ZeroconfListener(
             stop_service_name="chimerapy", logger=self.worker.logger
         )
 
@@ -207,7 +207,7 @@ class ManagerClientService(WorkerService):
 
         return success
 
-    async def _async_send_archive_locally(self, path: pathlib.Path) -> bool:
+    async def _send_archive_locally(self, path: pathlib.Path) -> bool:
         self.worker.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
@@ -232,7 +232,7 @@ class ManagerClientService(WorkerService):
         os.rename(old_folder_name, new_folder_name)
         return True
 
-    async def _async_send_archive_remotely(self, host: str, port: int) -> bool:
+    async def _send_archive_remotely(self, host: str, port: int) -> bool:
 
         self.worker.logger.debug(f"{self}: sending archive via network")
 
