@@ -2,6 +2,7 @@
 from typing import Coroutine, Callable, Tuple, List, Optional, Any
 import threading
 import asyncio
+import traceback
 from concurrent.futures import Future
 
 # Internal Imports
@@ -21,8 +22,13 @@ def waitable_callback(
     finished.clear()
 
     # Create wrapper that signals when the callback finished
-    def _wrapper(func: Callable, *args):
-        output = func(*args)
+    def _wrapper(func: Callable, *args) -> Any:
+        try:
+            output = func(*args)
+        except Exception:
+            logger.error(traceback.format_exc())
+            output = None
+
         finished.set()
         return output
 
@@ -38,7 +44,13 @@ class AsyncLoopThread(threading.Thread):
         self._loop = asyncio.new_event_loop()
 
     def callback(self, coro: Callable[[], Coroutine]):
-        self._loop.create_task(coro())
+        async def _wrapper():
+            try:
+                await coro()
+            except Exception:
+                logger.error(traceback.format_exc())
+
+        self._loop.create_task(_wrapper())
 
     def exec(self, coro: Coroutine) -> Future:
         return asyncio.run_coroutine_threadsafe(coro, self._loop)
@@ -67,3 +79,6 @@ class AsyncLoopThread(threading.Thread):
 
         # Then stop the loop
         self._loop.stop()
+
+    def __del__(self):
+        self.stop()

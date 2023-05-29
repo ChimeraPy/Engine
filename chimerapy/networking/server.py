@@ -381,11 +381,14 @@ class Server:
     # Server Sync Lifecycle API
     ####################################################################
 
-    def serve(self):
+    def serve(self, thread: Optional[AsyncLoopThread] = None):
 
         # Create async loop in thread
-        self._thread = AsyncLoopThread()
-        self._thread.start()
+        if thread:
+            self._thread = thread
+        else:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
 
         # Mark that the server is running
         self.running.set()

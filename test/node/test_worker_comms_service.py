@@ -1,9 +1,9 @@
-from chimerapy.node.worker_service import WorkerService
+from chimerapy.node.worker_comms_service import WorkerCommsService
 from ..conftest import GenNode, TEST_DATA_DIR
 
 
 def test_inject_service(logreceiver):
-    worker_service = WorkerService(
+    worker_service = WorkerCommsService(
         name="worker",
         host="0.0.0.0",
         port=9000,

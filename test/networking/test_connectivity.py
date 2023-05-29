@@ -24,10 +24,6 @@ def test_manager_instance_shutdown_twice(manager):
     manager.shutdown()
 
 
-def test_worker_instance(worker):
-    ...
-
-
 def test_worker_instance_shutdown_twice(worker):
     worker.shutdown()
 
@@ -91,7 +87,7 @@ def test_zeroconf_connect(worker):
 
     manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
 
-    worker.connect(method="zeroconf")
+    worker.connect(method="zeroconf", blocking=False).result(timeout=30)
     assert worker.id in manager.workers
 
     manager.shutdown()

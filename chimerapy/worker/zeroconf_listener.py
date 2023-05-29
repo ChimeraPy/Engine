@@ -2,10 +2,10 @@ import time
 import logging
 from datetime import datetime, timedelta
 
-from zeroconf import ServiceInfo
+from zeroconf import ServiceInfo, ServiceListener
 
 
-class ManagerListener:
+class ZeroconfListener(ServiceListener):
     def __init__(
         self,
         stop_service_name: str = None,
