@@ -16,10 +16,6 @@ TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
 TEST_DATA_DIR = TEST_DIR / "data"
 
 
-def test_manager_instance(manager):
-    ...
-
-
 def test_manager_instance_shutdown_twice(manager):
     manager.shutdown()
 

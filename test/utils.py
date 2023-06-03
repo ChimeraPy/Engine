@@ -13,3 +13,11 @@ def cleanup_and_recreate_dir(directory: pathlib.Path):
 def uuid() -> str:
     """Generate a UUID."""
     return str(v4())
+
+
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__

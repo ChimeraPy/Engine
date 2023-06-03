@@ -39,6 +39,7 @@ dependencies = [
 [project.optional-dependencies]
 test = [
     'pytest',
+    'pytest-asyncio',
     'pytest-repeat',
     'pytest-lazy-fixture',
     'pytest-order',
