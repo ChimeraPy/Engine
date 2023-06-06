@@ -33,6 +33,7 @@ class Node:
         name: str,
         debug_port: Optional[int] = None,
         logdir: Optional[Union[str, pathlib.Path]] = None,
+        id: Optional[str] = None,
     ):
         """Create a basic unit of computation in ChimeraPy.
 
@@ -49,10 +50,13 @@ class Node:
             name (str): The name that will later used to refer to the Node.
 
         """
+        # Handle optional parameters
+        if not isinstance(id, str):
+            id = str(uuid.uuid4())
 
         # Saving input parameters
         self.state = NodeState(
-            id=str(uuid.uuid4()), name=name, registered_methods=self.registered_methods
+            id=id, name=name, registered_methods=self.registered_methods
         )
         self.debug_port = debug_port
         self._running: Union[bool, mp.Value] = True

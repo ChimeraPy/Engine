@@ -18,6 +18,12 @@ CWD = pathlib.Path(os.path.abspath(__file__)).parent
 TEST_DATA_DIR = CWD / "data"
 
 
+def test_setting_node_id(logreceiver):
+
+    node = GenNode(name="gen", debug_port=logreceiver.port, id="1")
+    assert node.id == "1"
+
+
 def test_run_node_in_debug_mode(logreceiver):
 
     data_nodes = [AudioNode, VideoNode, TabularNode, ImageNode]
