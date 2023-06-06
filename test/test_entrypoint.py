@@ -1,6 +1,6 @@
 # Test Import
 from .mock import DockeredWorker
-from .conftest import linux_run_only, TEST_DATA_DIR
+from .conftest import linux_run_only
 
 # Built-in Imports
 import subprocess
@@ -60,9 +60,9 @@ def test_worker_entrypoint_connect_wport(manager):
     manager.shutdown()
 
 
-def test_worker_entrypoint_zeroconf_connect():
+def test_worker_entrypoint_zeroconf_connect(manager):
 
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    manager.zeroconf(enable=True)
 
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
@@ -84,8 +84,8 @@ def test_worker_entrypoint_zeroconf_connect():
     logger.info("Killing worker subprocess")
     worker_process.kill()
 
-    logger.info("Manager shutting down")
-    manager.shutdown()
+    logger.info("Disable Zeroconf")
+    manager.zeroconf(enable=False)
 
 
 @pytest.mark.skip

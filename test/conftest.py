@@ -72,7 +72,7 @@ def slow_interval_between_tests():
 
 @pytest.fixture
 def manager():
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0, enable_zeroconf=False)
+    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
     yield manager
     manager.shutdown()
 

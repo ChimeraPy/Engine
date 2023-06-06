@@ -25,6 +25,10 @@ def test_worker_instance(worker):
     ...
 
 
+def test_worker_instance_shutdown_twice(worker):
+    worker.shutdown()
+
+
 def test_send_archive_locally(worker):
 
     # Adding simple file

@@ -15,7 +15,7 @@ class P2PNetworkingVerifier:
         self.manager = manager
 
     def assert_nodes_are_ready(self) -> None:
-        worker_node_map = self.manager.worker_graph_map
+        worker_node_map = self.manager.services.worker_handler.worker_graph_map
 
         nodes_ids = []
         for worker_id in self.manager.workers:
@@ -37,7 +37,12 @@ class P2PNetworkingVerifier:
                 nodes_ids.append(node_id)
 
         # The manager should have all the nodes are registered
-        assert all([self.manager.graph.has_node_by_id(x) for x in nodes_ids])
+        assert all(
+            [
+                self.manager.services.worker_handler.graph.has_node_by_id(x)
+                for x in nodes_ids
+            ]
+        )
 
     def assert_can_step_after_graph_commit(
         self, expected_output: Dict[str, int]
@@ -52,7 +57,7 @@ class P2PNetworkingVerifier:
         # Convert the expected from name to id
         expected_output_by_id = {}
         for k, v in expected_output.items():
-            id = self.manager.graph.get_id_by_name(k)
+            id = self.manager.services.worker_handler.graph.get_id_by_name(k)
             expected_output_by_id[id] = v
 
         # Assert
@@ -75,7 +80,7 @@ class P2PNetworkingVerifier:
         # Convert the expected from name to id
         expected_output_by_id = {}
         for k, v in expected_output.items():
-            id = self.manager.graph.get_id_by_name(k)
+            id = self.manager.services.worker_handler.graph.get_id_by_name(k)
             expected_output_by_id[id] = v
 
         # Assert
