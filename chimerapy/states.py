@@ -46,6 +46,3 @@ class ManagerState:
     workers: Dict[str, WorkerState] = field(default_factory=dict)
 
     logs_subscription_port: Optional[int] = None
-    running: bool = False
-    collecting: bool = False
-    collection_status: Optional[Literal["PASS", "FAIL"]] = None

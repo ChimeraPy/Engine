@@ -47,26 +47,30 @@ class ZeroconfService(ManagerService):
     ## Helper Methods
     #####################################################################################
 
-    async def enable(self):
+    async def enable(self) -> bool:
 
         if not self.enabled:
 
             # Start Zeroconf Service
             self.zeroconf = Zeroconf()
-            self.zeroconf.register_service(self.zeroconf_info, ttl=60)
+            await self.zeroconf.async_register_service(self.zeroconf_info, ttl=60)
             logger.info(f"Manager started Zeroconf Service named {self.service_name}")
 
             # Mark the service
             self.enabled = True
 
-    async def disable(self):
+        return True
+
+    async def disable(self) -> bool:
 
         if self.enabled:
 
             # Unregister the service and close the zeroconf instance
             if self.zeroconf:
-                self.zeroconf.unregister_service(self.zeroconf_info)
+                await self.zeroconf.async_unregister_service(self.zeroconf_info)
                 self.zeroconf.close()
 
             # Mark the service
             self.enabled = False
+
+        return True

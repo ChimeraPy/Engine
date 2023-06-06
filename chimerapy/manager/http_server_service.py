@@ -86,7 +86,6 @@ class HttpServerService(ManagerService):
 
         # Register worker
         success = self.services.worker_handler._register_worker(worker_state)
-        logger.debug(f"Register Worker: {success}")
 
         if success:
             logs_collection_info = self.services.distributed_logging.get_log_info()

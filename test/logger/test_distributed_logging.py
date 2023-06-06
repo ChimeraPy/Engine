@@ -27,7 +27,7 @@ def test_manager_ability_to_collect_logs():
     cp.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
 
     manager = cp.Manager(port=0, logdir=TEST_DATA_DIR)
-    assert manager.logs_sink is not None
+    assert manager.services.distributed_logging.logs_sink is not None
 
     worker_ids = []
 
@@ -42,7 +42,10 @@ def test_manager_ability_to_collect_logs():
         worker.deregister().result(timeout=10)
         time.sleep(5)
 
-        assert worker.id not in manager.logs_sink.handler.handlers
+        assert (
+            worker.id
+            not in manager.services.distributed_logging.logs_sink.handler.handlers
+        )
         worker.shutdown()
 
     manager.shutdown()
@@ -58,7 +61,7 @@ def test_manager_ability_to_collect_logs_with_worker_nodes():
     cp.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
 
     manager = cp.Manager(port=0, logdir=TEST_DATA_DIR)
-    assert manager.logs_sink is not None
+    assert manager.services.distributed_logging.logs_sink is not None
 
     gen_node = GenNode(name="Gen1")
     con_node = ConsumeNode(name="Con1")

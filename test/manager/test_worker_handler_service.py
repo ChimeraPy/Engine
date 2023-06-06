@@ -3,42 +3,24 @@ import asyncio
 import pytest
 
 import chimerapy as cp
-from chimerapy.states import ManagerState
-from chimerapy.manager.manager_services_group import ManagerServicesGroup
 
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
+from .dev_manager_services_group import DevManagerServicesGroup
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
 
-class DevManagerServicesGroup(ManagerServicesGroup):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        state = ManagerState()
-        self.inject(state)
-        self.apply("start")
-        logger.debug(state)
-
-
-@pytest.fixture(scope="module")
-def testbed_worker():
-    # Create the worker
-    worker = cp.Worker(name="local", port=0)
-    yield worker
-    worker.shutdown()
-
-
 @pytest.mark.asyncio
-@pytest.fixture(scope="module")
-async def testbed_setup(testbed_worker):
+@pytest.fixture
+async def testbed_setup(worker):
 
     # Create the service
     manager_services_group = DevManagerServicesGroup(
-        logdir=TEST_DATA_DIR,
+        logdir=TEST_DATA_DIR, publisher_port=0
     )
 
-    assert testbed_worker.connect(
+    assert worker.connect(
         method="ip",
         host=manager_services_group.http_server.ip,
         port=manager_services_group.http_server.port,
@@ -54,13 +36,13 @@ async def testbed_setup(testbed_worker):
     # Register graph
     manager_services_group.worker_handler._register_graph(simple_graph)
 
-    yield (manager_services_group.worker_handler, testbed_worker, gen_node, con_node)
+    yield (manager_services_group.worker_handler, worker, gen_node, con_node)
 
     await manager_services_group.async_apply("shutdown")
 
 
 @pytest.mark.asyncio
-async def test_create_node(testbed_setup):
+async def test_worker_handler_create_node(testbed_setup):
 
     item = await testbed_setup.__anext__()
     worker_handler, worker, gen_node, con_node = item
@@ -75,7 +57,7 @@ async def test_create_node(testbed_setup):
 
 
 @pytest.mark.asyncio
-async def test_manager_create_connections(testbed_setup):
+async def test_worker_handler_create_connections(testbed_setup):
 
     item = await testbed_setup.__anext__()
     worker_handler, worker, gen_node, con_node = item
@@ -100,7 +82,7 @@ async def test_manager_create_connections(testbed_setup):
 
 
 @pytest.mark.asyncio
-async def test_manager_lifecycle_graph(testbed_setup):
+async def test_worker_handler_lifecycle_graph(testbed_setup):
 
     item = await testbed_setup.__anext__()
     worker_handler, worker, gen_node, con_node = item

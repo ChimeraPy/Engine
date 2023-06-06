@@ -33,6 +33,7 @@ class DistributedLoggingService(ManagerService):
         # Stop the distributed logger
         if self.logs_sink:
             self.logs_sink.shutdown()
+            logger.debug(f"{self}: SHUTTING DOWN LOGS SINK")
 
     #####################################################################################
     ## Helper Function
@@ -53,7 +54,7 @@ class DistributedLoggingService(ManagerService):
     def get_log_info(self) -> Dict[str, Any]:
         return {
             "enabled": self.logs_sink is not None,
-            "host": self.host if self.logs_sink else None,
+            "host": self.services.http_server.ip if self.logs_sink else None,
             "port": self.logs_sink.port if self.logs_sink else None,
         }
 

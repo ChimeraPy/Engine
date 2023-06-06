@@ -100,6 +100,10 @@ class Manager:
     def workers(self) -> Dict[str, WorkerState]:
         return self.state.workers
 
+    @property
+    def logdir(self) -> pathlib.Path:
+        return self.services.session_record.logdir
+
     ####################################################################
     ## Utils Methods
     ####################################################################
@@ -182,12 +186,12 @@ class Manager:
     ## Front-facing ASync API
     ####################################################################
 
-    async def async_zeroconf(self, enable: bool = True):
+    async def async_zeroconf(self, enable: bool = True) -> bool:
 
         if enable:
-            await self.services.zeroconf.enable()
+            return await self.services.zeroconf.enable()
         else:
-            await self.services.zeroconf.disable()
+            return await self.services.zeroconf.disable()
 
     async def async_commit(
         self,
@@ -271,9 +275,10 @@ class Manager:
             results = await self.services.async_apply(
                 "shutdown",
                 order=[
+                    "distributed_logging",
                     "worker_handler",
                     "session_record",
-                    "distributed_logging" "zeroconf",
+                    "zeroconf",
                     "http_server",
                 ],
             )
@@ -287,8 +292,8 @@ class Manager:
     ## Front-facing Sync API
     ####################################################################
 
-    def zeroconf(self, enable: bool = True):
-        return self._exec_coro(self.async_zeroconf(enable))
+    def zeroconf(self, enable: bool = True, timeout: Union[int, float] = 5) -> bool:
+        return self._exec_coro(self.async_zeroconf(enable)).result(timeout)
 
     def commit_graph(
         self,

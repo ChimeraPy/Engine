@@ -66,6 +66,7 @@ class ManagerServicesGroup(ServiceGroup):  # UserDict
             "worker_handler": self.worker_handler,
             "zeroconf": self.zeroconf,
             "session_record": self.session_record,
+            "distributed_logging": self.distributed_logging,
         }
 
     def inject(self, state: "ManagerState"):
