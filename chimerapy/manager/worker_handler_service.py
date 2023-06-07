@@ -309,21 +309,24 @@ class WorkerHandlerService(ManagerService):
                 if resp.ok:
                     data = await resp.json()
 
-                    if data["success"]:
-                        logger.debug(
-                            f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
-                        )
-                        self.state.workers[worker_id].nodes[
-                            node_id
-                        ] = NodeState.from_dict(data["node_state"])
-                        logger.debug(f"{self}: WorkerState: {self.state.workers}")
-                        return True
-
-                    else:
+                    if not data["success"]:
                         logger.error(
                             f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
                         )
                         return False
+
+                    logger.debug(
+                        f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
+                    )
+                    self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
+                        data["node_state"]
+                    )
+                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+                    # Relay information to front-end
+                    await self.services.http_server._broadcast_network_status_update()
+
+                    return True
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
@@ -366,21 +369,24 @@ class WorkerHandlerService(ManagerService):
                 if resp.ok:
                     data = await resp.json()
 
-                    if data["success"]:
-                        logger.debug(
-                            f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
-                        )
-                        self.state.workers[worker_id] = WorkerState.from_dict(
-                            data["worker_state"]
-                        )
-                        logger.debug(f"{self}: WorkerState: {self.state.workers}")
-                        return True
-
-                    else:
+                    if not data["success"]:
                         logger.error(
                             f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
                         )
                         return False
+
+                    logger.debug(
+                        f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
+                    )
+                    self.state.workers[worker_id] = WorkerState.from_dict(
+                        data["worker_state"]
+                    )
+                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+                    # Relay information to front-end
+                    await self.services.http_server._broadcast_network_status_update()
+
+                    return True
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
@@ -438,21 +444,28 @@ class WorkerHandlerService(ManagerService):
                     f"{self._get_worker_ip(worker_id)}/nodes/server_data",
                     data=json.dumps(self.nodes_server_table),
                 ) as resp:
-                    if resp.ok:
-                        # Get JSON
-                        data = await resp.json()
+                    if not resp.ok:
+                        return False
 
-                        if data["success"]:
-                            self.state.workers[worker_id] = WorkerState.from_dict(
-                                data["worker_state"]
-                            )
-                            logger.debug(f"{self}: WorkerState: {self.state.workers}")
+                    # Get JSON
+                    data = await resp.json()
 
-                            logger.debug(
-                                f"{self}: receiving Worker's node server request: \
-                                SUCCESS"
-                            )
-                            return True
+                    if not data["success"]:
+                        return False
+
+                    self.state.workers[worker_id] = WorkerState.from_dict(
+                        data["worker_state"]
+                    )
+                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
+
+                    logger.debug(
+                        f"{self}: receiving Worker's node server request: \
+                        SUCCESS"
+                    )
+                    # Relay information to front-end
+                    await self.services.http_server._broadcast_network_status_update()
+
+                    return True
 
         return False
 
@@ -649,6 +662,9 @@ class WorkerHandlerService(ManagerService):
         ):
             return True
 
+        # Relay information to front-end
+        await self.services.http_server._broadcast_network_status_update()
+
         return False
 
     async def gather(self) -> Dict:
@@ -683,11 +699,12 @@ class WorkerHandlerService(ManagerService):
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/start")
-        if success:
-            self.state.running = True
 
         # Updating meta just in case of failure
         self.services.session_record._save_meta()
+
+        # Relay information to front-end
+        await self.services.http_server._broadcast_network_status_update()
 
         return success
 
@@ -698,11 +715,12 @@ class WorkerHandlerService(ManagerService):
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/record")
-        if success:
-            self.state.running = True
 
         # Updating meta just in case of failure
         self.services.session_record._save_meta()
+
+        # Relay information to front-end
+        await self.services.http_server._broadcast_network_status_update()
 
         return success
 
@@ -747,11 +765,12 @@ class WorkerHandlerService(ManagerService):
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/stop")
-        if success:
-            self.state.running = False
 
         # Updating meta just in case of failure
         self.services.session_record._save_meta()
+
+        # Relay information to front-end
+        await self.services.http_server._broadcast_network_status_update()
 
         return success
 
@@ -766,8 +785,6 @@ class WorkerHandlerService(ManagerService):
         )
         await asyncio.sleep(1)
 
-        self.state.collecting = False
-
         if success:
             try:
                 self.services.session_record._save_meta()
@@ -776,9 +793,6 @@ class WorkerHandlerService(ManagerService):
                 )
             except Exception:
                 logger.error(traceback.format_exc())
-            self.state.collection_status = "PASS"
-        else:
-            self.state.collection_status = "FAIL"
 
         logger.info(f"{self}: finished collect")
 
@@ -810,5 +824,8 @@ class WorkerHandlerService(ManagerService):
         # Update variable data
         self.nodes_server_table = {}
         self._deregister_graph()
+
+        # Relay information to front-end
+        await self.services.http_server._broadcast_network_status_update()
 
         return all(results)

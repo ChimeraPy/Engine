@@ -121,8 +121,7 @@ class HttpServerService(ManagerService):
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         # Relay information to front-end
-        if self._enable_api:
-            await self._broadcast_network_status_update()
+        await self._broadcast_network_status_update()
 
         return web.HTTPOk()
 
