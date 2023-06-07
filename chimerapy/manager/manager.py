@@ -159,6 +159,12 @@ class Manager:
     ## Sync Networking
     ####################################################################
 
+    def _register_graph(self, graph: Graph):
+        self.services.worker_handler._register_graph(graph)
+
+    def _deregister_graph(self):
+        self.services.worker_handler._deregister_graph()
+
     def _request_node_creation(self, worker_id: str, node_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_node_creation(worker_id, node_id))
 

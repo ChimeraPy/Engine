@@ -43,9 +43,7 @@ def test_ws_client(manager):
     client.shutdown()
 
 
-# @pytest.mark.skip()
 def test_node_updates(test_ws_client, manager, worker):
-
     client, record = test_ws_client
 
     # Create original containers
@@ -57,26 +55,71 @@ def test_node_updates(test_ws_client, manager, worker):
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
     manager.commit_graph(simple_graph, mapping).result(timeout=30)
-
-    time.sleep(5)
-
-    # New test assertations
+    time.sleep(3)
     assert record.network_state == manager.state
 
 
-def test_ws_client_worker(test_ws_client, manager, worker):
+def test_worker_network_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
-
-    time.sleep(5)
-
-    # New test assertations
+    time.sleep(3)
     assert record.network_state == manager.state
 
     worker.deregister()
+    time.sleep(3)
+    assert record.network_state == manager.state
 
-    time.sleep(5)
 
+def test_node_creation_and_destruction_network_updates(test_ws_client, manager, worker):
+    client, record = test_ws_client
+
+    # Create original containers
+    simple_graph = cp.Graph()
+    new_node = GenNode(name="Gen1", id="Gen1")
+    simple_graph.add_nodes_from([new_node])
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+    manager._register_graph(simple_graph)
+
+    # Test construction
+    manager._request_node_creation(worker_id=worker.id, node_id="Gen1").result(
+        timeout=30
+    )
+    time.sleep(2)
+    assert record.network_state == manager.state
+
+    # Test destruction
+    manager._request_node_destruction(worker_id=worker.id, node_id="Gen1").result(
+        timeout=10
+    )
+    time.sleep(2)
+    assert record.network_state == manager.state
+
+
+def test_reset_network_updates(test_ws_client, manager, worker):
+    client, record = test_ws_client
+
+    # Create original containers
+    simple_graph = cp.Graph()
+    new_node = GenNode(name="Gen1")
+    simple_graph.add_nodes_from([new_node])
+    mapping = {worker.id: [new_node.id]}
+
+    # Connect to the manager
+    worker.connect(host=manager.host, port=manager.port)
+    manager.commit_graph(simple_graph, mapping).result(timeout=30)
+    time.sleep(3)
+    assert record.network_state == manager.state
+
+    # Reset
+    manager.reset(keep_workers=True)
+    time.sleep(3)
+    assert record.network_state == manager.state
+
+    # Recommit graph
+    manager.commit_graph(simple_graph, mapping).result(timeout=30)
+    time.sleep(3)
     assert record.network_state == manager.state

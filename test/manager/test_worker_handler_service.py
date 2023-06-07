@@ -27,8 +27,8 @@ async def testbed_setup(worker):
     )
 
     # Define graph
-    gen_node = GenNode(name="Gen1")
-    con_node = ConsumeNode(name="Con1")
+    gen_node = GenNode(name="Gen1", id="Gen1")
+    con_node = ConsumeNode(name="Con1", id="Con1")
     simple_graph = cp.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(src=gen_node, dst=con_node)
@@ -36,7 +36,7 @@ async def testbed_setup(worker):
     # Register graph
     manager_services_group.worker_handler._register_graph(simple_graph)
 
-    yield (manager_services_group.worker_handler, worker, gen_node, con_node)
+    yield (manager_services_group.worker_handler, worker)
 
     await manager_services_group.async_apply("shutdown")
 
@@ -45,29 +45,31 @@ async def testbed_setup(worker):
 async def test_worker_handler_create_node(testbed_setup):
 
     item = await testbed_setup.__anext__()
-    worker_handler, worker, gen_node, con_node = item
+    worker_handler, worker = item
 
     assert await worker_handler._request_node_creation(
-        worker_id=worker.id, node_id=gen_node.id
+        worker_id=worker.id, node_id="Gen1"
     )
+    assert "Gen1" in worker_handler.state.workers[worker.id].nodes
 
     assert await worker_handler._request_node_destruction(
-        worker_id=worker.id, node_id=gen_node.id
+        worker_id=worker.id, node_id="Gen1"
     )
+    assert "Gen1" not in worker_handler.state.workers[worker.id].nodes
 
 
 @pytest.mark.asyncio
 async def test_worker_handler_create_connections(testbed_setup):
 
     item = await testbed_setup.__anext__()
-    worker_handler, worker, gen_node, con_node = item
+    worker_handler, worker = item
 
     # Create Nodes
     assert await worker_handler._request_node_creation(
-        worker_id=worker.id, node_id=gen_node.id
+        worker_id=worker.id, node_id="Gen1"
     )
     assert await worker_handler._request_node_creation(
-        worker_id=worker.id, node_id=con_node.id
+        worker_id=worker.id, node_id="Con1"
     )
 
     # Get the node information
@@ -85,10 +87,10 @@ async def test_worker_handler_create_connections(testbed_setup):
 async def test_worker_handler_lifecycle_graph(testbed_setup):
 
     item = await testbed_setup.__anext__()
-    worker_handler, worker, gen_node, con_node = item
+    worker_handler, worker = item
 
     assert await worker_handler.commit(
-        graph=worker_handler.graph, mapping={worker.id: [gen_node.id, con_node.id]}
+        graph=worker_handler.graph, mapping={worker.id: ["Gen1", "Con1"]}
     )
     assert await worker_handler.start_workers()
 
