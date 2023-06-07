@@ -135,3 +135,36 @@ def test_manager_reset(configured_manager):
 
     assert manager.stop().result()
     assert manager.collect().result()
+
+
+def test_manager_recommit_graph(worker, manager):
+
+    # Define graph
+    gen_node = GenNode(name="Gen1")
+    con_node = ConsumeNode(name="Con1")
+    simple_graph = cp.Graph()
+    simple_graph.add_nodes_from([gen_node, con_node])
+    simple_graph.add_edge(src=gen_node, dst=con_node)
+
+    # Configure the worker and obtain the mapping
+    worker.connect(host=manager.host, port=manager.port)
+    mapping = {worker.id: [gen_node.id, con_node.id]}
+
+    graph_info = {"graph": simple_graph, "mapping": mapping}
+
+    tic = time.time()
+    assert manager.commit_graph(**graph_info).result(timeout=30)
+    toc = time.time()
+    delta = toc - tic
+
+    assert manager.reset(keep_workers=True).result(timeout=30)
+
+    tic2 = time.time()
+    assert manager.commit_graph(**graph_info).result(timeout=30)
+    toc2 = time.time()
+    delta2 = toc2 - tic2
+
+    assert ((delta2 - delta) / (delta)) < 0.2
+
+    worker.shutdown()
+    manager.shutdown()
