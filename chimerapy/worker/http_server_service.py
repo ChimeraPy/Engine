@@ -153,17 +153,14 @@ class HttpServerService(WorkerService):
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
         msg_bytes = await request.read()
-        msg = pickle.loads(msg_bytes)
+        node_config = pickle.loads(msg_bytes)
 
-        node_id = msg["id"]
-        success = await self.worker.services.node_handler.async_create_node(
-            node_id, msg
-        )
+        success = await self.worker.services.node_handler.async_create_node(node_config)
 
         # Update the manager with the most up-to-date status of the nodes
         response = {
             "success": success,
-            "node_state": self.worker.state.nodes[node_id].to_dict(),
+            "node_state": self.worker.state.nodes[node_config.id].to_dict(),
         }
 
         return web.json_response(response)

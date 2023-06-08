@@ -15,6 +15,7 @@ from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState, NodeState
 from .. import _logger
 from .worker_services_group import WorkerServicesGroup
+from ..node import NodeConfig
 
 
 class Worker:
@@ -183,10 +184,8 @@ class Worker:
     async def async_deregister(self) -> bool:
         return await self.services.http_client.async_deregister()
 
-    async def async_create_node(self, node_id: str, msg: Dict) -> bool:
-        return await self.services.node_handler.async_create_node(
-            node_id=node_id, msg=msg
-        )
+    async def async_create_node(self, node_config: NodeConfig) -> bool:
+        return await self.services.node_handler.async_create_node(node_config)
 
     async def async_destroy_node(self, node_id: str) -> bool:
         return await self.services.node_handler.async_destroy_node(node_id=node_id)
@@ -279,8 +278,11 @@ class Worker:
     def deregister(self) -> Future[bool]:
         return self._exec_coro(self.async_deregister())
 
-    def create_node(self, msg: Dict[str, Any]) -> Future[bool]:
-        return self._exec_coro(self.async_create_node(msg["id"], msg))
+    def create_node(self, node_config: NodeConfig) -> Future[bool]:
+        return self._exec_coro(self.async_create_node(node_config))
+
+    def destroy_node(self, node_id: str) -> Future[bool]:
+        return self._exec_coro(self.async_destroy_node(node_id))
 
     def step(self) -> Future[bool]:
         return self._exec_coro(self.async_step())

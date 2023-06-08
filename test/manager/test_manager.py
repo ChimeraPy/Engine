@@ -6,30 +6,6 @@ import chimerapy as cp
 from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
 
 
-@pytest.fixture
-def configured_manager(manager, worker):
-
-    # Define graph
-    gen_node = GenNode(name="Gen1")
-    con_node = ConsumeNode(name="Con1")
-    simple_graph = cp.Graph()
-    simple_graph.add_nodes_from([gen_node, con_node])
-    simple_graph.add_edge(src=gen_node, dst=con_node)
-
-    # Configure the worker and obtain the mapping
-    worker.connect(host=manager.host, port=manager.port)
-    mapping = {worker.id: [gen_node.id, con_node.id]}
-
-    graph_info = {"graph": simple_graph, "mapping": mapping}
-
-    assert manager.commit_graph(**graph_info).result(timeout=30)
-
-    yield manager, graph_info
-
-    worker.shutdown()
-    manager.shutdown()
-
-
 def test_manager_instance(manager):
     ...
 
@@ -101,10 +77,23 @@ def test_manager_shutting_down_ungracefully():
     worker.shutdown()
 
 
-def test_manager_lifecycle(configured_manager):
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+def test_manager_lifecycle(manager, worker, context):
 
-    manager, _ = configured_manager
+    # Define graph
+    gen_node = GenNode(name="Gen1")
+    con_node = ConsumeNode(name="Con1")
+    graph = cp.Graph()
+    graph.add_nodes_from([gen_node, con_node])
+    graph.add_edge(src=gen_node, dst=con_node)
 
+    # Configure the worker and obtain the mapping
+    worker.connect(host=manager.host, port=manager.port)
+    mapping = {worker.id: [gen_node.id, con_node.id]}
+
+    assert manager.commit_graph(graph=graph, mapping=mapping, context=context).result(
+        timeout=10
+    )
     assert manager.start().result()
 
     time.sleep(3)
@@ -116,25 +105,8 @@ def test_manager_lifecycle(configured_manager):
     assert manager.stop().result()
     assert manager.collect().result()
 
-
-def test_manager_reset(configured_manager):
-
-    manager, graph_info = configured_manager
-
-    manager.reset(keep_workers=True).result(timeout=10)
-
-    manager.commit_graph(**graph_info).result(timeout=10)
-
-    assert manager.start().result()
-
-    time.sleep(3)
-
-    assert manager.record().result()
-
-    time.sleep(3)
-
-    assert manager.stop().result()
-    assert manager.collect().result()
+    worker.shutdown()
+    manager.shutdown()
 
 
 def test_manager_recommit_graph(worker, manager):

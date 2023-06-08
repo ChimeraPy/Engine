@@ -64,9 +64,6 @@ class Client:
         self._thread = AsyncLoopThread()
         self._thread.start()
 
-        # Communication between Async + Sync
-        self._send_msg_queue = asyncio.Queue()
-
         # Adding default client handlers
         self.ws_handlers.update(
             {
@@ -283,6 +280,8 @@ class Client:
 
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(f"http://{self.host}:{self.port}/ws") as ws:
+
+                self.logger.debug(f"{self}: successfully connected!")
 
                 # Store the Client session
                 self._session = session

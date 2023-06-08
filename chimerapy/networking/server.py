@@ -364,12 +364,15 @@ class Server:
 
             for client_data in self.ws_clients.values():
                 client_ws = client_data["ws"]
-                await asyncio.wait_for(
-                    client_ws.close(
-                        code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
-                    ),
-                    timeout=2,
-                )
+                try:
+                    await asyncio.wait_for(
+                        client_ws.close(
+                            code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
+                        ),
+                        timeout=2,
+                    )
+                except (asyncio.exceptions.TimeoutError, RuntimeError):
+                    pass
 
             # Cleanup and signal complete
             await asyncio.wait_for(self._runner.shutdown(), timeout=10)

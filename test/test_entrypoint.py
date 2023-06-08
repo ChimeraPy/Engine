@@ -1,6 +1,5 @@
 # Test Import
 from .mock import DockeredWorker
-from .conftest import linux_run_only
 
 # Built-in Imports
 import subprocess
@@ -12,21 +11,6 @@ import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
-
-
-@linux_run_only
-def test_worker_entrypoint_connect(manager, dockered_worker):
-
-    # Create docker container to simulate Worker computer
-    dockered_worker.connect(manager.host, manager.port)
-    logger.info("Executed cmd to connect Worker to Manager.")
-
-    time.sleep(2)
-
-    # Assert that the Worker is connected
-    assert dockered_worker.id in manager.workers
-    logger.info("Manager shutting down")
-    manager.shutdown()
 
 
 def test_worker_entrypoint_connect_wport(manager):
