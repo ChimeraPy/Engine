@@ -300,7 +300,8 @@ class HttpServerService(WorkerService):
         node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        self.worker.state.nodes[node_id] = node_state
+        if node_id in self.worker.state.nodes:
+            self.worker.state.nodes[node_id] = node_state
 
         # Update Manager on the new nodes status
         if self.worker.services.http_client.connected_to_manager:
@@ -311,7 +312,9 @@ class HttpServerService(WorkerService):
         # Saving gathering value
         node_state = NodeState.from_dict(msg["data"]["state"])
         node_id = node_state.id
-        self.worker.state.nodes[node_id] = node_state
+        
+        if node_id in self.worker.state.nodes:
+            self.worker.state.nodes[node_id] = node_state
 
         self.worker.services.node_handler.update_gather(
             node_id, msg["data"]["latest_value"]

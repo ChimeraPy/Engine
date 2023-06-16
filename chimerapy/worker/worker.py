@@ -333,6 +333,7 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        self.logger.debug(f"SHUTTING DOWN!")
         # Only execute if thread exists
         if not hasattr(self, "_thread"):
             future = Future()
