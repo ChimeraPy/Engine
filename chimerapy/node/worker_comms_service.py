@@ -38,6 +38,9 @@ class WorkerCommsService(NodeService):
     def inject(self, node: Node):
         super().inject(node)
 
+        # Add the context information
+        self.node.context = self.node_config.context
+
         # Creating logdir after given the Node
         self.node.logdir = str(self.worker_logdir / self.node.state.name)
         os.makedirs(self.node.logdir, exist_ok=True)

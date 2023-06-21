@@ -103,6 +103,7 @@ class Server:
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
         self.file_transfer_records = collections.defaultdict(dict)
+
         if parent_logger is not None:
             self.logger = _logger.fork(parent_logger, "server")
         else:
@@ -385,6 +386,11 @@ class Server:
     ####################################################################
 
     def serve(self, thread: Optional[AsyncLoopThread] = None):
+
+        # Cannot serve twice
+        if self.running.is_set():
+            self.logger.warning(f"{self}: Requested to re-server HTTP Server")
+            return None
 
         # Create async loop in thread
         if thread:
