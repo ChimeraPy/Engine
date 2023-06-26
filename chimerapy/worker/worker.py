@@ -184,7 +184,7 @@ class Worker:
     async def async_deregister(self) -> bool:
         return await self.services.http_client.async_deregister()
 
-    async def async_create_node(self, node_config: NodeConfig) -> bool:
+    async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
         return await self.services.node_handler.async_create_node(node_config)
 
     async def async_destroy_node(self, node_id: str) -> bool:
@@ -333,7 +333,7 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
-        self.logger.debug(f"SHUTTING DOWN!")
+        self.logger.debug("SHUTTING DOWN!")
         # Only execute if thread exists
         if not hasattr(self, "_thread"):
             future = Future()

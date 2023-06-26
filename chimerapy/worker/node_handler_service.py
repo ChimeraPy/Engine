@@ -1,5 +1,6 @@
 import threading
 import typing
+import warnings
 from typing import Dict, Any, Union, Type, Optional
 
 if typing.TYPE_CHECKING:
@@ -136,7 +137,16 @@ class NodeHandlerService(WorkerService):
     ## Node Handling
     ###################################################################################
 
-    async def async_create_node(self, node_config: NodeConfig) -> bool:
+    async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
+
+        # Ensure to convert the node_config into a NodeConfig object
+        if isinstance(node_config, dict):
+            warnings.warn(
+                "node_config parameter as type Dict is going to be deprecated soon",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            node_config = NodeConfig(**node_config)
 
         # Extract id for ease
         id = node_config.id
