@@ -51,7 +51,6 @@ def test_zeroconf_connect(manager, worker):
     manager.zeroconf(enable=False)
 
 
-
 def test_manager_shutting_down_gracefully():
 
     # Create the actors
@@ -64,7 +63,6 @@ def test_manager_shutting_down_gracefully():
     # Wait and then shutdown system through the manager
     worker.shutdown()
     manager.shutdown()
-
 
 
 def test_manager_shutting_down_ungracefully():
@@ -94,6 +92,7 @@ def test_manager_lifecycle(manager, worker, context):
     # Configure the worker and obtain the mapping
     worker.connect(host=manager.host, port=manager.port)
     mapping = {worker.id: [gen_node.id, con_node.id]}
+    manager.commit_graph(graph, mapping, context=context).result(timeout=30)
 
     assert manager.start().result()
 
@@ -130,7 +129,7 @@ def test_manager_reset(manager, worker):
     assert manager.record().result()
 
     time.sleep(3)
-    
+
     assert manager.stop().result()
     assert manager.collect().result()
 
@@ -150,25 +149,22 @@ def test_manager_recommit_graph(worker, manager):
 
     graph_info = {"graph": simple_graph, "mapping": mapping}
 
-    logger.debug(f"STARTING COMMIT 1st ROUND")
+    logger.debug("STARTING COMMIT 1st ROUND")
     tic = time.time()
     assert manager.commit_graph(**graph_info).result(timeout=30)
     toc = time.time()
     delta = toc - tic
-    logger.debug(f"FINISHED COMMIT 1st ROUND")
+    logger.debug("FINISHED COMMIT 1st ROUND")
 
-    logger.debug(f"STARTING RESET")
+    logger.debug("STARTING RESET")
     assert manager.reset(keep_workers=True).result(timeout=30)
-    logger.debug(f"FINISHED RESET")
+    logger.debug("FINISHED RESET")
 
-    logger.debug(f"STARTING COMMIT 2st ROUND")
+    logger.debug("STARTING COMMIT 2st ROUND")
     tic2 = time.time()
     assert manager.commit_graph(**graph_info).result(timeout=30)
     toc2 = time.time()
     delta2 = toc2 - tic2
-    logger.debug(f"FINISHED COMMIT 2st ROUND")
+    logger.debug("FINISHED COMMIT 2st ROUND")
 
-    # assert ((delta2 - delta) / (delta)) < 1
-
-    manager.shutdown()
-    worker.shutdown()
+    assert ((delta2 - delta) / (delta)) < 1
