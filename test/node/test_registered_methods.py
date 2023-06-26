@@ -1,7 +1,6 @@
 from typing import Union, Optional
 import time
 
-import dill
 import pytest
 import chimerapy as cp
 
@@ -54,19 +53,8 @@ def node_with_reg_methods(logreceiver):
 @pytest.fixture
 def worker_with_reg(worker, node_with_reg_methods):
 
-    # Simple single node without connection
-    msg = {
-        "id": node_with_reg_methods.id,
-        "name": node_with_reg_methods.name,
-        "pickled": dill.dumps(node_with_reg_methods),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
-
     logger.debug("Create nodes")
-    worker.create_node(msg).result(timeout=30)
+    worker.create_node(cp.NodeConfig(node_with_reg_methods)).result(timeout=30)
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
