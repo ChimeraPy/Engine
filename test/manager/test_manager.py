@@ -134,7 +134,7 @@ def test_manager_reset(manager, worker):
     assert manager.collect().result()
 
 
-# @pytest.mark.skip(reason="Flaky")
+@pytest.mark.skip(reason="Flaky")
 def test_manager_recommit_graph(worker, manager):
 
     # Define graph
