@@ -5,9 +5,7 @@ from ..networking.test_client_server import server
 import time
 from concurrent.futures import wait
 
-import dill
 import pytest
-from pytest_lazyfixture import lazy_fixture
 import chimerapy as cp
 
 logger = cp._logger.getLogger("chimerapy")
@@ -24,26 +22,61 @@ NAME_CLASS_MAP = {
 }
 
 
-@pytest.mark.parametrize("node", [lazy_fixture("gen_node"), lazy_fixture("con_node")])
-def test_worker_create_node(worker, node):
-
-    # Simple single node without connection
-    msg = {
-        "id": node.id,
-        "pickled": dill.dumps(node),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+def test_worker_create_node(worker, gen_node, context):
 
     logger.debug("Create nodes")
-    worker.create_node(msg).result(
+    worker.create_node(cp.NodeConfig(gen_node, context=context)).result(
         timeout=cp.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied creating nodes")
-    assert node.id in worker.nodes
+    assert gen_node.id in worker.nodes
+
+    logger.debug("Destroy nodes")
+    worker.destroy_node(gen_node.id).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
+
+    logger.debug("Finishied destroying nodes")
+    assert gen_node.id not in worker.nodes
+
+
+@pytest.mark.parametrize(
+    "context_order",
+    [["multiprocessing", "threading"], ["threading", "multiprocessing"]],
+)
+def test_worker_create_node_different_context(
+    worker, gen_node, con_node, context_order
+):
+
+    logger.debug("Create nodes")
+    worker.create_node(cp.NodeConfig(gen_node, context=context_order[0])).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
+
+    logger.debug("Finishied creating nodes")
+    assert gen_node.id in worker.nodes
+
+    logger.debug("Destroy nodes")
+    worker.destroy_node(gen_node.id).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
+
+    worker.create_node(cp.NodeConfig(con_node, context=context_order[1])).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
+
+    logger.debug("Finishied creating nodes")
+    assert con_node.id in worker.nodes
+
+    worker.destroy_node(con_node.id).result(
+        timeout=cp.config.get("worker.timeout.node-creation")
+    )
+
+    logger.debug("Finishied destroying nodes")
+    assert gen_node.id not in worker.nodes
+    assert con_node.id not in worker.nodes
 
 
 @linux_run_only
@@ -55,18 +88,11 @@ def test_worker_create_unknown_node(worker):
     node = UnknownNode(name="Unk1")
 
     # Simple single node without connection
-    msg = {
-        "id": node.id,
-        "pickled": dill.dumps(node),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
+    node_config = cp.NodeConfig(node)
     del UnknownNode
 
     logger.debug("Create nodes")
-    worker.create_node(msg).result(
+    worker.create_node(node_config).result(
         timeout=cp.config.get("worker.timeout.node-creation")
     )
 
@@ -74,20 +100,11 @@ def test_worker_create_unknown_node(worker):
     assert node.id in worker.nodes
 
 
-def test_starting_node(worker, gen_node):
-
-    # Simple single node without connection
-    msg = {
-        "id": gen_node.id,
-        "pickled": dill.dumps(gen_node),
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-    }
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+def test_starting_node(worker, gen_node, context):
 
     logger.debug("Create nodes")
-    worker.create_node(msg).result(
+    worker.create_node(cp.NodeConfig(gen_node, context=context)).result(
         timeout=cp.config.get("worker.timeout.node-creation")
     )
 
@@ -104,8 +121,8 @@ def test_starting_node(worker, gen_node):
     assert isinstance(data, dict)
 
 
-# @pytest.mark.repeat(5)
-def test_worker_data_archiving(worker):
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+def test_worker_data_archiving(worker, context):
 
     # Just for debugging
     # worker.delete_temp = False
@@ -117,16 +134,7 @@ def test_worker_data_archiving(worker):
     # Simple single node without connection
     futures = []
     for node in nodes:
-        msg = {
-            "id": node.id,
-            "name": node.name,
-            "pickled": dill.dumps(node),
-            "in_bound": [],
-            "in_bound_by_name": [],
-            "out_bound": [],
-            "follow": None,
-        }
-        futures.append(worker.create_node(msg))
+        futures.append(worker.create_node(cp.NodeConfig(node, context=context)))
 
     assert wait(futures, timeout=10)
 

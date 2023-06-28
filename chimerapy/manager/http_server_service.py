@@ -48,7 +48,7 @@ class HttpServerService(ManagerService):
         )
 
         # Runn the Server
-        self._server.serve()
+        self._server.serve(thread=self._thread)
         logger.info(f"Manager started at {self._server.host}:{self._server.port}")
 
         # Update the ip and port
@@ -134,7 +134,6 @@ class HttpServerService(ManagerService):
         if not self._enable_api:
             return
 
-        logger.debug(f"{self}: Broadcasting network status update")
         await self._server.async_broadcast(
             signal=MANAGER_MESSAGE.NETWORK_STATUS_UPDATE,
             data=self.state.to_dict(),

@@ -121,9 +121,14 @@ class Manager:
     ## Async Networking
     ####################################################################
 
-    async def _async_request_node_creation(self, worker_id: str, node_id: str) -> bool:
+    async def _async_request_node_creation(
+        self,
+        worker_id: str,
+        node_id: str,
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
+    ) -> bool:
         return await self.services.worker_handler._request_node_creation(
-            worker_id, node_id
+            worker_id, node_id, context=context
         )
 
     async def _async_request_node_destruction(
@@ -165,8 +170,15 @@ class Manager:
     def _deregister_graph(self):
         self.services.worker_handler._deregister_graph()
 
-    def _request_node_creation(self, worker_id: str, node_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_node_creation(worker_id, node_id))
+    def _request_node_creation(
+        self,
+        worker_id: str,
+        node_id: str,
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
+    ) -> Future[bool]:
+        return self._exec_coro(
+            self._async_request_node_creation(worker_id, node_id, context=context)
+        )
 
     def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
@@ -203,6 +215,7 @@ class Manager:
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
         send_packages: Optional[List[Dict[str, Any]]] = None,
     ) -> bool:
         """Committing ``Graph`` to the cluster.
@@ -240,7 +253,9 @@ class Manager:
             bool: Success in cluster's setup
 
         """
-        return await self.services.worker_handler.commit(graph, mapping, send_packages)
+        return await self.services.worker_handler.commit(
+            graph, mapping, context=context, send_packages=send_packages
+        )
 
     async def async_gather(self) -> Dict:
         return await self.services.worker_handler.gather()
@@ -305,6 +320,7 @@ class Manager:
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
         send_packages: Optional[List[Dict[str, Any]]] = None,
     ) -> Future[bool]:
         """Committing ``Graph`` to the cluster.
@@ -342,7 +358,11 @@ class Manager:
             Future[bool]: Future of success in cluster's setup
 
         """
-        return self._exec_coro(self.async_commit(graph, mapping, send_packages))
+        return self._exec_coro(
+            self.async_commit(
+                graph, mapping, context=context, send_packages=send_packages
+            )
+        )
 
     def step(self) -> Future[bool]:
         """Cluster step execution for offline operation.

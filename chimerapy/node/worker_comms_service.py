@@ -1,16 +1,17 @@
+import pathlib
+import os
+import logging
+import threading
+import datetime
+from typing import Dict
+
 from ..networking import Client
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from .node_service import NodeService
 from .poller_service import PollerService
 from .publisher_service import PublisherService
 from .node import Node
-
-import pathlib
-import os
-import logging
-import threading
-import datetime
-from typing import List, Optional, Dict
+from .node_config import NodeConfig
 
 
 class WorkerCommsService(NodeService):
@@ -20,10 +21,7 @@ class WorkerCommsService(NodeService):
         host: str,
         port: int,
         worker_logdir: pathlib.Path,
-        in_bound: List[str],
-        in_bound_by_name: List[str],
-        out_bound: List[str],
-        follow: Optional[str] = None,
+        node_config: NodeConfig,
         logging_level: int = logging.INFO,
         worker_logging_port: int = 5555,
     ):
@@ -34,35 +32,31 @@ class WorkerCommsService(NodeService):
         self.port = port
         self.worker_logging_port = worker_logging_port
         self.logging_level = logging_level
-        self.follow = follow
         self.worker_logdir = worker_logdir
-
-        # Storing p2p information
-        self.p2p_info = {
-            "in_bound": in_bound,
-            "in_bound_by_name": in_bound_by_name,
-            "out_bound": out_bound,
-        }
+        self.node_config = node_config
 
     def inject(self, node: Node):
         super().inject(node)
+
+        # Add the context information
+        self.node.context = self.node_config.context
 
         # Creating logdir after given the Node
         self.node.logdir = str(self.worker_logdir / self.node.state.name)
         os.makedirs(self.node.logdir, exist_ok=True)
 
         # If in-boudn, enable the poller service
-        if self.p2p_info["in_bound"]:
+        if self.node_config.in_bound:
             poll_service = PollerService(
                 "poller",
-                self.p2p_info["in_bound"],
-                self.p2p_info["in_bound_by_name"],
-                self.follow,
+                self.node_config.in_bound,
+                self.node_config.in_bound_by_name,
+                self.node_config.follow,
             )
             poll_service.inject(self.node)
 
         # If out_bound, enable the publisher service
-        if self.p2p_info["out_bound"]:
+        if self.node_config.out_bound:
             pub_service = PublisherService("publisher")
             pub_service.inject(self.node)
 

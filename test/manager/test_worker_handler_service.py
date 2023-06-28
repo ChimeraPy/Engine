@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 import chimerapy as cp
+from chimerapy.networking.async_loop_thread import AsyncLoopThread
 
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 from .dev_manager_services_group import DevManagerServicesGroup
@@ -10,17 +11,22 @@ from .dev_manager_services_group import DevManagerServicesGroup
 logger = cp._logger.getLogger("chimerapy")
 cp.debug()
 
+# TODO: Fix this entire file
+
 
 @pytest.mark.asyncio
 @pytest.fixture
 async def testbed_setup(worker):
 
+    thread = AsyncLoopThread()
+    thread.start()
+
     # Create the service
     manager_services_group = DevManagerServicesGroup(
-        logdir=TEST_DATA_DIR, publisher_port=0
+        logdir=TEST_DATA_DIR, publisher_port=0, thread=thread
     )
 
-    assert worker.connect(
+    assert await worker.async_connect(
         method="ip",
         host=manager_services_group.http_server.ip,
         port=manager_services_group.http_server.port,

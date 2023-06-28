@@ -3,7 +3,6 @@ import datetime
 import uuid
 import os
 
-import dill
 import numpy as np
 
 import chimerapy as cp
@@ -75,13 +74,12 @@ def test_run_record_service_from_worker(worker):
 
     node = VideoNode(name="video")
     msg = {
-        "id": node.id,
-        "name": node.name,
-        "pickled": dill.dumps(node),
+        "node": node,
         "in_bound": [],
         "in_bound_by_name": [],
         "out_bound": [],
         "follow": None,
+        "context": "multiprocessing",
     }
     assert worker.create_node(msg).result(timeout=10)
 

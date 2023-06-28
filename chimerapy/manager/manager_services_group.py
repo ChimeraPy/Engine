@@ -43,6 +43,7 @@ class ManagerServicesGroup(ServiceGroup):  # UserDict
             self._thread = thread
         else:
             self._thread = AsyncLoopThread()
+            self._thread.start()
 
         # Create the services
         self.http_server = HttpServerService(

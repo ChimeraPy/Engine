@@ -153,17 +153,14 @@ class HttpServerService(WorkerService):
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
         msg_bytes = await request.read()
-        msg = pickle.loads(msg_bytes)
+        node_config = pickle.loads(msg_bytes)
 
-        node_id = msg["id"]
-        success = await self.worker.services.node_handler.async_create_node(
-            node_id, msg
-        )
+        success = await self.worker.services.node_handler.async_create_node(node_config)
 
         # Update the manager with the most up-to-date status of the nodes
         response = {
             "success": success,
-            "node_state": self.worker.state.nodes[node_id].to_dict(),
+            "node_state": self.worker.state.nodes[node_config.id].to_dict(),
         }
 
         return web.json_response(response)
@@ -303,7 +300,8 @@ class HttpServerService(WorkerService):
         node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        self.worker.state.nodes[node_id] = node_state
+        if node_id in self.worker.state.nodes:
+            self.worker.state.nodes[node_id] = node_state
 
         # Update Manager on the new nodes status
         if self.worker.services.http_client.connected_to_manager:
@@ -314,7 +312,9 @@ class HttpServerService(WorkerService):
         # Saving gathering value
         node_state = NodeState.from_dict(msg["data"]["state"])
         node_id = node_state.id
-        self.worker.state.nodes[node_id] = node_state
+        
+        if node_id in self.worker.state.nodes:
+            self.worker.state.nodes[node_id] = node_state
 
         self.worker.services.node_handler.update_gather(
             node_id, msg["data"]["latest_value"]

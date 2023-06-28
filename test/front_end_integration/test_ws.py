@@ -115,7 +115,7 @@ def test_reset_network_updates(test_ws_client, manager, worker):
     assert record.network_state == manager.state
 
     # Reset
-    manager.reset(keep_workers=True)
+    assert manager.reset(keep_workers=True).result(timeout=10)
     time.sleep(3)
     assert record.network_state == manager.state
 

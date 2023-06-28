@@ -34,10 +34,6 @@ linux_run_only = pytest.mark.skipif(
 linux_expected_only = pytest.mark.skipif(
     current_platform != "Linux", reason="Test expected to only pass on Linux"
 )
-not_github_actions = pytest.mark.skipif(
-    running_on_github_actions == "GA",
-    reason="Certain test require hardware to execute that is not available in GA",
-)
 
 disable_loggers = [
     "matplotlib",

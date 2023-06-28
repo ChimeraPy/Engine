@@ -6,13 +6,13 @@ import traceback
 import json
 import pickle
 import zipfile
-import dill
 
 # Third-party Imports
 import aiohttp
 import networkx as nx
 
 from chimerapy import config
+from ..node import NodeConfig
 from ..graph import Graph
 from ..networking import Client, DataChunk
 from ..exceptions import CommitGraphError
@@ -258,7 +258,12 @@ class WorkerHandlerService(ManagerService):
     ## Async Networking
     ####################################################################
 
-    async def _request_node_creation(self, worker_id: str, node_id: str) -> bool:
+    async def _request_node_creation(
+        self,
+        worker_id: str,
+        node_id: str,
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
+    ) -> bool:
         """Request creating a Node from the Graph.
 
         Args:
@@ -286,17 +291,14 @@ class WorkerHandlerService(ManagerService):
 
         # Create the data to be send
         data = pickle.dumps(
-            {
-                "worker_id": worker_id,
-                "id": node_id,
-                "pickled": dill.dumps(
-                    self.graph.G.nodes[node_id]["object"], recurse=True
-                ),
-                "in_bound": in_bound,
-                "in_bound_by_name": in_bound_by_name,
-                "out_bound": list(self.graph.G.successors(node_id)),
-                "follow": self.graph.G.nodes[node_id]["follow"],
-            }
+            NodeConfig(
+                node=self.graph.G.nodes[node_id]["object"],
+                in_bound=in_bound,
+                in_bound_by_name=in_bound_by_name,
+                out_bound=list(self.graph.G.successors(node_id)),
+                follow=self.graph.G.nodes[node_id]["follow"],
+                context=context,
+            )
         )
 
         # Construct the url
@@ -530,7 +532,9 @@ class WorkerHandlerService(ManagerService):
         # Return if all outputs were successful
         return all(results)
 
-    async def _create_p2p_network(self) -> bool:
+    async def _create_p2p_network(
+        self, context: Literal["multiprocessing", "threading"] = "multiprocessing"
+    ) -> bool:
         """Create the P2P Nodes in the Network
 
         This routine only creates the Node via the Workers but doesn't \
@@ -546,7 +550,7 @@ class WorkerHandlerService(ManagerService):
             for node_id in self.worker_graph_map[worker_id]:
 
                 # Request the creation
-                coro = self._request_node_creation(worker_id, node_id)
+                coro = self._request_node_creation(worker_id, node_id, context=context)
                 coros.append(coro)
 
         # Wait until all complete
@@ -606,6 +610,7 @@ class WorkerHandlerService(ManagerService):
         self,
         graph: Graph,
         mapping: Dict[str, List[str]],
+        context: Literal["multiprocessing", "threading"] = "multiprocessing",
         send_packages: Optional[List[Dict[str, Any]]] = None,
     ) -> bool:
         """Committing ``Graph`` to the cluster.
@@ -657,7 +662,7 @@ class WorkerHandlerService(ManagerService):
         # Start with the nodes and then the connections
         if (
             success
-            and await self._create_p2p_network()
+            and await self._create_p2p_network(context=context)
             and await self._setup_p2p_connections()
         ):
             return True

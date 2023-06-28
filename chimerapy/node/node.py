@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Literal
 import pathlib
 import logging
 import uuid
@@ -27,6 +27,7 @@ class Node:
 
     services: ServiceGroup
     registered_methods: Dict[str, RegisteredMethod] = {}
+    context: Literal["main", "multiprocessing", "threading"]
 
     def __init__(
         self,
@@ -61,6 +62,7 @@ class Node:
         self.debug_port = debug_port
         self._running: Union[bool, mp.Value] = True
         self.blocking = True
+        self.context = "main"  # default
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-node")
@@ -125,6 +127,10 @@ class Node:
         # Get Logger
         logger = _logger.getLogger("chimerapy-node")
         logger.setLevel(self.logging_level)
+
+        # Do not add handler in threaded mode
+        if self.context != "multiprocessing":
+            return logger
 
         # If worker, add zmq handler
         if "worker" in self.services or self.debug_port:
