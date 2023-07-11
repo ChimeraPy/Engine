@@ -18,7 +18,7 @@ def test_worker_entrypoint_connect_wport(manager):
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
         [
-            "cpe-worker",
+            "cp-worker",
             "--name",
             "test",
             "--id",
@@ -51,7 +51,7 @@ def test_worker_entrypoint_zeroconf_connect(manager):
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
         [
-            "cpe-worker",
+            "cp-worker",
             "--name",
             "test",
             "--id",
