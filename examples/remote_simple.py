@@ -3,12 +3,12 @@ import time
 import pathlib
 import os
 
-import chimerapy as cp
+import chimerapy_engine as cpe
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
-class Producer(cp.Node):
+class Producer(cpe.Node):
     def setup(self):
         self.counter = 0
 
@@ -16,18 +16,18 @@ class Producer(cp.Node):
         time.sleep(1)
         current_counter = self.counter
         self.counter += 1
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("counter", current_counter)
         return data_chunk
 
 
-class Consumer(cp.Node):
+class Consumer(cpe.Node):
     def step(self, data: Dict[str, Any]):
         d = data["prod"].get("counter")["value"]
         print("Consumer got data: ", d)
 
 
-class SimpleGraph(cp.Graph):
+class SimpleGraph(cpe.Graph):
     def __init__(self):
         super().__init__()
         self.prod = Producer(name="prod")
@@ -41,9 +41,9 @@ class SimpleGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs")
+    manager = cpe.Manager(logdir=CWD / "runs")
     graph = SimpleGraph()
-    worker = cp.Worker(name="local")
+    worker = cpe.Worker(name="local")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)

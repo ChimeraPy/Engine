@@ -4,13 +4,13 @@ import time
 from typing import Dict
 
 import pytest
-import chimerapy as cp
-from chimerapy.networking import Client
-from chimerapy.networking.enums import MANAGER_MESSAGE
-from chimerapy.states import ManagerState
+import chimerapy_engine as cpe
+from chimerapy_engine.networking import Client
+from chimerapy_engine.networking.enums import MANAGER_MESSAGE
+from chimerapy_engine.states import ManagerState
 
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 
 class Record:
@@ -47,7 +47,7 @@ def test_node_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Create original containers
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
     mapping = {worker.id: [new_node.id]}
@@ -76,7 +76,7 @@ def test_node_creation_and_destruction_network_updates(test_ws_client, manager, 
     client, record = test_ws_client
 
     # Create original containers
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     new_node = GenNode(name="Gen1", id="Gen1")
     simple_graph.add_nodes_from([new_node])
 
@@ -103,7 +103,7 @@ def test_reset_network_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Create original containers
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
     mapping = {worker.id: [new_node.id]}

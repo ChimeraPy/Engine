@@ -1,5 +1,3 @@
-from chimerapy.networking import Server, Client
-
 from typing import Dict
 import time
 import pathlib
@@ -10,10 +8,11 @@ from aiohttp import web
 
 import pytest
 
-import chimerapy as cp
+import chimerapy_engine as cpe
+from chimerapy_engine.networking import Server, Client
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -97,7 +96,7 @@ def test_server_send_to_client(server, client):
         client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True
     )
 
-    assert cp.utils.waiting_for(
+    assert cpe.utils.waiting_for(
         lambda: client.msg_processed_counter >= 2,
         timeout=2,
     )
@@ -110,7 +109,7 @@ def test_client_send_to_server(server, client):
     # Simple send with OK
     client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True)
 
-    assert cp.utils.waiting_for(
+    assert cpe.utils.waiting_for(
         lambda: server.msg_processed_counter >= 2,
         timeout=2,
     )
@@ -121,7 +120,7 @@ def test_multiple_clients_send_to_server(server, client_list):
     for client in client_list:
         client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
-    assert cp.utils.waiting_for(
+    assert cpe.utils.waiting_for(
         lambda: server.msg_processed_counter >= NUMBER_OF_CLIENTS,
         timeout=5,
     )
@@ -132,7 +131,7 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
     server.broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
     for client in client_list:
-        assert cp.utils.waiting_for(
+        assert cpe.utils.waiting_for(
             lambda: client.msg_processed_counter >= 2,
             timeout=5,
         )

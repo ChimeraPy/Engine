@@ -1,13 +1,13 @@
 import time
 
-import chimerapy as cp
+import chimerapy_engine as cpe
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 import glob
 import pytest
 from ..utils import uuid
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy")
+cpe.debug()
 
 pytestmark = [pytest.mark.slow]
 
@@ -23,16 +23,16 @@ def assert_has_log_with(file: str, text: str):
 
 
 def test_manager_ability_to_collect_logs():
-    assert cp.config.get("manager.logs-sink.enabled") is False
-    cp.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
+    assert cpe.config.get("manager.logs-sink.enabled") is False
+    cpe.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
 
-    manager = cp.Manager(port=0, logdir=TEST_DATA_DIR)
+    manager = cpe.Manager(port=0, logdir=TEST_DATA_DIR)
     assert manager.services.distributed_logging.logs_sink is not None
 
     worker_ids = []
 
     for j in range(5):
-        worker = cp.Worker(name=f"worker_{j}", port=0, id=uuid())
+        worker = cpe.Worker(name=f"worker_{j}", port=0, id=uuid())
         worker.connect(method="ip", host=manager.host, port=manager.port)
         worker_ids.append(worker.id)
         time.sleep(5)
@@ -57,23 +57,23 @@ def test_manager_ability_to_collect_logs():
 
 
 def test_manager_ability_to_collect_logs_with_worker_nodes():
-    assert cp.config.get("manager.logs-sink.enabled") is False
-    cp.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
+    assert cpe.config.get("manager.logs-sink.enabled") is False
+    cpe.config.set("manager.logs-sink.enabled", True)  # re-enable logs sink
 
-    manager = cp.Manager(port=0, logdir=TEST_DATA_DIR)
+    manager = cpe.Manager(port=0, logdir=TEST_DATA_DIR)
     assert manager.services.distributed_logging.logs_sink is not None
 
     gen_node = GenNode(name="Gen1")
     con_node = ConsumeNode(name="Con1")
 
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([gen_node, con_node])
     graph.add_edge(gen_node, con_node)
 
-    worker1 = cp.Worker(name="worker1", port=0, id=uuid())
+    worker1 = cpe.Worker(name="worker1", port=0, id=uuid())
     worker1.connect(method="ip", host=manager.host, port=manager.port)
 
-    worker2 = cp.Worker(name="worker2", port=0, id=uuid())
+    worker2 = cpe.Worker(name="worker2", port=0, id=uuid())
     worker2.connect(method="ip", host=manager.host, port=manager.port)
 
     worker_node_map = {worker1.id: [gen_node.id], worker2.id: [con_node.id]}

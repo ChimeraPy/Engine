@@ -3,12 +3,12 @@ from typing import Dict
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-import chimerapy as cp
+import chimerapy_engine as cpe
 
 from .p2p_networking_verifier import P2PNetworkingVerifier
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 @pytest.mark.slow
@@ -41,7 +41,7 @@ cp.debug()
         ),
     ],
 )
-def test_p2p_networking(config_manager: cp.Manager, expected_output: Dict[str, int]):
+def test_p2p_networking(config_manager: cpe.Manager, expected_output: Dict[str, int]):
     p2p_verifier = P2PNetworkingVerifier(config_manager)
     p2p_verifier.assert_nodes_are_ready()
     logger.info("Verified nodes are ready")

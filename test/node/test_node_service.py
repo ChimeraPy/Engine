@@ -1,8 +1,8 @@
-import chimerapy as cp
-from chimerapy.node.node_service import NodeService
+import chimerapy_engine as cpe
+from chimerapy_engine.node.node_service import NodeService
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 class ExampleService(NodeService):

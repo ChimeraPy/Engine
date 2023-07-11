@@ -7,10 +7,10 @@ import time
 
 # Third-party Imports
 import pytest
-import chimerapy as cp
+import chimerapy_engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 def test_worker_entrypoint_connect_wport(manager):
@@ -18,7 +18,7 @@ def test_worker_entrypoint_connect_wport(manager):
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
         [
-            "cp-worker",
+            "cpe-worker",
             "--name",
             "test",
             "--id",
@@ -51,7 +51,7 @@ def test_worker_entrypoint_zeroconf_connect(manager):
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
         [
-            "cp-worker",
+            "cpe-worker",
             "--name",
             "test",
             "--id",

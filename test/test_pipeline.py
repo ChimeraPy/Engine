@@ -1,9 +1,9 @@
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-import chimerapy as cp
+import chimerapy_engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 # How to test with matplotlib
 # https://stackoverflow.com/questions/63541241/networkx-drawing-in-layered-manner
@@ -12,10 +12,10 @@ logger = cp._logger.getLogger("chimerapy")
 @pytest.fixture
 def simple_graph():
 
-    a = cp.Node(name="a")
-    b = cp.Node(name="b")
+    a = cpe.Node(name="a")
+    b = cpe.Node(name="b")
 
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([a, b])
     graph.add_edge(a, b)
 
@@ -25,12 +25,12 @@ def simple_graph():
 @pytest.fixture
 def slightly_more_complex_graph():
 
-    a = cp.Node(name="a")
-    b = cp.Node(name="b")
-    c = cp.Node(name="c")
-    d = cp.Node(name="d")
+    a = cpe.Node(name="a")
+    b = cpe.Node(name="b")
+    c = cpe.Node(name="c")
+    d = cpe.Node(name="d")
 
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([a, b, c, d])
     graph.add_edges_from([[a, b], [a, c], [b, c], [c, d]])
     return graph
@@ -39,14 +39,14 @@ def slightly_more_complex_graph():
 @pytest.fixture
 def complex_graph():
 
-    a = cp.Node(name="a")
-    b = cp.Node(name="b")
-    c = cp.Node(name="c")
-    d = cp.Node(name="d")
-    e = cp.Node(name="e")
-    f = cp.Node(name="f")
+    a = cpe.Node(name="a")
+    b = cpe.Node(name="b")
+    c = cpe.Node(name="c")
+    d = cpe.Node(name="d")
+    e = cpe.Node(name="e")
+    f = cpe.Node(name="f")
 
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([a, b, c, d, e, f])
     graph.add_edges_from([[a, b], [c, d], [c, e], [b, e], [d, f], [e, f]])
     return graph
@@ -61,7 +61,7 @@ def complex_graph():
     ],
 )
 def test_graph_instance(graph):
-    assert isinstance(graph, cp.Graph)
+    assert isinstance(graph, cpe.Graph)
 
 
 @pytest.mark.skip(reason="need to automate matplotlib test")

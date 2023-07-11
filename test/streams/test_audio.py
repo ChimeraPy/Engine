@@ -12,10 +12,10 @@ import pytest
 import pyaudio
 
 # Internal Imports
-import chimerapy as cp
-from chimerapy.records.audio_record import AudioRecord
+import chimerapy_engine as cpe
+from chimerapy_engine.records.audio_record import AudioRecord
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

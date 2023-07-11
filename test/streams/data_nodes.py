@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 
 # Internal Imports
-import chimerapy as cp
+import chimerapy_engine as cpe
 
 
-class AudioNode(cp.Node):
+class AudioNode(cpe.Node):
     def __init__(
         self,
         name: str,
@@ -39,14 +39,14 @@ class AudioNode(cp.Node):
         )
 
 
-class ImageNode(cp.Node):
+class ImageNode(cpe.Node):
     def step(self):
         time.sleep(1 / 10)
         rand_frame = np.random.rand(20, 30, 3) * 255
         self.save_image(name="test", data=rand_frame)
 
 
-class TabularNode(cp.Node):
+class TabularNode(cpe.Node):
     def step(self):
 
         time.sleep(1 / 10)
@@ -62,7 +62,7 @@ class TabularNode(cp.Node):
         self.save_tabular(name="test", data=data)
 
 
-class VideoNode(cp.Node):
+class VideoNode(cpe.Node):
     def step(self):
         time.sleep(1 / 15)
         rand_frame = np.random.rand(720, 1280, 3) * 255

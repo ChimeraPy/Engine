@@ -6,7 +6,10 @@ import time
 
 import pytest
 
-from chimerapy.logger.zmq_handlers import NodeIDZMQPullListener, NodeIdZMQPushHandler
+from chimerapy_engine.logger.zmq_handlers import (
+    NodeIDZMQPullListener,
+    NodeIdZMQPushHandler,
+)
 
 
 @pytest.mark.skip(reason="Flaky")
