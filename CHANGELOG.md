@@ -1,11 +1,11 @@
-# ChimeraPy CHANGELOG
+# ChimeraPy-Engine CHANGELOG
 
 ## 0.0.8 (2023-01-23)
 
 #### New Features
 
-* (logging): Made logging available outside of ChimeraPy, made testing of Nodes easier, simplified the Manager's API, make the worker transfer local files through moving files, fixed WIndows timeout bugs.
-* (logging): Added feature where DEBUG messages from ChimeraPy can be disabled from outside the package.
+* (logging): Made logging available outside of ChimeraPy-Engine, made testing of Nodes easier, simplified the Manager's API, make the worker transfer local files through moving files, fixed WIndows timeout bugs.
+* (logging): Added feature where DEBUG messages from ChimeraPy-Engine can be disabled from outside the package.
 * (meta): Added Manager saving meta data to the logdir.
 * (transfer): Made the Worker transfer its archives to the Manager.
 * (tabular): Added tabular record to Node API along with pandas as a dependency.
@@ -33,7 +33,7 @@
 #### Docs
 
 * (dependencies): Started creating documentation on how to deal with dependencies used by a custom data pipeline.
-* (windows): Removed the warning in README.md that stated ChimeraPy does not work with Windows. Now Windows, Linux, and MacOS are supported.
+* (windows): Removed the warning in README.md that stated ChimeraPy-Engine does not work with Windows. Now Windows, Linux, and MacOS are supported.
 * (changelog): added automatic CHANGELOG GitHub Actions Workflow, fixed PYPI logo rendering, and added some links in the developer docs
 #### Others
 
