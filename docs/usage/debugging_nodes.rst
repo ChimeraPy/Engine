@@ -1,13 +1,13 @@
 Debugging Nodes
 #################
 
-Before executing the cluster and rolling a complex system to handle streams of data, it's best to perform unittest for each Node. By setting the parameter ``debug`` to ``True`` in the constructor of the :class:`Node<chimerapy.Node>`, we can begin testing only 1 node. Here is an example::
+Before executing the cluster and rolling a complex system to handle streams of data, it's best to perform unittest for each Node. By setting the parameter ``debug`` to ``True`` in the constructor of the :class:`Node<chimerapy.engine.Node>`, we can begin testing only 1 node. Here is an example::
 
     # Imports
-    import chimerapy as cp
+    import chimerapy as cpe
     import time
 
-    class TestingVideoNode(cp.Node):
+    class TestingVideoNode(cpe.Node):
 
         def __init__(self, name:str, id: int = 0, debug: bool = False):
             # Do not forget to include parent's arguments!

@@ -3,24 +3,24 @@ Actors
 
 Manager
 ------------
-.. autoclass:: chimerapy.manager.Manager
+.. autoclass:: chimerapy.engine.manager.Manager
    :undoc-members:
    :members:
 
 Worker
 ------------
-.. autoclass:: chimerapy.worker.Worker
+.. autoclass:: chimerapy.engine.worker.Worker
    :undoc-members:
    :members:
 
 Node
 ------------
-.. autoclass:: chimerapy.node.Node
+.. autoclass:: chimerapy.engine.node.Node
    :undoc-members:
    :members:
 
 Graph
 ------------
-.. autoclass:: chimerapy.graph.Graph
+.. autoclass:: chimerapy.engine.graph.Graph
    :undoc-members:
    :members:

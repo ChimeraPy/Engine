@@ -15,4 +15,4 @@ To then model data pipelines, a peer-to-peer (P2P) typology is put in place. The
   :width: 90%
   :alt: System Design
 
-The combination of these two network typologies results in the diagram above. This is the resulting network design of ChimeraPy. In this case, the cluster's overall Server is the :class:`Manager<chimerapy.Manager>` and the Client is the :class:`Worker<chimerapy.Worker>`. The P2P network is embodied by computer processes instead of unique computers. These processes are linked through the scaffolding of the :class:`Worker<chimerapy.Worker>` and :class:`Manager<chimerapy.Manager>`.
+The combination of these two network typologies results in the diagram above. This is the resulting network design of ChimeraPy. In this case, the cluster's overall Server is the :class:`Manager<chimerapy.engine.Manager>` and the Client is the :class:`Worker<chimerapy.engine.Worker>`. The P2P network is embodied by computer processes instead of unique computers. These processes are linked through the scaffolding of the :class:`Worker<chimerapy.engine.Worker>` and :class:`Manager<chimerapy.engine.Manager>`.
