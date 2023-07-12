@@ -12,8 +12,8 @@ import pytest
 import pyaudio
 
 # Internal Imports
-import chimerapy_engine as cpe
-from chimerapy_engine.records.audio_record import AudioRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.audio_record import AudioRecord
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

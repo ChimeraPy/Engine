@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 # Internal Imports
-import chimerapy_engine as cpe
-from chimerapy_engine.records.image_record import ImageRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.image_record import ImageRecord
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

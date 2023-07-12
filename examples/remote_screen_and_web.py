@@ -9,7 +9,7 @@ import cv2
 import imutils
 from PIL import ImageGrab
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 cpe.debug()
 

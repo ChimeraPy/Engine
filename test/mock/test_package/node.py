@@ -1,4 +1,4 @@
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 
 class TestNode(cpe.Node):

@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from chimerapy_engine.logger.zmq_handlers import (
+from chimerapy.engine.logger.zmq_handlers import (
     NodeIDZMQPullListener,
     NodeIdZMQPushHandler,
 )

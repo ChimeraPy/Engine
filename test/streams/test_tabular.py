@@ -8,8 +8,8 @@ import time
 
 # Third-party
 import pytest
-import chimerapy_engine as cpe
-from chimerapy_engine.records.tabular_record import TabularRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.tabular_record import TabularRecord
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")

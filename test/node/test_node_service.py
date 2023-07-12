@@ -1,5 +1,5 @@
-import chimerapy_engine as cpe
-from chimerapy_engine.node.node_service import NodeService
+import chimerapy.engine as cpe
+from chimerapy.engine.node.node_service import NodeService
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

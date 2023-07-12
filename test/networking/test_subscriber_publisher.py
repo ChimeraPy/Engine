@@ -7,9 +7,9 @@ import numpy as np
 from pytest_lazyfixture import lazy_fixture
 
 # Internal Imports
-import chimerapy_engine as cpe
-from chimerapy_engine.networking.publisher import Publisher
-from chimerapy_engine.networking.subscriber import Subscriber
+import chimerapy.engine as cpe
+from chimerapy.engine.networking.publisher import Publisher
+from chimerapy.engine.networking.subscriber import Subscriber
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

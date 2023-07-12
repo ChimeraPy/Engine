@@ -3,7 +3,7 @@ import time
 import pathlib
 import os
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
 

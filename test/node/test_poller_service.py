@@ -1,6 +1,6 @@
 import pytest
 
-from chimerapy_engine.node.poller_service import PollerService
+from chimerapy.engine.node.poller_service import PollerService
 from ..conftest import GenNode
 
 

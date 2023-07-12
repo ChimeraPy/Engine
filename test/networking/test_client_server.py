@@ -8,8 +8,8 @@ from aiohttp import web
 
 import pytest
 
-import chimerapy_engine as cpe
-from chimerapy_engine.networking import Server, Client
+import chimerapy.engine as cpe
+from chimerapy.engine.networking import Server, Client
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

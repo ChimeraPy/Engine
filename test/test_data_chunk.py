@@ -4,7 +4,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 import numpy as np
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 
 @pytest.fixture

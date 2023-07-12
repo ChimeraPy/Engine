@@ -92,6 +92,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["chimerapy"]
 
 [tool.setuptools.package-data]
 chimerapy = ['*.yaml']

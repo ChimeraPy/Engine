@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
 
 logger = cpe._logger.getLogger("chimerapy")

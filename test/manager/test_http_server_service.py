@@ -5,7 +5,7 @@ import os
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 cpe.debug()
 

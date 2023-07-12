@@ -5,7 +5,7 @@ import os
 
 import cv2
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
 cpe.debug()

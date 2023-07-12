@@ -3,7 +3,7 @@ from typing import Dict
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 from .p2p_networking_verifier import P2PNetworkingVerifier
 

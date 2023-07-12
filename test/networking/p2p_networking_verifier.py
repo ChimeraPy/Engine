@@ -1,7 +1,7 @@
 import time
 from typing import Dict
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 
 class P2PNetworkingVerifier:

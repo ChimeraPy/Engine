@@ -6,7 +6,7 @@ import time
 from concurrent.futures import wait
 
 import pytest
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

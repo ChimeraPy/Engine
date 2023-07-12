@@ -5,8 +5,8 @@ import os
 
 import numpy as np
 
-import chimerapy_engine as cpe
-from chimerapy_engine.node.record_service import RecordService
+import chimerapy.engine as cpe
+from chimerapy.engine.node.record_service import RecordService
 from ..conftest import GenNode, TEST_DATA_DIR
 from ..streams import VideoNode
 

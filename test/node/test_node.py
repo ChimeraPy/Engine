@@ -5,7 +5,7 @@ import pathlib
 import dill
 import multiprocessing as mp
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 from ..conftest import GenNode
 from ..streams import AudioNode, VideoNode, ImageNode, TabularNode

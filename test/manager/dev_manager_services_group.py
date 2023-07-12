@@ -1,6 +1,6 @@
-import chimerapy_engine as cpe
-from chimerapy_engine.manager.manager_services_group import ManagerServicesGroup
-from chimerapy_engine.states import ManagerState
+import chimerapy.engine as cpe
+from chimerapy.engine.manager.manager_services_group import ManagerServicesGroup
+from chimerapy.engine.states import ManagerState
 
 logger = cpe._logger.getLogger("chimerapy")
 

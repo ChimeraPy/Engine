@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-import chimerapy_engine as cpe
-from chimerapy_engine.networking.async_loop_thread import AsyncLoopThread
+import chimerapy.engine as cpe
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 from .dev_manager_services_group import DevManagerServicesGroup

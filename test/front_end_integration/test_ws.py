@@ -4,10 +4,10 @@ import time
 from typing import Dict
 
 import pytest
-import chimerapy_engine as cpe
-from chimerapy_engine.networking import Client
-from chimerapy_engine.networking.enums import MANAGER_MESSAGE
-from chimerapy_engine.states import ManagerState
+import chimerapy.engine as cpe
+from chimerapy.engine.networking import Client
+from chimerapy.engine.networking.enums import MANAGER_MESSAGE
+from chimerapy.engine.states import ManagerState
 
 
 logger = cpe._logger.getLogger("chimerapy-engine")

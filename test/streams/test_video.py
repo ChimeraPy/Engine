@@ -10,8 +10,8 @@ import uuid
 import cv2
 import numpy as np
 import pytest
-import chimerapy_engine as cpe
-from chimerapy_engine.records.video_record import VideoRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.video_record import VideoRecord
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")

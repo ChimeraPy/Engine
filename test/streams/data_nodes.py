@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 # Internal Imports
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 
 class AudioNode(cpe.Node):

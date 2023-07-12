@@ -1,5 +1,5 @@
 from .conftest import linux_run_only
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

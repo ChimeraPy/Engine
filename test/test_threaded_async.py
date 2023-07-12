@@ -6,8 +6,8 @@ import asyncio
 import pytest
 
 # ChimeraPy Imports
-from chimerapy_engine.networking.async_loop_thread import AsyncLoopThread
-import chimerapy_engine as cpe
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+import chimerapy.engine as cpe
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

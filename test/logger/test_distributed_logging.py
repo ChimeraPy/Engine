@@ -1,6 +1,6 @@
 import time
 
-import chimerapy_engine as cpe
+import chimerapy.engine as cpe
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 import glob
 import pytest

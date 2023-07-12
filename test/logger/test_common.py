@@ -4,8 +4,8 @@ import pytest
 import glob
 import random
 
-from chimerapy_engine.logger.common import HandlerFactory
-import chimerapy_engine as cpe
+from chimerapy.engine.logger.common import HandlerFactory
+import chimerapy.engine as cpe
 
 from ..utils import cleanup_and_recreate_dir, uuid
 from ..conftest import TEST_DATA_DIR
