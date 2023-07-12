@@ -80,7 +80,7 @@ repository = "https://github.com/ChimeraPy/ChimeraPy-Engine"
 
 # Entrypoint
 [project.scripts]
-cp-worker = "chimerapy_engine.entry.worker:main"
+cp-worker = "chimerapy.engine.entry.worker:main"
 
 [build-system]
 requires = ["setuptools", "wheel"]
