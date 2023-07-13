@@ -3,7 +3,6 @@ from typing import Dict, Any
 import pathlib
 
 # Third-party Imports
-import numpy as np
 import pyaudio
 import wave
 
@@ -42,7 +41,7 @@ class AudioRecord(Record):
             self.first_frame = False
 
         # Write
-        prepped_data = data_chunk["data"].astype(np.float32).tobytes()
+        prepped_data = data_chunk["data"].tobytes()
         self.audio_writer.writeframes(prepped_data)
 
     def close(self):
