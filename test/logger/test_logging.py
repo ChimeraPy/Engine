@@ -8,7 +8,7 @@ from chimerapy.engine._logger import ZMQLogHandlerConfig, add_zmq_handler, getLo
 
 
 def test_logger_publishing():
-    logger = getLogger("chimerapy")
+    logger = getLogger("chimerapy-engine")
     config = ZMQLogHandlerConfig(
         publisher_port=0, root_topic="chimerapy_logs", transport="ws"
     )
