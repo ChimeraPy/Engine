@@ -92,10 +92,9 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["chimerapy"]
 
 [tool.setuptools.package-data]
-chimerapy = ['*.yaml']
+chimerapy = ['engine/*.yaml']
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
