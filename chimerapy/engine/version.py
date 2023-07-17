@@ -2,7 +2,7 @@
 __title__ = "chimerapy-engine"
 __description__ = ""
 __url__ = "https://github.com/ChimeraPy/ChimeraPy-Engine"
-__version__ = "0.0.10"
+__version__ = "0.1.0"
 __author__ = "Eduardo Davalos"
 __author_email__ = "eduardo.davalos.aanaya@vanderbilt.edu"
 __license__ = "GNU"
