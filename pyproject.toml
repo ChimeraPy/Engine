@@ -52,7 +52,8 @@ test = [
     'numpy',
     'imutils',
     'pillow',
-    'requests'
+    'requests',
+    'bump2version'
 ]
 docs = [
     'sphinx',
