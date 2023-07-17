@@ -71,23 +71,23 @@ jobs:
         run: |
           ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
           ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
-          mv chimerapy-test.log chimerapy-test-fast.log
+          mv chimerapy-engine-test.log chimerapy-engine-test-fast.log
 
       - name: Perform slower tests
         run: |
           ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
           ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
-          mv chimerapy-test.log chimerapy-test-slow.log
+          mv chimerapy-engine-test.log chimerapy-engine-test-slow.log
 
       - name: Combine test logs
         run : |
-          cat chimerapy-test-*.log > chimerapy-test.log
+          cat chimerapy-engine-test-*.log > chimerapy-engine-test.log
 
       - name: Upload test logs as artifact
         uses: actions/upload-artifact@v3
         with:
-          name: chimerapy-test-${{ env.MANUAL_OS_SET }}.log
-          path: chimerapy-test.log
+          name: chimerapy-engine-test-${{ env.MANUAL_OS_SET }}.log
+          path: chimerapy-engine-test.log
 
       - name: Upload coverage data to coveralls.io
         if : matrix.os == 'ubuntu-latest'
