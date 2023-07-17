@@ -76,7 +76,7 @@ examples = [
 
 [project.urls]
 homepath = "https://github.com/ChimeraPy/ChimeraPy-Engine"
-documentation = "https://chimerapy.readthedocs.io/en/latest/index.html"
+documentation = "https://chimerapy-engine.readthedocs.io/en/latest/index.html"
 repository = "https://github.com/ChimeraPy/ChimeraPy-Engine"
 
 # Entrypoint
