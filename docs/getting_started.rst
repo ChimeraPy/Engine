@@ -20,7 +20,7 @@ Additionally, you can install the package through GitHub instead.::
 To confirm that the installation went smoothly, you can test importing the package.::
 
     python
-    >>> import chimerapy as cp
+    >>> import chimerapy.engine as cpe
     >>> # Successful importing YAY!
 
 After confirming that your installation is ready to go, you can start using ChimeraPy.

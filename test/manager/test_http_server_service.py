@@ -5,9 +5,9 @@ import os
 
 import pytest
 from pytest_lazyfixture import lazy_fixture
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-cp.debug()
+cpe.debug()
 
 # Constant
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -16,7 +16,7 @@ TEST_PACKAGE_DIR = TEST_DIR / "mock"
 
 @pytest.fixture
 def local_node_graph(gen_node):
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_node(gen_node)
     return graph
 
@@ -35,7 +35,7 @@ def packaged_node_graph():
         import test_package as tp
 
     node = tp.TestNode(name="test")
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_node(node)
     return graph
 

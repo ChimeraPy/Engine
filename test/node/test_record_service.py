@@ -5,13 +5,13 @@ import os
 
 import numpy as np
 
-import chimerapy as cp
-from chimerapy.node.record_service import RecordService
+import chimerapy.engine as cpe
+from chimerapy.engine.node.record_service import RecordService
 from ..conftest import GenNode, TEST_DATA_DIR
 from ..streams import VideoNode
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 def test_record_direct_submit():

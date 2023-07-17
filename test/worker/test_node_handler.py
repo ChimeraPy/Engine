@@ -6,10 +6,10 @@ import time
 from concurrent.futures import wait
 
 import pytest
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 # Constants
@@ -26,8 +26,8 @@ NAME_CLASS_MAP = {
 def test_worker_create_node(worker, gen_node, context):
 
     logger.debug("Create nodes")
-    worker.create_node(cp.NodeConfig(gen_node, context=context)).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+    worker.create_node(cpe.NodeConfig(gen_node, context=context)).result(
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied creating nodes")
@@ -35,7 +35,7 @@ def test_worker_create_node(worker, gen_node, context):
 
     logger.debug("Destroy nodes")
     worker.destroy_node(gen_node.id).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied destroying nodes")
@@ -51,8 +51,8 @@ def test_worker_create_node_different_context(
 ):
 
     logger.debug("Create nodes")
-    worker.create_node(cp.NodeConfig(gen_node, context=context_order[0])).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+    worker.create_node(cpe.NodeConfig(gen_node, context=context_order[0])).result(
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied creating nodes")
@@ -60,18 +60,18 @@ def test_worker_create_node_different_context(
 
     logger.debug("Destroy nodes")
     worker.destroy_node(gen_node.id).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
-    worker.create_node(cp.NodeConfig(con_node, context=context_order[1])).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+    worker.create_node(cpe.NodeConfig(con_node, context=context_order[1])).result(
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied creating nodes")
     assert con_node.id in worker.nodes
 
     worker.destroy_node(con_node.id).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied destroying nodes")
@@ -81,19 +81,19 @@ def test_worker_create_node_different_context(
 
 @linux_run_only
 def test_worker_create_unknown_node(worker):
-    class UnknownNode(cp.Node):
+    class UnknownNode(cpe.Node):
         def step(self):
             return 2
 
     node = UnknownNode(name="Unk1")
 
     # Simple single node without connection
-    node_config = cp.NodeConfig(node)
+    node_config = cpe.NodeConfig(node)
     del UnknownNode
 
     logger.debug("Create nodes")
     worker.create_node(node_config).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Finishied creating nodes")
@@ -104,8 +104,8 @@ def test_worker_create_unknown_node(worker):
 def test_starting_node(worker, gen_node, context):
 
     logger.debug("Create nodes")
-    worker.create_node(cp.NodeConfig(gen_node, context=context)).result(
-        timeout=cp.config.get("worker.timeout.node-creation")
+    worker.create_node(cpe.NodeConfig(gen_node, context=context)).result(
+        timeout=cpe.config.get("worker.timeout.node-creation")
     )
 
     logger.debug("Start nodes!")
@@ -134,7 +134,7 @@ def test_worker_data_archiving(worker, context):
     # Simple single node without connection
     futures = []
     for node in nodes:
-        futures.append(worker.create_node(cp.NodeConfig(node, context=context)))
+        futures.append(worker.create_node(cpe.NodeConfig(node, context=context)))
 
     assert wait(futures, timeout=10)
 

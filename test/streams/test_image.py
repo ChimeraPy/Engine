@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 
 # Internal Imports
-import chimerapy as cp
-from chimerapy.records.image_record import ImageRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.image_record import ImageRecord
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

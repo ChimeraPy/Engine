@@ -2,12 +2,12 @@ from typing import Union, Optional
 import time
 
 import pytest
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 
-class NodeWithRegisteredMethods(cp.Node):
+class NodeWithRegisteredMethods(cpe.Node):
     def __init__(
         self, name: str, init_value: int = 0, debug_port: Optional[int] = None
     ):
@@ -27,19 +27,19 @@ class NodeWithRegisteredMethods(cp.Node):
         self.logger.debug(f"{self}: executing TEARDOWN")
 
     # Default style
-    @cp.register
+    @cpe.register
     async def printout(self):
         self.logger.debug(f"{self}: logging out value: {self.value}")
         return self.value
 
     # Style: blocking
-    @cp.register.with_config(params={"value": "Union[int, float]"}, style="blocking")
+    @cpe.register.with_config(params={"value": "Union[int, float]"}, style="blocking")
     async def set_value(self, value: Union[int, float]):
         self.value = value
         return value
 
     # Style: Reset
-    @cp.register.with_config(style="reset")
+    @cpe.register.with_config(style="reset")
     async def reset(self):
         self.init_value = 100
         return 100
@@ -54,7 +54,7 @@ def node_with_reg_methods(logreceiver):
 def worker_with_reg(worker, node_with_reg_methods):
 
     logger.debug("Create nodes")
-    worker.create_node(cp.NodeConfig(node_with_reg_methods)).result(timeout=30)
+    worker.create_node(cpe.NodeConfig(node_with_reg_methods)).result(timeout=30)
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
@@ -66,7 +66,7 @@ def worker_with_reg(worker, node_with_reg_methods):
 def single_node_with_reg_methods_manager(manager, worker, node_with_reg_methods):
 
     # Define graph
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([node_with_reg_methods])
 
     # Connect to the manager

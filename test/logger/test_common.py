@@ -4,8 +4,8 @@ import pytest
 import glob
 import random
 
-from chimerapy.logger.common import HandlerFactory
-import chimerapy as cp
+from chimerapy.engine.logger.common import HandlerFactory
+import chimerapy.engine as cpe
 
 from ..utils import cleanup_and_recreate_dir, uuid
 from ..conftest import TEST_DATA_DIR
@@ -50,7 +50,7 @@ def test_multiplexed_file_handler():
 
     for entity_id, logger in loggers.items():
         logger.setLevel(logging.DEBUG)
-        cp._logger.add_identifier_filter(logger, entity_id)
+        cpe._logger.add_identifier_filter(logger, entity_id)
         logger.addHandler(logs_sink)
 
     logs_dir = (TEST_DATA_DIR / "distributed_logs").resolve()

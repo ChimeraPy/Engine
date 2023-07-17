@@ -2,10 +2,10 @@ import time
 
 import pytest
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy")
 
 
 def test_manager_instance(manager):
@@ -30,7 +30,7 @@ def test_manager_registering_workers_locally(manager):
 
     workers = []
     for i in range(3):
-        worker = cp.Worker(name=f"local-{i}", port=0)
+        worker = cpe.Worker(name=f"local-{i}", port=0)
         worker.connect(method="ip", host=manager.host, port=manager.port)
         workers.append(worker)
 
@@ -54,8 +54,8 @@ def test_zeroconf_connect(manager, worker):
 def test_manager_shutting_down_gracefully():
 
     # Create the actors
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
-    worker = cp.Worker(name="local", port=0)
+    manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
+    worker = cpe.Worker(name="local", port=0)
 
     # Connect to the Manager
     worker.connect(method="ip", host=manager.host, port=manager.port)
@@ -68,8 +68,8 @@ def test_manager_shutting_down_gracefully():
 def test_manager_shutting_down_ungracefully():
 
     # Create the actors
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
-    worker = cp.Worker(name="local", port=0)
+    manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
+    worker = cpe.Worker(name="local", port=0)
 
     # Connect to the Manager
     worker.connect(method="ip", host=manager.host, port=manager.port)
@@ -85,7 +85,7 @@ def test_manager_lifecycle(manager, worker, context):
     # Define graph
     gen_node = GenNode(name="Gen1")
     con_node = ConsumeNode(name="Con1")
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([gen_node, con_node])
     graph.add_edge(src=gen_node, dst=con_node)
 
@@ -111,7 +111,7 @@ def test_manager_reset(manager, worker):
     # Define graph
     gen_node = GenNode(name="Gen1")
     con_node = ConsumeNode(name="Con1")
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(src=gen_node, dst=con_node)
 
@@ -140,7 +140,7 @@ def test_manager_recommit_graph(worker, manager):
     # Define graph
     gen_node = GenNode(name="Gen1")
     con_node = ConsumeNode(name="Con1")
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(src=gen_node, dst=con_node)
 

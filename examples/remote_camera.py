@@ -5,21 +5,21 @@ import os
 
 import cv2
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
-cp.debug()
+cpe.debug()
 
 
-class WebcamNode(cp.Node):
+class WebcamNode(cpe.Node):
     def setup(self):
         self.vid = cv2.VideoCapture(0)
 
-    def step(self) -> cp.DataChunk:
+    def step(self) -> cpe.DataChunk:
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
         self.save_video(name="test", data=frame, fps=15)
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("frame", frame, "image")
         return data_chunk
 
@@ -27,8 +27,8 @@ class WebcamNode(cp.Node):
         self.vid.release()
 
 
-class ShowWindow(cp.Node):
-    def step(self, data_chunks: Dict[str, cp.DataChunk]):
+class ShowWindow(cpe.Node):
+    def step(self, data_chunks: Dict[str, cpe.DataChunk]):
 
         for name, data_chunk in data_chunks.items():
             self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
@@ -37,7 +37,7 @@ class ShowWindow(cp.Node):
             cv2.waitKey(1)
 
 
-class RemoteCameraGraph(cp.Graph):
+class RemoteCameraGraph(cpe.Graph):
     def __init__(self):
         super().__init__()
         self.web = WebcamNode(name="web")
@@ -51,9 +51,9 @@ class RemoteCameraGraph(cp.Graph):
 if __name__ == "__main__":
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs")
+    manager = cpe.Manager(logdir=CWD / "runs")
     graph = RemoteCameraGraph()
-    worker = cp.Worker(name="local", id="local")
+    worker = cpe.Worker(name="local", id="local")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)

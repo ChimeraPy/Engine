@@ -10,9 +10,9 @@ from typing import Dict
 import docker
 import pytest
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent
@@ -40,7 +40,7 @@ disable_loggers = [
     "chardet.charsetprober",
     "matplotlib.font_manager",
     "PIL.PngImagePlugin",
-    "IocpProactor",
+    "IocpeProactor",
 ]
 
 
@@ -53,7 +53,7 @@ def pytest_configure():
 
 @pytest.fixture
 def logreceiver():
-    listener = cp._logger.get_node_id_zmq_listener()
+    listener = cpe._logger.get_node_id_zmq_listener()
     listener.start()
     yield listener
     listener.stop()
@@ -68,14 +68,14 @@ def slow_interval_between_tests():
 
 @pytest.fixture
 def manager():
-    manager = cp.Manager(logdir=TEST_DATA_DIR, port=0)
+    manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
     yield manager
     manager.shutdown()
 
 
 @pytest.fixture
 def worker():
-    worker = cp.Worker(name="local", id="local", port=0)
+    worker = cpe.Worker(name="local", id="local", port=0)
     yield worker
     worker.shutdown()
 
@@ -89,7 +89,7 @@ def docker_client():
 
 @pytest.fixture(autouse=True)
 def disable_file_logging():
-    cp.config.set("manager.logs-sink.enabled", False)
+    cpe.config.set("manager.logs-sink.enabled", False)
 
 
 @pytest.fixture
@@ -100,12 +100,12 @@ def dockered_worker(docker_client):
     dockered_worker.shutdown()
 
 
-class LowFrequencyNode(cp.Node):
+class LowFrequencyNode(cpe.Node):
     def setup(self):
         self.i = 0
 
     def step(self):
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         if self.i == 0:
             time.sleep(0.5)
             self.i += 1
@@ -118,34 +118,34 @@ class LowFrequencyNode(cp.Node):
             return data_chunk
 
 
-class HighFrequencyNode(cp.Node):
+class HighFrequencyNode(cpe.Node):
     def setup(self):
         self.i = 0
 
     def step(self):
         time.sleep(0.1)
         self.i += 1
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("i", self.i)
         return data_chunk
 
 
-class SubsequentNode(cp.Node):
+class SubsequentNode(cpe.Node):
     def setup(self):
         self.record = {}
 
-    def step(self, data: Dict[str, cp.DataChunk]):
+    def step(self, data: Dict[str, cpe.DataChunk]):
 
         for k, v in data.items():
             self.record[k] = v
 
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("record", self.record)
 
         return data_chunk
 
 
-class GenNode(cp.Node):
+class GenNode(cpe.Node):
     def setup(self):
         self.value = 2
 
@@ -155,11 +155,11 @@ class GenNode(cp.Node):
         return self.value
 
 
-class ConsumeNode(cp.Node):
+class ConsumeNode(cpe.Node):
     def setup(self):
         self.coef = 3
 
-    def step(self, data_chunks: Dict[str, cp.DataChunk]):
+    def step(self, data_chunks: Dict[str, cpe.DataChunk]):
         time.sleep(0.1)
         # Extract the data
         self.logger.debug(
@@ -170,7 +170,7 @@ class ConsumeNode(cp.Node):
         return output
 
 
-class SlowSetupNode(cp.Node):
+class SlowSetupNode(cpe.Node):
     def setup(self):
         time.sleep(2)
         self.value = 5
@@ -200,7 +200,7 @@ def slow_node():
 def graph(gen_node, con_node):
 
     # Define graph
-    _graph = cp.Graph()
+    _graph = cpe.Graph()
     _graph.add_nodes_from([gen_node, con_node])
     _graph.add_edge(src=gen_node, dst=con_node)
 
@@ -211,7 +211,7 @@ def graph(gen_node, con_node):
 def single_node_no_connections_manager(manager, worker, gen_node):
 
     # Define graph
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node])
 
     # Connect to the manager
@@ -232,7 +232,7 @@ def single_node_no_connections_manager(manager, worker, gen_node):
 def multiple_nodes_one_worker_manager(manager, worker, gen_node, con_node):
 
     # Define graph
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([gen_node, con_node])
     graph.add_edge(gen_node, con_node)
 
@@ -254,12 +254,12 @@ def multiple_nodes_one_worker_manager(manager, worker, gen_node, con_node):
 def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
 
     # Define graph
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([gen_node, con_node])
     graph.add_edge(gen_node, con_node)
 
-    worker1 = cp.Worker(name="local", port=0)
-    worker2 = cp.Worker(name="local2", port=0)
+    worker1 = cpe.Worker(name="local", port=0)
+    worker2 = cpe.Worker(name="local2", port=0)
 
     worker1.connect(method="ip", host=manager.host, port=manager.port)
     worker2.connect(method="ip", host=manager.host, port=manager.port)
@@ -279,7 +279,7 @@ def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
 def slow_single_node_single_worker_manager(manager, worker, slow_node):
 
     # Define graph
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([slow_node])
 
     # Connect to the manager
@@ -300,7 +300,7 @@ def slow_single_node_single_worker_manager(manager, worker, slow_node):
 def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_node):
 
     # Define graph
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node])
 
     # Connect to the manager
@@ -323,7 +323,7 @@ def dockered_multiple_nodes_one_worker_manager(
 ):
 
     # Define graph
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(gen_node, con_node)
 
@@ -347,7 +347,7 @@ def dockered_multiple_nodes_multiple_workers_manager(
 ):
 
     # Define graph
-    graph = cp.Graph()
+    graph = cpe.Graph()
     graph.add_nodes_from([gen_node, con_node])
     graph.add_edge(gen_node, con_node)
 

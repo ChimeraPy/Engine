@@ -9,14 +9,14 @@ import cv2
 import imutils
 from PIL import ImageGrab
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-cp.debug()
+cpe.debug()
 
 CWD = pathlib.Path(os.path.abspath(__file__)).parent
 
 
-class WebcamNode(cp.Node):
+class WebcamNode(cpe.Node):
     def setup(self):
         self.vid = cv2.VideoCapture(0)
 
@@ -24,7 +24,7 @@ class WebcamNode(cp.Node):
         time.sleep(1 / 15)
         ret, frame = self.vid.read()
         self.save_video(name="test", data=frame, fps=20)
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("frame", frame, "image")
         return data_chunk
 
@@ -32,7 +32,7 @@ class WebcamNode(cp.Node):
         self.vid.release()
 
 
-class ScreenCaptureNode(cp.Node):
+class ScreenCaptureNode(cpe.Node):
     def setup(self):
 
         if platform.system() == "Windows":
@@ -59,15 +59,15 @@ class ScreenCaptureNode(cp.Node):
 
         # Save the frame and package it
         self.save_video(name="screen", data=frame, fps=15)
-        data_chunk = cp.DataChunk()
+        data_chunk = cpe.DataChunk()
         data_chunk.add("frame", imutils.resize(frame, width=720), "image")
 
         # Then send it
         return data_chunk
 
 
-class ShowWindow(cp.Node):
-    def step(self, data_chunks: Dict[str, cp.DataChunk]):
+class ShowWindow(cpe.Node):
+    def step(self, data_chunks: Dict[str, cpe.DataChunk]):
 
         for name, data_chunk in data_chunks.items():
             self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
@@ -76,7 +76,7 @@ class ShowWindow(cp.Node):
             cv2.waitKey(1)
 
 
-class RemoteCameraGraph(cp.Graph):
+class RemoteCameraGraph(cpe.Graph):
     def __init__(self):
         super().__init__()
         web = WebcamNode(name="web")
@@ -90,11 +90,11 @@ class RemoteCameraGraph(cp.Graph):
 
 if __name__ == "__main__":
 
-    cp.debug()
+    cpe.debug()
 
     # Create default manager and desired graph
-    manager = cp.Manager(logdir=CWD / "runs", port=9000)
-    worker = cp.Worker(name="local", id="local", port=0)
+    manager = cpe.Manager(logdir=CWD / "runs", port=9000)
+    worker = cpe.Worker(name="local", id="local", port=0)
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     else:
 
         # For mutliple workers (remote and local)
-        graph = cp.Graph()
+        graph = cpe.Graph()
         show_node = ShowWindow(name="show")
         graph.add_node(show_node)
         mapping = {worker.id: [show_node.id]}

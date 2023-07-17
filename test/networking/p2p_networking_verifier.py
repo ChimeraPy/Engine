@@ -1,7 +1,7 @@
 import time
 from typing import Dict
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
 
 class P2PNetworkingVerifier:
@@ -11,7 +11,7 @@ class P2PNetworkingVerifier:
     https://github.com/oele-isis-vanderbilt/ChimeraPy/blob/e47b4cd3056db08f4406b7eb91b25e815931eeea/test/networking/test_p2p_networking.py
     """
 
-    def __init__(self, manager: cp.Manager):
+    def __init__(self, manager: cpe.Manager):
         self.manager = manager
 
     def assert_nodes_are_ready(self) -> None:
@@ -64,7 +64,7 @@ class P2PNetworkingVerifier:
         for k, v in expected_output_by_id.items():
             assert (
                 k in latest_data_values
-                and isinstance(latest_data_values[k], cp.DataChunk)
+                and isinstance(latest_data_values[k], cpe.DataChunk)
                 and latest_data_values[k].get("default")["value"] == v
             )
 
@@ -87,6 +87,6 @@ class P2PNetworkingVerifier:
         for k, v in expected_output_by_id.items():
             assert (
                 k in latest_data_values
-                and isinstance(latest_data_values[k], cp.DataChunk)
+                and isinstance(latest_data_values[k], cpe.DataChunk)
                 and latest_data_values[k].get("default")["value"] == v
             )

@@ -12,12 +12,12 @@ RUN apt-get install portaudio19-dev python3-pyaudio -y
 
 # Copy the Local repo
 RUN ls
-COPY . /ChimeraPy
+COPY . /ChimeraPy-Engine
 RUN ls
 
-# Install ChimeraPy
+# Install ChimeraPy-Engine
 RUN python3 -m pip install --upgrade pip
-RUN cd ChimeraPy && python3 -m pip install '.[test]' && cd ..
+RUN cd ChimeraPy-Engine && python3 -m pip install '.[test]' && cd ..
 
 # For a certain test, remove the mock
-RUN rm -r ChimeraPy/test/mock/test_package
+RUN rm -r ChimeraPy-Engine/test/mock/test_package

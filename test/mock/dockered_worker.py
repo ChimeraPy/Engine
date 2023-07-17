@@ -5,9 +5,9 @@ import uuid
 
 # Third-party
 import docker
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-logger = cp._logger.getLogger("chimerapy-networking")
+logger = cpe._logger.getLogger("chimerapy-engine-networking")
 
 
 class LogThread(threading.Thread):
@@ -47,7 +47,7 @@ class DockeredWorker:
 
         # Connect worker to Manager through entrypoint
         _, stream = self.container.exec_run(
-            cmd=f"cp-worker --id {self.id} --ip {host} --port {port} --name \
+            cmd=f"cpe-worker --id {self.id} --ip {host} --port {port} --name \
             {self.name} --wport 0",
             stream=True,
         )

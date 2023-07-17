@@ -1,6 +1,6 @@
-import chimerapy as cp
+import chimerapy.engine as cpe
 
 
-class TestNode(cp.Node):
+class TestNode(cpe.Node):
     def step(self):
         return 1

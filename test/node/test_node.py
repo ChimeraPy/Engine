@@ -5,13 +5,13 @@ import pathlib
 import dill
 import multiprocessing as mp
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
 from ..conftest import GenNode
 from ..streams import AudioNode, VideoNode, ImageNode, TabularNode
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent

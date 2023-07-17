@@ -2,14 +2,13 @@ from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
 from ..streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..networking.test_client_server import server
 
-import pytest
 import os
 import shutil
 
-import chimerapy as cp
+import chimerapy.engine as cpe
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 # Constants

@@ -7,12 +7,12 @@ import numpy as np
 from pytest_lazyfixture import lazy_fixture
 
 # Internal Imports
-import chimerapy as cp
-from chimerapy.networking.publisher import Publisher
-from chimerapy.networking.subscriber import Subscriber
+import chimerapy.engine as cpe
+from chimerapy.engine.networking.publisher import Publisher
+from chimerapy.engine.networking.subscriber import Subscriber
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy-engine")
+cpe.debug()
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def subscriber(publisher):
 @pytest.fixture
 def text_data_chunk():
     # Create the data
-    data = cp.DataChunk()
+    data = cpe.DataChunk()
     data.add(name="msg", value="HELLO")
     return data
 
@@ -42,7 +42,7 @@ def text_data_chunk():
 @pytest.fixture
 def image_data_chunk():
     # Create the data
-    data = cp.DataChunk()
+    data = cpe.DataChunk()
     test_image = (np.random.rand(100, 100, 3) * 255).astype(np.uint8)
     data.add(name="test_image", value=test_image, content_type="image")
     return data

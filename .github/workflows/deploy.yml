@@ -1,4 +1,4 @@
-name: Publish ChimeraPy to PyPI / GitHub
+name: Publish ChimeraPy-Engine to PyPI / GitHub
 
 on:
   push:

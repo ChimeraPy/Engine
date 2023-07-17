@@ -2,14 +2,14 @@ import asyncio
 
 import pytest
 
-import chimerapy as cp
-from chimerapy.networking.async_loop_thread import AsyncLoopThread
+import chimerapy.engine as cpe
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 from .dev_manager_services_group import DevManagerServicesGroup
 
-logger = cp._logger.getLogger("chimerapy")
-cp.debug()
+logger = cpe._logger.getLogger("chimerapy")
+cpe.debug()
 
 # TODO: Fix this entire file
 
@@ -35,7 +35,7 @@ async def testbed_setup(worker):
     # Define graph
     gen_node = GenNode(name="Gen1", id="Gen1")
     con_node = ConsumeNode(name="Con1", id="Con1")
-    simple_graph = cp.Graph()
+    simple_graph = cpe.Graph()
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(src=gen_node, dst=con_node)
 

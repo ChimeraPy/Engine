@@ -10,13 +10,13 @@ import uuid
 import cv2
 import numpy as np
 import pytest
-import chimerapy as cp
-from chimerapy.records.video_record import VideoRecord
+import chimerapy.engine as cpe
+from chimerapy.engine.records.video_record import VideoRecord
 
 # Internal Imports
-logger = cp._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
-# cp.debug()
+# cpe.debug()
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent

@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.abspath("./source/"))
 
 # -- Project information -----------------------------------------------------
 
-project = "chimerapy"
+project = "chimerapy-engine"
 copyright = "2022, Vanderbilt OELE Laboratory"
 author = "Vanderbilt OELE Laboratory"
 
