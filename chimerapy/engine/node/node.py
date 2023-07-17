@@ -172,7 +172,26 @@ class Node:
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
     ):
+        """Record audio data.
 
+        Parameters
+        ----------
+        name : str
+            Name of the audio data (.wav extension will be suffixed).
+        data : np.ndarray
+            Audio data as a numpy array.
+        channels : int
+            Number of channels.
+        format : int
+            Format of the audio data.
+        rate : int
+            Sampling rate of the audio data.
+
+        Notes
+        -----
+        It is the implementation's responsibility to properly format the data
+
+        """
         if self.services["record"].enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
