@@ -8,7 +8,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
 from .dev_manager_services_group import DevManagerServicesGroup
 
-logger = cpe._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 # TODO: Fix this entire file

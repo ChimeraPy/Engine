@@ -1,4 +1,3 @@
-from typing import Dict, Optional, List, Any, Coroutine, Literal, Union
 import pathlib
 import tempfile
 import asyncio
@@ -6,28 +5,35 @@ import traceback
 import json
 import pickle
 import zipfile
+from typing import Dict, Optional, List, Any, Coroutine, Literal, Union
 
 # Third-party Imports
 import aiohttp
 import networkx as nx
 
 from chimerapy.engine import config
-from ..node import NodeConfig
-from chimerapy.engine.graph import Graph
-from ..networking import Client, DataChunk
-from chimerapy.engine.exceptions import CommitGraphError
-from chimerapy.engine.states import WorkerState, NodeState
-from .manager_service import ManagerService
 from chimerapy.engine import _logger
+from ..node import NodeConfig
+from ..networking import Client, DataChunk
+from ..service import Service
+from ..graph import Graph
+from ..exceptions import CommitGraphError
+from ..states import WorkerState, NodeState, ManagerState
+from ..eventbus import EventBus, TypedObserver
 
-logger = _logger.getLogger("chimerapy")
+logger = _logger.getLogger("chimerapy-engine")
 
 
-class WorkerHandlerService(ManagerService):
-    def __init__(self, name: str):
+class WorkerHandlerService(Service):
+    def __init__(self, name: str, eventbus: EventBus, state: ManagerState):
         super().__init__(name=name)
 
+        # Parameters
         self.name = name
+        self.eventbus = eventbus
+        self.state = state
+
+        # Containers
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
@@ -35,6 +41,13 @@ class WorkerHandlerService(ManagerService):
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, drop_event=True
+            )
+        }
 
     async def shutdown(self) -> bool:
 

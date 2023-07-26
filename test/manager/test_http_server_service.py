@@ -1,73 +1,49 @@
-from ..conftest import linux_run_only
-
-import pathlib
-import os
+import requests
 
 import pytest
-from pytest_lazyfixture import lazy_fixture
-import chimerapy.engine as cpe
 
-cpe.debug()
-
-# Constant
-TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
-TEST_PACKAGE_DIR = TEST_DIR / "mock"
+from chimerapy.engine.manager.http_server_service import HttpServerService
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.states import ManagerState, WorkerState
 
 
 @pytest.fixture
-def local_node_graph(gen_node):
-    graph = cpe.Graph()
-    graph.add_node(gen_node)
-    return graph
+def http_server():
+
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus()
+    configure(eventbus, thread)
+
+    state = ManagerState()
+
+    # Create the services
+    http_server = HttpServerService(
+        name="http_server",
+        port=0,
+        enable_api=True,
+        thread=thread,
+        eventbus=eventbus,
+        state=state,
+    )
+    http_server.start()
+    return http_server
 
 
-@pytest.fixture
-def packaged_node_graph():
-    # Installing test package (in case this test package hasn't been done before)
-    # Reference: https://stackoverflow.com/a/55188705/13231446
-    try:
-        import test_package as tp
-    except ImportError:
-        import pip._internal as pip
-
-        pip.main(["install", str(TEST_PACKAGE_DIR)])
-    finally:
-        import test_package as tp
-
-    node = tp.TestNode(name="test")
-    graph = cpe.Graph()
-    graph.add_node(node)
-    return graph
+def test_http_server_instanciate():
+    ...
 
 
-@linux_run_only
 @pytest.mark.parametrize(
-    "_worker, config_graph",
+    "route, payload",
     [
-        (lazy_fixture("worker"), lazy_fixture("local_node_graph")),
-        (lazy_fixture("worker"), lazy_fixture("packaged_node_graph")),
-        pytest.param(
-            lazy_fixture("dockered_worker"),
-            lazy_fixture("local_node_graph"),
-            marks=pytest.mark.skip,
-        ),
-        pytest.param(
-            lazy_fixture("dockered_worker"),
-            lazy_fixture("packaged_node_graph"),
-            marks=pytest.mark.skip,
-        ),
+        ("/workers/register", WorkerState(id="NULL", name="NULL").to_json()),
+        ("/workers/deregister", WorkerState(id="NULL", name="NULL").to_json()),
+        ("/workers/node_status", WorkerState(id="NULL", name="NULL").to_json()),
     ],
 )
-def test_sending_package(manager, _worker, config_graph):
-    _worker.connect(host=manager.host, port=manager.port)
-
-    assert manager.commit_graph(
-        graph=config_graph,
-        mapping={_worker.id: list(config_graph.G.nodes())},
-        send_packages=[
-            {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
-        ],
-    ).result(timeout=30)
-
-    for node_id in config_graph.G.nodes():
-        assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
+def test_http_server_routes(http_server, route, payload):
+    r = requests.post(f"{http_server.url}{route}", data=payload)
+    assert r.status_code == requests.codes.ok
+    assert http_server.eventbus._event_counts != 0

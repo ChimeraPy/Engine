@@ -10,7 +10,7 @@ from ._logger import LOGGING_CONFIG
 def debug(loggers: Optional[List[str]] = None):
 
     # Not provided, then get all
-    if loggers:
+    if type(loggers) == type(None):
         logger_config: Dict[str, Dict] = LOGGING_CONFIG["loggers"]
         loggers = [x for x in logger_config]
 

@@ -1,37 +1,70 @@
-from typing import List
-from concurrent.futures import Future
 import traceback
+from concurrent.futures import Future
+from typing import List, Dict
 
 from aiohttp import web
 
 from chimerapy.engine import config
-from .manager_service import ManagerService
-from chimerapy.engine.states import WorkerState
+from chimerapy.engine import _logger
+from ..eventbus import EventBus, Event, TypedObserver
+from ..service import Service
+from ..states import WorkerState, ManagerState
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
-from chimerapy.engine import _logger
+from .events import WorkerRegisterEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
 
-class HttpServerService(ManagerService):
-
-    ip: str
-    port: int
-
-    def __init__(self, name: str, port: int, enable_api: bool, thread: AsyncLoopThread):
+class HttpServerService(Service):
+    def __init__(
+        self,
+        name: str,
+        port: int,
+        enable_api: bool,
+        thread: AsyncLoopThread,
+        eventbus: EventBus,
+        state: ManagerState,
+    ):
         super().__init__(name=name)
 
         # Save input parameters
         self.name = name
-        self.ip = "172.0.0.1"
-        self.port = port
+        self._ip = "172.0.0.1"
+        self._port = port
         self._enable_api = enable_api
         self._thread = thread
+        self.eventbus = eventbus
+        self.state = state
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "start": TypedObserver("start", on_asend=self.start, drop_event=True),
+            "ManagerState.changed": TypedObserver(
+                "ManagerState.changed",
+                on_asend=self._broadcast_network_status_update,
+                drop_event=True,
+            ),
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, drop_event=True
+            ),
+        }
 
         # Future Container
         self._futures: List[Future] = []
+
+    @property
+    def ip(self) -> str:
+        return self._ip
+
+    @property
+    def port(self) -> int:
+        return self._port
+
+    @property
+    def url(self) -> str:
+        return f"http://{self._ip}:{self._port}"
 
     def start(self):
 
@@ -52,7 +85,7 @@ class HttpServerService(ManagerService):
         logger.info(f"Manager started at {self._server.host}:{self._server.port}")
 
         # Update the ip and port
-        self.ip, self.port = self._server.host, self._server.port
+        self._ip, self._port = self._server.host, self._server.port
         self.state.ip = self.ip
         self.state.port = self.port
 
@@ -85,32 +118,32 @@ class HttpServerService(ManagerService):
         worker_state = WorkerState.from_dict(msg)
 
         # Register worker
-        success = self.services.worker_handler._register_worker(worker_state)
+        await self.eventbus.asend(
+            Event("worker_register", WorkerRegisterEvent(worker_state))
+        )
 
-        if success:
-            logs_collection_info = self.services.distributed_logging.get_log_info()
+        response = {
+            "logs_push_info": {
+                "enabled": self.state.log_sink_enabled,
+                "host": self.ip,
+                "port": self.port,
+            },
+            "config": config.config,
+        }
 
-            response = {
-                "logs_push_info": logs_collection_info,
-                "config": config.config,
-            }
-
-            await self._broadcast_network_status_update()
-            return web.json_response(response)
-
-        else:
-            return web.HTTPError()
+        # Broadcast changes
+        return web.json_response(response)
 
     async def _deregister_worker_route(self, request: web.Request):
         msg = await request.json()
         worker_state = WorkerState.from_dict(msg)
-        success = self.services.worker_handler._deregister_worker(worker_state.id)
 
-        if success:
-            await self._broadcast_network_status_update()
-            return web.HTTPOk()
-        else:
-            return web.HTTPBadRequest()
+        # Deregister worker
+        await self.eventbus.asend(
+            Event("worker_deregister", WorkerRegisterEvent(worker_state))
+        )
+
+        return web.HTTPOk()
 
     async def _update_nodes_status(self, request: web.Request):
         msg = await request.json()
@@ -119,9 +152,6 @@ class HttpServerService(ManagerService):
         # Updating nodes status
         self.state.workers[worker_state.id] = worker_state
         logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
-
-        # Relay information to front-end
-        await self._broadcast_network_status_update()
 
         return web.HTTPOk()
 

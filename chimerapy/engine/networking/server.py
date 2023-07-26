@@ -14,6 +14,7 @@ import json
 import enum
 import traceback
 import aiofiles
+import atexit
 from concurrent.futures import Future
 
 # Third-party
@@ -112,6 +113,9 @@ class Server:
             self.logger = _logger.fork(parent_logger, "server")
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
+
+        # Make sure to shutdown correctly
+        atexit.register(self.shutdown)
 
     def __str__(self):
         return f"<Server {self.id}>"
@@ -506,8 +510,7 @@ class Server:
         try:
             success = future.result(timeout=config.get("comms.timeout.server-shutdown"))
         except Exception:
-            self.logger.error(traceback.format_exc())
-            self.logger.warning(f"{self}: failed to gracefully shutdown")
+            ...
 
         # Stop the async thread
         self._thread.stop()

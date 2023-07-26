@@ -3,14 +3,26 @@ import random
 import pathlib
 import os
 import json
-from typing import Optional, Union
+from typing import Optional, Union, Dict
 
-from .manager_service import ManagerService
+from ..states import ManagerState
+from ..eventbus import EventBus, TypedObserver
+from ..service import Service
 
 
-class SessionRecordService(ManagerService):
-    def __init__(self, name: str, logdir: Union[str, pathlib.Path]):
+class SessionRecordService(Service):
+    def __init__(
+        self,
+        name: str,
+        logdir: Union[str, pathlib.Path],
+        eventbus: EventBus,
+        state: ManagerState,
+    ):
         super().__init__(name=name)
+
+        # Input parameters
+        self.eventbus = eventbus
+        self.state = state
 
         # State information
         self.start_time: Optional[datetime.datetime] = None
@@ -27,6 +39,9 @@ class SessionRecordService(ManagerService):
 
         # Create a logging directory
         os.makedirs(self.logdir, exist_ok=True)
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {}
 
     def _save_meta(self):
         # Get the times, handle Optional

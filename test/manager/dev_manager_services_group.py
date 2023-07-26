@@ -2,7 +2,7 @@ import chimerapy.engine as cpe
 from chimerapy.engine.manager.manager_services_group import ManagerServicesGroup
 from chimerapy.engine.states import ManagerState
 
-logger = cpe._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 
 
 class DevManagerServicesGroup(ManagerServicesGroup):

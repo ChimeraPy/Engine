@@ -1,25 +1,38 @@
 import socket
-from typing import Optional
+from typing import Optional, Dict
 
 from zeroconf import ServiceInfo, Zeroconf
 
-from .manager_service import ManagerService
 from chimerapy.engine import _logger
+from ..states import ManagerState
+from ..eventbus import EventBus, TypedObserver
+from ..service import Service
 
 logger = _logger.getLogger("chimerapy-engine")
 
 
-class ZeroconfService(ManagerService):
+class ZeroconfService(Service):
 
     enabled: bool
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, eventbus: EventBus, state: ManagerState):
         super().__init__(name=name)
 
         # Save information
         self.name = name
+        self.eventbus = eventbus
+        self.state = state
+
+        # Creating zeroconf variables
         self.zeroconf: Optional[Zeroconf] = None
         self.enabled: bool = False
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, drop_event=True
+            )
+        }
 
     def start(self):
 
