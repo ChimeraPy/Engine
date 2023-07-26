@@ -7,6 +7,7 @@ from ..eventbus import EventBus, TypedObserver
 from ..service import Service
 from ..states import ManagerState
 from ..logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
+from .events import RegisterEntityEvent, DeregisterEntityEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -34,9 +35,21 @@ class DistributedLoggingService(Service):
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, drop_event=True),
+            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
+            "entity_register": TypedObserver(
+                "entity_register",
+                on_asend=self.register_entity,
+                event_data_cls=RegisterEntityEvent,
+                handle_event="unpack",
+            ),
+            "entity_deregister": TypedObserver(
+                "entity_deregister",
+                on_asend=self.deregister_entity,
+                event_data_cls=DeregisterEntityEvent,
+                handle_event="unpack",
+            ),
             "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, drop_event=True
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
         }
 
@@ -57,17 +70,15 @@ class DistributedLoggingService(Service):
     ## Helper Function
     #####################################################################################
 
-    def register_entity(self, worker_name: str, worker_id: str):
+    def register_entity(self, name: str, id: str):
 
         if self.logs_sink is not None:
-            self._register_worker_to_logs_sink(
-                worker_name=worker_name, worker_id=worker_id
-            )
+            self._register_worker_to_logs_sink(worker_name=name, worker_id=id)
 
-    def deregister_entity(self, worker_id: str):
+    def deregister_entity(self, id: str):
 
         if self.logs_sink is not None:
-            self.logs_sink.deregister_entity(worker_id)
+            self.logs_sink.deregister_entity(id)
 
     def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
         if not self.services.session_record.logdir.exists():

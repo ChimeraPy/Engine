@@ -1,7 +1,10 @@
-from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
 import pathlib
 import atexit
+import random
+import os
+from datetime import datetime
 from concurrent.futures import Future
+from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
 
 # Internal Imports
 from chimerapy.engine import config
@@ -62,6 +65,15 @@ class Manager:
         # Saving input parameters
         self.has_shutdown = False
 
+        # Create log directory to store data
+        self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        self.rand_num = random.randint(1000, 9999)
+        logdir = (
+            pathlib.Path(logdir).resolve()
+            / f"{self.timestamp}-chimerapy-{self.rand_num}"
+        )
+        os.makedirs(logdir, exist_ok=True)
+
         # Creating a container for task futures
         self.task_futures: List[Future] = []
 
@@ -74,7 +86,9 @@ class Manager:
         configure(self.eventbus, self._thread)
 
         # Create state information container
-        self.state = ManagerState(id="Manager", ip="127.0.0.1", port=port)
+        self.state = ManagerState(
+            id="Manager", ip="127.0.0.1", port=port, logdir=logdir
+        )
 
         # Create the services
         self.http_server = HttpServerService(
@@ -93,7 +107,6 @@ class Manager:
         )
         self.session_record = SessionRecordService(
             name="session_record",
-            logdir=logdir,
             eventbus=self.eventbus,
             state=self.state,
         )
@@ -135,7 +148,7 @@ class Manager:
 
     @property
     def logdir(self) -> pathlib.Path:
-        return self.session_record.logdir
+        return self.state.logdir
 
     ####################################################################
     ## Utils Methods
@@ -236,9 +249,9 @@ class Manager:
     async def async_zeroconf(self, enable: bool = True) -> bool:
 
         if enable:
-            return await self.zeroconf.enable()
+            return await self.zeroconf_service.enable()
         else:
-            return await self.zeroconf.disable()
+            return await self.zeroconf_service.disable()
 
     async def async_commit(
         self,

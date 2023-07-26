@@ -30,7 +30,7 @@ class ZeroconfService(Service):
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, drop_event=True
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
             )
         }
 

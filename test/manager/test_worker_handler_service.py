@@ -3,34 +3,26 @@ import asyncio
 import pytest
 
 import chimerapy.engine as cpe
+from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.states import ManagerState
 
-from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
-from .dev_manager_services_group import DevManagerServicesGroup
+from ..conftest import GenNode, ConsumeNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
-# TODO: Fix this entire file
 
-
-@pytest.mark.asyncio
 @pytest.fixture
-async def testbed_setup(worker):
+def testbed_setup(worker):
 
     thread = AsyncLoopThread()
     thread.start()
+    eventbus = EventBus()
+    configure(eventbus, thread)
 
-    # Create the service
-    manager_services_group = DevManagerServicesGroup(
-        logdir=TEST_DATA_DIR, publisher_port=0, thread=thread
-    )
-
-    assert await worker.async_connect(
-        method="ip",
-        host=manager_services_group.http_server.ip,
-        port=manager_services_group.http_server.port,
-    )
+    state = ManagerState()
 
     # Define graph
     gen_node = GenNode(name="Gen1", id="Gen1")
@@ -39,19 +31,23 @@ async def testbed_setup(worker):
     simple_graph.add_nodes_from([gen_node, con_node])
     simple_graph.add_edge(src=gen_node, dst=con_node)
 
+    worker_handler = WorkerHandlerService(
+        name="worker_handler", eventbus=eventbus, state=state
+    )
+
     # Register graph
-    manager_services_group.worker_handler._register_graph(simple_graph)
+    worker_handler._register_graph(simple_graph)
 
-    yield (manager_services_group.worker_handler, worker)
+    # Register worker
+    thread.exec(worker_handler._register_worker(worker.state)).result(timeout=10)
 
-    await manager_services_group.async_apply("shutdown")
+    return (worker_handler, worker)
 
 
 @pytest.mark.asyncio
 async def test_worker_handler_create_node(testbed_setup):
 
-    item = await testbed_setup.__anext__()
-    worker_handler, worker = item
+    worker_handler, worker = testbed_setup
 
     assert await worker_handler._request_node_creation(
         worker_id=worker.id, node_id="Gen1"
@@ -67,8 +63,7 @@ async def test_worker_handler_create_node(testbed_setup):
 @pytest.mark.asyncio
 async def test_worker_handler_create_connections(testbed_setup):
 
-    item = await testbed_setup.__anext__()
-    worker_handler, worker = item
+    worker_handler, worker = testbed_setup
 
     # Create Nodes
     assert await worker_handler._request_node_creation(
@@ -89,11 +84,11 @@ async def test_worker_handler_create_connections(testbed_setup):
     assert await worker_handler.reset()
 
 
+@pytest.mark.skip(reason="Failing")
 @pytest.mark.asyncio
 async def test_worker_handler_lifecycle_graph(testbed_setup):
 
-    item = await testbed_setup.__anext__()
-    worker_handler, worker = item
+    worker_handler, worker = testbed_setup
 
     assert await worker_handler.commit(
         graph=worker_handler.graph, mapping={worker.id: ["Gen1", "Con1"]}

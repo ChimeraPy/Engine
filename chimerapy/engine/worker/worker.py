@@ -219,7 +219,6 @@ class Worker:
 
         # Check if shutdown has been called already
         if self.has_shutdown:
-            self.logger.debug(f"{self}: requested to shutdown when already shutdown.")
             return True
         else:
             self.has_shutdown = True
@@ -316,8 +315,6 @@ class Worker:
 
     def idle(self):
 
-        self.logger.debug(f"{self}: Idle")
-
         while not self.has_shutdown:
             time.sleep(2)
 
@@ -333,7 +330,7 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
-        self.logger.debug("SHUTTING DOWN!")
+        self.logger.info(f"{self}: Shutting down.")
         # Only execute if thread exists
         if not hasattr(self, "_thread"):
             future: Future[bool] = Future()

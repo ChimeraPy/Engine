@@ -19,7 +19,12 @@ from ..service import Service
 from ..graph import Graph
 from ..exceptions import CommitGraphError
 from ..states import WorkerState, NodeState, ManagerState
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import EventBus, TypedObserver, Event
+from .events import (
+    RegisterEntityEvent,
+    DeregisterEntityEvent,
+    MoveTransferredFilesEvent,
+)
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -45,8 +50,16 @@ class WorkerHandlerService(Service):
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, drop_event=True
-            )
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "worker_register": TypedObserver(
+                "worker_register", on_asend=self._register_worker, handle_event="unpack"
+            ),
+            "worker_deregister": TypedObserver(
+                "worker_deregister",
+                on_asend=self._deregister_worker,
+                handle_event="unpack",
+            ),
         }
 
     async def shutdown(self) -> bool:
@@ -58,7 +71,6 @@ class WorkerHandlerService(Service):
         if len(self.state.workers) > 0:
 
             # Send shutdown message
-            logger.debug(f"{self}: broadcasting shutdown via /shutdown route")
             try:
                 success = await self._broadcast_request(
                     "post",
@@ -69,9 +81,7 @@ class WorkerHandlerService(Service):
             except Exception:
                 success = False
 
-            if success:
-                logger.debug(f"{self}: All workers shutdown: SUCCESS")
-            else:
+            if not success:
                 logger.warning(f"{self}: All workers shutdown: FAILED - forced")
 
         return success
@@ -87,26 +97,32 @@ class WorkerHandlerService(Service):
     def _clear_node_server(self):
         self.nodes_server_table: Dict = {}
 
-    def _register_worker(self, worker_state: WorkerState) -> bool:
+    async def _register_worker(self, worker_state: WorkerState) -> bool:
 
         self.state.workers[worker_state.id] = worker_state
         logger.info(
             f"Manager registered <Worker id={worker_state.id} \
             name={worker_state.name}> from {worker_state.ip}"
         )
-        logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
         # Register entity from logging
-        self.services.distributed_logging.register_entity(
-            worker_state.name, worker_state.id
+        await self.eventbus.asend(
+            Event(
+                "entity_register",
+                RegisterEntityEvent(
+                    worker_name=worker_state.name, worker_id=worker_state.id
+                ),
+            )
         )
 
         return True
 
-    def _deregister_worker(self, worker_id: str) -> bool:
+    async def _deregister_worker(self, worker_id: str) -> bool:
 
         # Deregister entity from logging
-        self.services.distributed_logging.deregister_entity(worker_id)
+        await self.eventbus.asend(
+            Event("entity_deregister", DeregisterEntityEvent(worker_id=worker_id))
+        )
 
         if worker_id in self.state.workers:
             state = self.state.workers[worker_id]
@@ -254,9 +270,6 @@ class WorkerHandlerService(Service):
                         timeout=config.get("manager.timeout.package-delivery"),
                     ) as resp:
                         if resp.ok:
-                            logger.debug(
-                                f"{self}: Worker {worker_id} loaded package: SUCCESS"
-                            )
                             success = True
                             break
 
@@ -316,7 +329,6 @@ class WorkerHandlerService(Service):
 
         # Construct the url
         url = f"{self._get_worker_ip(worker_id)}/nodes/create"
-        logger.debug(f"{self}: Sending request to {url}")
 
         # Send for the creation of the node
         async with aiohttp.ClientSession() as client:
@@ -336,10 +348,6 @@ class WorkerHandlerService(Service):
                     self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
                         json_data["node_state"]
                     )
-                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
-
-                    # Relay information to front-end
-                    await self.services.http_server._broadcast_network_status_update()
 
                     return True
 
@@ -370,7 +378,6 @@ class WorkerHandlerService(Service):
 
         # Construct the url
         url = f"{self._get_worker_ip(worker_id)}/nodes/destroy"
-        logger.debug(f"{self}: Sending request to {url}")
 
         # Create the data to be send
         data = {
@@ -396,10 +403,6 @@ class WorkerHandlerService(Service):
                     self.state.workers[worker_id] = WorkerState.from_dict(
                         data["worker_state"]
                     )
-                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
-
-                    # Relay information to front-end
-                    await self.services.http_server._broadcast_network_status_update()
 
                     return True
 
@@ -471,14 +474,11 @@ class WorkerHandlerService(Service):
                     self.state.workers[worker_id] = WorkerState.from_dict(
                         data["worker_state"]
                     )
-                    logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
                     logger.debug(
                         f"{self}: receiving Worker's node server request: \
                         SUCCESS"
                     )
-                    # Relay information to front-end
-                    await self.services.http_server._broadcast_network_status_update()
 
                     return True
 
@@ -501,7 +501,6 @@ class WorkerHandlerService(Service):
         for worker_data in self.state.workers.values():
             session = aiohttp.ClientSession()
             url = f"http://{worker_data.ip}:{worker_data.port}" + route
-            logger.debug(f"{self}: Broadcasting request to {url}")
             if htype == "get":
                 tasks.append(
                     asyncio.create_task(session.get(url, data=json.dumps(data)))
@@ -664,7 +663,7 @@ class WorkerHandlerService(Service):
         # First, test that the graph and the mapping are valid
         self._register_graph(graph)
         self._map_graph(mapping)
-        self.services.session_record._save_meta()
+        await self.eventbus.asend(Event("save_meta"))
 
         # Then send requested packages
         success = True
@@ -680,9 +679,6 @@ class WorkerHandlerService(Service):
         ):
             return True
 
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
-
         return False
 
     async def gather(self) -> Dict:
@@ -696,7 +692,6 @@ class WorkerHandlerService(Service):
                     timeout=config.get("manager.timeout.info-request"),
                 ) as resp:
                     if resp.ok:
-                        logger.debug(f"{self}: Gathering Worker {worker_id}: SUCCESS")
 
                         # Read the content
                         content = await resp.content.read()
@@ -719,26 +714,20 @@ class WorkerHandlerService(Service):
         success = await self._broadcast_request("post", "/nodes/start")
 
         # Updating meta just in case of failure
-        self.services.session_record._save_meta()
-
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
+        await self.eventbus.asend(Event("save_meta"))
 
         return success
 
     async def record(self) -> bool:
 
         # Mark the start time
-        self.services.session_record.start_recording()
+        await self.eventbus.asend(Event("start_recording"))
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/record")
 
         # Updating meta just in case of failure
-        self.services.session_record._save_meta()
-
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
+        await self.eventbus.asend(Event("save_meta"))
 
         return success
 
@@ -765,9 +754,6 @@ class WorkerHandlerService(Service):
             ) as resp:
 
                 if resp.ok:
-                    logger.debug(
-                        f"{self}: Registered Method for Worker {worker_id}: SUCCESS"
-                    )
                     resp_data = await resp.json()
                     return resp_data
                 else:
@@ -779,16 +765,10 @@ class WorkerHandlerService(Service):
     async def stop(self) -> bool:
 
         # Mark the start time
-        self.services.session_record.stop_recording()
+        await self.eventbus.asend(Event("stop_recording"))
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/stop")
-
-        # Updating meta just in case of failure
-        self.services.session_record._save_meta()
-
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
 
         return success
 
@@ -798,24 +778,23 @@ class WorkerHandlerService(Service):
         success = await self._broadcast_request(
             htype="post",
             route="/nodes/collect",
-            data={"path": str(self.services.session_record.logdir)},
+            data={"path": str(self.state.logdir)},
             timeout=None,
         )
         await asyncio.sleep(1)
 
         if success:
             try:
-                self.services.session_record._save_meta()
-                success = self.services.http_server._server.move_transfer_files(
-                    self.services.session_record.logdir, unzip
+                await self.eventbus.asend(Event("save_meta"))
+                await self.eventbus.asend(
+                    Event(
+                        "move_transferred_files", MoveTransferredFilesEvent(unzip=unzip)
+                    )
                 )
             except Exception:
                 logger.error(traceback.format_exc())
 
         logger.info(f"{self}: finished collect")
-
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
 
         return success
 
@@ -837,13 +816,10 @@ class WorkerHandlerService(Service):
         # If not keep Workers, then deregister all
         if not keep_workers:
             for worker_id in self.state.workers:
-                self._deregister_worker(worker_id)
+                await self._deregister_worker(worker_id)
 
         # Update variable data
         self.nodes_server_table = {}
         self._deregister_graph()
-
-        # Relay information to front-end
-        await self.services.http_server._broadcast_network_status_update()
 
         return all(results)

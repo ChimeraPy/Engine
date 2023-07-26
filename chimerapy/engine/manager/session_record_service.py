@@ -1,9 +1,6 @@
 import datetime
-import random
-import pathlib
-import os
 import json
-from typing import Optional, Union, Dict
+from typing import Optional, Dict
 
 from ..states import ManagerState
 from ..eventbus import EventBus, TypedObserver
@@ -14,7 +11,6 @@ class SessionRecordService(Service):
     def __init__(
         self,
         name: str,
-        logdir: Union[str, pathlib.Path],
         eventbus: EventBus,
         state: ManagerState,
     ):
@@ -29,19 +25,18 @@ class SessionRecordService(Service):
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: float = 0
 
-        # Create log directory to store data
-        self.timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        self.rand_num = random.randint(1000, 9999)
-        self.logdir = (
-            pathlib.Path(logdir).resolve()
-            / f"chimerapy-{self.timestamp}-{self.rand_num}"
-        )
-
-        # Create a logging directory
-        os.makedirs(self.logdir, exist_ok=True)
-
         # Specify observers
-        self.observers: Dict[str, TypedObserver] = {}
+        self.observers: Dict[str, TypedObserver] = {
+            "save_meta": TypedObserver(
+                "save_meta", on_asend=self._save_meta, handle_event="drop"
+            ),
+            "start_recording": TypedObserver(
+                "start_recording", on_asend=self.start_recording, handle_event="drop"
+            ),
+            "stop_recording": TypedObserver(
+                "stop_recording", on_asend=self.stop_recording, handle_event="drop"
+            ),
+        }
 
     def _save_meta(self):
         # Get the times, handle Optional
@@ -65,7 +60,7 @@ class SessionRecordService(Service):
             "stop_time": stop_time,
         }
 
-        with open(self.logdir / "meta.json", "w") as f:
+        with open(self.state.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
     def start_recording(self):
@@ -82,3 +77,6 @@ class SessionRecordService(Service):
             self.duration = (self.stop_time - self.start_time).total_seconds()
         else:
             self.duration = 0
+
+        # Save the data
+        self._save_meta()

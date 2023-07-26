@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+from dataclasses_json import DataClassJsonMixin
 from typing import List, Any
 
 import pytest
@@ -23,9 +23,8 @@ class WorldEventData:
 
 
 @evented
-@dataclass_json
 @dataclass
-class SomeClass:
+class SomeClass(DataClassJsonMixin):
     number: int
     string: str
 
@@ -73,84 +72,86 @@ async def test_event_null_data():
 
 
 @pytest.mark.asyncio
-async def test_sync_binding():
+async def test_sync_and_async_binding():
 
     event_bus = EventBus()
     hello_observer = TypedObserver("hello", HelloEventData)
+    goodbye_observer = TypedObserver("goodbye", HelloEventData)
 
     # Creating handler
-    local_variable: List = []
+    sync_local_variable: List = []
+    async_local_variable: List = []
 
     def add_to(var: List[Any]):
         var.append(1)
 
-    hello_observer.bind_asend(lambda event: add_to(local_variable))
+    async def async_add_to(_):
+        async_local_variable.append(1)
+
+    hello_observer.bind_asend(lambda _: add_to(sync_local_variable))
+    goodbye_observer.bind_asend(async_add_to)
 
     # Subscribe to the event bus
     await event_bus.subscribe(hello_observer)
+    await event_bus.subscribe(goodbye_observer)
 
     # Create the event
     hello_event = Event("hello", HelloEventData("Hello data"))
+    goodbye_event = Event("goodbye", HelloEventData("Hello data"))
 
     # Send some events
     await event_bus.asend(hello_event)
+    await event_bus.asend(goodbye_event)
 
     # Confirm
-    assert len(local_variable) != 0
+    assert len(sync_local_variable) != 0
+    assert len(async_local_variable) != 0
 
 
 @pytest.mark.asyncio
-async def test_async_binding():
+async def test_event_handling():
 
     event_bus = EventBus()
-    hello_observer = TypedObserver("hello", HelloEventData)
+    pass_observer = TypedObserver("hello", HelloEventData, handle_event="pass")
+    unpack_observer = TypedObserver("hello", HelloEventData, handle_event="unpack")
+    drop_observer = TypedObserver("hello", HelloEventData, handle_event="drop")
+    obs = [pass_observer, unpack_observer, drop_observer]
 
     # Creating handler
-    local_variable: List = []
 
-    async def add_to(event):
-        local_variable.append(1)
+    pass_variable: List = []
 
-    hello_observer.bind_asend(add_to)
+    async def pass_func(event):
+        assert isinstance(event, Event)
+        pass_variable.append(1)
 
-    # Subscribe to the event bus
-    await event_bus.subscribe(hello_observer)
+    unpack_variable: List = []
 
-    # Create the event
-    hello_event = Event("hello", HelloEventData("Hello data"))
+    async def unpack_func(message: str):
+        assert isinstance(message, str)
+        unpack_variable.append(1)
 
-    # Send some events
-    await event_bus.asend(hello_event)
+    drop_variable: List = []
 
-    # Confirm
-    assert len(local_variable) != 0
+    async def drop_func():
+        drop_variable.append(1)
 
-
-@pytest.mark.asyncio
-async def test_drop_event():
-
-    event_bus = EventBus()
-    hello_observer = TypedObserver("hello", HelloEventData, drop_event=True)
-
-    # Creating handler
-    local_variable: List = []
-
-    async def add_to():
-        local_variable.append(1)
-
-    hello_observer.bind_asend(add_to)
+    # Bind
+    pass_observer.bind_asend(pass_func)
+    unpack_observer.bind_asend(unpack_func)
+    drop_observer.bind_asend(drop_func)
 
     # Subscribe to the event bus
-    await event_bus.subscribe(hello_observer)
-
-    # Create the event
-    hello_event = Event("hello", HelloEventData("Hello data"))
+    for ob in obs:
+        await event_bus.subscribe(ob)
 
     # Send some events
-    await event_bus.asend(hello_event)
+    await event_bus.asend(Event("hello", HelloEventData("Hello data")))
 
     # Confirm
-    assert len(local_variable) != 0
+    assert len(pass_variable) != 0
+    assert len(unpack_variable) != 0
+    assert len(drop_variable) != 0
 
 
 @pytest.mark.asyncio

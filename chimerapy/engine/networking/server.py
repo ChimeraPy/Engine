@@ -139,7 +139,6 @@ class Server:
         self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
-        self.logger.debug(f"{self}: receiving file!")
 
         reader = await request.multipart()
 
@@ -199,14 +198,12 @@ class Server:
                     read += len(chunk)
                     pbar.update(len(chunk) / total_size)
                     if (pbar.n - prev_n) > 0.05:
-                        self.logger.debug(f"File {field.filename}: {pbar.n:.2%}")
                         prev_n = pbar.n
 
         # After finishing, mark the size and that is complete
         self.file_transfer_records[meta["sender_id"]][filename].update(
             {"size": total_size, "complete": True}
         )
-        self.logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
         return web.Response(
             text=f"{filename} sized of {total_size} successfully stored"
@@ -217,16 +214,13 @@ class Server:
     ####################################################################
 
     async def _read_ws(self, ws: web.WebSocketResponse):
-        self.logger.debug(f"{self}: reading")
         async for aiohttp_msg in ws:
 
             # Tracking the number of messages processed
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            self.logger.debug(f"{self}: got msg, processing now")
             msg = aiohttp_msg.json()
-            self.logger.debug(f"{self}: read - {msg}, {type(msg)}")
 
             # Select the handler
             handler = self.ws_handlers[msg["signal"]]
@@ -234,7 +228,6 @@ class Server:
 
             # Send OK if requested
             if msg["ok"]:
-                self.logger.debug(f"{self}: sending OK for {msg['uuid']}")
                 try:
                     await ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
@@ -247,7 +240,6 @@ class Server:
                     return None
 
     async def _write_ws(self, client_id: str, msg: Dict) -> bool:
-        self.logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
         ws = self.ws_clients[client_id]["ws"]
         success = await self._send_msg(ws, **msg)
         return success
@@ -291,20 +283,12 @@ class Server:
             await ws.close()
             return False
 
-        self.logger.debug(f"{self}: _send_msg -> {signal}")
-
         # If ok, wait until ok
         if ok:
-            success = await async_waiting_for(
+            await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-                return True
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
-                return False
 
         return True
 
@@ -420,7 +404,7 @@ class Server:
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
         if success:
-            self.logger.debug(f"{self}: running at {self.host}:{self.port}")
+            self.logger.info(f"{self}: running at {self.host}:{self.port}")
 
     def send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
@@ -450,9 +434,6 @@ class Server:
             for filename, file_meta in filepath_dict.items():
 
                 # Extract data
-                self.logger.debug(
-                    f"{self}: move_transfer_files, file_meta = {file_meta}"
-                )
                 filepath = file_meta["dst_filepath"]
 
                 # Wait until filepath is completely written

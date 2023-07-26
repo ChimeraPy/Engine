@@ -12,7 +12,7 @@ from ..states import WorkerState, ManagerState
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
-from .events import WorkerRegisterEvent
+from .events import WorkerRegisterEvent, WorkerDeregisterEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -40,14 +40,19 @@ class HttpServerService(Service):
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, drop_event=True),
+            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
             "ManagerState.changed": TypedObserver(
                 "ManagerState.changed",
                 on_asend=self._broadcast_network_status_update,
-                drop_event=True,
+                handle_event="drop",
             ),
             "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, drop_event=True
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "move_transferred_files": TypedObserver(
+                "move_transferred_files",
+                on_asend=self.move_transferred_files,
+                handle_event="unpack",
             ),
         }
 
@@ -109,6 +114,9 @@ class HttpServerService(Service):
             except Exception:
                 logger.error(traceback.format_exc())
 
+    def move_transferred_files(self, unzip: bool) -> bool:
+        return self._server.move_transfer_files(self.state.logdir, unzip)
+
     #####################################################################################
     ## Worker -> Manager Routes
     #####################################################################################
@@ -140,7 +148,7 @@ class HttpServerService(Service):
 
         # Deregister worker
         await self.eventbus.asend(
-            Event("worker_deregister", WorkerRegisterEvent(worker_state))
+            Event("worker_deregister", WorkerDeregisterEvent(worker_state))
         )
 
         return web.HTTPOk()

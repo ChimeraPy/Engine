@@ -2,11 +2,11 @@ import uuid
 import asyncio
 from datetime import datetime
 from collections import deque
-from typing import Any, Generic, Type, TypeVar, Callable, Awaitable, Optional
+from typing import Any, Generic, Type, TypeVar, Callable, Awaitable, Optional, Literal
 
-from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
 import dataclasses_json
-from dataclasses import dataclass, field, fields
+from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
+from dataclasses import dataclass, field, fields, asdict
 
 from . import _logger
 from .networking.async_loop_thread import AsyncLoopThread
@@ -109,13 +109,13 @@ class TypedObserver(AsyncObserver, Generic[T]):
         on_asend: Optional[Callable] = None,
         on_athrow: Optional[Callable] = None,
         on_aclose: Optional[Callable] = None,
-        drop_event: bool = False,
+        handle_event: Literal["pass", "unpack", "drop"] = "pass",
     ):
 
         # Containers
         self.event_type = event_type
         self.event_data_cls = event_data_cls
-        self.drop_event = drop_event
+        self.handle_event = handle_event
         self.received: deque[str] = deque(maxlen=10)
 
         # Callables
@@ -132,11 +132,11 @@ class TypedObserver(AsyncObserver, Generic[T]):
     def bind_aclose(self, func: Callable[[], Awaitable[None]]):
         self._on_aclose = func
 
-    async def exec_callable(self, func: Callable, *arg):
+    async def exec_callable(self, func: Callable, *arg, **kwargs):
         if asyncio.iscoroutinefunction(func):
-            await func(*arg)
+            await func(*arg, **kwargs)
         else:
-            func(*arg)
+            func(*arg, **kwargs)
 
     async def asend(self, event: Event):
 
@@ -150,10 +150,12 @@ class TypedObserver(AsyncObserver, Generic[T]):
         if is_match:
             self.received.append(event.id)
             if self._on_asend:
-                if self.drop_event:
-                    await self.exec_callable(self._on_asend)
-                else:
+                if self.handle_event == "pass":
                     await self.exec_callable(self._on_asend, event)
+                elif self.handle_event == "unpack":
+                    await self.exec_callable(self._on_asend, **asdict(event.data))
+                elif self.handle_event == "drop":
+                    await self.exec_callable(self._on_asend)
 
     async def athrow(self, ex: Exception):
         if self._on_athrow:
