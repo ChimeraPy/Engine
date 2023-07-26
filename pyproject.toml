@@ -55,6 +55,11 @@ test = [
     'requests',
     'bump2version'
 ]
+types = [
+    'types-requests',
+    'types-PyYAML',
+    'types-aiofiles'
+]
 docs = [
     'sphinx',
     'myst-parser'
@@ -96,6 +101,10 @@ where = ["."]
 
 [tool.setuptools.package-data]
 chimerapy = ['engine/*.yaml']
+
+[tool.mypy]
+files = "chimerapy"
+ignore_missing_imports = true
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests

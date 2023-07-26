@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 
 from zeroconf import ServiceInfo, ServiceListener
+import zeroconf
 
 
 class ZeroconfListener(ServiceListener):
@@ -22,7 +23,7 @@ class ZeroconfListener(ServiceListener):
 
         # Containers
         self.is_service_found = False
-        self.service_info = {}
+        self.service_info: zeroconf._services.info.ServiceInfo = {}
         self.wait_time = wait_time
 
     def update_service(self, *args, **kwargs):

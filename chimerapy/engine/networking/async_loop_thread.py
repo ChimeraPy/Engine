@@ -67,6 +67,8 @@ class AsyncLoopThread(threading.Thread):
         else:
             self._loop.call_soon_threadsafe(callback, *args)
 
+        return None
+
     def run(self):
         asyncio.set_event_loop(self._loop)
         self._loop.run_forever()

@@ -207,7 +207,7 @@ class WorkerHandlerService(ManagerService):
             # We do so by sending compressed zip files of the packages
             zip_package_dst = self.tempfolder / f"{package_name}.zip"
             with zipfile.PyZipFile(str(zip_package_dst), mode="w") as zip_pkg:
-                zip_pkg.writepy(package_path)
+                zip_pkg.writepy(package_path)  # type: ignore[attr-defined]
 
             # Send it to the workers and let them know to load the
             # send package
@@ -235,7 +235,7 @@ class WorkerHandlerService(ManagerService):
                 data = json.dumps({"packages": [x["name"] for x in packages_meta]})
 
                 async with aiohttp.ClientSession() as client:
-                    async with client.post(
+                    async with client.post(  # type: ignore[attr-defined]
                         url=url,
                         data=data,
                         timeout=config.get("manager.timeout.package-delivery"),
@@ -309,9 +309,9 @@ class WorkerHandlerService(ManagerService):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=data) as resp:
                 if resp.ok:
-                    data = await resp.json()
+                    json_data: Dict[str, Any] = await resp.json()
 
-                    if not data["success"]:
+                    if not json_data["success"]:
                         logger.error(
                             f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
                         )
@@ -321,7 +321,7 @@ class WorkerHandlerService(ManagerService):
                         f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
                     )
                     self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
-                        data["node_state"]
+                        json_data["node_state"]
                     )
                     logger.debug(f"{self}: WorkerState: {self.state.workers}")
 
@@ -589,13 +589,13 @@ class WorkerHandlerService(ManagerService):
             return False
 
         # Distribute the entire graph's information to all the Workers
-        coros: List[Coroutine] = []
+        coros2: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
-            coros.append(self._request_connection_creation(worker_id))
+            coros2.append(self._request_connection_creation(worker_id))
 
         # Wait until all complete
         try:
-            results = await asyncio.gather(*coros)
+            results = await asyncio.gather(*coros2)
         except Exception:
             logger.error(traceback.format_exc())
             return False

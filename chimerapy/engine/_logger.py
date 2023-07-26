@@ -73,7 +73,7 @@ class ZMQLogHandlerConfig:
         return cls(**kwargs)
 
 
-LOGGING_CONFIG = {
+LOGGING_CONFIG: Dict[str, Any] = {
     "version": 1,
     "disable_existing_loggers": True,
     "formatters": {
@@ -124,7 +124,7 @@ def setup():
 
 # Add the identifier filter
 def add_identifier_filter(
-    logging_entity: [logging.Logger, logging.Handler], identifier: str
+    logging_entity: Union[logging.Logger, logging.Handler], identifier: str
 ):
     """Add an identifier filter to the logger."""
     logging_entity.addFilter(IdentifierFilter(identifier))
@@ -168,13 +168,20 @@ def add_zmq_handler(logger: logging.Logger, handler_config: ZMQLogHandlerConfig)
     handler.root_topic = handler_config.root_topic
     logger.addHandler(handler)
     handler.setLevel(logging.DEBUG)
-    # Use the same formatter as the console
-    handler.setFormatter(
-        logging.Formatter(
-            logger.handlers[0].formatter._fmt,
-            logger.handlers[0].formatter.datefmt,
-        )
-    )  # FIXME: This is a hack, can this be done better?
+
+    # Check for None
+    _formatter = logger.handlers[0].formatter
+
+    if _formatter:
+        # Use the same formatter as the console
+        handler.setFormatter(
+            logging.Formatter(
+                _formatter._fmt,
+                _formatter.datefmt,
+            )
+        )  # FIXME: This is a hack, can this be done better?
+    else:
+        raise RuntimeError("ChimeraPy/Engine: Formatter not found!")
 
 
 def getLogger(
