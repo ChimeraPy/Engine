@@ -3,7 +3,7 @@ from datetime import datetime
 from logging import Filter, Formatter, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Union
+from typing import Union, Dict
 
 MAX_BYTES_PER_FILE = 100 * 1024 * 1024  # 100MB
 
@@ -18,15 +18,22 @@ class HandlerFactory:
         filename: str = None,
         max_bytes: int = MAX_BYTES_PER_FILE,
         level: int = logging.DEBUG,
-    ) -> Union[logging.Handler, "MultiplexedEntityHandler"]:
+    ) -> Union[
+        logging.Handler,
+        "MultiplexedEntityHandler",
+        "MultiplexedRotatingFileHandler",
+        "StreamHandler",
+    ]:
         if name in {"rotating-file"} and filename is None:
             raise ValueError("filename must be provided for file handler(s)")
         if name == "console":
             hdlr = HandlerFactory.get_console_handler()
-        elif name == "rotating-file":
+        elif name == "rotating-file" and filename:
             hdlr = HandlerFactory.get_rotating_file_handler(filename, max_bytes)
         elif name == "multiplexed-rotating-file":
-            hdlr = HandlerFactory.get_multiplexed_file_handler(name, max_bytes)
+            hdlr = HandlerFactory.get_multiplexed_file_handler(
+                name, max_bytes
+            )  # type: ignore[assignment]
         elif name == "console-node_id":
             hdlr = HandlerFactory.get_node_id_context_console_handler()
         else:
@@ -82,7 +89,7 @@ class IdentifierFilter(Filter):
         self.identifier = identifier
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.identifier = self.identifier
+        record.identifier = self.identifier  # type: ignore
         return True
 
 
@@ -120,7 +127,7 @@ class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
 
     def __init__(self, name, max_bytes: int = MAX_BYTES_PER_FILE):
         super().__init__(name)
-        self.handlers = {}
+        self.handlers: Dict[str, logging.Handler] = {}
         self.max_bytes_per_file = max_bytes
 
     def initialize_entity(self, prefix: str, identifier: str, parent_dir: Path) -> None:
@@ -145,6 +152,6 @@ class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):
     def emit(self, record: logging.LogRecord) -> None:
         """Emit the record to the appropriate file handler."""
         if hasattr(record, "identifier"):
-            handler = self.handlers.get(record.identifier)
+            handler = self.handlers.get(record.identifier)  # type: ignore
             if handler is not None:
                 handler.emit(record)

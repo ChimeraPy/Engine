@@ -34,7 +34,6 @@ def clear_queue(input_queue: queue.Queue):
         # queue
         try:
             input_queue.get(timeout=0.1, block=False)
-            del data
         except queue.Empty:
             logger.debug("clear_queue: empty!")
             return

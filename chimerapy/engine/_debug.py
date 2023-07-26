@@ -1,5 +1,5 @@
 # Built-in Import
-from typing import List, Optional
+from typing import List, Optional, Dict
 import logging
 import os
 
@@ -10,8 +10,9 @@ from ._logger import LOGGING_CONFIG
 def debug(loggers: Optional[List[str]] = None):
 
     # Not provided, then get all
-    if type(loggers) == type(None):
-        loggers = [x for x in LOGGING_CONFIG["loggers"]]
+    if loggers:
+        logger_config: Dict[str, Dict] = LOGGING_CONFIG["loggers"]
+        loggers = [x for x in logger_config]
 
     assert loggers is not None
 

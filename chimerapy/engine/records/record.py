@@ -1,4 +1,5 @@
 # Built-in Imports
+from typing import Dict, Any
 
 
 class Record:
@@ -12,7 +13,7 @@ class Record:
         """String representation of ``Entry``."""
         return self.__repr__()
 
-    def write(self):
+    def write(self, data_chunk: Dict[str, Any]):
         """Write/Save changes and mark them as processed.
 
         Raises:

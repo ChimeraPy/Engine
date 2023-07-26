@@ -40,11 +40,11 @@ class DataChunk:
     def __str__(self):
         return f"<DataChunk {list(self._container.keys())}"
 
-    def __eq__(self, other: "DataChunk"):
+    def __eq__(self, other: object):
 
         # First check data type
         if not isinstance(other, DataChunk):
-            return False
+            return NotImplemented
 
         # Check that their records have the same content
         for record_name, record in self._container.items():
@@ -84,7 +84,7 @@ class DataChunk:
     def _serialize(self) -> bytes:
 
         # Create serialized container
-        s_container = collections.defaultdict(dict)
+        s_container: Dict[str, Any] = collections.defaultdict(dict)
 
         # For each entry, serialize and compress based on their content type
         for record_name, record in self._container.items():
@@ -129,8 +129,8 @@ class DataChunk:
         return list(self._serialize())
 
     @classmethod
-    def from_json(cls, data_str: str):
-        return cls.from_bytes(bytes(data_str))
+    def from_json(cls, data: List[int]):
+        return cls.from_bytes(bytes(data))
 
     @classmethod
     def from_bytes(cls, data_bytes: bytes):

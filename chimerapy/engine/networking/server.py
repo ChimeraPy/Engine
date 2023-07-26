@@ -102,7 +102,11 @@ class Server:
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
-        self.file_transfer_records = collections.defaultdict(dict)
+        self.file_transfer_records: Dict[
+            str, Dict[str, Dict[str, Any]]
+        ] = collections.defaultdict(
+            dict
+        )  # Need to refactor this!
 
         if parent_logger is not None:
             self.logger = _logger.fork(parent_logger, "server")
@@ -307,7 +311,7 @@ class Server:
     async def _main(self) -> bool:
 
         # Create record of message uuids
-        self.uuid_records = collections.deque(maxlen=100)
+        self.uuid_records: collections.deque[str] = collections.deque(maxlen=100)
 
         # Use an application runner to run the web server
         self._runner = web.AppRunner(self._app)

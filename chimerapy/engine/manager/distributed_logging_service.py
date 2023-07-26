@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from chimerapy.engine import config
 from ..logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
@@ -15,7 +15,7 @@ class DistributedLoggingService(ManagerService):
 
         # Save parameters
         self.name = name
-        self.logs_sink = None
+        self.logs_sink: Optional[DistributedLogsMultiplexedFileSink] = None
 
         if publish_logs_via_zmq:
             handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
@@ -52,19 +52,24 @@ class DistributedLoggingService(ManagerService):
             self.logs_sink.deregister_entity(worker_id)
 
     def get_log_info(self) -> Dict[str, Any]:
-        return {
-            "enabled": self.logs_sink is not None,
-            "host": self.services.http_server.ip if self.logs_sink else None,
-            "port": self.logs_sink.port if self.logs_sink else None,
-        }
+
+        # Extract information
+        ip = None
+        port = None
+        if self.logs_sink:
+            port = self.logs_sink.port
+            ip = self.services.http_server.ip
+
+        return {"enabled": self.logs_sink is not None, "host": ip, "port": port}
 
     def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
         if not self.services.session_record.logdir.exists():
             self.services.session_record.logdir.mkdir(parents=True)
-        self.logs_sink.initialize_entity(
-            worker_name, worker_id, self.services.session_record.logdir
-        )
-        logger.info(f"Registered worker {worker_name} to logs sink")
+        if self.logs_sink:
+            self.logs_sink.initialize_entity(
+                worker_name, worker_id, self.services.session_record.logdir
+            )
+            logger.info(f"Registered worker {worker_name} to logs sink")
 
     @staticmethod
     def _start_logs_sink() -> DistributedLogsMultiplexedFileSink:

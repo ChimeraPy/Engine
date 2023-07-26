@@ -4,7 +4,7 @@ import os
 import threading
 from logging import LogRecord, makeLogRecord
 from logging.handlers import QueueHandler
-from typing import Collection, Optional
+from typing import Collection, Optional, Callable, Dict, Any
 
 import zmq
 
@@ -120,7 +120,7 @@ class ZMQPushHandler(QueueHandler):
         super().__init__(socket)
 
     def emit(self, record: LogRecord) -> None:
-        self.queue.send_json(record.__dict__)
+        self.queue.send_json(record.__dict__)  # type: ignore[union-attr]
 
 
 class NodeIdZMQPushHandler(ZMQPushHandler):
@@ -133,15 +133,21 @@ class NodeIdZMQPushHandler(ZMQPushHandler):
     """
 
     def __init__(
-        self, host: str, port: int, node_id_callback: Optional[callable] = os.getpid
+        self, host: str, port: int, node_id_callback: Optional[Callable] = os.getpid
     ):
         super().__init__(host, port)
         self.node_id_callback = node_id_callback
-        self.node_ids = {}
+        self.node_ids: Dict[Any, str] = {}
 
     def emit(self, record: LogRecord) -> None:
-        record.node_id = self.node_ids.get(self.node_id_callback(), None)
+        return_callback = None
+        if self.node_id_callback:
+            return_callback = self.node_id_callback()
+        record.node_id = self.node_ids.get(return_callback, None)  # type: ignore
         super().emit(record)
 
     def register_node_id(self, node_id: str) -> None:
-        self.node_ids[self.node_id_callback()] = node_id
+        return_callback = None
+        if self.node_id_callback:
+            return_callback = self.node_id_callback()
+        self.node_ids[return_callback] = node_id

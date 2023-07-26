@@ -24,12 +24,14 @@ class DistributedLogsMultiplexedFileSink:
     def initialize_entity(self, name, identifier, parent_dir) -> None:
         """Register a logging entity with the given identifier, \
         thereby creating a new file handler for it."""
-        self.handler.initialize_entity(name, identifier, parent_dir)
+        self.handler.initialize_entity(  # type: ignore[union-attr]
+            name, identifier, parent_dir
+        )
 
     def deregister_entity(self, identifier: str) -> None:
         """Deregister a logging entity with the given identifier, thereby closing the \
         file handler for it."""
-        self.handler.deregister_entity(identifier)
+        self.handler.deregister_entity(identifier)  # type: ignore[union-attr]
 
     def shutdown(self):
         """Shutdown the listener."""

@@ -336,7 +336,7 @@ class Worker:
         self.logger.debug("SHUTTING DOWN!")
         # Only execute if thread exists
         if not hasattr(self, "_thread"):
-            future = Future()
+            future: Future[bool] = Future()
             future.set_result(True)
             return future
 

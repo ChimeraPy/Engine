@@ -62,17 +62,17 @@ class ProcessorService(NodeService):
         # Execute method based on its style
         success = False
         if style == "concurrent":
-            output = await function(**params)
+            output = await function(**params)  # type: ignore[call-arg]
             success = True
 
         elif style == "blocking":
             with self.step_lock:
-                output = await function(**params)
+                output = await function(**params)  # type: ignore[call-arg]
                 success = True
 
         elif style == "reset":
             with self.step_lock:
-                output = await function(**params)
+                output = await function(**params)  # type: ignore[call-arg]
                 success = True
 
             # Signal the reset event and then wait

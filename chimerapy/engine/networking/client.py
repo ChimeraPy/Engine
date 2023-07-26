@@ -50,7 +50,7 @@ class Client:
         self.host = host
         self.port = port
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
-        self._ws = None
+        self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._session = None
 
         # State variables
@@ -98,7 +98,8 @@ class Client:
     ####################################################################
 
     async def _read_ws(self):
-        self.logger.debug(f"{self}: reading")
+        assert self._ws
+
         async for aiohttp_msg in self._ws:
 
             # Tracking the number of messages processed
@@ -145,6 +146,7 @@ class Client:
         msg_uuid: str = str(uuid.uuid4()),
         ok: bool = False,
     ):
+        assert self._ws
 
         # Create payload
         self.logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
