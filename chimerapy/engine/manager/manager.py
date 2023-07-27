@@ -2,6 +2,7 @@ import pathlib
 import atexit
 import random
 import os
+import uuid
 from datetime import datetime
 from concurrent.futures import Future
 from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
@@ -65,15 +66,6 @@ class Manager:
         # Saving input parameters
         self.has_shutdown = False
 
-        # Create log directory to store data
-        self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        self.rand_num = random.randint(1000, 9999)
-        logdir = (
-            pathlib.Path(logdir).resolve()
-            / f"{self.timestamp}-chimerapy-{self.rand_num}"
-        )
-        os.makedirs(logdir, exist_ok=True)
-
         # Creating a container for task futures
         self.task_futures: List[Future] = []
 
@@ -82,12 +74,21 @@ class Manager:
         self._thread.start()
 
         # Create eventbus
-        self.eventbus = EventBus()
-        configure(self.eventbus, self._thread)
+        self.eventbus = EventBus(thread=self._thread)
+        configure(self.eventbus)
+        
+        # Create log directory to store data
+        self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        id = str(uuid.uuid4())[:8]
+        logdir = (
+            pathlib.Path(logdir).resolve()
+            / f"{self.timestamp}-chimerapy-{id}"
+        )
+        os.makedirs(logdir, exist_ok=True)
 
         # Create state information container
         self.state = ManagerState(
-            id="Manager", ip="127.0.0.1", port=port, logdir=logdir
+            id=id, ip="127.0.0.1", port=port, logdir=logdir
         )
 
         # Create the services
@@ -119,7 +120,10 @@ class Manager:
         )
 
         # Start all services
-        self._exec_coro(self.eventbus.asend(Event("start")))
+        self.eventbus.send(Event("start")).result(timeout=10)
+        
+        # Logging
+        logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
 
         # Register atexit
         atexit.register(self.shutdown)

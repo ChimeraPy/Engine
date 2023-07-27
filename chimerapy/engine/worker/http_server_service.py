@@ -60,8 +60,8 @@ class HttpServerService(WorkerService):
             self.server.port,
         )
         self.worker.logger.info(
-            f"Worker {self.worker.state.id} running HTTP server at \
-            {self.worker.state.ip}:{self.worker.state.port}"
+            f"Worker: {self.worker.state.id} running HTTP server at "
+            f"{self.worker.state.ip}:{self.worker.state.port}"
         )
 
     async def shutdown(self) -> bool:

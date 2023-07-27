@@ -53,6 +53,7 @@ class Server:
         host: str = get_ip_address(),
         routes: List[web.RouteDef] = [],
         ws_handlers: Dict[enum.Enum, Callable] = {},
+        thread: Optional[AsyncLoopThread] = None,
         parent_logger: Optional[logging.Logger] = None,
     ):
         """Create HTTP Server with WS support.
@@ -71,6 +72,7 @@ class Server:
         self.port = port
         self.routes = routes
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
+        self._thread = thread
 
         # Using flag for marking if system should be running
         self.running = threading.Event()
@@ -296,8 +298,8 @@ class Server:
     # Server Async Setup
     ####################################################################
 
-    async def _main(self) -> bool:
-
+    async def async_serve(self) -> bool:
+        
         # Create record of message uuids
         self.uuid_records: collections.deque[str] = collections.deque(maxlen=100)
 
@@ -395,16 +397,13 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        future = self._thread.exec(self._main())
+        future = self._thread.exec(self.async_serve())
 
         try:
             success = future.result(timeout=config.get("comms.timeout.server-ready"))
         except Exception:
             self.logger.error(traceback.format_exc())
             raise TimeoutError(f"{self}: failed to start, shutting down!")
-
-        if success:
-            self.logger.info(f"{self}: running at {self.host}:{self.port}")
 
     def send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False

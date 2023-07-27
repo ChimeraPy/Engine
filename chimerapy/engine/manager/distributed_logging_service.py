@@ -52,6 +52,8 @@ class DistributedLoggingService(Service):
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
         }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def start(self):
 
@@ -81,11 +83,9 @@ class DistributedLoggingService(Service):
             self.logs_sink.deregister_entity(id)
 
     def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
-        if not self.services.session_record.logdir.exists():
-            self.services.session_record.logdir.mkdir(parents=True)
         if self.logs_sink:
             self.logs_sink.initialize_entity(
-                worker_name, worker_id, self.services.session_record.logdir
+                worker_name, worker_id, self.state.logdir
             )
             logger.info(f"Registered worker {worker_name} to logs sink")
 

@@ -6,6 +6,7 @@ import uuid
 import shutil
 import asyncio
 import traceback
+import atexit
 from concurrent.futures import Future
 from asyncio import Task
 
@@ -91,6 +92,9 @@ class Worker:
         self.services.apply(
             "start", order=["node_handler", "http_client", "http_server"]
         )
+
+        # Register shutdown
+        atexit.register(self.shutdown)
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -345,9 +349,3 @@ class Worker:
         if blocking:
             return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
         return future
-
-    def __del__(self):
-
-        # Also good to shutdown anything that isn't
-        if not self.has_shutdown:
-            self.shutdown()

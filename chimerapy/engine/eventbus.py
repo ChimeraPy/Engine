@@ -2,6 +2,7 @@ import uuid
 import asyncio
 from datetime import datetime
 from collections import deque
+from concurrent.futures import Future
 from typing import Any, Generic, Type, TypeVar, Callable, Awaitable, Optional, Literal
 
 import dataclasses_json
@@ -17,14 +18,11 @@ T = TypeVar("T")
 
 # Global variables
 global_event_bus: Optional["EventBus"] = None
-global_thread: Optional[AsyncLoopThread] = None
 
 
-def configure(event_bus: "EventBus", thread: AsyncLoopThread):
+def configure(event_bus: "EventBus"):
     global global_event_bus
-    global global_thread
     global_event_bus = event_bus
-    global_thread = thread
 
 
 def evented(cls):
@@ -32,14 +30,11 @@ def evented(cls):
 
     def new_init(self, *args, **kwargs):
         global global_event_bus
-        global global_thread
 
         self.event_bus = None
-        self.thread = None
 
         if isinstance(global_event_bus, EventBus):
             self.event_bus = global_event_bus
-            self.thread = global_thread
 
         original_init(self, *args, **kwargs)
 
@@ -49,10 +44,10 @@ def evented(cls):
 
         def setter(self, value):
             self.__dict__[f"_{name}"] = value
-            if self.event_bus and self.thread:
+            if self.event_bus:
                 event_name = f"{cls.__name__}.changed"
                 event_data = DataClassEvent(self)
-                self.thread.exec(self.event_bus.asend(Event(event_name, event_data)))
+                self.event_bus.send(Event(event_name, event_data))
 
         return property(getter, setter)
 
@@ -87,19 +82,36 @@ class DataClassEvent:
 
 
 class EventBus(AsyncObservable):
-    def __init__(self):
+    def __init__(self, thread: Optional[AsyncLoopThread] = None):
         self.stream = AsyncSubject()
         self._event_counts: int = 0
         self._sub_counts: int = 0
+        self._thread = thread
+
+    ####################################################################
+    ## Async
+    ####################################################################
 
     async def asend(self, event: Event):
+        # logger.debug(f"EventBus: Sending event: {event}")
         self._event_counts += 1
         await self.stream.asend(event)
 
-    async def subscribe(self, observer: AsyncObserver):
+    async def asubscribe(self, observer: AsyncObserver):
         self._sub_counts += 1
         await self.stream.subscribe_async(observer)
+    
+    ####################################################################
+    ## Sync
+    ####################################################################
 
+    def send(self, event: Event) -> Future:
+        assert isinstance(self._thread, AsyncLoopThread)
+        return self._thread.exec(self.asend(event))
+
+    def subscribe(self, observer: AsyncObserver):
+        assert isinstance(self._thread, AsyncLoopThread)
+        return self._thread.exec(self.asubscribe(observer))
 
 class TypedObserver(AsyncObserver, Generic[T]):
     def __init__(
@@ -122,6 +134,9 @@ class TypedObserver(AsyncObserver, Generic[T]):
         self._on_asend = on_asend
         self._on_athrow = on_athrow
         self._on_aclose = on_aclose
+
+    def __str__(self) -> str:
+        return f"<TypedObserver event_type={self.event_type}, event_data_cls={self.event_data_cls}>"
 
     def bind_asend(self, func: Callable[[Event], Awaitable[None]]):
         self._on_asend = func
@@ -147,13 +162,15 @@ class TypedObserver(AsyncObserver, Generic[T]):
                 isinstance(event.data, self.event_data_cls)
                 and event.type == self.event_type
             )
+
         if is_match:
+            # logger.debug(f"{self}: asend!")
             self.received.append(event.id)
             if self._on_asend:
                 if self.handle_event == "pass":
                     await self.exec_callable(self._on_asend, event)
                 elif self.handle_event == "unpack":
-                    await self.exec_callable(self._on_asend, **asdict(event.data))
+                    await self.exec_callable(self._on_asend, **event.data.__dict__)
                 elif self.handle_event == "drop":
                     await self.exec_callable(self._on_asend)
 

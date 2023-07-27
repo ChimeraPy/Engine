@@ -27,11 +27,11 @@ def http_server():
         eventbus=eventbus,
         state=state,
     )
-    http_server.start()
+    thread.exec(http_server.start()).result(timeout=10)
     return http_server
 
 
-def test_http_server_instanciate():
+def test_http_server_instanciate(http_server):
     ...
 
 

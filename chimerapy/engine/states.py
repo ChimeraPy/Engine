@@ -1,4 +1,5 @@
 import pathlib
+import uuid
 from typing import Dict, Optional, Literal
 from dataclasses import dataclass, field
 from dataclasses_json import DataClassJsonMixin, cfg
@@ -46,13 +47,13 @@ class WorkerState(DataClassJsonMixin):
 class ManagerState(DataClassJsonMixin):
 
     # General
-    id: str = ""
+    id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
 
     # Worker Handler Information
     workers: Dict[str, WorkerState] = field(default_factory=dict)
 
     # Http Server Information
-    ip: str = ""
+    ip: str = "0.0.0.0"
     port: int = 0
 
     # Distributed Logging information

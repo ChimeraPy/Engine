@@ -73,7 +73,6 @@ class Node:
             self.logdir = str(logdir)
         else:
             self.logdir = str(tempfile.mkdtemp())
-        self.logger.debug(f"{self}: logdir located in {self.logdir}")
 
         # Saving state variables
         self.services = ServiceGroup()
@@ -239,41 +238,41 @@ class Node:
         self.services.apply(
             "setup", order=["record", "worker", "publisher", "poller", "processor"]
         )
-        self.logger.debug(f"{self}: finished setup")
+        # self.logger.debug(f"{self}: finished setup")
 
     def _ready(self):
         self.state.fsm = "READY"
         self.services.apply(
             "ready", order=["record", "publisher", "poller", "processor", "worker"]
         )
-        self.logger.debug(f"{self}: is ready")
+        # self.logger.debug(f"{self}: is ready")
 
     def _wait(self):
         self.services.apply(
             "wait", order=["record", "publisher", "poller", "processor", "worker"]
         )
-        self.logger.debug(f"{self}: finished waiting")
+        # self.logger.debug(f"{self}: finished waiting")
 
     def _main(self):
         # self.state.fsm = "PREVIEWING"
         self.services.apply(
             "main", order=["record", "publisher", "poller", "processor", "worker"]
         )
-        self.logger.debug(f"{self}: finished main")
+        # self.logger.debug(f"{self}: finished main")
 
     def _idle(self):
 
-        self.logger.debug(f"{self}: idle")
+        # self.logger.debug(f"{self}: idle")
         while self.running:
             time.sleep(1)
-        self.logger.debug(f"{self}: exiting idle")
+        # self.logger.debug(f"{self}: exiting idle")
 
     def _teardown(self):
         self.services.apply(
             "teardown", order=["record", "publisher", "poller", "processor", "worker"]
         )
         self.state.fsm = "SHUTDOWN"
-        self.logger.debug(f"{self}: finished teardown")
+        # self.logger.debug(f"{self}: finished teardown")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -363,15 +362,15 @@ class Node:
         if self.blocking:
             self._idle()
             self._teardown()
-            self.logger.debug(f"{self}: is exiting")
+            # self.logger.debug(f"{self}: is exiting")
         else:
             self.state.fsm = "RECORDING"
 
     def shutdown(self, msg: Dict = {}):
 
         self.running = False
-        self.logger.debug(f"{self}: shutting down")
+        # self.logger.debug(f"{self}: shutting down")
 
         if not self.blocking:
             self._teardown()
-            self.logger.debug(f"{self}: is exiting")
+            # self.logger.debug(f"{self}: is exiting")

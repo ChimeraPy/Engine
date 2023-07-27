@@ -37,6 +37,8 @@ class SessionRecordService(Service):
                 "stop_recording", on_asend=self.stop_recording, handle_event="drop"
             ),
         }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def _save_meta(self):
         # Get the times, handle Optional
@@ -53,9 +55,9 @@ class SessionRecordService(Service):
         # Generate meta record
         meta = {
             "workers": list(self.state.workers.keys()),
-            "nodes": list(self.services.worker_handler.graph.G.nodes()),
-            "worker_graph_map": self.services.worker_handler.worker_graph_map,
-            "nodes_server_table": self.services.worker_handler.nodes_server_table,
+            # "nodes": list(self.services.worker_handler.graph.G.nodes()),
+            # "worker_graph_map": self.services.worker_handler.worker_graph_map,
+            # "nodes_server_table": self.services.worker_handler.nodes_server_table,
             "start_time": start_time,
             "stop_time": stop_time,
         }

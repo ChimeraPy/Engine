@@ -21,6 +21,8 @@ from ..exceptions import CommitGraphError
 from ..states import WorkerState, NodeState, ManagerState
 from ..eventbus import EventBus, TypedObserver, Event
 from .events import (
+    WorkerRegisterEvent,
+    WorkerDeregisterEvent,
     RegisterEntityEvent,
     DeregisterEntityEvent,
     MoveTransferredFilesEvent,
@@ -53,14 +55,17 @@ class WorkerHandlerService(Service):
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
             "worker_register": TypedObserver(
-                "worker_register", on_asend=self._register_worker, handle_event="unpack"
+                "worker_register", on_asend=self._register_worker, event_data_cls=WorkerRegisterEvent, handle_event="unpack"
             ),
             "worker_deregister": TypedObserver(
                 "worker_deregister",
                 on_asend=self._deregister_worker,
+                event_data_cls=WorkerDeregisterEvent,
                 handle_event="unpack",
             ),
         }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     async def shutdown(self) -> bool:
 
@@ -100,9 +105,9 @@ class WorkerHandlerService(Service):
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
         self.state.workers[worker_state.id] = worker_state
-        logger.info(
-            f"Manager registered <Worker id={worker_state.id} \
-            name={worker_state.name}> from {worker_state.ip}"
+        logger.debug(
+            f"Manager registered <Worker id={worker_state.id}"
+            f"name={worker_state.name}> from {worker_state.ip}"
         )
 
         # Register entity from logging

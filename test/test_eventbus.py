@@ -36,7 +36,7 @@ async def test_msg_filtering():
     hello_observer = TypedObserver("hello", HelloEventData)
 
     # Subscribe to the event bus
-    await event_bus.subscribe(hello_observer)
+    await event_bus.asubscribe(hello_observer)
 
     # Create the event
     hello_event = Event("hello", HelloEventData("Hello data"))
@@ -57,7 +57,7 @@ async def test_event_null_data():
     null_observer = TypedObserver("null")
 
     # Subscribe to the event bus
-    await event_bus.subscribe(null_observer)
+    await event_bus.asubscribe(null_observer)
 
     # Create the event
     null_event = Event("null")
@@ -92,8 +92,8 @@ async def test_sync_and_async_binding():
     goodbye_observer.bind_asend(async_add_to)
 
     # Subscribe to the event bus
-    await event_bus.subscribe(hello_observer)
-    await event_bus.subscribe(goodbye_observer)
+    await event_bus.asubscribe(hello_observer)
+    await event_bus.asubscribe(goodbye_observer)
 
     # Create the event
     hello_event = Event("hello", HelloEventData("Hello data"))
@@ -143,7 +143,7 @@ async def test_event_handling():
 
     # Subscribe to the event bus
     for ob in obs:
-        await event_bus.subscribe(ob)
+        await event_bus.asubscribe(ob)
 
     # Send some events
     await event_bus.asend(Event("hello", HelloEventData("Hello data")))
@@ -158,10 +158,10 @@ async def test_event_handling():
 async def test_evented_dataclass():
 
     # Creating the configuration for the eventbus and dataclasses
-    event_bus = EventBus()
     thread = AsyncLoopThread()
     thread.start()
-    configure(event_bus, thread)
+    event_bus = EventBus(thread=thread)
+    configure(event_bus)
 
     # Creating the observer and its binding
     evented_observer = TypedObserver("SomeClass.changed")
@@ -175,7 +175,7 @@ async def test_evented_dataclass():
     evented_observer.bind_asend(add_to)
 
     # Subscribe to the event bus
-    await event_bus.subscribe(evented_observer)
+    await event_bus.asubscribe(evented_observer)
 
     # Create the evented class
     data = SomeClass(number=1, string="hello")

@@ -38,6 +38,23 @@ class HttpServerService(Service):
         self.eventbus = eventbus
         self.state = state
 
+        # Future Container
+        self._server: Optional[Server] = None
+        self._futures: List[Future] = []
+        
+        # Create server
+        self._server = Server(
+            port=self.port,
+            id="Manager",
+            routes=[
+                # Worker API
+                web.post("/workers/register", self._register_worker_route),
+                web.post("/workers/deregister", self._deregister_worker_route),
+                web.post("/workers/node_status", self._update_nodes_status),
+            ],
+            thread=self._thread
+        )
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
@@ -55,9 +72,8 @@ class HttpServerService(Service):
                 handle_event="unpack",
             ),
         }
-
-        # Future Container
-        self._futures: List[Future] = []
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     @property
     def ip(self) -> str:
@@ -71,23 +87,11 @@ class HttpServerService(Service):
     def url(self) -> str:
         return f"http://{self._ip}:{self._port}"
 
-    def start(self):
-
-        # Create server
-        self._server = Server(
-            port=self.port,
-            id="Manager",
-            routes=[
-                # Worker API
-                web.post("/workers/register", self._register_worker_route),
-                web.post("/workers/deregister", self._deregister_worker_route),
-                web.post("/workers/node_status", self._update_nodes_status),
-            ],
-        )
+    async def start(self):
 
         # Runn the Server
-        self._server.serve(thread=self._thread)
-        logger.info(f"Manager started at {self._server.host}:{self._server.port}")
+        await self._server.async_serve()
+        await self.eventbus.asend(Event("after_server_startup"))
 
         # Update the ip and port
         self._ip, self._port = self._server.host, self._server.port
@@ -100,7 +104,10 @@ class HttpServerService(Service):
         self._future_flush()
 
         # Then, shutdown server
-        return await self._server.async_shutdown()
+        if self._server:
+            return await self._server.async_shutdown()
+
+        return True
 
     ####################################################################
     ## Helper Functions
