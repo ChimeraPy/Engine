@@ -4,26 +4,47 @@ import traceback
 import socket
 import asyncio
 import pathlib
-from typing import Optional, Literal, Union, Tuple
+import logging
+from typing import Optional, Literal, Union, Tuple, Dict
 
 import aiohttp
 from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import config
-from ..networking import Client
 from chimerapy.engine import _logger
-from .worker_service import WorkerService
+from ..states import WorkerState
+from ..networking import Client
+from ..service import Service
+from ..eventbus import EventBus, TypedObserver
 from .zeroconf_listener import ZeroconfListener
 
 
-class HttpClientService(WorkerService):
-    def __init__(self, name: str):
+class HttpClientService(Service):
+    def __init__(
+        self, name: str, state: WorkerState, eventbus: EventBus, logger: logging.Logger
+    ):
         super().__init__(name=name)
+
+        # Input parameters
+        self.state = state
+        self.eventbus = eventbus
+        self.logger = logger
+
+        # Containers
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
         self.manager_port = -1
         self.manager_url = ""
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            )
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port
@@ -34,7 +55,7 @@ class HttpClientService(WorkerService):
             try:
                 success = await self.async_deregister()
             except Exception:
-                self.worker.logger.warning(f"{self}: Failed to properly deregister")
+                self.logger.warning(f"{self}: Failed to properly deregister")
                 success = False
 
         return success
@@ -94,7 +115,7 @@ class HttpClientService(WorkerService):
         async with aiohttp.ClientSession() as client:
             async with client.post(
                 self.manager_url + "/workers/deregister",
-                data=self.worker.state.to_json(),
+                data=self.state.to_json(),
                 timeout=config.get("worker.timeout.deregister"),
             ) as resp:
 
@@ -116,7 +137,7 @@ class HttpClientService(WorkerService):
         async with aiohttp.ClientSession() as client:
             async with client.post(
                 f"http://{host}:{port}/workers/register",
-                data=self.worker.state.to_json(),
+                data=self.state.to_json(),
                 timeout=timeout,
             ) as resp:
 
@@ -129,11 +150,9 @@ class HttpClientService(WorkerService):
                     logs_push_info = data.get("logs_push_info", {})
 
                     if logs_push_info["enabled"]:
-                        self.worker.logger.info(
-                            f"{self}: enabling logs push to Manager"
-                        )
+                        self.logger.info(f"{self}: enabling logs push to Manager")
                         for logging_entity in [
-                            self.worker.logger,
+                            self.logger,
                             self.worker.logreceiver,
                         ]:
                             handler = _logger.add_zmq_push_handler(
@@ -141,10 +160,8 @@ class HttpClientService(WorkerService):
                                 logs_push_info["host"],
                                 logs_push_info["port"],
                             )
-                            if logging_entity is not self.worker.logger:
-                                _logger.add_identifier_filter(
-                                    handler, self.worker.state.id
-                                )
+                            if logging_entity is not self.logger:
+                                _logger.add_identifier_filter(handler, self.state.id)
 
                     # Tracking the state and location of the manager
                     self.connected_to_manager = True
@@ -152,7 +169,7 @@ class HttpClientService(WorkerService):
                     self.manager_port = port
                     self.manager_url = f"http://{host}:{port}"
 
-                    self.worker.logger.info(
+                    self.logger.info(
                         f"{self}: connection successful to Manager @ {host}:{port}."
                     )
                     return True
@@ -165,9 +182,7 @@ class HttpClientService(WorkerService):
 
         # Create the Zeroconf instance and the listener
         zeroconf = Zeroconf()
-        listener = ZeroconfListener(
-            stop_service_name="chimerapy", logger=self.worker.logger
-        )
+        listener = ZeroconfListener(stop_service_name="chimerapy", logger=self.logger)
 
         # Browse for services
         browser = ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
@@ -201,12 +216,12 @@ class HttpClientService(WorkerService):
         browser.cancel()
         zeroconf.close()
 
-        # self.worker.logger.debug(f"{self}: connected via zeroconf: {success}")
+        # self.logger.debug(f"{self}: connected via zeroconf: {success}")
 
         return success
 
     async def _send_archive_locally(self, path: pathlib.Path) -> bool:
-        self.worker.logger.debug(f"{self}: sending archive locally")
+        self.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
         delay = 1
@@ -219,7 +234,7 @@ class HttpClientService(WorkerService):
             except shutil.Error:  # File already exists!
                 break
             except Exception:
-                self.worker.logger.error(traceback.format_exc())
+                self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)
                 miss_counter += 1
                 if miss_counter * delay > timeout:
@@ -232,7 +247,7 @@ class HttpClientService(WorkerService):
 
     async def _send_archive_remotely(self, host: str, port: int) -> bool:
 
-        self.worker.logger.debug(f"{self}: sending archive via network")
+        self.logger.debug(f"{self}: sending archive via network")
 
         # Else, send the archive data to the manager via network
         try:
@@ -243,7 +258,7 @@ class HttpClientService(WorkerService):
             )
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False
-            self.worker.logger.exception(
+            self.logger.exception(
                 f"{self}: Failed to transmit files to Manager - {error}."
             )
 
@@ -253,7 +268,7 @@ class HttpClientService(WorkerService):
 
         async with aiohttp.ClientSession(self.manager_url) as session:
             async with session.post(
-                "/workers/node_status", data=self.worker.state.to_json()
+                "/workers/node_status", data=self.state.to_json()
             ) as resp:
 
                 return resp.ok

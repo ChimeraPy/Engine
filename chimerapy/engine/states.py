@@ -33,13 +33,20 @@ class NodeState(DataClassJsonMixin):
     registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
 
+@evented
 @dataclass
 class WorkerState(DataClassJsonMixin):
-    id: str
-    name: str
-    port: int = 0
-    ip: str = ""
+
+    # General
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    name: str = "default"
+
+    # Node Handler Information
     nodes: Dict[str, NodeState] = field(default_factory=dict)
+
+    # Http Server Information
+    ip: str = "0.0.0.0"
+    port: int = 0
 
 
 @evented

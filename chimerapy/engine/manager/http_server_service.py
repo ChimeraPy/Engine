@@ -105,10 +105,7 @@ class HttpServerService(Service):
         self._future_flush()
 
         # Then, shutdown server
-        if self._server:
-            return await self._server.async_shutdown()
-
-        return True
+        return await self._server.async_shutdown()
 
     ####################################################################
     ## Helper Functions
@@ -167,7 +164,7 @@ class HttpServerService(Service):
 
         # Updating nodes status
         self.state.workers[worker_state.id] = worker_state
-        logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
+        # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         return web.HTTPOk()
 

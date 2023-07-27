@@ -1,6 +1,7 @@
 import threading
 import typing
 import warnings
+import logging
 from typing import Dict, Any, Union, Type, Optional
 
 if typing.TYPE_CHECKING:
@@ -11,13 +12,14 @@ import dill
 import multiprocess as mp
 
 from chimerapy.engine import config
-from .worker_service import WorkerService
+from ..service import Service
 from ..node.node_config import NodeConfig
 from ..node.worker_comms_service import WorkerCommsService
-from chimerapy.engine.states import NodeState
+from ..states import NodeState, WorkerState
 from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
-from chimerapy.engine.utils import async_waiting_for
+from ..utils import async_waiting_for
+from ..eventbus import EventBus, TypedObserver
 
 
 class NodeController:
@@ -90,9 +92,16 @@ class MPNodeController(NodeController):
         self.context.terminate()
 
 
-class NodeHandlerService(WorkerService):
-    def __init__(self, name: str):
+class NodeHandlerService(Service):
+    def __init__(
+        self, name: str, state: WorkerState, eventbus: EventBus, logger: logging.Logger
+    ):
         super().__init__(name=name)
+
+        # Input parameters
+        self.state = state
+        self.eventbus = eventbus
+        self.logger = logger
 
         # Containers
         self.node_controllers: Dict[str, NodeController] = {}
@@ -102,6 +111,15 @@ class NodeHandlerService(WorkerService):
             "multiprocessing": MPNodeController,
             "threading": ThreadNodeController,
         }
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            )
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     async def shutdown(self) -> bool:
 
