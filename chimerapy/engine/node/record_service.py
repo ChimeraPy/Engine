@@ -20,7 +20,7 @@ class RecordService(NodeService):
 
     def setup(self):
 
-        self.node.logger.debug(f"{self}: setup executed")
+        # self.node.logger.debug(f"{self}: setup executed")
 
         # Create IO queue
         self.save_queue = queue.Queue()
@@ -51,7 +51,7 @@ class RecordService(NodeService):
         self.is_running.clear()
         self._thread.join()
 
-        self.node.logger.debug(f"{self}: shutdown")
+        # self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Helper Methods & Attributes
@@ -66,7 +66,7 @@ class RecordService(NodeService):
 
     def run(self):
 
-        self.node.logger.debug(f"{self}: Running poll threading")
+        # self.node.logger.debug(f"{self}: Running poll threading")
 
         # Continue checking for messages from client until not running
         while self.is_running.is_set() or self.save_queue.qsize() != 0:
@@ -96,7 +96,7 @@ class RecordService(NodeService):
         for entry in self.records.values():
             entry.close()
 
-        self.node.logger.debug(f"{self}: Closed all entries")
+        # self.node.logger.debug(f"{self}: Closed all entries")
 
     def save(self):
 
@@ -104,4 +104,4 @@ class RecordService(NodeService):
         self.is_running.clear()
         self._thread.join()
 
-        self.node.logger.debug(f"{self}: Finish saving records")
+        # self.node.logger.debug(f"{self}: Finish saving records")

@@ -107,19 +107,13 @@ class Client:
 
             # Extract the binary data and decoded it
             msg = aiohttp_msg.json()
-            self.logger.debug(f"{self}: read - {msg}")
 
             # Select the handler
-            self.logger.debug(f"{self}: read executing {msg['signal']}")
             handler = self.ws_handlers[msg["signal"]]
-
-            self.logger.debug(f"{self}: read handler {handler}")
             await handler(msg)
-            self.logger.debug(f"{self}: finished read executing {msg['signal']}")
 
             # Send OK if requested
             if msg["ok"]:
-                self.logger.debug(f"{self}: sending OK")
                 try:
                     await self._ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
@@ -132,7 +126,6 @@ class Client:
                     return None
 
     async def _write_ws(self, msg: Dict):
-        self.logger.debug(f"{self}: writing - {msg}")
         await self._send_msg(**msg)
 
     ####################################################################
@@ -149,11 +142,9 @@ class Client:
         assert self._ws
 
         # Create payload
-        self.logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
 
         # Send the message
-        self.logger.debug(f"{self}: send_msg -> {signal} with OK={ok}")
         try:
             await self._ws.send_json(payload)
         except ConnectionResetError:
@@ -164,14 +155,10 @@ class Client:
         # If ok, wait until ok
         if ok:
 
-            success = await async_waiting_for(
+            await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
 
     async def _send_file_async(
         self, url: str, sender_id: str, filepath: pathlib.Path
@@ -193,15 +180,11 @@ class Client:
 
         # Create a new session for the moment
         async with aiohttp.ClientSession() as session:
-            self.logger.debug(f"{self}: Executing file transfer to {url}")
-            response = await session.post(url, data=data)
-            self.logger.debug(f"{self}: File transfer response => {response}")
+            await session.post(url, data=data)
 
         return True
 
     async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
-
-        self.logger.debug(f"{self}: _send_folder_async")
 
         if not dir.is_dir() and not dir.exists():
             self.logger.error(f"Cannot send non-existent dir: {dir}.")
@@ -215,10 +198,6 @@ class Client:
         # First, we need to archive the folder into a zip file
         while True:
             try:
-                self.logger.debug(
-                    f"{self}: creating zip folder of {dir}, by {sender_id} of size: \
-                    {os.path.getsize(str(dir))}"
-                )
                 process = mp.Process(
                     target=shutil.make_archive,
                     args=(
@@ -232,9 +211,6 @@ class Client:
                 process.join()
                 assert process.exitcode == 0
 
-                self.logger.debug(
-                    f"{self}: created zip folder of {dir}, by {sender_id}"
-                )
                 break
             except Exception:
                 self.logger.warning("Temp folder couldn't be zipped.")
@@ -254,7 +230,6 @@ class Client:
         # Then send the file
         await self._send_file_async(url, sender_id, zip_file)
 
-        self.logger.debug(f"{self}: finished sending folder")
         return True
 
     ####################################################################
@@ -275,15 +250,11 @@ class Client:
 
     async def _main(self):
 
-        self.logger.debug(f"{self}: _main -> http://{self.host}:{self.port}/ws")
-
         # Create record of message uuids
         self.uuid_records = collections.deque(maxlen=100)
 
         async with aiohttp.ClientSession() as session:
             async with session.ws_connect(f"http://{self.host}:{self.port}/ws") as ws:
-
-                self.logger.debug(f"{self}: successfully connected!")
 
                 # Store the Client session
                 self._session = session
@@ -328,16 +299,10 @@ class Client:
 
         if ok:
 
-            success = await async_waiting_for(
+            await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-                return True
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
-                return False
 
         return True
 
@@ -363,8 +328,6 @@ class Client:
 
     def connect(self):
 
-        self.logger.debug(f"{self}: start connect routine")
-
         # Mark that the client is running
         self.running.set()
 
@@ -373,7 +336,6 @@ class Client:
         self._client_ready.clear()
 
         # Start async execution
-        logger.debug(f"{self}: executing _main")
         self._thread.exec(self._main())
 
         # Wait until client is ready
@@ -381,8 +343,6 @@ class Client:
         if flag == 0:
             self.shutdown()
             raise TimeoutError(f"{self}: failed to connect, shutting down!")
-        else:
-            self.logger.debug(f"{self}: connected to {self.host}:{self.port}")
 
     def shutdown(self):
 

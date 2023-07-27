@@ -1,19 +1,42 @@
-from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
 import pathlib
-import traceback
+import atexit
+import random
+import os
+import uuid
+from datetime import datetime
 from concurrent.futures import Future
+from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
 
+# Internal Imports
 from chimerapy.engine import config
-from chimerapy.engine.states import ManagerState, WorkerState
-from ..networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.graph import Graph
-from .manager_services_group import ManagerServicesGroup
 from chimerapy.engine import _logger
+from ..networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.states import ManagerState, WorkerState
+from chimerapy.engine.graph import Graph
 
-logger = _logger.getLogger("chimerapy")
+# Eventbus
+from ..eventbus import EventBus, Event, configure
+
+# from .events import StartEvent
+
+# Services
+from .http_server_service import HttpServerService
+from .worker_handler_service import WorkerHandlerService
+from .zeroconf_service import ZeroconfService
+from .session_record_service import SessionRecordService
+from .distributed_logging_service import DistributedLoggingService
+
+logger = _logger.getLogger("chimerapy-engine")
 
 
 class Manager:
+
+    http_server: HttpServerService
+    worker_handler: WorkerHandlerService
+    zeroconf_service: ZeroconfService
+    session_record: SessionRecordService
+    distributed_logging: DistributedLoggingService
+
     def __init__(
         self,
         logdir: Union[pathlib.Path, str],
@@ -50,33 +73,60 @@ class Manager:
         self._thread = AsyncLoopThread()
         self._thread.start()
 
-        # Create state information container
-        self.state = ManagerState(id="Manager", ip="127.0.0.1", port=port)
+        # Create eventbus
+        self.eventbus = EventBus(thread=self._thread)
+        configure(self.eventbus)
+        
+        # Create log directory to store data
+        self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        id = str(uuid.uuid4())[:8]
+        logdir = (
+            pathlib.Path(logdir).resolve()
+            / f"{self.timestamp}-chimerapy-{id}"
+        )
+        os.makedirs(logdir, exist_ok=True)
 
-        # Saving state variables
-        self.services = ManagerServicesGroup(
-            logdir=logdir,
+        # Create state information container
+        self.state = ManagerState(
+            id=id, ip="127.0.0.1", port=port, logdir=logdir
+        )
+
+        # Create the services
+        self.http_server = HttpServerService(
+            name="http_server",
             port=port,
-            publish_logs_via_zmq=publish_logs_via_zmq,
             enable_api=enable_api,
             thread=self._thread,
+            eventbus=self.eventbus,
+            state=self.state,
+        )
+        self.worker_handler = WorkerHandlerService(
+            name="worker_handler", eventbus=self.eventbus, state=self.state
+        )
+        self.zeroconf_service = ZeroconfService(
+            name="zeroconf", eventbus=self.eventbus, state=self.state
+        )
+        self.session_record = SessionRecordService(
+            name="session_record",
+            eventbus=self.eventbus,
+            state=self.state,
+        )
+        self.distributed_logging = DistributedLoggingService(
+            name="distributed_logging",
+            publish_logs_via_zmq=publish_logs_via_zmq,
+            eventbus=self.eventbus,
+            state=self.state,
             **kwargs,
         )
 
-        # Inect the services
-        self.services.inject(self.state)
-
         # Start all services
-        self.services.apply(
-            "start",
-            order=[
-                "worker_handler",
-                "http_server",
-                "zeroconf",
-                "session_record",
-                "distributed_logging",
-            ],
-        )
+        self.eventbus.send(Event("start")).result(timeout=10)
+        
+        # Logging
+        logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
+
+        # Register atexit
+        atexit.register(self.shutdown)
 
     def __repr__(self):
         return f"<Manager @{self.host}:{self.port}>"
@@ -102,7 +152,7 @@ class Manager:
 
     @property
     def logdir(self) -> pathlib.Path:
-        return self.services.session_record.logdir
+        return self.state.logdir
 
     ####################################################################
     ## Utils Methods
@@ -127,24 +177,20 @@ class Manager:
         node_id: str,
         context: Literal["multiprocessing", "threading"] = "multiprocessing",
     ) -> bool:
-        return await self.services.worker_handler._request_node_creation(
+        return await self.worker_handler._request_node_creation(
             worker_id, node_id, context=context
         )
 
     async def _async_request_node_destruction(
         self, worker_id: str, node_id: str
     ) -> bool:
-        return await self.services.worker_handler._request_node_destruction(
-            worker_id, node_id
-        )
+        return await self.worker_handler._request_node_destruction(worker_id, node_id)
 
     async def _async_request_node_server_data(self, worker_id: str) -> bool:
-        return await self.services.worker_handler._request_node_server_data(worker_id)
+        return await self.worker_handler._request_node_server_data(worker_id)
 
     async def _async_request_connection_creation(self, worker_id: str) -> bool:
-        return await self.services.worker_handler._request_connection_creation(
-            worker_id
-        )
+        return await self.worker_handler._request_connection_creation(worker_id)
 
     async def _async_broadcast_request(
         self,
@@ -156,7 +202,7 @@ class Manager:
         ),
         report_exceptions: bool = True,
     ) -> bool:
-        return await self.services.worker_handler._broadcast_request(
+        return await self.worker_handler._broadcast_request(
             htype, route, data, timeout, report_exceptions
         )
 
@@ -165,10 +211,10 @@ class Manager:
     ####################################################################
 
     def _register_graph(self, graph: Graph):
-        self.services.worker_handler._register_graph(graph)
+        self.worker_handler._register_graph(graph)
 
     def _deregister_graph(self):
-        self.services.worker_handler._deregister_graph()
+        self.worker_handler._deregister_graph()
 
     def _request_node_creation(
         self,
@@ -207,9 +253,9 @@ class Manager:
     async def async_zeroconf(self, enable: bool = True) -> bool:
 
         if enable:
-            return await self.services.zeroconf.enable()
+            return await self.zeroconf_service.enable()
         else:
-            return await self.services.zeroconf.disable()
+            return await self.zeroconf_service.disable()
 
     async def async_commit(
         self,
@@ -253,34 +299,34 @@ class Manager:
             bool: Success in cluster's setup
 
         """
-        return await self.services.worker_handler.commit(
+        return await self.worker_handler.commit(
             graph, mapping, context=context, send_packages=send_packages
         )
 
     async def async_gather(self) -> Dict:
-        return await self.services.worker_handler.gather()
+        return await self.worker_handler.gather()
 
     async def async_start(self) -> bool:
-        return await self.services.worker_handler.start_workers()
+        return await self.worker_handler.start_workers()
 
     async def async_record(self) -> bool:
-        return await self.services.worker_handler.record()
+        return await self.worker_handler.record()
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
-        return await self.services.worker_handler.request_registered_method(
+        return await self.worker_handler.request_registered_method(
             node_id, method_name, params
         )
 
     async def async_stop(self) -> bool:
-        return await self.services.worker_handler.stop()
+        return await self.worker_handler.stop()
 
     async def async_collect(self, unzip: bool = True) -> bool:
-        return await self.services.worker_handler.collect(unzip)
+        return await self.worker_handler.collect(unzip)
 
     async def async_reset(self, keep_workers: bool = True):
-        return await self.services.worker_handler.reset(keep_workers)
+        return await self.worker_handler.reset(keep_workers)
 
     async def async_shutdown(self) -> bool:
 
@@ -288,26 +334,11 @@ class Manager:
         if self.has_shutdown:
             logger.debug(f"{self}: requested to shutdown twice, skipping.")
             return True
-        else:
-            self.has_shutdown = True
 
-        logger.debug(f"{self}: shutting down")
-        try:
-            results = await self.services.async_apply(
-                "shutdown",
-                order=[
-                    "distributed_logging",
-                    "worker_handler",
-                    "session_record",
-                    "zeroconf",
-                    "http_server",
-                ],
-            )
-        except Exception:
-            logger.error(traceback.format_exc())
-            return False
+        await self.eventbus.asend(Event("shutdown"))
+        self.has_shutdown = True
 
-        return all(results)
+        return True
 
     ####################################################################
     ## Front-facing Sync API
@@ -451,9 +482,3 @@ class Manager:
         if blocking:
             return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
         return future
-
-    def __del__(self):
-
-        # Also good to shutdown anything that isn't
-        if not self.has_shutdown:
-            self.shutdown()

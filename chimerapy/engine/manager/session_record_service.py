@@ -1,32 +1,44 @@
 import datetime
-import random
-import pathlib
-import os
 import json
-from typing import Optional, Union
+from typing import Optional, Dict
 
-from .manager_service import ManagerService
+from ..states import ManagerState
+from ..eventbus import EventBus, TypedObserver
+from ..service import Service
 
 
-class SessionRecordService(ManagerService):
-    def __init__(self, name: str, logdir: Union[str, pathlib.Path]):
+class SessionRecordService(Service):
+    def __init__(
+        self,
+        name: str,
+        eventbus: EventBus,
+        state: ManagerState,
+    ):
         super().__init__(name=name)
+
+        # Input parameters
+        self.eventbus = eventbus
+        self.state = state
 
         # State information
         self.start_time: Optional[datetime.datetime] = None
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: float = 0
 
-        # Create log directory to store data
-        self.timestamp = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-        self.rand_num = random.randint(1000, 9999)
-        self.logdir = (
-            pathlib.Path(logdir).resolve()
-            / f"chimerapy-{self.timestamp}-{self.rand_num}"
-        )
-
-        # Create a logging directory
-        os.makedirs(self.logdir, exist_ok=True)
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "save_meta": TypedObserver(
+                "save_meta", on_asend=self._save_meta, handle_event="drop"
+            ),
+            "start_recording": TypedObserver(
+                "start_recording", on_asend=self.start_recording, handle_event="drop"
+            ),
+            "stop_recording": TypedObserver(
+                "stop_recording", on_asend=self.stop_recording, handle_event="drop"
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def _save_meta(self):
         # Get the times, handle Optional
@@ -43,14 +55,14 @@ class SessionRecordService(ManagerService):
         # Generate meta record
         meta = {
             "workers": list(self.state.workers.keys()),
-            "nodes": list(self.services.worker_handler.graph.G.nodes()),
-            "worker_graph_map": self.services.worker_handler.worker_graph_map,
-            "nodes_server_table": self.services.worker_handler.nodes_server_table,
+            # "nodes": list(self.services.worker_handler.graph.G.nodes()),
+            # "worker_graph_map": self.services.worker_handler.worker_graph_map,
+            # "nodes_server_table": self.services.worker_handler.nodes_server_table,
             "start_time": start_time,
             "stop_time": stop_time,
         }
 
-        with open(self.logdir / "meta.json", "w") as f:
+        with open(self.state.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
     def start_recording(self):
@@ -67,3 +79,6 @@ class SessionRecordService(ManagerService):
             self.duration = (self.stop_time - self.start_time).total_seconds()
         else:
             self.duration = 0
+
+        # Save the data
+        self._save_meta()

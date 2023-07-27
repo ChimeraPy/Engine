@@ -6,7 +6,7 @@ import glob
 import pytest
 from ..utils import uuid
 
-logger = cpe._logger.getLogger("chimerapy")
+logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 pytestmark = [pytest.mark.slow]

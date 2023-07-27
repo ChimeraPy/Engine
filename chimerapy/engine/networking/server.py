@@ -14,6 +14,7 @@ import json
 import enum
 import traceback
 import aiofiles
+import atexit
 from concurrent.futures import Future
 
 # Third-party
@@ -52,6 +53,7 @@ class Server:
         host: str = get_ip_address(),
         routes: List[web.RouteDef] = [],
         ws_handlers: Dict[enum.Enum, Callable] = {},
+        thread: Optional[AsyncLoopThread] = None,
         parent_logger: Optional[logging.Logger] = None,
     ):
         """Create HTTP Server with WS support.
@@ -70,6 +72,7 @@ class Server:
         self.port = port
         self.routes = routes
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
+        self._thread = thread
 
         # Using flag for marking if system should be running
         self.running = threading.Event()
@@ -113,6 +116,9 @@ class Server:
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
 
+        # Make sure to shutdown correctly
+        atexit.register(self.shutdown)
+
     def __str__(self):
         return f"<Server {self.id}>"
 
@@ -135,7 +141,6 @@ class Server:
         self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
 
     async def _file_receive(self, request):
-        self.logger.debug(f"{self}: receiving file!")
 
         reader = await request.multipart()
 
@@ -195,14 +200,12 @@ class Server:
                     read += len(chunk)
                     pbar.update(len(chunk) / total_size)
                     if (pbar.n - prev_n) > 0.05:
-                        self.logger.debug(f"File {field.filename}: {pbar.n:.2%}")
                         prev_n = pbar.n
 
         # After finishing, mark the size and that is complete
         self.file_transfer_records[meta["sender_id"]][filename].update(
             {"size": total_size, "complete": True}
         )
-        self.logger.debug(f"Finished updating record: {self.file_transfer_records}")
 
         return web.Response(
             text=f"{filename} sized of {total_size} successfully stored"
@@ -213,16 +216,13 @@ class Server:
     ####################################################################
 
     async def _read_ws(self, ws: web.WebSocketResponse):
-        self.logger.debug(f"{self}: reading")
         async for aiohttp_msg in ws:
 
             # Tracking the number of messages processed
             self.msg_processed_counter += 1
 
             # Extract the binary data and decoded it
-            self.logger.debug(f"{self}: got msg, processing now")
             msg = aiohttp_msg.json()
-            self.logger.debug(f"{self}: read - {msg}, {type(msg)}")
 
             # Select the handler
             handler = self.ws_handlers[msg["signal"]]
@@ -230,7 +230,6 @@ class Server:
 
             # Send OK if requested
             if msg["ok"]:
-                self.logger.debug(f"{self}: sending OK for {msg['uuid']}")
                 try:
                     await ws.send_json(
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
@@ -243,7 +242,6 @@ class Server:
                     return None
 
     async def _write_ws(self, client_id: str, msg: Dict) -> bool:
-        self.logger.debug(f"{self}: client_id: {client_id},  write - {msg}")
         ws = self.ws_clients[client_id]["ws"]
         success = await self._send_msg(ws, **msg)
         return success
@@ -287,20 +285,12 @@ class Server:
             await ws.close()
             return False
 
-        self.logger.debug(f"{self}: _send_msg -> {signal}")
-
         # If ok, wait until ok
         if ok:
-            success = await async_waiting_for(
+            await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
-            if success:
-                self.logger.debug(f"{self}: receiving OK: SUCCESS")
-                return True
-            else:
-                self.logger.debug(f"{self}: receiving OK: FAILED")
-                return False
 
         return True
 
@@ -308,7 +298,7 @@ class Server:
     # Server Async Setup
     ####################################################################
 
-    async def _main(self) -> bool:
+    async def async_serve(self) -> bool:
 
         # Create record of message uuids
         self.uuid_records: collections.deque[str] = collections.deque(maxlen=100)
@@ -407,20 +397,19 @@ class Server:
         self.running.set()
 
         # Start aiohttp server
-        future = self._thread.exec(self._main())
+        future = self._thread.exec(self.async_serve())
 
         try:
-            success = future.result(timeout=config.get("comms.timeout.server-ready"))
+            future.result(timeout=config.get("comms.timeout.server-ready"))
         except Exception:
             self.logger.error(traceback.format_exc())
             raise TimeoutError(f"{self}: failed to start, shutting down!")
 
-        if success:
-            self.logger.debug(f"{self}: running at {self.host}:{self.port}")
-
     def send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
     ) -> Future[bool]:
+        assert self._thread
+
         return self._thread.exec(self.async_send(client_id, signal, data, ok))
 
     def broadcast(
@@ -428,6 +417,8 @@ class Server:
     ) -> List[Future[bool]]:
         # Create msg container and execute writing coroutine for all
         # clients
+        assert self._thread
+
         msg = {"signal": signal, "data": data, "ok": ok}
         futures = []
         for client_id in self.ws_clients:
@@ -446,9 +437,6 @@ class Server:
             for filename, file_meta in filepath_dict.items():
 
                 # Extract data
-                self.logger.debug(
-                    f"{self}: move_transfer_files, file_meta = {file_meta}"
-                )
                 filepath = file_meta["dst_filepath"]
 
                 # Wait until filepath is completely written
@@ -500,16 +488,18 @@ class Server:
 
     def shutdown(self) -> bool:
         # Execute shutdown
-        future = self._thread.exec(self.async_shutdown())
+        if self._thread:
+            future = self._thread.exec(self.async_shutdown())
 
-        success = False
-        try:
-            success = future.result(timeout=config.get("comms.timeout.server-shutdown"))
-        except Exception:
-            self.logger.error(traceback.format_exc())
-            self.logger.warning(f"{self}: failed to gracefully shutdown")
+            success = False
+            try:
+                success = future.result(
+                    timeout=config.get("comms.timeout.server-shutdown")
+                )
+            except Exception:
+                ...
 
-        # Stop the async thread
-        self._thread.stop()
+            # Stop the async thread
+            self._thread.stop()
 
         return success

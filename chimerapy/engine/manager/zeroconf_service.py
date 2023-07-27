@@ -1,32 +1,49 @@
 import socket
-from typing import Optional
+from datetime import datetime
+from typing import Optional, Dict
 
 from zeroconf import ServiceInfo, Zeroconf
 
-from .manager_service import ManagerService
 from chimerapy.engine import _logger
+from ..states import ManagerState
+from ..eventbus import EventBus, TypedObserver
+from ..service import Service
 
 logger = _logger.getLogger("chimerapy-engine")
 
 
-class ZeroconfService(ManagerService):
+class ZeroconfService(Service):
 
     enabled: bool
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, eventbus: EventBus, state: ManagerState):
         super().__init__(name=name)
 
         # Save information
         self.name = name
+        self.eventbus = eventbus
+        self.state = state
+
+        # Creating zeroconf variables
         self.zeroconf: Optional[Zeroconf] = None
         self.enabled: bool = False
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "after_server_startup": TypedObserver(
+                "after_server_startup", on_asend=self.start, handle_event="drop"
+            ),
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def start(self):
 
         # Create the zeroconf service name
-        self.service_name = (
-            f"chimerapy-{self.services.session_record.rand_num}._http._tcp.local."
-        )
+        self.service_name = f"chimerapy-{self.state.id}._http._tcp.local."
 
         # Create service information
         self.zeroconf_info = ServiceInfo(
@@ -35,8 +52,8 @@ class ZeroconfService(ManagerService):
             addresses=[socket.inet_aton(self.state.ip)],
             port=self.state.port,
             properties={
-                "path": str(self.services.session_record.logdir),
-                "timestamp": self.services.session_record.timestamp,
+                "path": str(self.state.logdir),
+                "timestamp": datetime.now().strftime("%Y_%m_%d_%H_%M_%S"),
             },
         )
 
@@ -54,7 +71,7 @@ class ZeroconfService(ManagerService):
             # Start Zeroconf Service
             self.zeroconf = Zeroconf()
             await self.zeroconf.async_register_service(self.zeroconf_info, ttl=60)
-            logger.info(f"Manager started Zeroconf Service named {self.service_name}")
+            logger.info(f"{self}: Started Zeroconf Service named {self.service_name}")
 
             # Mark the service
             self.enabled = True
