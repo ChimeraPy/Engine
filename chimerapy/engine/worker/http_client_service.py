@@ -82,7 +82,6 @@ class HttpClientService(WorkerService):
         # Using Zeroconf
         elif method == "zeroconf":
             success = await self._async_connect_via_zeroconf(timeout)
-            self.worker.logger.debug(f"{self}: successful zeroconf: {success}")
             return success
 
         # Invalid option
@@ -182,7 +181,6 @@ class HttpClientService(WorkerService):
             # Check if ChimeraPy service was found
             if listener.is_service_found:
 
-                # Extract the information
                 host = socket.inet_ntoa(listener.service_info.addresses[0])
                 port = listener.service_info.port
 
@@ -203,7 +201,7 @@ class HttpClientService(WorkerService):
         browser.cancel()
         zeroconf.close()
 
-        self.worker.logger.debug(f"{self}: connected via zeroconf: {success}")
+        # self.worker.logger.debug(f"{self}: connected via zeroconf: {success}")
 
         return success
 

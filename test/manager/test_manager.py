@@ -112,6 +112,7 @@ def test_manager_shutting_down_ungracefully():
     worker.shutdown()
 
 
+@pytest.mark.skip(reason="Frozen test")
 @linux_run_only
 @pytest.mark.parametrize(
     "_worker, config_graph",

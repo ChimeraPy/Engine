@@ -46,14 +46,14 @@ class PollerService(NodeService):
         # Stop poller
         if self.poll_inputs_thread:
             self.poll_inputs_thread.join()
-            self.node.logger.debug(f"{self}: polling thread shutdown")
+            # self.node.logger.debug(f"{self}: polling thread shutdown")
 
         # Shutting down subscriber
         for sub in self.p2p_subs.values():
             sub.shutdown()
-            self.node.logger.debug(f"{self}: subscriber shutdown")
+            # self.node.logger.debug(f"{self}: subscriber shutdown")
 
-        self.node.logger.debug(f"{self}: shutdown")
+        # self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Helper Methods
@@ -64,9 +64,9 @@ class PollerService(NodeService):
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
 
-            self.node.logger.debug(
-                f"{self}: Setting up clients: {self.node.state.id}: {msg}"
-            )
+            # self.node.logger.debug(
+            #     f"{self}: Setting up clients: {self.node.state.id}: {msg}"
+            # )
 
             # Determine the host and port information
             in_bound_info = msg["data"][in_bound_id]

@@ -39,9 +39,8 @@ class HttpServerService(Service):
         self.state = state
 
         # Future Container
-        self._server: Optional[Server] = None
         self._futures: List[Future] = []
-        
+
         # Create server
         self._server = Server(
             port=self.port,
@@ -52,7 +51,7 @@ class HttpServerService(Service):
                 web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
             ],
-            thread=self._thread
+            thread=self._thread,
         )
 
         # Specify observers
@@ -91,12 +90,14 @@ class HttpServerService(Service):
 
         # Runn the Server
         await self._server.async_serve()
-        await self.eventbus.asend(Event("after_server_startup"))
 
         # Update the ip and port
         self._ip, self._port = self._server.host, self._server.port
         self.state.ip = self.ip
         self.state.port = self.port
+
+        # After updatign the information, then run it!
+        await self.eventbus.asend(Event("after_server_startup"))
 
     async def shutdown(self) -> bool:
 

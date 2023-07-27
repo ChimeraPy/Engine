@@ -13,8 +13,8 @@ def http_server():
 
     thread = AsyncLoopThread()
     thread.start()
-    eventbus = EventBus()
-    configure(eventbus, thread)
+    eventbus = EventBus(thread=thread)
+    configure(eventbus)
 
     state = ManagerState()
 

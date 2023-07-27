@@ -55,7 +55,10 @@ class WorkerHandlerService(Service):
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
             "worker_register": TypedObserver(
-                "worker_register", on_asend=self._register_worker, event_data_cls=WorkerRegisterEvent, handle_event="unpack"
+                "worker_register",
+                on_asend=self._register_worker,
+                event_data_cls=WorkerRegisterEvent,
+                handle_event="unpack",
             ),
             "worker_deregister": TypedObserver(
                 "worker_deregister",

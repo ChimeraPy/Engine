@@ -31,11 +31,11 @@ class ZeroconfService(Service):
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "after_server_startup": TypedObserver(
-                "after_server_startup", on_asend=self.start, handle_event='drop'
+                "after_server_startup", on_asend=self.start, handle_event="drop"
             ),
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
-            )
+            ),
         }
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
@@ -43,9 +43,7 @@ class ZeroconfService(Service):
     def start(self):
 
         # Create the zeroconf service name
-        self.service_name = (
-            f"chimerapy-{self.state.id}._http._tcp.local."
-        )
+        self.service_name = f"chimerapy-{self.state.id}._http._tcp.local."
 
         # Create service information
         self.zeroconf_info = ServiceInfo(

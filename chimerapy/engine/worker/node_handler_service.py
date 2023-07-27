@@ -114,7 +114,7 @@ class NodeHandlerService(WorkerService):
             self.node_controllers[node_id].shutdown(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
-            self.worker.logger.debug(f"{self}: Nodes have joined")
+            # self.worker.logger.debug(f"{self}: Nodes have joined")
 
         # Clear node_controllers afterwards
         self.node_controllers = {}

@@ -1,19 +1,17 @@
 import asyncio
 import logging
 
+from zeroconf import Zeroconf, ServiceInfo, ServiceListener, ServiceBrowser
+import zeroconf
+
 import pytest
 
-from ..conftest import TEST_DATA_DIR
 from chimerapy.engine.manager.zeroconf_service import ZeroconfService
-from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, configure
 from chimerapy.engine.states import ManagerState
 
 logger = logging.getLogger("chimerapy-engine")
-
-from zeroconf import Zeroconf, ServiceInfo, ServiceListener, ServiceBrowser
-import zeroconf
 
 
 class MockZeroconfListener(ServiceListener):
@@ -44,19 +42,21 @@ class MockZeroconfListener(ServiceListener):
                 self.is_service_found = True
                 self.service_info = info
 
+
 @pytest.fixture
 def zeroconf_service():
-    
+
     thread = AsyncLoopThread()
     thread.start()
-    eventbus = EventBus()
-    configure(eventbus, thread)
+    eventbus = EventBus(thread=thread)
+    configure(eventbus)
 
     state = ManagerState()
 
-    zeroconf_service = ZeroconfService('zeroconf', eventbus, state)
+    zeroconf_service = ZeroconfService("zeroconf", eventbus, state)
     zeroconf_service.start()
     return zeroconf_service
+
 
 @pytest.mark.asyncio
 async def test_enable_and_disable_zeroconf(zeroconf_service):
@@ -74,9 +74,7 @@ async def test_zeroconf_connect(zeroconf_service):
 
     # Create the Zeroconf instance and the listener
     zeroconf = Zeroconf()
-    listener = MockZeroconfListener(
-        stop_service_name="chimerapy"
-    )
+    listener = MockZeroconfListener(stop_service_name="chimerapy")
 
     # Browse for services
     browser = ServiceBrowser(zeroconf, "_http._tcp.local.", listener)

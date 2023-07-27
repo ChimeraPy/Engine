@@ -42,7 +42,7 @@ class ProcessorService(NodeService):
 
         self.safe_exec(self.node.teardown)
 
-        self.node.logger.debug(f"{self}: shutdown")
+        # self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Async Registered Methods
@@ -57,7 +57,7 @@ class ProcessorService(NodeService):
         # Extract the method
         function: Callable[[], Coroutine] = getattr(self.node, method_name)
         style = self.node.registered_methods[method_name].style
-        self.node.logger.debug(f"{self}: executing {function} with params: {params}")
+        # self.node.logger.debug(f"{self}: executing {function} with params: {params}")
 
         # Execute method based on its style
         success = False
@@ -104,16 +104,16 @@ class ProcessorService(NodeService):
 
     def while_loop(self):
 
-        self.node.logger.debug(f"{self}: started processor while loop")
+        # self.node.logger.debug(f"{self}: started processor while loop")
 
         # If using main method
         if self.node.__class__.__bases__[0].main.__code__ != self.node.main.__code__:
-            self.node.logger.debug(f"{self}: Using ``main`` method")
+            # self.node.logger.debug(f"{self}: Using ``main`` method")
             self.safe_exec(self.node.main)
 
         # Else, step method
         else:
-            self.node.logger.debug(f"{self}: Using ``step`` method")
+            # self.node.logger.debug(f"{self}: Using ``step`` method")
 
             while self.node.running:
 
@@ -178,11 +178,11 @@ class ProcessorService(NodeService):
                 self.node.services["publisher"].publish(output_data_chunk)
                 # self.logger.debug(f"{self}: published!")
 
-            else:
+            # else:
 
-                self.node.logger.warning(
-                    f"{self}: Do not have publisher yet given outputs"
-                )
+            # self.node.logger.warning(
+            #     f"{self}: Do not have publisher yet given outputs"
+            # )
 
         # Update the counter
         self.step_id += 1

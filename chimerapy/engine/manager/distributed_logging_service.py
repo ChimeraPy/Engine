@@ -72,21 +72,21 @@ class DistributedLoggingService(Service):
     ## Helper Function
     #####################################################################################
 
-    def register_entity(self, name: str, id: str):
+    def register_entity(self, worker_name: str, worker_id: str):
 
         if self.logs_sink is not None:
-            self._register_worker_to_logs_sink(worker_name=name, worker_id=id)
+            self._register_worker_to_logs_sink(
+                worker_name=worker_name, worker_id=worker_id
+            )
 
-    def deregister_entity(self, id: str):
+    def deregister_entity(self, worker_id: str):
 
         if self.logs_sink is not None:
-            self.logs_sink.deregister_entity(id)
+            self.logs_sink.deregister_entity(worker_id)
 
     def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
         if self.logs_sink:
-            self.logs_sink.initialize_entity(
-                worker_name, worker_id, self.state.logdir
-            )
+            self.logs_sink.initialize_entity(worker_name, worker_id, self.state.logdir)
             logger.info(f"Registered worker {worker_name} to logs sink")
 
     @staticmethod

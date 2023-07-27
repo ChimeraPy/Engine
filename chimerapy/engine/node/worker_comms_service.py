@@ -70,10 +70,10 @@ class WorkerCommsService(NodeService):
         self.worker_signal_start = threading.Event()
         self.worker_signal_start.clear()
 
-        self.node.logger.debug(
-            f"{self}: Prepping the networking component of the Node, connecting to \
-            Worker at {self.host}:{self.port}"
-        )
+        # self.node.logger.debug(
+        #     f"{self}: Prepping the networking component of the Node, connecting to \
+        #     Worker at {self.host}:{self.port}"
+        # )
 
         # Create client to the Worker
         self.client = Client(
@@ -124,7 +124,7 @@ class WorkerCommsService(NodeService):
         # Shutdown the client
         self.client.shutdown()
 
-        self.node.logger.debug(f"{self}: shutdown")
+        # self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Message Reactivity API
@@ -132,7 +132,7 @@ class WorkerCommsService(NodeService):
 
     async def process_node_server_data(self, msg: Dict):
 
-        self.node.logger.debug(f"{self}: setting up connections: {msg}")
+        # self.node.logger.debug(f"{self}: setting up connections: {msg}")
 
         # Pass the information to the Poller Service
         if "poller" in self.node.services:
@@ -143,7 +143,7 @@ class WorkerCommsService(NodeService):
         await self.client.async_send(
             signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
         )
-        self.node.logger.debug(f"{self}: Notifying Worker that Node is connected")
+        # self.node.logger.debug(f"{self}: Notifying Worker that Node is connected")
 
     async def start_node(self, msg: Dict):
         self.node.state.fsm = "PREVIEWING"
@@ -154,7 +154,7 @@ class WorkerCommsService(NodeService):
         )
 
     async def record_node(self, msg: Dict):
-        self.node.logger.debug(f"{self}: start")
+        # self.node.logger.debug(f"{self}: start")
         self.node.start_time = datetime.datetime.now()
         self.node.state.fsm = "RECORDING"
         self.worker_signal_start.set()
@@ -164,7 +164,7 @@ class WorkerCommsService(NodeService):
         )
 
     async def execute_registered_method(self, msg: Dict):
-        self.node.logger.debug(f"{self}: execute register method: {msg}")
+        # self.node.logger.debug(f"{self}: execute register method: {msg}")
 
         # Check first that the method exists
         method_name, params = (msg["data"]["method_name"], msg["data"]["params"])

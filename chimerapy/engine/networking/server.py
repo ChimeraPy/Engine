@@ -299,7 +299,7 @@ class Server:
     ####################################################################
 
     async def async_serve(self) -> bool:
-        
+
         # Create record of message uuids
         self.uuid_records: collections.deque[str] = collections.deque(maxlen=100)
 
@@ -400,7 +400,7 @@ class Server:
         future = self._thread.exec(self.async_serve())
 
         try:
-            success = future.result(timeout=config.get("comms.timeout.server-ready"))
+            future.result(timeout=config.get("comms.timeout.server-ready"))
         except Exception:
             self.logger.error(traceback.format_exc())
             raise TimeoutError(f"{self}: failed to start, shutting down!")
@@ -408,6 +408,8 @@ class Server:
     def send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
     ) -> Future[bool]:
+        assert self._thread
+
         return self._thread.exec(self.async_send(client_id, signal, data, ok))
 
     def broadcast(
@@ -415,6 +417,8 @@ class Server:
     ) -> List[Future[bool]]:
         # Create msg container and execute writing coroutine for all
         # clients
+        assert self._thread
+
         msg = {"signal": signal, "data": data, "ok": ok}
         futures = []
         for client_id in self.ws_clients:
@@ -484,15 +488,18 @@ class Server:
 
     def shutdown(self) -> bool:
         # Execute shutdown
-        future = self._thread.exec(self.async_shutdown())
+        if self._thread:
+            future = self._thread.exec(self.async_shutdown())
 
-        success = False
-        try:
-            success = future.result(timeout=config.get("comms.timeout.server-shutdown"))
-        except Exception:
-            ...
+            success = False
+            try:
+                success = future.result(
+                    timeout=config.get("comms.timeout.server-shutdown")
+                )
+            except Exception:
+                ...
 
-        # Stop the async thread
-        self._thread.stop()
+            # Stop the async thread
+            self._thread.stop()
 
         return success

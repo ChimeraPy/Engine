@@ -148,7 +148,7 @@ class HttpServerService(WorkerService):
             sys.path.insert(0, str(package_zip_path))
 
         # Send message back to the Manager letting them know that
-        self.worker.logger.info(f"{self}: Completed loading packages sent by Manager")
+        # self.worker.logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
@@ -189,7 +189,7 @@ class HttpServerService(WorkerService):
     ) -> web.Response:
         msg = await request.json()
 
-        self.worker.logger.debug(f"{self}: processing node server data: {msg}")
+        # self.worker.logger.debug(f"{self}: processing node server data: {msg}")
 
         # Broadcasting the node server data
         success = (
@@ -197,8 +197,6 @@ class HttpServerService(WorkerService):
         )
 
         # After all nodes have been connected, inform the Manager
-        self.worker.logger.debug(f"{self}: Informing Manager of processing completion")
-
         return web.json_response(
             {"success": success, "worker_state": self.worker.state.to_dict()}
         )
@@ -295,7 +293,7 @@ class HttpServerService(WorkerService):
 
     async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        self.worker.logger.debug(f"{self}: note_status_update: ", msg)
+        # self.worker.logger.debug(f"{self}: note_status_update: ", msg)
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
@@ -321,7 +319,7 @@ class HttpServerService(WorkerService):
         )
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-        self.worker.logger.debug(f"{self}: node report results: {msg}")
+        # self.worker.logger.debug(f"{self}: node report results: {msg}")
 
         node_id = msg["data"]["node_id"]
         self.worker.services.node_handler.update_results(node_id, msg["data"]["output"])
