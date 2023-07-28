@@ -48,6 +48,9 @@ class WorkerState(DataClassJsonMixin):
     ip: str = "0.0.0.0"
     port: int = 0
 
+    # Session logs
+    tempfolder: pathlib.Path = pathlib.Path.cwd()
+
 
 @evented
 @dataclass

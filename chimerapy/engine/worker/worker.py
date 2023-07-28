@@ -58,8 +58,12 @@ class Worker:
         else:
             id = str(uuid.uuid4())
 
+        # Create temporary data folder
+        self.delete_temp = delete_temp
+        tempfolder = pathlib.Path(tempfile.mkdtemp())
+
         # Creating state
-        self.state = WorkerState(id=id, name=name, port=port)
+        self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
@@ -67,10 +71,6 @@ class Worker:
         # Instance variables
         self.has_shutdown: bool = False
         self.shutdown_task: Optional[Task] = None
-
-        # Create temporary data folder
-        self.delete_temp = delete_temp
-        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
         self.logger = _logger.fork(parent_logger, name, id)
@@ -95,6 +95,7 @@ class Worker:
             state=self.state,
             eventbus=self.eventbus,
             logger=self.logger,
+            logreceiver=self.logreceiver,
         )
         self.http_server = HttpServerService(
             name="http_server",
@@ -108,6 +109,7 @@ class Worker:
             state=self.state,
             eventbus=self.eventbus,
             logger=self.logger,
+            logreceiver=self.logreceiver,
         )
 
         # Start all services
@@ -251,8 +253,8 @@ class Worker:
         await self.eventbus.asend(Event("shutdown"))
 
         # Delete temp folder if requested
-        if self.tempfolder.exists() and self.delete_temp:
-            shutil.rmtree(self.tempfolder)
+        if self.state.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.state.tempfolder)
 
         return True
 

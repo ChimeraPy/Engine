@@ -1,11 +1,9 @@
 import sys
 import pickle
 import asyncio
-import pathlib
-import traceback
 import enum
 import logging
-from typing import Dict
+from typing import Dict, List
 
 from aiohttp import web
 
@@ -15,8 +13,16 @@ from ..states import NodeState, WorkerState
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
-from ..utils import async_waiting_for, get_ip_address
+from ..utils import async_waiting_for
 from ..eventbus import EventBus, Event, TypedObserver
+from .events import (
+    CreateNodeEvent,
+    DestroyNodeEvent,
+    ProcessNodeServerDataEvent,
+    RegisteredMethodEvent,
+    UpdateGatherEvent,
+    UpdateResultsEvent,
+)
 
 
 class HttpServerService(Service):
@@ -36,7 +42,8 @@ class HttpServerService(Service):
         self.eventbus = eventbus
         self.logger = logger
 
-        self.logger.debug("HELLO")
+        # Containers
+        self.tasks: List[asyncio.Task] = []
 
         # Create server
         self.server = Server(
@@ -48,13 +55,13 @@ class HttpServerService(Service):
                 web.get("/nodes/server_data", self._async_report_node_server_data),
                 web.post("/nodes/server_data", self._async_process_node_server_data),
                 web.get("/nodes/gather", self._async_report_node_gather),
-                web.post("/nodes/collect", self._async_send_archive),
+                web.post("/nodes/collect", self._async_collect),
                 web.post("/nodes/step", self._async_step_route),
-                web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/nodes/start", self._async_start_nodes_route),
                 web.post("/nodes/record", self._async_record_route),
                 web.post("/nodes/registered_methods", self._async_request_method_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
+                web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
             ws_handlers={
@@ -121,7 +128,7 @@ class HttpServerService(Service):
         # Construct simple data structure for Node to address information
         node_server_data = {"id": self.state.id, "nodes": {}}
         for node_id, node_state in self.state.nodes.items():
-            node_server_data["nodes"][node_id] = {
+            node_server_data["nodes"][node_id] = {  # type: ignore[index]
                 "host": self.state.ip,
                 "port": node_state.port,
             }
@@ -179,32 +186,25 @@ class HttpServerService(Service):
             sys.path.insert(0, str(package_zip_path))
 
         # Send message back to the Manager letting them know that
-        # self.logger.info(f"{self}: Completed loading packages sent by Manager")
         return web.HTTPOk()
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
         msg_bytes = await request.read()
+
+        # Create node
         node_config = pickle.loads(msg_bytes)
+        await self.eventbus.asend(Event("create_node", CreateNodeEvent(node_config)))
 
-        success = await self.worker.services.node_handler.async_create_node(node_config)
-
-        # Update the manager with the most up-to-date status of the nodes
-        response = {
-            "success": success,
-            "node_state": self.state.nodes[node_config.id].to_dict(),
-        }
-
-        return web.json_response(response)
+        return web.HTTPOk()
 
     async def _async_destroy_node_route(self, request: web.Request) -> web.Response:
         msg = await request.json()
+
+        # Destroy Node
         node_id = msg["id"]
+        await self.eventbus.asend(Event("destroy_node", DestroyNodeEvent(node_id)))
 
-        success = await self.worker.services.node_handler.async_destroy_node(node_id)
-
-        return web.json_response(
-            {"success": success, "worker_state": self.state.to_dict()}
-        )
+        return web.HTTPOk()
 
     async def _async_report_node_server_data(
         self, request: web.Request
@@ -220,103 +220,65 @@ class HttpServerService(Service):
     ) -> web.Response:
         msg = await request.json()
 
-        # self.logger.debug(f"{self}: processing node server data: {msg}")
-
         # Broadcasting the node server data
-        success = (
-            await self.worker.services.node_handler.async_process_node_server_data(msg)
+        await self.eventbus.asend(
+            Event("process_node_server_data", ProcessNodeServerDataEvent(msg))
         )
 
-        # After all nodes have been connected, inform the Manager
-        return web.json_response(
-            {"success": success, "worker_state": self.state.to_dict()}
-        )
+        return web.HTTPOk()
 
     async def _async_step_route(self, request: web.Request) -> web.Response:
-
-        if await self.worker.services.node_handler.async_step():
-            return web.HTTPOk()
-        else:
-            return web.HTTPError()
+        await self.eventbus.asend(Event("step"))
+        return web.HTTPOk()
 
     async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
-
-        if await self.worker.services.node_handler.async_start_nodes():
-            return web.HTTPOk()
-        else:
-            return web.HTTPError()
+        await self.eventbus.asend(Event("start_nodes"))
+        return web.HTTPOk()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
-
-        if await self.worker.services.node_handler.async_record_nodes():
-            return web.HTTPOk()
-        else:
-            return web.HTTPError()
+        await self.eventbus.asend(Event("record"))
+        return web.HTTPOk()
 
     async def _async_request_method_route(self, request: web.Request) -> web.Response:
         msg = await request.json()
 
-        # Get information
-        node_id = msg["node_id"]
-        method_name = msg["method_name"]
-        params = msg["params"]
-
-        # # Make the request and get results
-        results = (
-            await self.worker.services.node_handler.async_request_registered_method(
-                node_id, method_name, params
-            )
+        # Get event information
+        event_data = RegisteredMethodEvent(
+            node_id=msg["node_id"], method_name=msg["method_name"], params=msg["params"]
         )
 
-        return web.json_response(results)
-
-    async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
-
-        if await self.worker.services.node_handler.async_stop_nodes():
-            return web.HTTPOk()
-        else:
-            return web.HTTPError()
-
-    async def _async_shutdown_route(self, request: web.Request) -> web.Response:
-        # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
-        self.worker.shutdown_task = asyncio.create_task(self.worker.async_shutdown())
+        # Send it!
+        await self.eventbus.asend(Event("registered_method", event_data))
 
         return web.HTTPOk()
 
-    async def _async_report_node_gather(self, request: web.Request) -> web.Response:
+    async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
+        await self.eventbus.asend(Event("stop_nodes"))
+        return web.HTTPOk()
 
-        gather_data = await self.worker.services.node_handler.async_gather()
+    async def _async_report_node_gather(self, request: web.Request) -> web.Response:
+        await self.eventbus.asend(Event("node_gather"))
+
+        self.logger.warning(f"{self}: gather doesn't work ATM.")
+        gather_data = {"id": self.state.id, "node_data": {}}
         return web.Response(body=pickle.dumps(gather_data))
 
-    async def _async_send_archive(self, request: web.Request) -> web.Response:
-        msg = await request.json()
+    async def _async_collect(self, request: web.Request) -> web.Response:
+        await request.json()
 
         # Collect data from the Nodes
-        success = await self.worker.services.node_handler.async_collect()
+        await self.eventbus.asend(Event("collect"))
 
-        # If located in the same computer, just move the data
-        if success:
-            host, port = self.worker.services.http_client.get_address()
-            try:
-                if host == get_ip_address():
-                    success = (
-                        await self.worker.services.http_client._send_archive_locally(
-                            pathlib.Path(msg["path"])
-                        )
-                    )
+        # After collecting, request to send the archive
+        await self.eventbus.asend(Event("send_archive"))
 
-                else:
-                    success = (
-                        await self.worker.services.http_client._send_archive_remotely(
-                            host, port
-                        )
-                    )
-            except Exception:
-                self.logger.error(traceback.format_exc())
-                return web.HTTPError()
+        return web.HTTPOk()
 
-        # After completion, let the Manager know
-        return web.json_response({"id": self.worker.id, "success": success})
+    async def _async_shutdown_route(self, request: web.Request) -> web.Response:
+        # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
+        self.tasks.append(asyncio.create_task(self.eventbus.asend(Event("shutdown"))))
+
+        return web.HTTPOk()
 
     ####################################################################
     ## WS Routes
@@ -332,10 +294,6 @@ class HttpServerService(Service):
         if node_id in self.state.nodes:
             self.state.nodes[node_id] = node_state
 
-        # Update Manager on the new nodes status
-        if self.worker.services.http_client.connected_to_manager:
-            await self.worker.services.http_client._async_node_status_update()
-
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving gathering value
@@ -345,12 +303,21 @@ class HttpServerService(Service):
         if node_id in self.state.nodes:
             self.state.nodes[node_id] = node_state
 
-        self.worker.services.node_handler.update_gather(
-            node_id, msg["data"]["latest_value"]
+        await self.eventbus.asend(
+            Event(
+                "update_gather",
+                UpdateGatherEvent(
+                    node_id=node_id, latest_value=msg["data"]["latest_value"]
+                ),
+            )
         )
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-        # self.logger.debug(f"{self}: node report results: {msg}")
 
         node_id = msg["data"]["node_id"]
-        self.worker.services.node_handler.update_results(node_id, msg["data"]["output"])
+        await self.eventbus.asend(
+            Event(
+                "update_results",
+                UpdateResultsEvent(node_id=node_id, output=msg["data"]["output"]),
+            )
+        )

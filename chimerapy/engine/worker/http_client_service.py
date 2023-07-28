@@ -12,6 +12,7 @@ from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import config
 from chimerapy.engine import _logger
+from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState
 from ..networking import Client
 from ..service import Service
@@ -21,7 +22,12 @@ from .zeroconf_listener import ZeroconfListener
 
 class HttpClientService(Service):
     def __init__(
-        self, name: str, state: WorkerState, eventbus: EventBus, logger: logging.Logger
+        self,
+        name: str,
+        state: WorkerState,
+        eventbus: EventBus,
+        logger: logging.Logger,
+        logreceiver: NodeIDZMQPullListener,
     ):
         super().__init__(name=name)
 
@@ -29,6 +35,7 @@ class HttpClientService(Service):
         self.state = state
         self.eventbus = eventbus
         self.logger = logger
+        self.logreceiver = logreceiver
 
         # Containers
         self.manager_ack: bool = False
@@ -41,7 +48,12 @@ class HttpClientService(Service):
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
-            )
+            ),
+            "WorkerState.changed": TypedObserver(
+                "WorkerState.changed",
+                on_asend=self._async_node_status_update,
+                handle_event="drop",
+            ),
         }
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
@@ -153,7 +165,7 @@ class HttpClientService(Service):
                         self.logger.info(f"{self}: enabling logs push to Manager")
                         for logging_entity in [
                             self.logger,
-                            self.worker.logreceiver,
+                            self.logreceiver,
                         ]:
                             handler = _logger.add_zmq_push_handler(
                                 logging_entity,
@@ -220,6 +232,29 @@ class HttpClientService(Service):
 
         return success
 
+    async def _send_archive(self) -> bool:
+        ...
+
+        # # If located in the same computer, just move the data
+        # host, port = self.worker.services.http_client.get_address()
+        # try:
+        #     if host == get_ip_address():
+        #         (
+        #             await self.worker.services.http_client._send_archive_locally(
+        #                 pathlib.Path(msg["path"])
+        #             )
+        #         )
+
+        #     else:
+        #         (
+        #             await self.worker.services.http_client._send_archive_remotely(
+        #                 host, port
+        #             )
+        #         )
+        # except Exception:
+        #     self.logger.error(traceback.format_exc())
+        #     return web.HTTPError()
+
     async def _send_archive_locally(self, path: pathlib.Path) -> bool:
         self.logger.debug(f"{self}: sending archive locally")
 
@@ -229,7 +264,7 @@ class HttpClientService(Service):
         timeout = 10
         while True:
             try:
-                shutil.move(self.worker.tempfolder, path)
+                shutil.move(self.state.tempfolder, path)
                 break
             except shutil.Error:  # File already exists!
                 break
@@ -240,8 +275,8 @@ class HttpClientService(Service):
                 if miss_counter * delay > timeout:
                     raise TimeoutError("Nodes haven't fully finishing saving!")
 
-        old_folder_name = path / self.worker.tempfolder.name
-        new_folder_name = path / f"{self.worker.name}-{self.worker.id}"
+        old_folder_name = path / self.state.tempfolder.name
+        new_folder_name = path / f"{self.state.name}-{self.state.id}"
         os.rename(old_folder_name, new_folder_name)
         return True
 
@@ -252,9 +287,9 @@ class HttpClientService(Service):
         # Else, send the archive data to the manager via network
         try:
             # Create a temporary HTTP client
-            client = Client(self.worker.id, host=host, port=port)
+            client = Client(self.state.id, host=host, port=port)
             return await client._send_folder_async(
-                self.worker.name, self.worker.tempfolder
+                self.state.name, self.state.tempfolder
             )
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False

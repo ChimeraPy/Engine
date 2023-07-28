@@ -12,6 +12,7 @@ import dill
 import multiprocess as mp
 
 from chimerapy.engine import config
+from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..service import Service
 from ..node.node_config import NodeConfig
 from ..node.worker_comms_service import WorkerCommsService
@@ -94,7 +95,12 @@ class MPNodeController(NodeController):
 
 class NodeHandlerService(Service):
     def __init__(
-        self, name: str, state: WorkerState, eventbus: EventBus, logger: logging.Logger
+        self,
+        name: str,
+        state: WorkerState,
+        eventbus: EventBus,
+        logger: logging.Logger,
+        logreceiver: NodeIDZMQPullListener,
     ):
         super().__init__(name=name)
 
@@ -102,6 +108,7 @@ class NodeHandlerService(Service):
         self.state = state
         self.eventbus = eventbus
         self.logger = logger
+        self.logreceiver = logreceiver
 
         # Containers
         self.node_controllers: Dict[str, NodeController] = {}
@@ -116,7 +123,10 @@ class NodeHandlerService(Service):
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
-            )
+            ),
+            "create_node": TypedObserver(
+                "create_node", on_asend=self.async_create_node, handle_event="unpack"
+            ),
         }
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
@@ -132,7 +142,6 @@ class NodeHandlerService(Service):
             self.node_controllers[node_id].shutdown(
                 timeout=config.get("worker.timeout.node-shutdown")
             )
-            # self.worker.logger.debug(f"{self}: Nodes have joined")
 
         # Clear node_controllers afterwards
         self.node_controllers = {}
@@ -170,12 +179,12 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        self.worker.logger.debug(
+        self.logger.debug(
             f"{self}: received request for Node {node_config.id} creation:"
         )
 
         # Saving the node data
-        self.worker.state.nodes[id] = NodeState(id=id)
+        self.state.nodes[id] = NodeState(id=id)
 
         # Keep trying to start a process until success
         success = False
@@ -185,17 +194,17 @@ class NodeHandlerService(Service):
             node_object = dill.loads(node_config.pickled)
 
             # Record the node name
-            self.worker.state.nodes[id].name = node_object.name
+            self.state.nodes[id].name = node_object.name
 
             # Create worker service and inject to the Node
             worker_service = WorkerCommsService(
                 name="worker",
-                host=self.worker.state.ip,
-                port=self.worker.state.port,
-                worker_logdir=self.worker.tempfolder,
+                host=self.state.ip,
+                port=self.state.port,
+                worker_logdir=self.state.tempfolder,
                 node_config=node_config,
-                logging_level=self.worker.logger.level,
-                worker_logging_port=self.worker.logreceiver.port,
+                logging_level=self.logger.level,
+                worker_logging_port=self.logreceiver.port,
             )
             worker_service.inject(node_object)
 
@@ -204,12 +213,11 @@ class NodeHandlerService(Service):
 
             # Start the node
             controller.start()
-            self.worker.logger.debug(f"{self}: started {node_object}")
+            self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
-                condition=lambda: self.worker.state.nodes[id].fsm
-                in ["INITIALIZED", "READY"],
+                condition=lambda: self.state.nodes[id].fsm in ["INITIALIZED", "READY"],
                 timeout=config.get("worker.timeout.node-creation"),
             )
 
@@ -219,7 +227,7 @@ class NodeHandlerService(Service):
 
             # Now we wait until the node has fully initialized and ready-up
             success = await async_waiting_for(
-                condition=lambda: self.worker.state.nodes[id].fsm == "READY",
+                condition=lambda: self.state.nodes[id].fsm == "READY",
                 timeout=config.get("worker.timeout.info-request"),
             )
 
@@ -231,27 +239,25 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            self.worker.logger.debug(f"{self}: completed node creation: {id}")
+            self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
-            self.worker.logger.error(f"{self}: Node {id} failed to create")
+            self.logger.error(f"{self}: Node {id} failed to create")
             return False
 
         return success
 
     async def async_destroy_node(self, node_id: str) -> bool:
 
-        self.worker.logger.debug(
-            f"{self}: received request for Node {node_id} destruction"
-        )
+        self.logger.debug(f"{self}: received request for Node {node_id} destruction")
         success = False
 
         if node_id in self.node_controllers:
             self.node_controllers[node_id].shutdown()
 
-            if node_id in self.worker.state.nodes:
-                del self.worker.state.nodes[node_id]
+            if node_id in self.state.nodes:
+                del self.state.nodes[node_id]
 
             success = True
 
@@ -266,28 +272,21 @@ class NodeHandlerService(Service):
 
         # Now wait until all nodes have responded as CONNECTED
         success = []
-        for node_id in self.worker.state.nodes:
+        for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
                 if await async_waiting_for(
-                    condition=lambda: self.worker.state.nodes[node_id].fsm
-                    == "CONNECTED",
+                    condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.worker.logger.debug(
-                        f"{self}: Nodes {node_id} has connected: PASS"
-                    )
+                    self.logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
                     success.append(True)
                     break
                 else:
-                    self.worker.logger.debug(
-                        f"{self}: Node {node_id} has connected: FAIL"
-                    )
+                    self.logger.debug(f"{self}: Node {node_id} has connected: FAIL")
                     success.append(False)
 
         if not all(success):
-            self.worker.logger.error(
-                f"{self}: Nodes failed to establish P2P connections"
-            )
+            self.logger.error(f"{self}: Nodes failed to establish P2P connections")
 
         return all(success)
 
@@ -321,7 +320,7 @@ class NodeHandlerService(Service):
 
         # Mark that the node hasn't responsed
         self.node_controllers[node_id].response = False
-        self.worker.logger.debug(
+        self.logger.debug(
             f"{self}: Requesting registered method: {method_name}@{node_id}"
         )
 
@@ -345,9 +344,9 @@ class NodeHandlerService(Service):
 
     async def async_gather(self) -> Dict:
 
-        self.worker.logger.debug(f"{self}: reporting to Manager gather request")
+        self.logger.debug(f"{self}: reporting to Manager gather request")
 
-        for node_id in self.worker.state.nodes:
+        for node_id in self.state.nodes:
             self.node_controllers[node_id].response = False
 
         # Request gather from Worker to Nodes
@@ -357,31 +356,29 @@ class NodeHandlerService(Service):
 
         # Wait until all Nodes have gather
         success = []
-        for node_id in self.worker.state.nodes:
+        for node_id in self.state.nodes:
             for i in range(config.get("worker.allowed-failures")):
 
                 if await async_waiting_for(
                     condition=lambda: self.node_controllers[node_id].response is True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.worker.logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to gather: PASS"
                     )
                     success.append(True)
                     break
                 else:
-                    self.worker.logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to gather: FAIL"
                     )
                     success.append(False)
 
                 if not all(success):
-                    self.worker.logger.error(
-                        f"{self}: Nodes failed to report to gather"
-                    )
+                    self.logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
-        gather_data = {"id": self.worker.state.id, "node_data": {}}
+        gather_data = {"id": self.state.id, "node_data": {}}
         for node_id, controller in self.node_controllers.items():
             if controller.gather is None:
                 data_chunk = DataChunk()
@@ -401,24 +398,24 @@ class NodeHandlerService(Service):
         # Now wait until all nodes have responded as CONNECTED
         success = []
         for i in range(config.get("worker.allowed-failures")):
-            for node_id in self.worker.nodes:
+            for node_id in self.state.nodes:
 
                 if await async_waiting_for(
-                    condition=lambda: self.worker.state.nodes[node_id].fsm == "SAVED",
+                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.worker.logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to saving request: PASS"
                     )
                     success.append(True)
                     break
                 else:
-                    self.worker.logger.debug(
+                    self.logger.debug(
                         f"{self}: Node {node_id} responded to saving request: FAIL"
                     )
                     success.append(False)
 
         if not all(success):
-            self.worker.logger.error(f"{self}: Nodes failed to report to saving")
+            self.logger.error(f"{self}: Nodes failed to report to saving")
 
         return all(success)
