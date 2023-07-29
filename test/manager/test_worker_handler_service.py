@@ -5,7 +5,7 @@ import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.states import ManagerState
 
 from ..conftest import GenNode, ConsumeNode
@@ -20,9 +20,8 @@ def testbed_setup(worker):
     thread = AsyncLoopThread()
     thread.start()
     eventbus = EventBus(thread=thread)
-    configure(eventbus)
 
-    state = ManagerState()
+    state = make_evented(ManagerState(), event_bus=eventbus)
 
     # Define graph
     gen_node = GenNode(name="Gen1", id="Gen1")
@@ -42,6 +41,10 @@ def testbed_setup(worker):
     thread.exec(worker_handler._register_worker(worker.state)).result(timeout=10)
 
     return (worker_handler, worker)
+
+
+def test_instanticate(testbed_setup):
+    ...
 
 
 @pytest.mark.asyncio

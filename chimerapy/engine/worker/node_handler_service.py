@@ -20,7 +20,7 @@ from ..states import NodeState, WorkerState
 from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import EventBus, TypedObserver, Event
 
 
 class NodeController:
@@ -292,9 +292,11 @@ class NodeHandlerService(Service):
 
     async def async_start_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.START_NODES, data={}
-        )
+        await self.eventbus.asend(Event("start_nodes"))
+        # return await self.worker.services["http_server"]._async_broadcast(
+        #     signal=WORKER_MESSAGE.START_NODES, data={}
+        # )
+        return True
 
     async def async_record_nodes(self) -> bool:
         # Send message to nodes to start
@@ -310,9 +312,11 @@ class NodeHandlerService(Service):
 
     async def async_stop_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.STOP_NODES, data={}
-        )
+        await self.eventbus.asend(Event("stop_nodes"))
+        # return await self.worker.services["http_server"]._async_broadcast(
+        #     signal=WORKER_MESSAGE.STOP_NODES, data={}
+        # )
+        return True
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict = {}

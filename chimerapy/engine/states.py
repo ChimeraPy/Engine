@@ -1,10 +1,10 @@
 import pathlib
 import uuid
+import tempfile
 from typing import Dict, Optional, Literal
 from dataclasses import dataclass, field
 from dataclasses_json import DataClassJsonMixin, cfg
 
-from .eventbus import evented
 from .node.registered_method import RegisteredMethod
 
 # As https://github.com/lidatong/dataclasses-json/issues/202#issuecomment-1186373078
@@ -33,7 +33,6 @@ class NodeState(DataClassJsonMixin):
     registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
 
-@evented
 @dataclass
 class WorkerState(DataClassJsonMixin):
 
@@ -49,10 +48,11 @@ class WorkerState(DataClassJsonMixin):
     port: int = 0
 
     # Session logs
-    tempfolder: pathlib.Path = pathlib.Path.cwd()
+    tempfolder: pathlib.Path = field(
+        default_factory=lambda: pathlib.Path(tempfile.mkdtemp())
+    )
 
 
-@evented
 @dataclass
 class ManagerState(DataClassJsonMixin):
 

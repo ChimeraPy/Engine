@@ -14,7 +14,7 @@ from ..networking.async_loop_thread import AsyncLoopThread
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState, NodeState
 from ..node import NodeConfig
-from ..eventbus import EventBus, Event, configure
+from ..eventbus import EventBus, Event, make_evented
 from .http_server_service import HttpServerService
 from .http_client_service import HttpClientService
 from .node_handler_service import NodeHandlerService
@@ -62,9 +62,6 @@ class Worker:
         self.delete_temp = delete_temp
         tempfolder = pathlib.Path(tempfile.mkdtemp())
 
-        # Creating state
-        self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
-
         # Creating a container for task futures
         self.task_futures: List[Future] = []
 
@@ -72,6 +69,20 @@ class Worker:
         self.has_shutdown: bool = False
         self.shutdown_task: Optional[Task] = None
 
+        # Create with thread
+        self._thread = AsyncLoopThread()
+        self._thread.start()
+
+        # Create the event bus for the Worker
+        self.eventbus = EventBus(thread=self._thread)
+
+        # Creating state
+        self.state = make_evented(
+            WorkerState(id=id, name=name, port=port, tempfolder=tempfolder),
+            event_bus=self.eventbus,
+        )
+
+        # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
         self.logger = _logger.fork(parent_logger, name, id)
 
@@ -80,14 +91,6 @@ class Worker:
         self.logger.debug(
             f"{self}: Log receiver started at port {self.logreceiver.port}"
         )
-
-        # Create with thread
-        self._thread = AsyncLoopThread()
-        self._thread.start()
-
-        # Create the event bus for the Worker
-        self.eventbus = EventBus(thread=self._thread)
-        configure(self.eventbus)
 
         # Create the services
         self.http_client = HttpClientService(

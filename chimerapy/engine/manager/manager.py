@@ -1,6 +1,5 @@
 import pathlib
 import atexit
-import random
 import os
 import uuid
 from datetime import datetime
@@ -15,7 +14,7 @@ from chimerapy.engine.states import ManagerState, WorkerState
 from chimerapy.engine.graph import Graph
 
 # Eventbus
-from ..eventbus import EventBus, Event, configure
+from ..eventbus import EventBus, Event, make_evented
 
 # from .events import StartEvent
 
@@ -75,20 +74,17 @@ class Manager:
 
         # Create eventbus
         self.eventbus = EventBus(thread=self._thread)
-        configure(self.eventbus)
-        
+
         # Create log directory to store data
         self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         id = str(uuid.uuid4())[:8]
-        logdir = (
-            pathlib.Path(logdir).resolve()
-            / f"{self.timestamp}-chimerapy-{id}"
-        )
+        logdir = pathlib.Path(logdir).resolve() / f"{self.timestamp}-chimerapy-{id}"
         os.makedirs(logdir, exist_ok=True)
 
         # Create state information container
-        self.state = ManagerState(
-            id=id, ip="127.0.0.1", port=port, logdir=logdir
+        self.state = make_evented(
+            ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir),
+            event_bus=self.eventbus,
         )
 
         # Create the services
@@ -121,7 +117,7 @@ class Manager:
 
         # Start all services
         self.eventbus.send(Event("start")).result(timeout=10)
-        
+
         # Logging
         logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
 
