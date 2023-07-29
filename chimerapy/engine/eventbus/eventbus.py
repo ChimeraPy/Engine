@@ -3,102 +3,17 @@ import asyncio
 from datetime import datetime
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Generic, Type, TypeVar, Callable, Awaitable, Optional, Literal
+from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar
 
-import dataclasses_json
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 
-from . import _logger
-from .networking.async_loop_thread import AsyncLoopThread
-
-logger = _logger.getLogger("chimerapy-engine")
+from .. import _logger
+from ..networking.async_loop_thread import AsyncLoopThread
 
 T = TypeVar("T")
 
-# Global variables
-global_event_bus: Optional["EventBus"] = None
-
-
-def configure(event_bus: "EventBus"):
-    global global_event_bus
-    global_event_bus = event_bus
-
-
-def evented(cls):
-    original_init = cls.__init__
-
-    def new_init(self, *args, **kwargs):
-        global global_event_bus
-
-        self.event_bus = None
-
-        if isinstance(global_event_bus, EventBus):
-            self.event_bus = global_event_bus
-
-        original_init(self, *args, **kwargs)
-
-    def make_property(name: str) -> Any:
-        def getter(self):
-            return self.__dict__[f"_{name}"]
-
-        def setter(self, value):
-            self.__dict__[f"_{name}"] = value
-            if self.event_bus:
-                event_name = f"{cls.__name__}.changed"
-                event_data = DataClassEvent(self)
-                self.event_bus.send(Event(event_name, event_data))
-
-        return property(getter, setter)
-
-    cls.__init__ = new_init
-
-    for f in fields(cls):
-        if f.name != "event_bus":
-            setattr(cls, f.name, make_property(f.name))
-
-    setattr(
-        cls,
-        "event_bus",
-        dataclasses_json.config(
-            field_name="event_bus", encoder=lambda x: None, decoder=lambda x: None
-        ),
-    )
-
-    return cls
-
-
-def make_evented(instance: T, event_bus: "EventBus") -> T:
-    setattr(instance, "event_bus", event_bus)
-    instance.__evented_values = {}  # type: ignore[attr-defined]
-
-    # Dynamically create a new class with the same name as the instance's class
-    new_class_name = instance.__class__.__name__
-    NewClass = type(new_class_name, (instance.__class__,), {})
-
-    def make_property(name: str):
-        def getter(self):
-            return self.__evented_values.get(name)
-
-        def setter(self, value):
-            self.__evented_values[name] = value
-            event_name = f"{self.__class__.__name__}.changed"
-            event_data = DataClassEvent(self)
-            event_bus.send(Event(event_name, event_data))
-
-        return property(getter, setter)
-
-    for f in fields(instance.__class__):
-        if f.name != "event_bus":
-            instance.__evented_values[f.name] = getattr(  # type: ignore
-                instance, f.name
-            )
-            setattr(NewClass, f.name, make_property(f.name))
-
-    # Change the class of the instance
-    instance.__class__ = NewClass
-
-    return instance
+logger = _logger.getLogger("chimerapy-engine")
 
 
 @dataclass
@@ -107,11 +22,6 @@ class Event:
     data: Optional[Any] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
-
-
-@dataclass
-class DataClassEvent:
-    dataclass: Any
 
 
 class EventBus(AsyncObservable):
