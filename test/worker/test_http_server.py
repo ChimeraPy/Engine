@@ -8,6 +8,7 @@ from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.data_protocols import NodePubTable
 from chimerapy.engine.eventbus import EventBus, configure
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.node.node_config import NodeConfig
@@ -50,8 +51,8 @@ def test_http_server_instanciate(http_server):
     [
         ("post", "/nodes/create", lazy_fixture("pickled_gen_node_config")),
         ("post", "/nodes/destroy", json.dumps({"id": 0})),
-        ("get", "/nodes/server_data", None),
-        ("post", "/nodes/server_data", json.dumps({"id": "test", "nodes": {}})),
+        ("get", "/nodes/pub_table", None),
+        ("post", "/nodes/pub_table", NodePubTable().to_json()),
         ("get", "/nodes/gather", None),
         ("post", "/nodes/collect", json.dumps({})),
         ("post", "/nodes/step", json.dumps({})),
@@ -64,7 +65,7 @@ def test_http_server_instanciate(http_server):
         ),
         ("post", "/nodes/stop", json.dumps({})),
         ("post", "/packages/load", json.dumps({"packages": []})),
-        # ("post", "/shutdown", json.dumps({})),
+        ("post", "/shutdown", json.dumps({})),
     ],
 )
 async def test_http_server_routes(http_server, route_type, route, payload):

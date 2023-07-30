@@ -36,7 +36,7 @@ class EventBus(AsyncObservable):
     ####################################################################
 
     async def asend(self, event: Event):
-        logger.debug(f"EventBus: Sending event: {event}")
+        # logger.debug(f"EventBus: Sending event: {event}")
         self._event_counts += 1
         await self.stream.asend(event)
 

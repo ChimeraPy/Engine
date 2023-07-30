@@ -182,8 +182,8 @@ class Manager:
     ) -> bool:
         return await self.worker_handler._request_node_destruction(worker_id, node_id)
 
-    async def _async_request_node_server_data(self, worker_id: str) -> bool:
-        return await self.worker_handler._request_node_server_data(worker_id)
+    async def _async_request_node_pub_table(self, worker_id: str) -> bool:
+        return await self.worker_handler._request_node_pub_table(worker_id)
 
     async def _async_request_connection_creation(self, worker_id: str) -> bool:
         return await self.worker_handler._request_connection_creation(worker_id)
@@ -225,8 +225,8 @@ class Manager:
     def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
 
-    def _request_node_server_data(self, worker_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_node_server_data(worker_id))
+    def _request_node_pub_table(self, worker_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_node_pub_table(worker_id))
 
     def _request_connection_creation(self, worker_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_connection_creation(worker_id))

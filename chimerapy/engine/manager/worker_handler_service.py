@@ -13,6 +13,7 @@ import networkx as nx
 
 from chimerapy.engine import config
 from chimerapy.engine import _logger
+from ..data_protocols import NodePubTable
 from ..node import NodeConfig
 from ..networking import Client, DataChunk
 from ..service import Service
@@ -44,7 +45,7 @@ class WorkerHandlerService(Service):
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
-        self.nodes_server_table: Dict = {}
+        self.node_pub_table = NodePubTable()
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -101,9 +102,6 @@ class WorkerHandlerService(Service):
     def _get_worker_ip(self, worker_id: str) -> str:
         worker_info = self.state.workers[worker_id]
         return f"http://{worker_info.ip}:{worker_info.port}"
-
-    def _clear_node_server(self):
-        self.nodes_server_table: Dict = {}
 
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
@@ -418,7 +416,7 @@ class WorkerHandlerService(Service):
 
         return False
 
-    async def _request_node_server_data(self, worker_id: str) -> bool:
+    async def _request_node_pub_table(self, worker_id: str) -> bool:
         """Request Workers to provide information about Node's PUBs
 
         Returns:
@@ -428,15 +426,16 @@ class WorkerHandlerService(Service):
         for i in range(config.get("manager.allowed-failures")):
             async with aiohttp.ClientSession() as client:
                 async with client.get(
-                    f"{self._get_worker_ip(worker_id)}/nodes/server_data"
+                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table"
                 ) as resp:
                     if resp.ok:
                         # Get JSON
                         data = await resp.json()
 
                         # And then updating the node server data
-                        node_server_data = data["node_server_data"]["nodes"]
-                        self.nodes_server_table.update(node_server_data)
+                        # node_server_data = data["node_server_data"]["nodes"]
+                        worker_node_pub_table = NodePubTable.from_dict(data)
+                        self.node_pub_table.table.update(worker_node_pub_table.table)
 
                         logger.debug(
                             f"{self}: Requesting Worker's node server request: SUCCESS"
@@ -468,7 +467,7 @@ class WorkerHandlerService(Service):
             async with aiohttp.ClientSession() as client:
                 async with client.post(
                     f"{self._get_worker_ip(worker_id)}/nodes/server_data",
-                    data=json.dumps(self.nodes_server_table),
+                    data=self.node_pub_table.to_json(),
                 ) as resp:
                     if not resp.ok:
                         return False
@@ -589,14 +588,10 @@ class WorkerHandlerService(Service):
             bool: Success in creating the connections
 
         """
-        # After all nodes have been created, get the entire graphs
-        # host and port information
-        self.nodes_server_table = {}
-
         # Broadcast request for node server data
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
-            coros.append(self._request_node_server_data(worker_id))
+            coros.append(self._request_node_pub_table(worker_id))
 
         # Wait until all complete
         try:
@@ -827,7 +822,7 @@ class WorkerHandlerService(Service):
                 await self._deregister_worker(worker_id)
 
         # Update variable data
-        self.nodes_server_table = {}
+        self.node_pub_table = NodePubTable()
         self._deregister_graph()
 
         return all(results)

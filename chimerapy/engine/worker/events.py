@@ -3,6 +3,7 @@ from typing import Dict, Any
 from enum import Enum
 
 from ..node.node_config import NodeConfig
+from ..data_protocols import NodePubTable
 
 
 @dataclass
@@ -22,8 +23,8 @@ class DestroyNodeEvent:
 
 
 @dataclass
-class ProcessNodeServerDataEvent:
-    msg: Dict
+class ProcessNodePubTableEvent:
+    node_pub_table: NodePubTable
 
 
 @dataclass

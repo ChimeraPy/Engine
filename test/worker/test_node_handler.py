@@ -115,9 +115,33 @@ async def test_create_unknown_node(node_handler_setup):
     assert await node_handler.async_destroy_node(node_id)
 
 
-@pytest.mark.skip(reason="TODO")
-def test_processing_node_server_data(node_handler_setup, gen_node):
-    ...
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.asyncio
+async def test_processing_node_pub_table(
+    node_handler_setup, gen_node, con_node, context
+):
+    node_handler, http_server = node_handler_setup
+
+    # Create
+    assert await node_handler.async_create_node(
+        cpe.NodeConfig(gen_node, context=context)
+    )
+    assert await node_handler.async_create_node(
+        cpe.NodeConfig(
+            con_node,
+            in_bound=[gen_node.id],
+            in_bound_by_name=[gen_node.name],
+            context=context,
+        )
+    )
+
+    # Serve node pub table
+    node_pub_table = http_server._create_node_pub_table()
+    assert await node_handler.async_process_node_pub_table(node_pub_table)
+
+    # Destroy
+    assert await node_handler.async_destroy_node(gen_node.id)
+    assert await node_handler.async_destroy_node(con_node.id)
 
 
 @pytest.mark.asyncio

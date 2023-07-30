@@ -7,6 +7,7 @@ from typing import Dict
 
 from ..networking import Client
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
+from ..data_protocols import NodePubTable
 from .node_service import NodeService
 from .poller_service import PollerService
 from .publisher_service import PublisherService
@@ -124,7 +125,7 @@ class WorkerCommsService(NodeService):
         # Shutdown the client
         self.client.shutdown()
 
-        # self.node.logger.debug(f"{self}: shutdown")
+        self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Message Reactivity API
@@ -132,11 +133,12 @@ class WorkerCommsService(NodeService):
 
     async def process_node_server_data(self, msg: Dict):
 
-        # self.node.logger.debug(f"{self}: setting up connections: {msg}")
+        node_pub_table = NodePubTable.from_json(msg["data"])
+        # self.node.logger.debug(f"{self}: setting up connections: {node_pub_table}")
 
         # Pass the information to the Poller Service
         if "poller" in self.node.services:
-            self.node.services["poller"].setup_connections(msg)
+            self.node.services["poller"].setup_connections(node_pub_table)
 
         self.node.state.fsm = "CONNECTED"
 

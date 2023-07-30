@@ -15,6 +15,7 @@ from chimerapy.engine import config
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..service import Service
 from ..node.node_config import NodeConfig
+from ..data_protocols import NodePubTable
 from ..node.worker_comms_service import WorkerCommsService
 from ..states import NodeState, WorkerState
 from ..networking import DataChunk
@@ -264,11 +265,16 @@ class NodeHandlerService(Service):
 
         return success
 
-    async def async_process_node_server_data(self, msg: Dict) -> bool:
+    async def async_process_node_pub_table(self, node_pub_table: NodePubTable) -> bool:
 
-        await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
-            data=msg,
+        await self.eventbus.asend(
+            Event(
+                "broadcast",
+                BroadcastEvent(
+                    signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
+                    data=node_pub_table.to_json(),
+                ),
+            )
         )
 
         # Now wait until all nodes have responded as CONNECTED
@@ -279,7 +285,7 @@ class NodeHandlerService(Service):
                     condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.logger.debug(f"{self}: Nodes {node_id} has connected: PASS")
+                    self.logger.debug(f"{self}: Node {node_id} has connected: PASS")
                     success.append(True)
                     break
                 else:

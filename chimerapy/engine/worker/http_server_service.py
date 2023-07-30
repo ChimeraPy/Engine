@@ -10,6 +10,7 @@ from aiohttp import web
 from chimerapy.engine import config
 from ..service import Service
 from ..states import NodeState, WorkerState
+from ..data_protocols import NodePubTable, NodePubEntry
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
@@ -18,7 +19,7 @@ from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
     CreateNodeEvent,
     DestroyNodeEvent,
-    ProcessNodeServerDataEvent,
+    ProcessNodePubTableEvent,
     RegisteredMethodEvent,
     UpdateGatherEvent,
     UpdateResultsEvent,
@@ -53,8 +54,8 @@ class HttpServerService(Service):
             routes=[
                 web.post("/nodes/create", self._async_create_node_route),
                 web.post("/nodes/destroy", self._async_destroy_node_route),
-                web.get("/nodes/server_data", self._async_report_node_server_data),
-                web.post("/nodes/server_data", self._async_process_node_server_data),
+                web.get("/nodes/pub_table", self._async_get_node_pub_table),
+                web.post("/nodes/pub_table", self._async_process_node_pub_table),
                 web.get("/nodes/gather", self._async_report_node_gather),
                 web.post("/nodes/collect", self._async_collect),
                 web.post("/nodes/step", self._async_step_route),
@@ -130,17 +131,15 @@ class HttpServerService(Service):
     async def _async_broadcast(self, signal: enum.Enum, data: Dict) -> bool:
         return await self.server.async_broadcast(signal=signal, data=data)
 
-    def _create_node_server_data(self) -> Dict:
+    def _create_node_pub_table(self) -> NodePubTable:
 
         # Construct simple data structure for Node to address information
-        node_server_data = {"id": self.state.id, "nodes": {}}
+        node_pub_table = NodePubTable()
         for node_id, node_state in self.state.nodes.items():
-            node_server_data["nodes"][node_id] = {  # type: ignore[index]
-                "host": self.state.ip,
-                "port": node_state.port,
-            }
+            node_entry = NodePubEntry(ip=self.state.ip, port=node_state.port)
+            node_pub_table.table[node_id] = node_entry
 
-        return node_server_data
+        return node_pub_table
 
     ####################################################################
     ## HTTP Routes
@@ -213,23 +212,18 @@ class HttpServerService(Service):
 
         return web.HTTPOk()
 
-    async def _async_report_node_server_data(
-        self, request: web.Request
-    ) -> web.Response:
+    async def _async_get_node_pub_table(self, request: web.Request) -> web.Response:
 
-        node_server_data = self._create_node_server_data()
-        return web.json_response(
-            {"success": True, "node_server_data": node_server_data}
-        )
+        node_pub_table = self._create_node_pub_table()
+        return web.json_response(node_pub_table.to_json())
 
-    async def _async_process_node_server_data(
-        self, request: web.Request
-    ) -> web.Response:
+    async def _async_process_node_pub_table(self, request: web.Request) -> web.Response:
         msg = await request.json()
+        node_pub_table: NodePubTable = NodePubTable.from_dict(msg)
 
         # Broadcasting the node server data
         await self.eventbus.asend(
-            Event("process_node_server_data", ProcessNodeServerDataEvent(msg))
+            Event("process_node_pub_table", ProcessNodePubTableEvent(node_pub_table))
         )
 
         return web.HTTPOk()

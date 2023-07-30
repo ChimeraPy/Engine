@@ -1,8 +1,7 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, List
+from typing import Callable, Dict, Optional, Any, List, Coroutine
 import asyncio
 import logging
-import threading
 import uuid
 import collections
 import time
@@ -72,11 +71,18 @@ class Server:
         self.port = port
         self.routes = routes
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
-        self._thread = thread
+
+        # The EventLoop
+        if thread:
+            self._thread = thread
+        else:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
+
+        self.futures: List[Future] = []
 
         # Using flag for marking if system should be running
-        self.running = threading.Event()
-        self.running.clear()
+        self.running: bool = False
         self.msg_processed_counter = 0
 
         # Create AIOHTTP server
@@ -86,7 +92,7 @@ class Server:
         self._app.add_routes([web.post("/file/post", self._file_receive)])
 
         # Creating container for ws clients
-        self.ws_clients: Dict[str, Dict[str, Any]] = {}
+        self.ws_clients: Dict[str, web.WebSocketResponse] = {}
 
         # Adding unique routes
         if self.routes:
@@ -123,6 +129,19 @@ class Server:
         return f"<Server {self.id}>"
 
     ####################################################################
+    # Helper Function
+    ####################################################################
+
+    def _exec_coro(self, coro: Coroutine) -> Future:
+        # Submitting the coroutine
+        future = self._thread.exec(coro)
+
+        # Saving the future for later use
+        self.futures.append(future)
+
+        return future
+
+    ####################################################################
     # Server Setters and Getters
     ####################################################################
 
@@ -138,7 +157,7 @@ class Server:
 
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
         # Storing the client information
-        self.ws_clients[msg["data"]["client_id"]] = {"ws": ws}
+        self.ws_clients[msg["data"]["client_id"]] = ws
 
     async def _file_receive(self, request):
 
@@ -215,35 +234,13 @@ class Server:
     # IO Main Methods
     ####################################################################
 
-    async def _read_ws(self, ws: web.WebSocketResponse):
-        async for aiohttp_msg in ws:
-
-            # Tracking the number of messages processed
-            self.msg_processed_counter += 1
-
-            # Extract the binary data and decoded it
-            msg = aiohttp_msg.json()
-
-            # Select the handler
-            handler = self.ws_handlers[msg["signal"]]
-            await handler(msg, ws)
-
-            # Send OK if requested
-            if msg["ok"]:
-                try:
-                    await ws.send_json(
-                        create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
-                    )
-                except ConnectionResetError:
-                    self.logger.warning(
-                        f"{self}: ConnectionResetError, shutting down ws"
-                    )
-                    await ws.close()
-                    return None
-
     async def _write_ws(self, client_id: str, msg: Dict) -> bool:
-        ws = self.ws_clients[client_id]["ws"]
-        success = await self._send_msg(ws, client_id, **msg)
+        success = False
+
+        if client_id in self.ws_clients:
+            ws = self.ws_clients[client_id]
+            success = await self._send_msg(ws, client_id, **msg)
+
         return success
 
     async def _websocket_handler(self, request):
@@ -252,14 +249,48 @@ class Server:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
-        # Establish read and write
-        read_task = asyncio.create_task(self._read_ws(ws))
+        try:
+            async for aiohttp_msg in ws:
 
-        # Continue executing them
-        await asyncio.gather(read_task)
+                # Tracking the number of messages processed
+                self.msg_processed_counter += 1
 
-        # Close websocket
-        await ws.close()
+                # Extract the binary data and decoded it
+                msg = aiohttp_msg.json()
+
+                # Select the handler
+                handler = self.ws_handlers[msg["signal"]]
+                await handler(msg, ws)
+
+                # Send OK if requested
+                if msg["ok"]:
+                    try:
+                        await ws.send_json(
+                            create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
+                        )
+                    except ConnectionResetError:
+                        self.logger.warning(
+                            f"{self}: ConnectionResetError, shutting down ws"
+                        )
+                        await ws.close()
+
+        except Exception as e:
+            self.logger.warning(f"{self}: WebSocket connection error: {e}")
+        finally:
+
+            # Close websocket
+            await ws.close()
+
+            # Remove client id
+            target_client_id: Optional[str] = None
+            for client_id, client_ws in self.ws_clients.values():
+                if client_ws == ws:
+                    target_client_id = client_id
+
+            # If found, remove
+            if target_client_id:
+                client_ws = self.ws_clients[target_client_id]
+                del self.ws_clients[target_client_id]
 
     ####################################################################
     # Server Utilities
@@ -275,6 +306,11 @@ class Server:
         ok: bool = False,
     ) -> bool:
 
+        # First, check if the ws is still open
+        if ws.closed:
+            del self.ws_clients[client_id]
+            return True
+
         # Create payload
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
 
@@ -283,7 +319,7 @@ class Server:
             await ws.send_json(payload)
         except ConnectionResetError:
             self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
-            await ws.close()
+            await ws.close(code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown")
             del self.ws_clients[client_id]
             return False
 
@@ -297,7 +333,7 @@ class Server:
         return True
 
     ####################################################################
-    # Server Async Setup
+    # Server ASync Lifecycle API
     ####################################################################
 
     async def async_serve(self) -> bool:
@@ -315,11 +351,10 @@ class Server:
         if self.port == 0:
             self.port = self._site._server.sockets[0].getsockname()[1]
 
-        return True
+        # Set flag
+        self.running = True
 
-    ####################################################################
-    # Server ASync Lifecycle API
-    ####################################################################
+        return True
 
     async def async_send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
@@ -356,24 +391,22 @@ class Server:
     async def async_shutdown(self) -> bool:
 
         # Only shutdown for the first time
-        if self.running.is_set():
-            self.running.clear()
+        if not self.running:
+            self.logger.debug(f"{self}: Tried to shutdown while not running.")
+            return True
 
-            for client_data in self.ws_clients.values():
-                client_ws = client_data["ws"]
-                try:
-                    await asyncio.wait_for(
-                        client_ws.close(
-                            code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"
-                        ),
-                        timeout=2,
-                    )
-                except (asyncio.exceptions.TimeoutError, RuntimeError):
-                    pass
+        for ws in self.ws_clients.values():
+            try:
+                await asyncio.wait_for(
+                    ws.close(code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"),
+                    timeout=2,
+                )
+            except (asyncio.exceptions.TimeoutError, RuntimeError):
+                pass
 
-            # Cleanup and signal complete
-            await asyncio.wait_for(self._runner.shutdown(), timeout=10)
-            await asyncio.wait_for(self._runner.cleanup(), timeout=10)
+        # Cleanup and signal complete
+        await asyncio.wait_for(self._runner.shutdown(), timeout=10)
+        await asyncio.wait_for(self._runner.cleanup(), timeout=10)
 
         return True
 
@@ -381,52 +414,31 @@ class Server:
     # Server Sync Lifecycle API
     ####################################################################
 
-    def serve(self, thread: Optional[AsyncLoopThread] = None):
+    def serve(self, blocking: bool = True) -> Optional[Future]:
 
         # Cannot serve twice
-        if self.running.is_set():
-            self.logger.warning(f"{self}: Requested to re-server HTTP Server")
+        if self.running:
+            self.logger.warning(f"{self}: Requested to re-serve HTTP Server")
             return None
 
-        # Create async loop in thread
-        if thread:
-            self._thread = thread
-        else:
-            self._thread = AsyncLoopThread()
-            self._thread.start()
+        future = self._exec_coro(self.async_serve())
 
-        # Mark that the server is running
-        self.running.set()
-
-        # Start aiohttp server
-        future = self._thread.exec(self.async_serve())
-
-        try:
+        if blocking:
             future.result(timeout=config.get("comms.timeout.server-ready"))
-        except Exception:
-            self.logger.error(traceback.format_exc())
-            raise TimeoutError(f"{self}: failed to start, shutting down!")
+
+        return future
 
     def send(
         self, client_id: str, signal: enum.Enum, data: Dict, ok: bool = False
     ) -> Future[bool]:
-        assert self._thread
-
-        return self._thread.exec(self.async_send(client_id, signal, data, ok))
+        return self._exec_coro(self.async_send(client_id, signal, data, ok))
 
     def broadcast(
         self, signal: enum.Enum, data: Dict, ok: bool = False
-    ) -> List[Future[bool]]:
+    ) -> Future[bool]:
         # Create msg container and execute writing coroutine for all
         # clients
-        assert self._thread
-
-        msg = {"signal": signal, "data": data, "ok": ok}
-        futures = []
-        for client_id in self.ws_clients:
-            futures.append(self._thread.exec(self._write_ws(client_id, msg)))
-
-        return futures
+        return self._exec_coro(self.async_broadcast(signal, data, ok))
 
     def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
 
@@ -488,20 +500,11 @@ class Server:
 
         return True
 
-    def shutdown(self) -> bool:
-        # Execute shutdown
-        if self._thread:
-            future = self._thread.exec(self.async_shutdown())
+    def shutdown(self, blocking: bool = True) -> Optional[Future]:
 
-            success = False
-            try:
-                success = future.result(
-                    timeout=config.get("comms.timeout.server-shutdown")
-                )
-            except Exception:
-                ...
+        future = self._exec_coro(self.async_shutdown())
 
-            # Stop the async thread
-            self._thread.stop()
+        if blocking:
+            future.result(timeout=config.get("comms.timeout.server-ready"))
 
-        return success
+        return future
