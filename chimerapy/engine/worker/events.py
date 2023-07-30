@@ -1,7 +1,14 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Any
+from enum import Enum
 
 from ..node.node_config import NodeConfig
+
+
+@dataclass
+class BroadcastEvent:
+    signal: Enum
+    data: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

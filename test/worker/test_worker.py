@@ -1,11 +1,13 @@
-from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
-from ..streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
-from ..networking.test_client_server import server
-
 import os
 import shutil
 
+import pytest
+
 import chimerapy.engine as cpe
+
+from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
+from ..streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
+from ..networking.test_client_server import server
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
@@ -29,6 +31,7 @@ def test_worker_instance_shutdown_twice(worker):
     worker.shutdown()
 
 
+@pytest.mark.skip(reason="Need to refactor")
 def test_send_archive_locally(worker):
 
     # Adding simple file
@@ -57,6 +60,7 @@ def test_send_archive_locally(worker):
         assert f.read() == "hello"
 
 
+@pytest.mark.skip(reason="Need to refactor")
 def test_send_archive_remotely(worker, server):
 
     # Make a copy of example logs

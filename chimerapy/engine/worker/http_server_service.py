@@ -22,6 +22,7 @@ from .events import (
     RegisteredMethodEvent,
     UpdateGatherEvent,
     UpdateResultsEvent,
+    BroadcastEvent,
 )
 
 
@@ -78,6 +79,12 @@ class HttpServerService(Service):
             "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "broadcast": TypedObserver(
+                "broadcast",
+                BroadcastEvent,
+                on_asend=self._async_broadcast,
+                handle_event="unpack",
             ),
         }
         for ob in self.observers.values():

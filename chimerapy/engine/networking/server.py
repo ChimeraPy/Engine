@@ -243,7 +243,7 @@ class Server:
 
     async def _write_ws(self, client_id: str, msg: Dict) -> bool:
         ws = self.ws_clients[client_id]["ws"]
-        success = await self._send_msg(ws, **msg)
+        success = await self._send_msg(ws, client_id, **msg)
         return success
 
     async def _websocket_handler(self, request):
@@ -268,6 +268,7 @@ class Server:
     async def _send_msg(
         self,
         ws: web.WebSocketResponse,
+        client_id: str,
         signal: enum.Enum,
         data: Dict,
         msg_uuid: str = str(uuid.uuid4()),
@@ -283,6 +284,7 @@ class Server:
         except ConnectionResetError:
             self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await ws.close()
+            del self.ws_clients[client_id]
             return False
 
         # If ok, wait until ok

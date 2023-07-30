@@ -54,27 +54,22 @@ async def test_connect_via_zeroconf(http_client, manager):
     assert await http_client._async_connect_via_zeroconf()
 
 
-@pytest.mark.skip(reason="Failed to shutdown, manager-side error in API call.")
 @pytest.mark.asyncio
 async def test_node_status_update(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
     assert await http_client._async_node_status_update()
 
 
-@pytest.mark.skip(reason="manager-side error")
 @pytest.mark.asyncio
 async def test_worker_state_changed_updates(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
 
     # Change the state
     http_client.state.nodes["test"] = NodeState(id="test", name="test")
-    # http_client.state.ip = '17'
 
     # Wait for the update
-    logger.debug("Sleeping for 5")
-    await asyncio.sleep(5)
+    logger.debug("Sleeping for 1")
+    await asyncio.sleep(1)
 
     # Check
-    logger.debug(http_client.state)
-    logger.debug(manager.state.workers[http_client.state.id])
-    # assert manager.state.workers[http_client.state.id] == http_client.state
+    assert "test" in manager.state.workers[http_client.state.id].nodes

@@ -21,12 +21,13 @@ from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
 from ..eventbus import EventBus, TypedObserver, Event
+from .events import BroadcastEvent
 
 
 class NodeController:
     node_object: "Node"
 
-    context: Union[threading.Thread, mp.Process]
+    context: Union[threading.Thread, mp.Process]  # type: ignore
 
     response: bool = False
     gather: DataChunk = DataChunk()
@@ -68,15 +69,15 @@ class ThreadNodeController(NodeController):
 
 class MPNodeController(NodeController):
 
-    context: mp.Process
-    running: mp.Value
+    context: mp.Process  # type: ignore
+    running: mp.Value  # type: ignore
 
     def __init__(self, node_object: "Node"):
         super().__init__(node_object)
 
         # Create a process to run the Node
-        self.running = mp.Value("i", True)
-        self.context = mp.Process(
+        self.running = mp.Value("i", True)  # type: ignore
+        self.context = mp.Process(  # type: ignore
             target=self.node_object.run,
             args=(
                 True,
@@ -292,30 +293,30 @@ class NodeHandlerService(Service):
 
     async def async_start_nodes(self) -> bool:
         # Send message to nodes to start
-        await self.eventbus.asend(Event("start_nodes"))
-        # return await self.worker.services["http_server"]._async_broadcast(
-        #     signal=WORKER_MESSAGE.START_NODES, data={}
-        # )
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.START_NODES))
+        )
         return True
 
     async def async_record_nodes(self) -> bool:
         # Send message to nodes to start
-        return await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.RECORD_NODES, data={}
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.RECORD_NODES))
         )
+        return True
 
     async def async_step(self) -> bool:
         # Worker tell all nodes to take a step
-        return await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.REQUEST_STEP, data={}
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_STEP))
         )
+        return True
 
     async def async_stop_nodes(self) -> bool:
         # Send message to nodes to start
-        await self.eventbus.asend(Event("stop_nodes"))
-        # return await self.worker.services["http_server"]._async_broadcast(
-        #     signal=WORKER_MESSAGE.STOP_NODES, data={}
-        # )
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.STOP_NODES))
+        )
         return True
 
     async def async_request_registered_method(
@@ -395,8 +396,8 @@ class NodeHandlerService(Service):
     async def async_collect(self) -> bool:
 
         # Request saving from Worker to Nodes
-        await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_COLLECT))
         )
 
         # Now wait until all nodes have responded as CONNECTED
