@@ -6,6 +6,7 @@ import pytest
 
 from chimerapy.engine.worker.http_client_service import HttpClientService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.networking.server import Server
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine import _logger
@@ -13,6 +14,17 @@ from chimerapy.engine import _logger
 from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
 
 logger = _logger.getLogger("chimerapy-engine")
+
+
+@pytest.fixture
+def server():
+    server = Server(
+        id="test_server",
+        port=0,
+    )
+    server.serve()
+    yield server
+    server.shutdown()
 
 
 @pytest.fixture
