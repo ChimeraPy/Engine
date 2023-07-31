@@ -13,12 +13,13 @@ import networkx as nx
 
 from chimerapy.engine import config
 from chimerapy.engine import _logger
+from ..data_protocols import NodePubTable
 from ..node import NodeConfig
 from ..networking import Client, DataChunk
 from ..service import Service
 from ..graph import Graph
 from ..exceptions import CommitGraphError
-from ..states import WorkerState, NodeState, ManagerState
+from ..states import WorkerState, ManagerState
 from ..eventbus import EventBus, TypedObserver, Event
 from .events import (
     WorkerRegisterEvent,
@@ -44,7 +45,7 @@ class WorkerHandlerService(Service):
         self.graph: Graph = Graph()
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
-        self.nodes_server_table: Dict = {}
+        self.node_pub_table = NodePubTable()
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -102,15 +103,12 @@ class WorkerHandlerService(Service):
         worker_info = self.state.workers[worker_id]
         return f"http://{worker_info.ip}:{worker_info.port}"
 
-    def _clear_node_server(self):
-        self.nodes_server_table: Dict = {}
-
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
         self.state.workers[worker_state.id] = worker_state
         logger.debug(
             f"Manager registered <Worker id={worker_state.id}"
-            f"name={worker_state.name}> from {worker_state.ip}"
+            f" name={worker_state.name}> from {worker_state.ip}"
         )
 
         # Register entity from logging
@@ -342,22 +340,15 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=data) as resp:
                 if resp.ok:
-                    json_data: Dict[str, Any] = await resp.json()
-
-                    if not json_data["success"]:
-                        logger.error(
-                            f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
-                        )
-                        return False
-
                     logger.debug(
                         f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
                     )
-                    self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
-                        json_data["node_state"]
-                    )
-
                     return True
+                else:
+                    logger.error(
+                        f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
+                    )
+                    return False
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
@@ -397,28 +388,22 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=json.dumps(data)) as resp:
                 if resp.ok:
-                    data = await resp.json()
-
-                    if not data["success"]:
-                        logger.error(
-                            f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
-                        )
-                        return False
-
                     logger.debug(
                         f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
                     )
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-
                     return True
+                else:
+
+                    logger.error(
+                        f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
+                    )
+                    return False
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
         return False
 
-    async def _request_node_server_data(self, worker_id: str) -> bool:
+    async def _request_node_pub_table(self, worker_id: str) -> bool:
         """Request Workers to provide information about Node's PUBs
 
         Returns:
@@ -428,24 +413,24 @@ class WorkerHandlerService(Service):
         for i in range(config.get("manager.allowed-failures")):
             async with aiohttp.ClientSession() as client:
                 async with client.get(
-                    f"{self._get_worker_ip(worker_id)}/nodes/server_data"
+                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table"
                 ) as resp:
                     if resp.ok:
                         # Get JSON
                         data = await resp.json()
 
                         # And then updating the node server data
-                        node_server_data = data["node_server_data"]["nodes"]
-                        self.nodes_server_table.update(node_server_data)
+                        worker_node_pub_table = NodePubTable.from_json(data)
+                        self.node_pub_table.table.update(worker_node_pub_table.table)
 
                         logger.debug(
-                            f"{self}: Requesting Worker's node server request: SUCCESS"
+                            f"{self}: Requesting Worker's node pub table: SUCCESS"
                         )
                         return True
 
                     else:
                         logger.error(
-                            f"{self}: Requesting Worker's node server request: NO \
+                            f"{self}: Requesting Worker's node pub table: NO \
                             RESPONSE"
                         )
 
@@ -467,28 +452,17 @@ class WorkerHandlerService(Service):
             # Send the request to each worker
             async with aiohttp.ClientSession() as client:
                 async with client.post(
-                    f"{self._get_worker_ip(worker_id)}/nodes/server_data",
-                    data=json.dumps(self.nodes_server_table),
+                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table",
+                    data=self.node_pub_table.to_json(),
                 ) as resp:
-                    if not resp.ok:
-                        return False
+                    if resp.ok:
 
-                    # Get JSON
-                    data = await resp.json()
+                        logger.debug(
+                            f"{self}: receiving Worker's node pub table:" "SUCCESS"
+                        )
+                        return True
 
-                    if not data["success"]:
-                        return False
-
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-
-                    logger.debug(
-                        f"{self}: receiving Worker's node server request: \
-                        SUCCESS"
-                    )
-
-                    return True
+                    return False
 
         return False
 
@@ -589,14 +563,10 @@ class WorkerHandlerService(Service):
             bool: Success in creating the connections
 
         """
-        # After all nodes have been created, get the entire graphs
-        # host and port information
-        self.nodes_server_table = {}
-
         # Broadcast request for node server data
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
-            coros.append(self._request_node_server_data(worker_id))
+            coros.append(self._request_node_pub_table(worker_id))
 
         # Wait until all complete
         try:
@@ -827,7 +797,7 @@ class WorkerHandlerService(Service):
                 await self._deregister_worker(worker_id)
 
         # Update variable data
-        self.nodes_server_table = {}
+        self.node_pub_table = NodePubTable()
         self._deregister_graph()
 
         return all(results)

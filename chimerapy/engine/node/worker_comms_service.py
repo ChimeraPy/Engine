@@ -7,6 +7,7 @@ from typing import Dict
 
 from ..networking import Client
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
+from ..data_protocols import NodePubTable
 from .node_service import NodeService
 from .poller_service import PollerService
 from .publisher_service import PublisherService
@@ -82,7 +83,7 @@ class WorkerCommsService(NodeService):
             id=self.node.state.id,
             ws_handlers={
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
-                WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_server_data,
+                WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_pub_table,
                 WORKER_MESSAGE.REQUEST_STEP: self.async_step,
                 WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
                 WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
@@ -130,13 +131,14 @@ class WorkerCommsService(NodeService):
     ## Message Reactivity API
     ####################################################################
 
-    async def process_node_server_data(self, msg: Dict):
+    async def process_node_pub_table(self, msg: Dict):
 
-        # self.node.logger.debug(f"{self}: setting up connections: {msg}")
+        node_pub_table = NodePubTable.from_json(msg["data"])
+        # self.node.logger.debug(f"{self}: setting up connections: {node_pub_table}")
 
         # Pass the information to the Poller Service
         if "poller" in self.node.services:
-            self.node.services["poller"].setup_connections(msg)
+            self.node.services["poller"].setup_connections(node_pub_table)
 
         self.node.state.fsm = "CONNECTED"
 

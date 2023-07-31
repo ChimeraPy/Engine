@@ -78,6 +78,10 @@ def client_list(server):
         client.shutdown()
 
 
+def test_server_instanciate(server):
+    ...
+
+
 def test_server_http_req_res(server):
     r = requests.get(f"http://{server.host}:{server.port}")
     assert r.status_code == 200 and r.text == "Hello, world"
@@ -85,6 +89,12 @@ def test_server_http_req_res(server):
 
 def test_server_websocket_connection(server, client):
     assert client.id in list(server.ws_clients.keys())
+
+
+def test_server_websocket_connection_shutdown(server, client):
+    client.shutdown()
+    time.sleep(1)
+    server.broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!")
 
 
 def test_server_send_to_client(server, client):

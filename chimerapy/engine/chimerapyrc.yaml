@@ -10,6 +10,7 @@ config:
       package-delivery: 60 # seconds
       worker-shutdown: 10 # seconds
       node-creation: 130 # seconds
+      reset: 30
     retry:
       data-collection: 30 # seconds
     logs-sink:

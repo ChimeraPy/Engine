@@ -4,6 +4,7 @@ import threading
 import zmq
 
 from ..networking import Subscriber, DataChunk
+from ..data_protocols import NodePubTable, NodePubEntry
 from .node_service import NodeService
 
 
@@ -59,7 +60,7 @@ class PollerService(NodeService):
     ## Helper Methods
     ####################################################################
 
-    def setup_connections(self, msg: Dict):
+    def setup_connections(self, node_pub_table: NodePubTable):
 
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
@@ -69,11 +70,11 @@ class PollerService(NodeService):
             # )
 
             # Determine the host and port information
-            in_bound_info = msg["data"][in_bound_id]
+            in_bound_entry: NodePubEntry = node_pub_table.table[in_bound_id]
 
             # Create subscribers to other nodes' publishers
             p2p_subscriber = Subscriber(
-                host=in_bound_info["host"], port=in_bound_info["port"]
+                host=in_bound_entry.ip, port=in_bound_entry.port
             )
 
             # Storing all subscribers

@@ -1,29 +1,71 @@
 import os
 import shutil
+import uuid
 import traceback
 import socket
 import asyncio
 import pathlib
-from typing import Optional, Literal, Union, Tuple
+import logging
+from typing import Optional, Literal, Union, Tuple, Dict
 
 import aiohttp
 from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import config
-from ..networking import Client
 from chimerapy.engine import _logger
-from .worker_service import WorkerService
+from ..logger.zmq_handlers import NodeIDZMQPullListener
+from ..states import WorkerState
+from ..networking import Client
+from ..utils import get_ip_address
+from ..service import Service
+from ..eventbus import EventBus, TypedObserver
+from .events import SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 
 
-class HttpClientService(WorkerService):
-    def __init__(self, name: str):
+class HttpClientService(Service):
+    def __init__(
+        self,
+        name: str,
+        state: WorkerState,
+        eventbus: EventBus,
+        logger: logging.Logger,
+        logreceiver: NodeIDZMQPullListener,
+    ):
         super().__init__(name=name)
+
+        # Input parameters
+        self.state = state
+        self.eventbus = eventbus
+        self.logger = logger
+        self.logreceiver = logreceiver
+
+        # Containers
         self.manager_ack: bool = False
         self.connected_to_manager: bool = False
         self.manager_host = "0.0.0.0"
         self.manager_port = -1
         self.manager_url = ""
+
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "shutdown": TypedObserver(
+                "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "WorkerState.changed": TypedObserver(
+                "WorkerState.changed",
+                on_asend=self._async_node_status_update,
+                handle_event="drop",
+            ),
+            "send_archive": TypedObserver(
+                "send_archive",
+                SendArchiveEvent,
+                on_asend=self._send_archive,
+                handle_event="unpack",
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port
@@ -34,7 +76,7 @@ class HttpClientService(WorkerService):
             try:
                 success = await self.async_deregister()
             except Exception:
-                self.worker.logger.warning(f"{self}: Failed to properly deregister")
+                self.logger.warning(f"{self}: Failed to properly deregister")
                 success = False
 
         return success
@@ -70,6 +112,11 @@ class HttpClientService(WorkerService):
 
         """
 
+        # First check if we are already connected
+        if self.connected_to_manager:
+            self.logger.warning(f"{self}: Requested to connect when already connected")
+            return True
+
         # Standard direct IP connection
         if method == "ip":
             if not isinstance(host, str) or not isinstance(port, int):
@@ -94,7 +141,7 @@ class HttpClientService(WorkerService):
         async with aiohttp.ClientSession() as client:
             async with client.post(
                 self.manager_url + "/workers/deregister",
-                data=self.worker.state.to_json(),
+                data=self.state.to_json(),
                 timeout=config.get("worker.timeout.deregister"),
             ) as resp:
 
@@ -116,7 +163,7 @@ class HttpClientService(WorkerService):
         async with aiohttp.ClientSession() as client:
             async with client.post(
                 f"http://{host}:{port}/workers/register",
-                data=self.worker.state.to_json(),
+                data=self.state.to_json(),
                 timeout=timeout,
             ) as resp:
 
@@ -129,22 +176,20 @@ class HttpClientService(WorkerService):
                     logs_push_info = data.get("logs_push_info", {})
 
                     if logs_push_info["enabled"]:
-                        self.worker.logger.info(
-                            f"{self}: enabling logs push to Manager"
+                        self.logger.info(
+                            f"{self}: enabling logs push to Manager: {logs_push_info}"
                         )
                         for logging_entity in [
-                            self.worker.logger,
-                            self.worker.logreceiver,
+                            self.logger,
+                            self.logreceiver,
                         ]:
                             handler = _logger.add_zmq_push_handler(
                                 logging_entity,
                                 logs_push_info["host"],
                                 logs_push_info["port"],
                             )
-                            if logging_entity is not self.worker.logger:
-                                _logger.add_identifier_filter(
-                                    handler, self.worker.state.id
-                                )
+                            if logging_entity is not self.logger:
+                                _logger.add_identifier_filter(handler, self.state.id)
 
                     # Tracking the state and location of the manager
                     self.connected_to_manager = True
@@ -152,7 +197,7 @@ class HttpClientService(WorkerService):
                     self.manager_port = port
                     self.manager_url = f"http://{host}:{port}"
 
-                    self.worker.logger.info(
+                    self.logger.info(
                         f"{self}: connection successful to Manager @ {host}:{port}."
                     )
                     return True
@@ -165,9 +210,7 @@ class HttpClientService(WorkerService):
 
         # Create the Zeroconf instance and the listener
         zeroconf = Zeroconf()
-        listener = ZeroconfListener(
-            stop_service_name="chimerapy", logger=self.worker.logger
-        )
+        listener = ZeroconfListener(stop_service_name="chimerapy", logger=self.logger)
 
         # Browse for services
         browser = ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
@@ -201,12 +244,38 @@ class HttpClientService(WorkerService):
         browser.cancel()
         zeroconf.close()
 
-        # self.worker.logger.debug(f"{self}: connected via zeroconf: {success}")
+        # self.logger.debug(f"{self}: connected via zeroconf: {success}")
 
         return success
 
-    async def _send_archive_locally(self, path: pathlib.Path) -> bool:
-        self.worker.logger.debug(f"{self}: sending archive locally")
+    async def _send_archive(self, path: pathlib.Path) -> bool:
+
+        # Flag
+        send_locally = False
+
+        # Get manager info
+        manager_host, manager_port = self.get_address()
+
+        if not self.connected_to_manager:
+            send_locally = True
+        elif manager_host == get_ip_address():
+            send_locally = True
+        else:
+            send_locally = False
+
+        try:
+            if send_locally:
+                await self._send_archive_locally(path)
+            else:
+                await self._send_archive_remotely(manager_host, manager_port)
+        except Exception:
+            self.logger.error(traceback.format_exc())
+            return False
+
+        return True
+
+    async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
+        self.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
         delay = 1
@@ -214,36 +283,38 @@ class HttpClientService(WorkerService):
         timeout = 10
         while True:
             try:
-                shutil.move(self.worker.tempfolder, path)
+                shutil.move(self.state.tempfolder, path)
                 break
             except shutil.Error:  # File already exists!
                 break
             except Exception:
-                self.worker.logger.error(traceback.format_exc())
+                self.logger.error(traceback.format_exc())
                 await asyncio.sleep(delay)
                 miss_counter += 1
                 if miss_counter * delay > timeout:
                     raise TimeoutError("Nodes haven't fully finishing saving!")
 
-        old_folder_name = path / self.worker.tempfolder.name
-        new_folder_name = path / f"{self.worker.name}-{self.worker.id}"
+        old_folder_name = path / self.state.tempfolder.name
+        new_folder_name = (
+            path / f"{self.state.name}-{self.state.id}-{str(uuid.uuid4())[:4]}"
+        )
         os.rename(old_folder_name, new_folder_name)
-        return True
+        return new_folder_name
 
     async def _send_archive_remotely(self, host: str, port: int) -> bool:
 
-        self.worker.logger.debug(f"{self}: sending archive via network")
+        self.logger.debug(f"{self}: sending archive via network")
 
         # Else, send the archive data to the manager via network
         try:
             # Create a temporary HTTP client
-            client = Client(self.worker.id, host=host, port=port)
+            client = Client(self.state.id, host=host, port=port)
             return await client._send_folder_async(
-                self.worker.name, self.worker.tempfolder
+                self.state.name, self.state.tempfolder
             )
         except (TimeoutError, SystemError) as error:
             self.delete_temp = False
-            self.worker.logger.exception(
+            self.logger.exception(
                 f"{self}: Failed to transmit files to Manager - {error}."
             )
 
@@ -253,7 +324,7 @@ class HttpClientService(WorkerService):
 
         async with aiohttp.ClientSession(self.manager_url) as session:
             async with session.post(
-                "/workers/node_status", data=self.worker.state.to_json()
+                "/workers/node_status", data=self.state.to_json()
             ) as resp:
 
                 return resp.ok

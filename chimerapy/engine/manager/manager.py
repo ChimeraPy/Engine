@@ -1,6 +1,5 @@
 import pathlib
 import atexit
-import random
 import os
 import uuid
 from datetime import datetime
@@ -15,7 +14,7 @@ from chimerapy.engine.states import ManagerState, WorkerState
 from chimerapy.engine.graph import Graph
 
 # Eventbus
-from ..eventbus import EventBus, Event, configure
+from ..eventbus import EventBus, Event, make_evented
 
 # from .events import StartEvent
 
@@ -75,20 +74,17 @@ class Manager:
 
         # Create eventbus
         self.eventbus = EventBus(thread=self._thread)
-        configure(self.eventbus)
-        
+
         # Create log directory to store data
         self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
         id = str(uuid.uuid4())[:8]
-        logdir = (
-            pathlib.Path(logdir).resolve()
-            / f"{self.timestamp}-chimerapy-{id}"
-        )
+        logdir = pathlib.Path(logdir).resolve() / f"{self.timestamp}-chimerapy-{id}"
         os.makedirs(logdir, exist_ok=True)
 
         # Create state information container
-        self.state = ManagerState(
-            id=id, ip="127.0.0.1", port=port, logdir=logdir
+        self.state = make_evented(
+            ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir),
+            event_bus=self.eventbus,
         )
 
         # Create the services
@@ -121,7 +117,7 @@ class Manager:
 
         # Start all services
         self.eventbus.send(Event("start")).result(timeout=10)
-        
+
         # Logging
         logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
 
@@ -186,8 +182,8 @@ class Manager:
     ) -> bool:
         return await self.worker_handler._request_node_destruction(worker_id, node_id)
 
-    async def _async_request_node_server_data(self, worker_id: str) -> bool:
-        return await self.worker_handler._request_node_server_data(worker_id)
+    async def _async_request_node_pub_table(self, worker_id: str) -> bool:
+        return await self.worker_handler._request_node_pub_table(worker_id)
 
     async def _async_request_connection_creation(self, worker_id: str) -> bool:
         return await self.worker_handler._request_connection_creation(worker_id)
@@ -229,8 +225,8 @@ class Manager:
     def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
 
-    def _request_node_server_data(self, worker_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_node_server_data(worker_id))
+    def _request_node_pub_table(self, worker_id: str) -> Future[bool]:
+        return self._exec_coro(self._async_request_node_pub_table(worker_id))
 
     def _request_connection_creation(self, worker_id: str) -> Future[bool]:
         return self._exec_coro(self._async_request_connection_creation(worker_id))
@@ -468,8 +464,15 @@ class Manager:
         """
         return self._exec_coro(self.async_collect(unzip))
 
-    def reset(self, keep_workers: bool = True) -> Future[bool]:
-        return self._exec_coro(self.async_reset(keep_workers))
+    def reset(
+        self, keep_workers: bool = True, blocking: bool = True
+    ) -> Union[bool, Future[bool]]:
+        future = self._exec_coro(self.async_reset(keep_workers))
+
+        if blocking:
+            return future.result(timeout=config.get("manager.timeout.reset"))
+
+        return future
 
     def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
         """Proper shutting down ChimeraPy-Engine cluster.

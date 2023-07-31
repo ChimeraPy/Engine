@@ -3,69 +3,17 @@ import asyncio
 from datetime import datetime
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Generic, Type, TypeVar, Callable, Awaitable, Optional, Literal
+from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar
 
-import dataclasses_json
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
-from dataclasses import dataclass, field, fields, asdict
+from dataclasses import dataclass, field
 
-from . import _logger
-from .networking.async_loop_thread import AsyncLoopThread
-
-logger = _logger.getLogger("chimerapy-engine")
+from .. import _logger
+from ..networking.async_loop_thread import AsyncLoopThread
 
 T = TypeVar("T")
 
-# Global variables
-global_event_bus: Optional["EventBus"] = None
-
-
-def configure(event_bus: "EventBus"):
-    global global_event_bus
-    global_event_bus = event_bus
-
-
-def evented(cls):
-    original_init = cls.__init__
-
-    def new_init(self, *args, **kwargs):
-        global global_event_bus
-
-        self.event_bus = None
-
-        if isinstance(global_event_bus, EventBus):
-            self.event_bus = global_event_bus
-
-        original_init(self, *args, **kwargs)
-
-    def make_property(name: str) -> Any:
-        def getter(self):
-            return self.__dict__[f"_{name}"]
-
-        def setter(self, value):
-            self.__dict__[f"_{name}"] = value
-            if self.event_bus:
-                event_name = f"{cls.__name__}.changed"
-                event_data = DataClassEvent(self)
-                self.event_bus.send(Event(event_name, event_data))
-
-        return property(getter, setter)
-
-    cls.__init__ = new_init
-
-    for f in fields(cls):
-        if f.name != "event_bus":
-            setattr(cls, f.name, make_property(f.name))
-
-    setattr(
-        cls,
-        "event_bus",
-        dataclasses_json.config(
-            field_name="event_bus", encoder=lambda x: None, decoder=lambda x: None
-        ),
-    )
-
-    return cls
+logger = _logger.getLogger("chimerapy-engine")
 
 
 @dataclass
@@ -76,17 +24,12 @@ class Event:
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-@dataclass
-class DataClassEvent:
-    dataclass: Any
-
-
 class EventBus(AsyncObservable):
     def __init__(self, thread: Optional[AsyncLoopThread] = None):
         self.stream = AsyncSubject()
         self._event_counts: int = 0
         self._sub_counts: int = 0
-        self._thread = thread
+        self.thread = thread
 
     ####################################################################
     ## Async
@@ -100,18 +43,19 @@ class EventBus(AsyncObservable):
     async def asubscribe(self, observer: AsyncObserver):
         self._sub_counts += 1
         await self.stream.subscribe_async(observer)
-    
+
     ####################################################################
     ## Sync
     ####################################################################
 
     def send(self, event: Event) -> Future:
-        assert isinstance(self._thread, AsyncLoopThread)
-        return self._thread.exec(self.asend(event))
+        assert isinstance(self.thread, AsyncLoopThread)
+        return self.thread.exec(self.asend(event))
 
     def subscribe(self, observer: AsyncObserver):
-        assert isinstance(self._thread, AsyncLoopThread)
-        return self._thread.exec(self.asubscribe(observer))
+        assert isinstance(self.thread, AsyncLoopThread)
+        return self.thread.exec(self.asubscribe(observer))
+
 
 class TypedObserver(AsyncObserver, Generic[T]):
     def __init__(
@@ -136,7 +80,9 @@ class TypedObserver(AsyncObserver, Generic[T]):
         self._on_aclose = on_aclose
 
     def __str__(self) -> str:
-        return f"<TypedObserver event_type={self.event_type}, event_data_cls={self.event_data_cls}>"
+        string = f"<TypedObserver event_type={self.event_type}, "
+        f"event_data_cls={self.event_data_cls}>"
+        return string
 
     def bind_asend(self, func: Callable[[Event], Awaitable[None]]):
         self._on_asend = func

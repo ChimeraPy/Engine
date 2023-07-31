@@ -13,9 +13,9 @@ import pandas as pd
 
 # Internal Imports
 from chimerapy.engine import _logger
-from chimerapy.engine.states import NodeState
+from ..states import NodeState
 from ..networking import DataChunk
-from chimerapy.engine.service import ServiceGroup
+from ..service import ServiceGroup
 
 # Service Imports
 from .registered_method import RegisteredMethod

@@ -1,13 +1,21 @@
 import asyncio
 from dataclasses import dataclass
 from dataclasses_json import DataClassJsonMixin
-from typing import List, Any
+from typing import List, Any, Dict
 
 import pytest
 
 import chimerapy.engine as cpe
-from chimerapy.engine.eventbus import EventBus, TypedObserver, Event, evented, configure
+from chimerapy.engine.eventbus import (
+    EventBus,
+    TypedObserver,
+    Event,
+    evented,
+    configure,
+    make_evented,
+)
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.states import ManagerState, WorkerState, NodeState
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -27,6 +35,24 @@ class WorldEventData:
 class SomeClass(DataClassJsonMixin):
     number: int
     string: str
+
+
+@dataclass
+class NestedClass(DataClassJsonMixin):
+    number: int
+    subclass: HelloEventData
+    map: Dict[str, str]
+    vector: List[str]
+
+
+@pytest.fixture
+def event_bus():
+    # Creating the configuration for the eventbus and dataclasses
+    thread = AsyncLoopThread()
+    thread.start()
+    event_bus = EventBus(thread=thread)
+    configure(event_bus)
+    return event_bus
 
 
 @pytest.mark.asyncio
@@ -155,13 +181,7 @@ async def test_event_handling():
 
 
 @pytest.mark.asyncio
-async def test_evented_dataclass():
-
-    # Creating the configuration for the eventbus and dataclasses
-    thread = AsyncLoopThread()
-    thread.start()
-    event_bus = EventBus(thread=thread)
-    configure(event_bus)
+async def test_evented_dataclass(event_bus):
 
     # Creating the observer and its binding
     evented_observer = TypedObserver("SomeClass.changed")
@@ -187,3 +207,91 @@ async def test_evented_dataclass():
     # Confirm
     assert len(local_variable) != 0
     assert isinstance(data.to_json(), str)
+
+
+@pytest.mark.asyncio
+async def test_evented_wrapper(event_bus):
+
+    # Creating the observer and its binding
+    evented_observer = TypedObserver("SomeClass.changed")
+
+    # Creating handler
+    local_variable: List = []
+
+    async def add_to(event):
+        local_variable.append(1)
+
+    evented_observer.bind_asend(add_to)
+
+    # Subscribe to the event bus
+    await event_bus.asubscribe(evented_observer)
+
+    # Create the evented class
+    data = make_evented(SomeClass(number=1, string="hello"), event_bus=event_bus)
+
+    # Trigger an event by changing the class
+    logger.debug("Triggering manually")
+    data.number = 2
+    await asyncio.sleep(1)
+
+    # Confirm
+    assert len(local_variable) != 0
+    assert isinstance(data.to_json(), str)
+
+
+@pytest.mark.parametrize(
+    "cls, kwargs",
+    [
+        (SomeClass, {"number": 1, "string": "hello"}),
+        (ManagerState, {}),
+        (WorkerState, {"id": "test", "name": "test"}),
+        (NodeState, {"id": "a"}),
+    ],
+)
+def test_make_evented(cls, kwargs, event_bus):
+    # Create the evented class
+    data = make_evented(cls(**kwargs), event_bus=event_bus)
+    data.to_json()
+
+
+def test_make_evented_multiple(event_bus):
+    # Create the evented class
+    make_evented(SomeClass(number=1, string="hello"), event_bus=event_bus)
+    make_evented(SomeClass(number=1, string="hello"), event_bus=event_bus)
+    make_evented(SomeClass(number=1, string="hello"), event_bus=event_bus)
+
+
+@pytest.mark.asyncio
+async def test_make_evented_nested(event_bus):
+    nested_data = make_evented(
+        NestedClass(
+            number=1,
+            subclass=HelloEventData(message="hello"),
+            map={"test": "test"},
+            vector=["hello", "there"],
+        ),
+        event_bus=event_bus,
+    )
+
+    nested_data.number = 5
+    await asyncio.sleep(1)
+    a = event_bus._event_counts
+    assert a > 0
+
+    nested_data.map["new"] = "key"
+    await asyncio.sleep(1)
+    b = event_bus._event_counts
+    assert b > a
+
+    nested_data.subclass.message = "goodbye"
+    await asyncio.sleep(1)
+    c = event_bus._event_counts
+    assert c > b
+
+    nested_data.vector.append("this")
+    await asyncio.sleep(1)
+    d = event_bus._event_counts
+    assert d > c
+
+    # Then it must also be jsonable
+    logger.debug(nested_data.to_json())

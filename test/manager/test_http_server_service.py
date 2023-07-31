@@ -4,19 +4,19 @@ import pytest
 
 from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.states import ManagerState, WorkerState
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def http_server():
 
+    # Creating the configuration for the eventbus and dataclasses
     thread = AsyncLoopThread()
     thread.start()
-    eventbus = EventBus(thread=thread)
-    configure(eventbus)
+    event_bus = EventBus(thread=thread)
 
-    state = ManagerState()
+    state = make_evented(ManagerState(), event_bus=event_bus)
 
     # Create the services
     http_server = HttpServerService(
@@ -24,7 +24,7 @@ def http_server():
         port=0,
         enable_api=True,
         thread=thread,
-        eventbus=eventbus,
+        eventbus=event_bus,
         state=state,
     )
     thread.exec(http_server.start()).result(timeout=10)

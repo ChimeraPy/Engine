@@ -74,6 +74,8 @@ class DistributedLoggingService(Service):
 
     def register_entity(self, worker_name: str, worker_id: str):
 
+        # logger.debug(f"{self}: registereing entity: {worker_name}, {worker_id}")
+
         if self.logs_sink is not None:
             self._register_worker_to_logs_sink(
                 worker_name=worker_name, worker_id=worker_id

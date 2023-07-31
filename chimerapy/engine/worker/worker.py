@@ -4,25 +4,23 @@ import tempfile
 import pathlib
 import uuid
 import shutil
-import asyncio
-import traceback
 import atexit
 from concurrent.futures import Future
 from asyncio import Task
 
 from chimerapy.engine import config
+from chimerapy.engine import _logger
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..logger.zmq_handlers import NodeIDZMQPullListener
-from chimerapy.engine.states import WorkerState, NodeState
-from chimerapy.engine import _logger
-from .worker_services_group import WorkerServicesGroup
+from ..states import WorkerState, NodeState
 from ..node import NodeConfig
+from ..eventbus import EventBus, Event, make_evented
+from .http_server_service import HttpServerService
+from .http_client_service import HttpClientService
+from .node_handler_service import NodeHandlerService
 
 
 class Worker:
-
-    services: WorkerServicesGroup
-
     def __init__(
         self,
         name: str,
@@ -60,8 +58,9 @@ class Worker:
         else:
             id = str(uuid.uuid4())
 
-        # Creating state
-        self.state = WorkerState(id=id, name=name, port=port)
+        # Create temporary data folder
+        self.delete_temp = delete_temp
+        tempfolder = pathlib.Path(tempfile.mkdtemp())
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
@@ -70,28 +69,54 @@ class Worker:
         self.has_shutdown: bool = False
         self.shutdown_task: Optional[Task] = None
 
-        # Create temporary data folder
-        self.delete_temp = delete_temp
-        self.tempfolder = pathlib.Path(tempfile.mkdtemp())
+        # Create with thread
+        self._thread = AsyncLoopThread()
+        self._thread.start()
 
+        # Create the event bus for the Worker
+        self.eventbus = EventBus(thread=self._thread)
+
+        # Creating state
+        self.state = make_evented(
+            WorkerState(id=id, name=name, port=port, tempfolder=tempfolder),
+            event_bus=self.eventbus,
+        )
+
+        # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
         self.logger = _logger.fork(parent_logger, name, id)
 
         # Create a log listener to read Node's information
         self.logreceiver = self._start_log_receiver()
-        self.logger.debug(f"Log receiver started at port {self.logreceiver.port}")
+        self.logger.debug(
+            f"{self}: Log receiver started at port {self.logreceiver.port}"
+        )
 
-        # Create with thread
-        self._thread = AsyncLoopThread()
-        self._thread.start()
-
-        # Saving state variables
-        self.services = WorkerServicesGroup(worker=self, thread=self._thread)
+        # Create the services
+        self.http_client = HttpClientService(
+            name="http_client",
+            state=self.state,
+            eventbus=self.eventbus,
+            logger=self.logger,
+            logreceiver=self.logreceiver,
+        )
+        self.http_server = HttpServerService(
+            name="http_server",
+            state=self.state,
+            thread=self._thread,
+            eventbus=self.eventbus,
+            logger=self.logger,
+        )
+        self.node_handler = NodeHandlerService(
+            name="node_handler",
+            state=self.state,
+            eventbus=self.eventbus,
+            logger=self.logger,
+            logreceiver=self.logreceiver,
+        )
 
         # Start all services
-        self.services.apply(
-            "start", order=["node_handler", "http_client", "http_server"]
-        )
+        self.eventbus.send(Event("start")).result(timeout=10)
 
         # Register shutdown
         atexit.register(self.shutdown)
@@ -181,43 +206,43 @@ class Worker:
             bool: Success in connecting to the Manager
 
         """
-        return await self.services.http_client.async_connect(
+        return await self.http_client.async_connect(
             host=host, port=port, method=method, timeout=timeout
         )
 
     async def async_deregister(self) -> bool:
-        return await self.services.http_client.async_deregister()
+        return await self.http_client.async_deregister()
 
     async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
-        return await self.services.node_handler.async_create_node(node_config)
+        return await self.node_handler.async_create_node(node_config)
 
     async def async_destroy_node(self, node_id: str) -> bool:
-        return await self.services.node_handler.async_destroy_node(node_id=node_id)
+        return await self.node_handler.async_destroy_node(node_id=node_id)
 
     async def async_start_nodes(self) -> bool:
-        return await self.services.node_handler.async_start_nodes()
+        return await self.node_handler.async_start_nodes()
 
     async def async_record_nodes(self) -> bool:
-        return await self.services.node_handler.async_record_nodes()
+        return await self.node_handler.async_record_nodes()
 
     async def async_step(self) -> bool:
-        return await self.services.node_handler.async_step()
+        return await self.node_handler.async_step()
 
     async def async_stop_nodes(self) -> bool:
-        return await self.services.node_handler.async_stop_nodes()
+        return await self.node_handler.async_stop_nodes()
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict = {}
     ) -> Dict[str, Any]:
-        return await self.services.node_handler.async_request_registered_method(
+        return await self.node_handler.async_request_registered_method(
             node_id=node_id, method_name=method_name, params=params
         )
 
     async def async_gather(self) -> Dict:
-        return await self.services.node_handler.async_gather()
+        return await self.node_handler.async_gather()
 
     async def async_collect(self) -> bool:
-        return await self.services.node_handler.async_collect()
+        return await self.node_handler.async_collect()
 
     async def async_shutdown(self) -> bool:
 
@@ -228,19 +253,13 @@ class Worker:
             self.has_shutdown = True
 
         # Shutdown all services and Wait until all complete
-        try:
-            results = await asyncio.gather(
-                *[s.shutdown() for s in self.services.values()]
-            )
-        except Exception:
-            self.logger.error(traceback.format_exc())
-            return False
+        await self.eventbus.asend(Event("shutdown"))
 
         # Delete temp folder if requested
-        if self.tempfolder.exists() and self.delete_temp:
-            shutil.rmtree(self.tempfolder)
+        if self.state.tempfolder.exists() and self.delete_temp:
+            shutil.rmtree(self.state.tempfolder)
 
-        return all(results)
+        return True
 
     ####################################################################
     ## Worker Sync Lifecycle API
@@ -334,7 +353,8 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
-        self.logger.info(f"{self}: Shutting down.")
+        self.logger.info(f"{self}: Shutting down")
+
         # Only execute if thread exists
         if not hasattr(self, "_thread"):
             future: Future[bool] = Future()

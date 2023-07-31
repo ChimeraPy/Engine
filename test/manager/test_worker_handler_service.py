@@ -1,11 +1,13 @@
 import asyncio
+import pathlib
+import tempfile
 
 import pytest
 
 import chimerapy.engine as cpe
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.states import ManagerState
 
 from ..conftest import GenNode, ConsumeNode
@@ -20,9 +22,10 @@ def testbed_setup(worker):
     thread = AsyncLoopThread()
     thread.start()
     eventbus = EventBus(thread=thread)
-    configure(eventbus)
 
-    state = ManagerState()
+    state = make_evented(
+        ManagerState(logdir=pathlib.Path(tempfile.mkdtemp())), event_bus=eventbus
+    )
 
     # Define graph
     gen_node = GenNode(name="Gen1", id="Gen1")
@@ -42,6 +45,10 @@ def testbed_setup(worker):
     thread.exec(worker_handler._register_worker(worker.state)).result(timeout=10)
 
     return (worker_handler, worker)
+
+
+def test_instanticate(testbed_setup):
+    ...
 
 
 @pytest.mark.asyncio
@@ -74,8 +81,8 @@ async def test_worker_handler_create_connections(testbed_setup):
     )
 
     # Get the node information
-    await worker_handler._request_node_server_data(worker_id=worker.id)
-    assert worker_handler.nodes_server_table != {}
+    await worker_handler._request_node_pub_table(worker_id=worker.id)
+    assert worker_handler.node_pub_table.table != {}
 
     # Create connections
     assert await worker_handler._request_connection_creation(worker_id=worker.id)
@@ -84,7 +91,6 @@ async def test_worker_handler_create_connections(testbed_setup):
     assert await worker_handler.reset()
 
 
-@pytest.mark.skip(reason="Failing")
 @pytest.mark.asyncio
 async def test_worker_handler_lifecycle_graph(testbed_setup):
 
@@ -95,7 +101,7 @@ async def test_worker_handler_lifecycle_graph(testbed_setup):
     )
     assert await worker_handler.start_workers()
 
-    await asyncio.sleep(5)
+    await asyncio.sleep(2)
 
     assert await worker_handler.stop()
     assert await worker_handler.collect()
