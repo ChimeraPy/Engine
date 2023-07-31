@@ -176,7 +176,9 @@ class HttpClientService(Service):
                     logs_push_info = data.get("logs_push_info", {})
 
                     if logs_push_info["enabled"]:
-                        self.logger.info(f"{self}: enabling logs push to Manager")
+                        self.logger.info(
+                            f"{self}: enabling logs push to Manager: {logs_push_info}"
+                        )
                         for logging_entity in [
                             self.logger,
                             self.logreceiver,
