@@ -119,9 +119,9 @@ class Client:
                         create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                     )
                 except ConnectionResetError:
-                    self.logger.warning(
-                        f"{self}: ConnectionResetError, shutting down ws"
-                    )
+                    # self.logger.warning(
+                    #     f"{self}: ConnectionResetError, shutting down ws"
+                    # )
                     await self._ws.close()
                     return None
 
@@ -141,6 +141,10 @@ class Client:
     ):
         assert self._ws
 
+        # Handle if closed
+        if self._ws.closed:
+            return None
+
         # Create payload
         payload = create_payload(signal=signal, data=data, msg_uuid=msg_uuid, ok=ok)
 
@@ -148,7 +152,7 @@ class Client:
         try:
             await self._ws.send_json(payload)
         except ConnectionResetError:
-            self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
+            # self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
             await self._ws.close()
             return None
 

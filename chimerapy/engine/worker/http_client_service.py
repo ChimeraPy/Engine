@@ -272,7 +272,7 @@ class HttpClientService(Service):
 
         return True
 
-    async def _send_archive_locally(self, path: pathlib.Path) -> bool:
+    async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
         self.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
@@ -297,7 +297,7 @@ class HttpClientService(Service):
             path / f"{self.state.name}-{self.state.id}-{str(uuid.uuid4())[:4]}"
         )
         os.rename(old_folder_name, new_folder_name)
-        return True
+        return new_folder_name
 
     async def _send_archive_remotely(self, host: str, port: int) -> bool:
 

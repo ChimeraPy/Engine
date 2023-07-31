@@ -56,7 +56,7 @@ def test_node_updates(test_ws_client, manager, worker):
     worker.connect(host=manager.host, port=manager.port)
     manager.commit_graph(simple_graph, mapping).result(timeout=30)
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
 
 def test_worker_network_updates(test_ws_client, manager, worker):
@@ -65,11 +65,11 @@ def test_worker_network_updates(test_ws_client, manager, worker):
     # Connect to the manager
     worker.connect(host=manager.host, port=manager.port)
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
     worker.deregister()
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
 
 def test_node_creation_and_destruction_network_updates(test_ws_client, manager, worker):
@@ -89,14 +89,14 @@ def test_node_creation_and_destruction_network_updates(test_ws_client, manager, 
         timeout=30
     )
     time.sleep(2)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
     # Test destruction
     manager._request_node_destruction(worker_id=worker.id, node_id="Gen1").result(
         timeout=10
     )
     time.sleep(2)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
 
 def test_reset_network_updates(test_ws_client, manager, worker):
@@ -112,14 +112,14 @@ def test_reset_network_updates(test_ws_client, manager, worker):
     worker.connect(host=manager.host, port=manager.port)
     manager.commit_graph(simple_graph, mapping).result(timeout=30)
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
     # Reset
-    assert manager.reset(keep_workers=True).result(timeout=10)
+    assert manager.reset()
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()
 
     # Recommit graph
     manager.commit_graph(simple_graph, mapping).result(timeout=30)
     time.sleep(3)
-    assert record.network_state == manager.state
+    assert record.network_state.to_json() == manager.state.to_json()

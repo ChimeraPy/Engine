@@ -96,11 +96,10 @@ async def test_send_archive_locally(http_client):
     if new_folder_name.exists():
         shutil.rmtree(new_folder_name)
 
-    assert await http_client._send_archive_locally(dst)
+    dst_path = await http_client._send_archive_locally(dst)
 
-    dst_worker = dst / f"{http_client.state.name}-{http_client.state.id}"
-    dst_test_file = dst_worker / "test.txt"
-    assert dst_worker.exists() and dst_test_file.exists()
+    dst_test_file = dst_path / "test.txt"
+    assert dst_path.exists() and dst_test_file.exists()
 
     with open(dst_test_file, "r") as f:
         assert f.read() == "hello"

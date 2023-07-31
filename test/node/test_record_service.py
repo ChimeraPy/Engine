@@ -73,15 +73,7 @@ def test_run_record_service_from_node():
 def test_run_record_service_from_worker(worker):
 
     node = VideoNode(name="video")
-    msg = {
-        "node": node,
-        "in_bound": [],
-        "in_bound_by_name": [],
-        "out_bound": [],
-        "follow": None,
-        "context": "multiprocessing",
-    }
-    assert worker.create_node(msg).result(timeout=10)
+    assert worker.create_node(cpe.NodeConfig(node)).result(timeout=10)
 
     logger.debug("Start nodes!")
     worker.start_nodes().result(timeout=5)
@@ -92,5 +84,6 @@ def test_run_record_service_from_worker(worker):
     worker.stop_nodes().result(timeout=5)
 
     assert worker.collect().result(timeout=10)
-
-    assert (worker.tempfolder / node.name / "test.mp4").exists()
+    path = worker.state.tempfolder / node.name / "test.mp4"
+    logger.debug(path)
+    assert (path).exists()
