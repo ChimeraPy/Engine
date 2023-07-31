@@ -1,5 +1,6 @@
 import os
 import shutil
+import uuid
 import traceback
 import socket
 import asyncio
@@ -15,8 +16,10 @@ from chimerapy.engine import _logger
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState
 from ..networking import Client
+from ..utils import get_ip_address
 from ..service import Service
 from ..eventbus import EventBus, TypedObserver
+from .events import SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -53,6 +56,12 @@ class HttpClientService(Service):
                 "WorkerState.changed",
                 on_asend=self._async_node_status_update,
                 handle_event="drop",
+            ),
+            "send_archive": TypedObserver(
+                "send_archive",
+                SendArchiveEvent,
+                on_asend=self._send_archive,
+                handle_event="unpack",
             ),
         }
         for ob in self.observers.values():
@@ -102,6 +111,11 @@ class HttpClientService(Service):
             Future[bool]: Success in connecting to the Manager
 
         """
+
+        # First check if we are already connected
+        if self.connected_to_manager:
+            self.logger.warning(f"{self}: Requested to connect when already connected")
+            return True
 
         # Standard direct IP connection
         if method == "ip":
@@ -232,28 +246,31 @@ class HttpClientService(Service):
 
         return success
 
-    async def _send_archive(self) -> bool:
-        ...
+    async def _send_archive(self, path: pathlib.Path) -> bool:
 
-        # # If located in the same computer, just move the data
-        # host, port = self.worker.services.http_client.get_address()
-        # try:
-        #     if host == get_ip_address():
-        #         (
-        #             await self.worker.services.http_client._send_archive_locally(
-        #                 pathlib.Path(msg["path"])
-        #             )
-        #         )
+        # Flag
+        send_locally = False
 
-        #     else:
-        #         (
-        #             await self.worker.services.http_client._send_archive_remotely(
-        #                 host, port
-        #             )
-        #         )
-        # except Exception:
-        #     self.logger.error(traceback.format_exc())
-        #     return web.HTTPError()
+        # Get manager info
+        manager_host, manager_port = self.get_address()
+
+        if not self.connected_to_manager:
+            send_locally = True
+        elif manager_host == get_ip_address():
+            send_locally = True
+        else:
+            send_locally = False
+
+        try:
+            if send_locally:
+                await self._send_archive_locally(path)
+            else:
+                await self._send_archive_remotely(manager_host, manager_port)
+        except Exception:
+            self.logger.error(traceback.format_exc())
+            return False
+
+        return True
 
     async def _send_archive_locally(self, path: pathlib.Path) -> bool:
         self.logger.debug(f"{self}: sending archive locally")
@@ -276,7 +293,9 @@ class HttpClientService(Service):
                     raise TimeoutError("Nodes haven't fully finishing saving!")
 
         old_folder_name = path / self.state.tempfolder.name
-        new_folder_name = path / f"{self.state.name}-{self.state.id}"
+        new_folder_name = (
+            path / f"{self.state.name}-{self.state.id}-{str(uuid.uuid4())[:4]}"
+        )
         os.rename(old_folder_name, new_folder_name)
         return True
 

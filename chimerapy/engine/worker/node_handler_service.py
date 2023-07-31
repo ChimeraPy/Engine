@@ -342,11 +342,11 @@ class NodeHandlerService(Service):
                     condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.logger.debug(f"{self}: Node {node_id} has connected: PASS")
+                    self.logger.debug(f"{self}: Node {node_id} has connected: SUCCESS")
                     success.append(True)
                     break
                 else:
-                    self.logger.debug(f"{self}: Node {node_id} has connected: FAIL")
+                    self.logger.debug(f"{self}: Node {node_id} has connected: FAILED")
                     success.append(False)
 
         if not all(success):
@@ -431,13 +431,13 @@ class NodeHandlerService(Service):
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(
-                        f"{self}: Node {node_id} responded to gather: PASS"
+                        f"{self}: Node {node_id} responded to gather: SUCCESS"
                     )
                     success.append(True)
                     break
                 else:
                     self.logger.debug(
-                        f"{self}: Node {node_id} responded to gather: FAIL"
+                        f"{self}: Node {node_id} responded to gather: FAILED"
                     )
                     success.append(False)
 
@@ -472,13 +472,13 @@ class NodeHandlerService(Service):
                     timeout=config.get("worker.timeout.info-request"),
                 ):
                     self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: PASS"
+                        f"{self}: Node {node_id} responded to saving request: SUCCESS"
                     )
                     success.append(True)
                     break
                 else:
                     self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: FAIL"
+                        f"{self}: Node {node_id} responded to saving request: FAILED"
                     )
                     success.append(False)
 

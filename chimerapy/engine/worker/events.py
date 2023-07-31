@@ -1,3 +1,4 @@
+import pathlib
 from dataclasses import dataclass, field
 from typing import Dict, Any
 from enum import Enum
@@ -51,3 +52,8 @@ class UpdateGatherEvent:
 class UpdateResultsEvent:
     node_id: str
     results: Any
+
+
+@dataclass
+class SendArchiveEvent:
+    path: pathlib.Path

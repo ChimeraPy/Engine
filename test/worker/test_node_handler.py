@@ -119,7 +119,7 @@ async def test_create_node(gen_node, node_handler_setup, context):
     assert await node_handler.async_destroy_node(gen_node.id)
 
 
-@pytest.mark.skip(reason="Flacky")
+@pytest.mark.skip(reason="Flaky")
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "context_order",
@@ -319,6 +319,6 @@ async def test_gather(node_handler_setup, gen_node, context):
     assert await node_handler.async_stop_nodes()
 
     results = await node_handler.async_gather()
-    assert len(results["node_data"]) > 0
+    assert len(results) > 0
 
     assert await node_handler.async_destroy_node(gen_node.id)

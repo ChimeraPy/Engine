@@ -3,6 +3,7 @@ import pickle
 import asyncio
 import enum
 import logging
+import pathlib
 from typing import Dict, List
 
 from aiohttp import web
@@ -25,6 +26,7 @@ from .events import (
     UpdateResultsEvent,
     BroadcastEvent,
     SendMessageEvent,
+    SendArchiveEvent,
 )
 
 
@@ -272,13 +274,14 @@ class HttpServerService(Service):
         return web.Response(body=pickle.dumps(gather_data))
 
     async def _async_collect(self, request: web.Request) -> web.Response:
-        await request.json()
+        data = await request.json()
 
         # Collect data from the Nodes
         await self.eventbus.asend(Event("collect"))
 
         # After collecting, request to send the archive
-        await self.eventbus.asend(Event("send_archive"))
+        event_data = SendArchiveEvent(pathlib.Path(data["path"]))
+        await self.eventbus.asend(Event("send_archive", event_data))
 
         return web.HTTPOk()
 
@@ -319,7 +322,6 @@ class HttpServerService(Service):
         )
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-        self.logger.debug(msg)
 
         node_id = msg["data"]["node_id"]
         await self.eventbus.asend(

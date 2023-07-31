@@ -1,5 +1,6 @@
 import asyncio
-
+import os
+import shutil
 
 import pytest
 
@@ -8,6 +9,8 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine import _logger
+
+from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -73,3 +76,49 @@ async def test_worker_state_changed_updates(http_client, manager):
 
     # Check
     assert "test" in manager.state.workers[http_client.state.id].nodes
+
+
+@pytest.mark.asyncio
+async def test_send_archive_locally(http_client):
+
+    # Adding simple file
+    test_file = http_client.state.tempfolder / "test.txt"
+    if test_file.exists():
+        os.remove(test_file)
+    else:
+        with open(test_file, "w") as f:
+            f.write("hello")
+
+    dst = TEST_DATA_DIR / "test_folder"
+    os.makedirs(dst, exist_ok=True)
+
+    new_folder_name = dst / f"{http_client.state.name}-{http_client.state.id}"
+    if new_folder_name.exists():
+        shutil.rmtree(new_folder_name)
+
+    assert await http_client._send_archive_locally(dst)
+
+    dst_worker = dst / f"{http_client.state.name}-{http_client.state.id}"
+    dst_test_file = dst_worker / "test.txt"
+    assert dst_worker.exists() and dst_test_file.exists()
+
+    with open(dst_test_file, "r") as f:
+        assert f.read() == "hello"
+
+
+@pytest.mark.asyncio
+async def test_send_archive_remotely(http_client, server):
+
+    # Make a copy of example logs
+    shutil.copytree(
+        str(TEST_SAMPLE_DATA_DIR / "chimerapy_logs"),
+        str(http_client.state.tempfolder / "data"),
+    )
+
+    assert await http_client._send_archive_remotely(server.host, server.port)
+
+    logger.debug(server.file_transfer_records)
+
+    # Also check that the file exists
+    for record in server.file_transfer_records[http_client.state.id].values():
+        assert record["dst_filepath"].exists()

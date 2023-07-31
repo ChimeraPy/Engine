@@ -464,8 +464,15 @@ class Manager:
         """
         return self._exec_coro(self.async_collect(unzip))
 
-    def reset(self, keep_workers: bool = True) -> Future[bool]:
-        return self._exec_coro(self.async_reset(keep_workers))
+    def reset(
+        self, keep_workers: bool = True, blocking: bool = True
+    ) -> Union[bool, Future[bool]]:
+        future = self._exec_coro(self.async_reset(keep_workers))
+
+        if blocking:
+            return future.result(timeout=config.get("manager.timeout.reset"))
+
+        return future
 
     def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
         """Proper shutting down ChimeraPy-Engine cluster.

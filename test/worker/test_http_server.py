@@ -1,5 +1,6 @@
 import pickle
 import json
+import tempfile
 
 import aiohttp
 
@@ -54,7 +55,7 @@ def test_http_server_instanciate(http_server):
         ("get", "/nodes/pub_table", None),
         ("post", "/nodes/pub_table", NodePubTable().to_json()),
         ("get", "/nodes/gather", None),
-        ("post", "/nodes/collect", json.dumps({})),
+        ("post", "/nodes/collect", json.dumps({"path": tempfile.mkdtemp()})),
         ("post", "/nodes/step", json.dumps({})),
         ("post", "/nodes/start", json.dumps({})),
         ("post", "/nodes/record", json.dumps({})),

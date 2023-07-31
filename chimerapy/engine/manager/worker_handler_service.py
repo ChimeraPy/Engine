@@ -19,7 +19,7 @@ from ..networking import Client, DataChunk
 from ..service import Service
 from ..graph import Graph
 from ..exceptions import CommitGraphError
-from ..states import WorkerState, NodeState, ManagerState
+from ..states import WorkerState, ManagerState
 from ..eventbus import EventBus, TypedObserver, Event
 from .events import (
     WorkerRegisterEvent,
@@ -108,7 +108,7 @@ class WorkerHandlerService(Service):
         self.state.workers[worker_state.id] = worker_state
         logger.debug(
             f"Manager registered <Worker id={worker_state.id}"
-            f"name={worker_state.name}> from {worker_state.ip}"
+            f" name={worker_state.name}> from {worker_state.ip}"
         )
 
         # Register entity from logging
@@ -340,22 +340,15 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=data) as resp:
                 if resp.ok:
-                    json_data: Dict[str, Any] = await resp.json()
-
-                    if not json_data["success"]:
-                        logger.error(
-                            f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
-                        )
-                        return False
-
                     logger.debug(
                         f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
                     )
-                    self.state.workers[worker_id].nodes[node_id] = NodeState.from_dict(
-                        json_data["node_state"]
-                    )
-
                     return True
+                else:
+                    logger.error(
+                        f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
+                    )
+                    return False
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
@@ -395,22 +388,16 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=json.dumps(data)) as resp:
                 if resp.ok:
-                    data = await resp.json()
-
-                    if not data["success"]:
-                        logger.error(
-                            f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
-                        )
-                        return False
-
                     logger.debug(
                         f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
                     )
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-
                     return True
+                else:
+
+                    logger.error(
+                        f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
+                    )
+                    return False
 
         logger.error(f"{self}: Worker {worker_id} didn't respond!")
 
@@ -433,18 +420,17 @@ class WorkerHandlerService(Service):
                         data = await resp.json()
 
                         # And then updating the node server data
-                        # node_server_data = data["node_server_data"]["nodes"]
-                        worker_node_pub_table = NodePubTable.from_dict(data)
+                        worker_node_pub_table = NodePubTable.from_json(data)
                         self.node_pub_table.table.update(worker_node_pub_table.table)
 
                         logger.debug(
-                            f"{self}: Requesting Worker's node server request: SUCCESS"
+                            f"{self}: Requesting Worker's node pub table: SUCCESS"
                         )
                         return True
 
                     else:
                         logger.error(
-                            f"{self}: Requesting Worker's node server request: NO \
+                            f"{self}: Requesting Worker's node pub table: NO \
                             RESPONSE"
                         )
 
@@ -466,28 +452,17 @@ class WorkerHandlerService(Service):
             # Send the request to each worker
             async with aiohttp.ClientSession() as client:
                 async with client.post(
-                    f"{self._get_worker_ip(worker_id)}/nodes/server_data",
+                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table",
                     data=self.node_pub_table.to_json(),
                 ) as resp:
-                    if not resp.ok:
-                        return False
+                    if resp.ok:
 
-                    # Get JSON
-                    data = await resp.json()
+                        logger.debug(
+                            f"{self}: receiving Worker's node pub table:" "SUCCESS"
+                        )
+                        return True
 
-                    if not data["success"]:
-                        return False
-
-                    self.state.workers[worker_id] = WorkerState.from_dict(
-                        data["worker_state"]
-                    )
-
-                    logger.debug(
-                        f"{self}: receiving Worker's node server request: \
-                        SUCCESS"
-                    )
-
-                    return True
+                    return False
 
         return False
 
