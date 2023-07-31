@@ -22,7 +22,16 @@ from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
 from ..eventbus import EventBus, TypedObserver, Event
-from .events import BroadcastEvent
+from .events import (
+    BroadcastEvent,
+    SendMessageEvent,
+    CreateNodeEvent,
+    DestroyNodeEvent,
+    ProcessNodePubTableEvent,
+    RegisteredMethodEvent,
+    UpdateResultsEvent,
+    UpdateGatherEvent,
+)
 
 
 class NodeController:
@@ -127,7 +136,55 @@ class NodeHandlerService(Service):
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
             "create_node": TypedObserver(
-                "create_node", on_asend=self.async_create_node, handle_event="unpack"
+                "create_node",
+                CreateNodeEvent,
+                on_asend=self.async_create_node,
+                handle_event="unpack",
+            ),
+            "destroy_node": TypedObserver(
+                "destroy_node",
+                DestroyNodeEvent,
+                on_asend=self.async_destroy_node,
+                handle_event="unpack",
+            ),
+            "process_node_pub_table": TypedObserver(
+                "process_node_pub_table",
+                ProcessNodePubTableEvent,
+                on_asend=self.async_process_node_pub_table,
+                handle_event="unpack",
+            ),
+            "step_nodes": TypedObserver(
+                "step_nodes", on_asend=self.async_step, handle_event="drop"
+            ),
+            "start_nodes": TypedObserver(
+                "start_nodes", on_asend=self.async_start_nodes, handle_event="drop"
+            ),
+            "record_nodes": TypedObserver(
+                "record_nodes", on_asend=self.async_record_nodes, handle_event="drop"
+            ),
+            "registered_method": TypedObserver(
+                "registered_method",
+                RegisteredMethodEvent,
+                on_asend=self.async_request_registered_method,
+                handle_event="unpack",
+            ),
+            "collect": TypedObserver(
+                "collect", on_asend=self.async_collect, handle_event="drop"
+            ),
+            "gather_nodes": TypedObserver(
+                "gather_nodes", on_asend=self.async_gather, handle_event="drop"
+            ),
+            "update_gather": TypedObserver(
+                "update_gather",
+                UpdateGatherEvent,
+                on_asend=self.update_gather,
+                handle_event="unpack",
+            ),
+            "update_results": TypedObserver(
+                "update_results",
+                UpdateResultsEvent,
+                on_asend=self.update_results,
+                handle_event="unpack",
             ),
         }
         for ob in self.observers.values():
@@ -335,13 +392,12 @@ class NodeHandlerService(Service):
             f"{self}: Requesting registered method: {method_name}@{node_id}"
         )
 
-        success = True
-
-        await self.worker.services["http_server"]._async_send(
+        event_data = SendMessageEvent(
             client_id=node_id,
             signal=WORKER_MESSAGE.REQUEST_METHOD,
             data={"method_name": method_name, "params": params},
         )
+        await self.eventbus.asend(Event("send", event_data))
 
         # Then wait for the Node response
         success = await async_waiting_for(
@@ -361,8 +417,8 @@ class NodeHandlerService(Service):
             self.node_controllers[node_id].response = False
 
         # Request gather from Worker to Nodes
-        await self.worker.services["http_server"]._async_broadcast(
-            signal=WORKER_MESSAGE.REQUEST_GATHER, data={}
+        await self.eventbus.asend(
+            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_GATHER))
         )
 
         # Wait until all Nodes have gather
@@ -389,13 +445,13 @@ class NodeHandlerService(Service):
                     self.logger.error(f"{self}: Nodes failed to report to gather")
 
         # Gather the data from the nodes!
-        gather_data = {"id": self.state.id, "node_data": {}}
+        gather_data: Dict[str, DataChunk] = {}
         for node_id, controller in self.node_controllers.items():
             if controller.gather is None:
                 data_chunk = DataChunk()
                 data_chunk.add("default", None)
                 controller.gather = data_chunk
-            gather_data["node_data"][node_id] = controller.gather
+            gather_data[node_id] = controller.gather
 
         return gather_data
 

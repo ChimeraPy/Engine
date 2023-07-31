@@ -13,6 +13,13 @@ class BroadcastEvent:
 
 
 @dataclass
+class SendMessageEvent:
+    client_id: str
+    signal: Enum
+    data: Dict[str, Any]
+
+
+@dataclass
 class CreateNodeEvent:
     node_config: NodeConfig
 
@@ -37,10 +44,10 @@ class RegisteredMethodEvent:
 @dataclass
 class UpdateGatherEvent:
     node_id: str
-    latest_value: Any
+    gather: Any
 
 
 @dataclass
 class UpdateResultsEvent:
     node_id: str
-    output: Any
+    results: Any

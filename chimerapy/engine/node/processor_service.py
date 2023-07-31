@@ -57,7 +57,7 @@ class ProcessorService(NodeService):
         # Extract the method
         function: Callable[[], Coroutine] = getattr(self.node, method_name)
         style = self.node.registered_methods[method_name].style
-        # self.node.logger.debug(f"{self}: executing {function} with params: {params}")
+        self.node.logger.debug(f"{self}: executing {function} with params: {params}")
 
         # Execute method based on its style
         success = False
@@ -76,8 +76,9 @@ class ProcessorService(NodeService):
                 success = True
 
             # Signal the reset event and then wait
-            self.reset_event.clear()
-            success = self.reset_event.wait()
+            if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
+                self.reset_event.clear()
+                success = self.reset_event.wait()
 
         else:
             self.node.logger.error(f"Invalid registered method request: style={style}")

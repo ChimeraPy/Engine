@@ -83,7 +83,7 @@ class WorkerCommsService(NodeService):
             id=self.node.state.id,
             ws_handlers={
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
-                WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_server_data,
+                WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_pub_table,
                 WORKER_MESSAGE.REQUEST_STEP: self.async_step,
                 WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
                 WORKER_MESSAGE.REQUEST_GATHER: self.provide_gather,
@@ -125,13 +125,13 @@ class WorkerCommsService(NodeService):
         # Shutdown the client
         self.client.shutdown()
 
-        self.node.logger.debug(f"{self}: shutdown")
+        # self.node.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Message Reactivity API
     ####################################################################
 
-    async def process_node_server_data(self, msg: Dict):
+    async def process_node_pub_table(self, msg: Dict):
 
         node_pub_table = NodePubTable.from_json(msg["data"])
         # self.node.logger.debug(f"{self}: setting up connections: {node_pub_table}")

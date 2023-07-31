@@ -1,4 +1,6 @@
 import asyncio
+import time
+from typing import Optional, Union
 
 import pytest
 import chimerapy.engine as cpe
@@ -24,6 +26,49 @@ NAME_CLASS_MAP = {
     "tn": TabularNode,
     # "an": AudioNode, # causes problems!
 }
+
+
+class NodeWithRegisteredMethods(cpe.Node):
+    def __init__(
+        self, name: str, init_value: int = 0, debug_port: Optional[int] = None
+    ):
+        super().__init__(name=name, debug_port=debug_port)
+        self.init_value = init_value
+
+    def setup(self):
+        self.logger.debug(f"{self}: executing SETUP")
+        self.value = self.init_value
+
+    def step(self):
+        time.sleep(0.5)
+        self.value += 1
+        return self.value
+
+    def teardown(self):
+        self.logger.debug(f"{self}: executing TEARDOWN")
+
+    # Default style
+    @cpe.register
+    async def printout(self):
+        self.logger.debug(f"{self}: logging out value: {self.value}")
+        return self.value
+
+    # Style: blocking
+    @cpe.register.with_config(params={"value": "Union[int, float]"}, style="blocking")
+    async def set_value(self, value: Union[int, float]):
+        self.value = value
+        return value
+
+    # Style: Reset
+    @cpe.register.with_config(style="reset")
+    async def reset(self):
+        self.init_value = 100
+        return 100
+
+
+@pytest.fixture
+def node_with_reg_methods(logreceiver):
+    return NodeWithRegisteredMethods(name="RegNode1", debug_port=logreceiver.port)
 
 
 @pytest.fixture(scope="module")
@@ -153,7 +198,7 @@ async def test_starting_node(node_handler_setup, gen_node, context):
         cpe.NodeConfig(gen_node, context=context)
     )
     assert await node_handler.async_start_nodes()
-    await asyncio.sleep(5)
+    await asyncio.sleep(1)
     assert await node_handler.async_stop_nodes()
     assert await node_handler.async_destroy_node(gen_node.id)
 
@@ -175,10 +220,10 @@ async def test_record_and_collect(node_handler_setup, context):
 
     logger.debug("Starting")
     assert await node_handler.async_start_nodes()
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
 
     assert await node_handler.async_record_nodes()
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
 
     assert await node_handler.async_stop_nodes()
     assert await node_handler.async_collect()
@@ -190,11 +235,90 @@ async def test_record_and_collect(node_handler_setup, context):
         assert (node_handler.state.tempfolder / node_name).exists()
 
 
-@pytest.mark.skip(reason="TODO")
-async def test_registered_method_call(node_handler_setup, context):
-    ...
+@pytest.mark.asyncio
+async def test_registered_method_with_concurrent_style(
+    node_handler_setup, node_with_reg_methods
+):
+    node_handler, _ = node_handler_setup
+
+    # Create the node
+    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+
+    # Execute the registered method (with config)
+    results = await node_handler.async_request_registered_method(
+        node_id=node_with_reg_methods.id, method_name="printout"
+    )
+
+    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+    assert (
+        results["success"]
+        and isinstance(results["output"], int)
+        and results["output"] >= 0
+    )
 
 
-@pytest.mark.skip(reason="TODO")
-async def test_gather(node_handler_setup, context):
-    ...
+@pytest.mark.asyncio
+async def test_registered_method_with_params_and_blocking_style(
+    node_handler_setup, node_with_reg_methods
+):
+    node_handler, _ = node_handler_setup
+
+    # Create the node
+    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+
+    # Execute the registered method (with config)
+    results = await node_handler.async_request_registered_method(
+        node_id=node_with_reg_methods.id,
+        method_name="set_value",
+        params={"value": -100},
+    )
+
+    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+    assert (
+        results["success"]
+        and isinstance(results["output"], int)
+        and results["output"] < -50
+    )
+
+
+@pytest.mark.asyncio
+async def test_registered_method_with_reset_style(
+    node_handler_setup, node_with_reg_methods
+):
+    node_handler, _ = node_handler_setup
+
+    # Create the node
+    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+
+    # Execute the registered method (with config)
+    results = await node_handler.async_request_registered_method(
+        node_id=node_with_reg_methods.id,
+        method_name="reset",
+    )
+
+    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+
+    assert (
+        results["success"]
+        and isinstance(results["output"], int)
+        and results["output"] >= 100
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+async def test_gather(node_handler_setup, gen_node, context):
+
+    node_handler, _ = node_handler_setup
+
+    assert await node_handler.async_create_node(
+        cpe.NodeConfig(gen_node, context=context)
+    )
+    assert await node_handler.async_start_nodes()
+    await asyncio.sleep(1)
+    assert await node_handler.async_stop_nodes()
+
+    results = await node_handler.async_gather()
+    assert len(results["node_data"]) > 0
+
+    assert await node_handler.async_destroy_node(gen_node.id)

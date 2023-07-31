@@ -24,6 +24,7 @@ from .events import (
     UpdateGatherEvent,
     UpdateResultsEvent,
     BroadcastEvent,
+    SendMessageEvent,
 )
 
 
@@ -85,6 +86,12 @@ class HttpServerService(Service):
                 "broadcast",
                 BroadcastEvent,
                 on_asend=self._async_broadcast,
+                handle_event="unpack",
+            ),
+            "send": TypedObserver(
+                "send",
+                SendMessageEvent,
+                on_asend=self._async_send,
                 handle_event="unpack",
             ),
         }
@@ -229,7 +236,7 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_step_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("step"))
+        await self.eventbus.asend(Event("step_nodes"))
         return web.HTTPOk()
 
     async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
@@ -237,7 +244,7 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("record"))
+        await self.eventbus.asend(Event("record_nodes"))
         return web.HTTPOk()
 
     async def _async_request_method_route(self, request: web.Request) -> web.Response:
@@ -258,7 +265,7 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_report_node_gather(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("node_gather"))
+        await self.eventbus.asend(Event("gather_nodes"))
 
         self.logger.warning(f"{self}: gather doesn't work ATM.")
         gather_data = {"id": self.state.id, "node_data": {}}
@@ -307,18 +314,17 @@ class HttpServerService(Service):
         await self.eventbus.asend(
             Event(
                 "update_gather",
-                UpdateGatherEvent(
-                    node_id=node_id, latest_value=msg["data"]["latest_value"]
-                ),
+                UpdateGatherEvent(node_id=node_id, gather=msg["data"]["latest_value"]),
             )
         )
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
+        self.logger.debug(msg)
 
         node_id = msg["data"]["node_id"]
         await self.eventbus.asend(
             Event(
                 "update_results",
-                UpdateResultsEvent(node_id=node_id, output=msg["data"]["output"]),
+                UpdateResultsEvent(node_id=node_id, results=msg["data"]["output"]),
             )
         )
