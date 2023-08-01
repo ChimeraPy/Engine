@@ -10,7 +10,7 @@ from pytest_lazyfixture import lazy_fixture
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.data_protocols import NodePubTable
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine import _logger
@@ -28,7 +28,6 @@ def http_server():
     thread = AsyncLoopThread()
     thread.start()
     eventbus = EventBus(thread=thread)
-    configure(eventbus)
 
     # Requirements
     state = WorkerState()

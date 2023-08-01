@@ -1,10 +1,10 @@
 import typing
 from typing import List, Optional, Literal
 
-import dill
-
 if typing.TYPE_CHECKING:
     from .node import Node
+
+import dill
 
 
 class NodeConfig:

@@ -1,48 +1,119 @@
-from typing import Dict, List, Optional, Callable, Coroutine, Any
 import threading
 import traceback
 import datetime
-import time
+import logging
+import asyncio
+from typing import Dict, List, Optional, Callable, Coroutine, Any, Literal
 
+from chimerapy.engine import _logger
 from ..networking import DataChunk
-from .node_service import NodeService
+from ..states import NodeState
+from ..eventbus import EventBus, Event, TypedObserver
+from ..service import Service
+from .registered_method import RegisteredMethod
+from .events import NewInBoundDataEvent, NewOutBoundDataEvent
 
 
-class ProcessorService(NodeService):
-    def __init__(self, name: str):
+class ProcessorService(Service):
+    def __init__(
+        self,
+        name: str,
+        state: NodeState,
+        eventbus: EventBus,
+        in_bound_data: bool,
+        setup_fn: Optional[Callable] = None,
+        main_fn: Optional[Callable] = None,
+        teardown_fn: Optional[Callable] = None,
+        registered_methods: Dict[str, RegisteredMethod] = {},
+        registered_node_fns: Dict[str, Callable] = {},
+        operation_mode: Literal["main", "step"] = "step",
+        logger: Optional[logging.Logger] = None,
+    ):
         super().__init__(name)
 
-        self.while_loop_thread: Optional[threading.Thread] = None
+        # Saving input parameters
+        self.state = state
+        self.eventbus = eventbus
+        self.setup_fn = setup_fn
+        self.main_fn = main_fn
+        self.teardown_fn = teardown_fn
+        self.operation_mode = operation_mode
+        self.in_bound_data = in_bound_data
+        self.registered_methods = registered_methods
+        self.registered_node_fns = registered_node_fns
+
+        if logger:
+            self.logger = logger
+        else:
+            self.logger = _logger.getLogger("chimerapy-engine")
+
+        # Containers
         self.latest_data_chunk = DataChunk()
         self.step_id: int = 0
+        self.running: bool = True
+
+        # Put observers
+        self.observers: Dict[str, TypedObserver] = {
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "main": TypedObserver("main", on_asend=self.main, handle_event="drop"),
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
-    def setup(self):
+    async def setup(self):
+
         # Create threading information
         self.step_lock = threading.Lock()
-        self.reset_event = threading.Event()
-        self.reset_event.set()
 
         # Executing setup
-        self.safe_exec(self.node.setup)
+        if self.setup_fn:
+            await self.safe_exec(self.setup_fn)
 
-    def main(self):
+    async def main(self):
 
-        # Then start a thread to read the sub poller
-        self.while_loop_thread = threading.Thread(target=self.while_loop)
-        self.while_loop_thread.start()
+        # Only if method is provided
+        if self.main_fn:
 
-    def teardown(self):
+            # Handling different operational modes
+            if self.operation_mode == "main":
+                await self.safe_exec(self.main_fn)
 
-        if self.while_loop_thread:
-            self.while_loop_thread.join()
+            elif self.operation_mode == "step":
 
-        self.safe_exec(self.node.teardown)
+                # self.logger.debug(f"{self}: operational mode = step")
 
-        # self.node.logger.debug(f"{self}: shutdown")
+                # If step or sink node, only run with inputs
+                if self.in_bound_data:
+                    observer = TypedObserver(
+                        "in_step",
+                        NewInBoundDataEvent,
+                        on_asend=self.safe_step,
+                        handle_event="drop",
+                    )
+                    await self.eventbus.asubscribe(observer)
+                    self.observers["in_step"] = observer
+                    # self.logger.debug(f"{self}: step or sink node")
+
+                # If source, run as fast as possible
+                else:
+                    # self.logger.debug(f"{self}: source node: {self.running}")
+                    while self.running:
+                        await self.safe_step()
+
+    async def teardown(self):
+
+        # Only teardown if running
+        if self.running:
+            self.running = False
+            if self.teardown_fn:
+                await self.safe_exec(self.teardown_fn)
 
     ####################################################################
     ## Async Registered Methods
@@ -55,33 +126,30 @@ class ProcessorService(NodeService):
     ) -> Dict[str, Any]:
 
         # Extract the method
-        function: Callable[[], Coroutine] = getattr(self.node, method_name)
-        style = self.node.registered_methods[method_name].style
-        self.node.logger.debug(f"{self}: executing {function} with params: {params}")
+        function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
+        style = self.registered_methods[method_name].style
+        # self.logger.debug(f"{self}: executing {function} with params: {params}")
 
         # Execute method based on its style
         success = False
         if style == "concurrent":
-            output = await function(**params)  # type: ignore[call-arg]
+            # output = await function(**params)  # type: ignore[call-arg]
+            output = await self.safe_exec(function, kwargs=params)
             success = True
 
         elif style == "blocking":
             with self.step_lock:
-                output = await function(**params)  # type: ignore[call-arg]
+                output = await self.safe_exec(function, kwargs=params)
                 success = True
 
         elif style == "reset":
             with self.step_lock:
-                output = await function(**params)  # type: ignore[call-arg]
+                output = await self.safe_exec(function, kwargs=params)
+                await self.eventbus.asend(Event("reset"))
                 success = True
 
-            # Signal the reset event and then wait
-            if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
-                self.reset_event.clear()
-                success = self.reset_event.wait()
-
         else:
-            self.node.logger.error(f"Invalid registered method request: style={style}")
+            self.logger.error(f"Invalid registered method request: style={style}")
             output = None
 
         return {"success": success, "output": output}
@@ -90,67 +158,33 @@ class ProcessorService(NodeService):
     ## Helper Methods
     ####################################################################
 
-    def safe_exec(self, func, args: List = [], kwargs: Dict = {}):
+    async def safe_exec(
+        self, func: Callable, args: List = [], kwargs: Dict = {}
+    ) -> Any:
 
         # Default value
         output = None
 
         try:
-            output = func(*args, **kwargs)
+            if asyncio.iscoroutinefunction(func):
+                output = await func(*args, **kwargs)
+            else:
+                await asyncio.sleep(1 / 1000)  # Allow other functions to run as well
+                output = func(*args, **kwargs)
         except Exception:
             traceback_info = traceback.format_exc()
-            self.node.logger.error(traceback_info)
+            self.logger.error(traceback_info)
 
         return output
 
-    def while_loop(self):
-
-        # self.node.logger.debug(f"{self}: started processor while loop")
-
-        # If using main method
-        if self.node.__class__.__bases__[0].main.__code__ != self.node.main.__code__:
-            # self.node.logger.debug(f"{self}: Using ``main`` method")
-            self.safe_exec(self.node.main)
-
-        # Else, step method
-        else:
-            # self.node.logger.debug(f"{self}: Using ``step`` method")
-
-            while self.node.running:
-
-                if self.node.state.fsm in ["PREVIEWING", "RECORDING"]:
-                    self.forward()
-                else:
-                    time.sleep(0.1)
-
-                # Allow the execution of user-defined registered methods
-                if not self.reset_event.is_set():
-                    self.safe_exec(self.node.teardown)
-                    self.safe_exec(self.node.setup)
-                    self.reset_event.set()
-
-    def forward(self):
+    async def safe_step(self, data: Dict[str, DataChunk] = {}):
 
         # Default value
         output = None
 
-        # If incoming data, feed it into the step
-        if "poller" in self.node.services:
-            while self.node.running:
-                if self.node.services["poller"].inputs_ready.wait(timeout=1):
-
-                    # Once we get them, pass them through!
-                    self.node.services["poller"].inputs_ready.clear()
-                    with self.step_lock:
-                        output = self.safe_exec(
-                            self.node.step,
-                            args=[self.node.services["poller"].in_bound_data],
-                        )
-                    break
-
-        else:
+        if self.main_fn:
             with self.step_lock:
-                output = self.safe_exec(self.node.step)
+                output = await self.safe_exec(self.main_fn, kwargs=data)
 
         # If output generated, send it!
         if output:
@@ -165,23 +199,18 @@ class ProcessorService(NodeService):
             # And then save the latest value
             self.latest_data_chunk = output_data_chunk
 
-            # First, check that it is a node with outbound!
-            if "publisher" in self.node.services:
+            # Add timestamp and step id to the DataChunk
+            meta = output_data_chunk.get("meta")
+            meta["value"]["ownership"].append(
+                {"name": self.state.name, "timestamp": datetime.datetime.now()}
+            )
+            output_data_chunk.update("meta", meta)
 
-                # Add timestamp and step id to the DataChunk
-                meta = output_data_chunk.get("meta")
-                meta["value"]["ownership"].append(
-                    {"name": self.node.state.name, "timestamp": datetime.datetime.now()}
-                )
-                output_data_chunk.update("meta", meta)
+            # Send out the output to the OutputsHandler
+            event_data = NewOutBoundDataEvent(output_data_chunk)
+            await self.eventbus.asend(Event("out_step", event_data))
 
-                # Send out the output to the OutputsHandler
-                self.node.services["publisher"].publish(output_data_chunk)
-                # self.logger.debug(f"{self}: published!")
-
-            # else:
-
-            # self.node.logger.warning(
+            # self.logger.warning(
             #     f"{self}: Do not have publisher yet given outputs"
             # )
 

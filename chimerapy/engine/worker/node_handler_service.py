@@ -265,7 +265,8 @@ class NodeHandlerService(Service):
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
-            worker_service.inject(node_object)
+            # worker_service.inject(node_object)
+            node_object.add_worker_service(worker_service)
 
             # Create controller
             controller = self.context_class_map[node_config.context](node_object)

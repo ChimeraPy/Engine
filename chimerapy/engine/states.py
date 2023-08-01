@@ -14,7 +14,7 @@ cfg.global_config.decoders[pathlib.Path] = pathlib.Path  # is this necessary?
 
 @dataclass
 class NodeState(DataClassJsonMixin):
-    id: str
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     port: int = 0
 
@@ -31,6 +31,11 @@ class NodeState(DataClassJsonMixin):
     ] = "NULL"
 
     registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
+
+    # Session logs
+    logdir: pathlib.Path = field(
+        default_factory=lambda: pathlib.Path(tempfile.mkdtemp())
+    )
 
 
 @dataclass

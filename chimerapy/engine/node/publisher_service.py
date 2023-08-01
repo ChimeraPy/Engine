@@ -1,17 +1,42 @@
-from .node_service import NodeService
+import logging
+from typing import Optional
+
+from chimerapy.engine import _logger
+from ..service import Service
+from ..states import NodeState
+from ..eventbus import EventBus
 from ..networking import Publisher, DataChunk
 
 
-class PublisherService(NodeService):
+class PublisherService(Service):
 
     publisher: Publisher
+
+    def __init__(
+        self,
+        name: str,
+        state: NodeState,
+        eventbus: EventBus,
+        logger: Optional[logging.Logger] = None,
+    ):
+        super().__init__(name)
+
+        # Save information
+        self.state = state
+        self.eventbus = eventbus
+
+        # Logging
+        if logger:
+            self.logger = logger
+        else:
+            self.logger = _logger.getLogger("chimerapy-engine")
 
     def setup(self):
 
         # Creating publisher
         self.publisher = Publisher()
         self.publisher.start()
-        self.node.state.port = self.publisher.port
+        self.state.port = self.publisher.port
 
         # self.node.logger.debug(f"{self} setup")
 

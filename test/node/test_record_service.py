@@ -1,35 +1,48 @@
-import time
 import datetime
 import uuid
-import os
 
+import pytest
 import numpy as np
 
 import chimerapy.engine as cpe
 from chimerapy.engine.node.record_service import RecordService
-from ..conftest import GenNode, TEST_DATA_DIR
-from ..streams import VideoNode
+from chimerapy.engine.states import NodeState
+from chimerapy.engine.eventbus import EventBus, Event
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+
 
 logger = cpe._logger.getLogger("chimerapy-engine")
-cpe.debug()
 
 
-def test_record_direct_submit():
+@pytest.fixture
+def recorder():
 
-    # Remove expected file
-    expected_file = TEST_DATA_DIR / "record_service_test" / "test.mp4"
-    try:
-        os.remove(expected_file)
-    except Exception:
-        ...
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
 
-    gen_node = GenNode(name="Gen", logdir=TEST_DATA_DIR / "record_service_test")
-    gen_node.state.fsm = "RECORDING"
+    # Create sample state
+    state = NodeState()
+    state.fsm = "PREVIEWING"
 
-    record_service = RecordService(name="record")
-    record_service.inject(gen_node)
+    # Create the recorder
+    recorder = RecordService(name="recorder", state=state, eventbus=eventbus)
 
-    record_service.setup()
+    yield recorder
+
+    eventbus.send(Event("teardown")).result(timeout=10)
+
+
+def test_instanciate(recorder):
+    ...
+
+
+@pytest.mark.asyncio
+async def test_record_direct_submit(recorder):
+
+    # Run the recorder
+    recorder.main()
 
     timestamp = datetime.datetime.now()
     video_entry = {
@@ -42,48 +55,11 @@ def test_record_direct_submit():
         "timestamp": timestamp,
     }
 
-    for i in range(50):
-        record_service.submit(video_entry)
+    for _ in range(50):
+        recorder.submit(video_entry)
 
-    record_service.teardown()
-    logger.debug("Exited teardown")
+    recorder.save()
+    recorder.teardown()
+
+    expected_file = recorder.state.logdir / "test.mp4"
     assert expected_file.exists()
-
-    logger.debug("Finished test!")
-
-
-def test_run_record_service_from_node():
-
-    # Remove expected file
-    expected_file = TEST_DATA_DIR / "record_service_test" / "test.mp4"
-    try:
-        os.remove(expected_file)
-    except Exception:
-        ...
-
-    node = VideoNode(name="video", logdir=TEST_DATA_DIR / "record_service_test")
-    node.run(blocking=False)
-
-    time.sleep(5)
-
-    node.shutdown()
-    assert expected_file.exists()
-
-
-def test_run_record_service_from_worker(worker):
-
-    node = VideoNode(name="video")
-    assert worker.create_node(cpe.NodeConfig(node)).result(timeout=10)
-
-    logger.debug("Start nodes!")
-    worker.start_nodes().result(timeout=5)
-    worker.record_nodes().result(timeout=5)
-
-    logger.debug("Let nodes run for some time")
-    time.sleep(5)
-    worker.stop_nodes().result(timeout=5)
-
-    assert worker.collect().result(timeout=10)
-    path = worker.state.tempfolder / node.name / "test.mp4"
-    logger.debug(path)
-    assert (path).exists()

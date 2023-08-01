@@ -1,10 +1,11 @@
-from typing import Dict, Any, Optional, Union, Literal
 import pathlib
 import logging
 import uuid
 import datetime
-import time
-import tempfile
+import os
+import asyncio
+from concurrent.futures import Future
+from typing import Dict, Any, Optional, Union, Literal, Coroutine, List
 
 # Third-party Imports
 import multiprocess as mp
@@ -15,17 +16,26 @@ import pandas as pd
 from chimerapy.engine import _logger
 from ..states import NodeState
 from ..networking import DataChunk
-from ..service import ServiceGroup
+from ..networking.async_loop_thread import AsyncLoopThread
+from ..eventbus import EventBus, Event
 
 # Service Imports
+from .worker_comms_service import WorkerCommsService
 from .registered_method import RegisteredMethod
 from .record_service import RecordService
 from .processor_service import ProcessorService
+from .poller_service import PollerService
+from .publisher_service import PublisherService
 
 
 class Node:
 
-    services: ServiceGroup
+    worker_comms: Optional[WorkerCommsService]
+    processor: Optional[ProcessorService]
+    recorder: Optional[RecordService]
+    poller: Optional[PollerService]
+    publisher: Optional[PublisherService]
+
     registered_methods: Dict[str, RegisteredMethod] = {}
     context: Literal["main", "multiprocessing", "threading"]
 
@@ -52,38 +62,33 @@ class Node:
 
         """
         # Handle optional parameters
-        if not isinstance(id, str):
-            id = str(uuid.uuid4())
+        kwargs = {"name": name, "registered_methods": self.registered_methods}
+        if id:
+            kwargs["id"] = id
+        if logdir:
+            kwargs["logdir"] = logdir
 
         # Saving input parameters
-        self.state = NodeState(
-            id=id, name=name, registered_methods=self.registered_methods
-        )
+        self.state = NodeState(**kwargs)
         self.debug_port = debug_port
+
+        # State variables
         self._running: Union[bool, mp.Value] = True
         self.blocking = True
-        self.context = "main"  # default
+        self.task_futures: List[Future] = []
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
         self.logging_level: int = logging.DEBUG
         self.start_time = datetime.datetime.now()
 
-        if logdir:
-            self.logdir = str(logdir)
-        else:
-            self.logdir = str(tempfile.mkdtemp())
-
-        # Saving state variables
-        self.services = ServiceGroup()
-
-        # Services to be established
-        for s_name, s_cls in {
-            "record": RecordService,
-            "processor": ProcessorService,
-        }.items():
-            s = s_cls(name=s_name)
-            s.inject(self)
+        # Default values
+        self.node_config = None
+        self.worker_comms = None
+        self.processor = None
+        self.recorder = None
+        self.poller = None
+        self.publisher = None
 
     ####################################################################
     ## Properties
@@ -132,10 +137,10 @@ class Node:
             return logger
 
         # If worker, add zmq handler
-        if "worker" in self.services or self.debug_port:
+        if self.worker_comms or self.debug_port:
 
-            if "worker" in self.services:
-                logging_port = self.services["worker"].worker_logging_port
+            if self.worker_comms:
+                logging_port = self.worker_comms.worker_logging_port
             elif self.debug_port:
                 logging_port = self.debug_port
             else:
@@ -149,13 +154,34 @@ class Node:
 
         return logger
 
+    def add_worker_service(self, worker_service: WorkerCommsService):
+
+        # Store service
+        self.worker_service = worker_service
+
+        # Add the context information
+        self.config = worker_service.node_config
+
+        # Creating logdir after given the Node
+        self.state.logdir = str(worker_service.worker_logdir / self.state.name)
+        os.makedirs(self.state.logdir, exist_ok=True)
+
+    def _exec_coro(self, coro: Coroutine) -> Future:
+        # Submitting the coroutine
+        future = self._thread.exec(coro)
+
+        # Saving the future for later use
+        self.task_futures.append(future)
+
+        return future
+
     ####################################################################
     ## Saving Data Stream API
     ####################################################################
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
-        if self.services["record"].enabled:
+        if self.recorder.enabled:
             timestamp = datetime.datetime.now()
             video_entry = {
                 "uuid": uuid.uuid4(),
@@ -166,7 +192,7 @@ class Node:
                 "elapsed": (timestamp - self.start_time).total_seconds(),
                 "timestamp": timestamp,
             }
-            self.services["record"].submit(video_entry)
+            self.recorder.submit(video_entry)
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
@@ -191,7 +217,7 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
-        if self.services["record"].enabled:
+        if self.recorder.enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -202,12 +228,12 @@ class Node:
                 "rate": rate,
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["record"].submit(audio_entry)
+            self.recorder.submit(audio_entry)
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        if self.services["record"].enabled:
+        if self.recorder.enabled:
             tabular_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -215,11 +241,11 @@ class Node:
                 "dtype": "tabular",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["record"].submit(tabular_entry)
+            self.recorder.submit(tabular_entry)
 
     def save_image(self, name: str, data: np.ndarray):
 
-        if self.services["record"].enabled:
+        if self.recorder.enabled:
             image_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -227,50 +253,48 @@ class Node:
                 "dtype": "image",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["record"].submit(image_entry)
+            self.recorder.submit(image_entry)
 
     ####################################################################
     ## Back-End Lifecycle API
     ####################################################################
 
-    def _setup(self):
+    async def _eventloop(self):
+        await self._setup()
+        await self._ready()
+        await self._wait()
+        await self._main()
+        await self._idle()
+        await self._teardown()
+
+    async def _setup(self):
         self.state.fsm = "INITIALIZED"
-        self.services.apply(
-            "setup", order=["record", "worker", "publisher", "poller", "processor"]
-        )
+        await self.eventbus.asend(Event("setup"))
         # self.logger.debug(f"{self}: finished setup")
 
-    def _ready(self):
+    async def _ready(self):
         self.state.fsm = "READY"
-        self.services.apply(
-            "ready", order=["record", "publisher", "poller", "processor", "worker"]
-        )
+        await self.eventbus.asend(Event("ready"))
         # self.logger.debug(f"{self}: is ready")
 
-    def _wait(self):
-        self.services.apply(
-            "wait", order=["record", "publisher", "poller", "processor", "worker"]
-        )
+    async def _wait(self):
+        await self.eventbus.asend(Event("wait"))
         # self.logger.debug(f"{self}: finished waiting")
 
-    def _main(self):
+    async def _main(self):
         # self.state.fsm = "PREVIEWING"
-        self.services.apply(
-            "main", order=["record", "publisher", "poller", "processor", "worker"]
-        )
+        await self.eventbus.asend(Event("main"))
         # self.logger.debug(f"{self}: finished main")
 
-    def _idle(self):
+    async def _idle(self):
 
         # self.logger.debug(f"{self}: idle")
         while self.running:
-            time.sleep(1)
+            await asyncio.sleep(1)
         # self.logger.debug(f"{self}: exiting idle")
 
-    def _teardown(self):
-        self.services.apply(
-            "teardown", order=["record", "publisher", "poller", "processor", "worker"]
-        )
+    async def _teardown(self):
+        await self.eventbus.asend("teardown")
         self.state.fsm = "SHUTDOWN"
         # self.logger.debug(f"{self}: finished teardown")
 
@@ -285,6 +309,8 @@ class Node:
         would include opening files, creating connections to sensors, and
         calibrating sensors.
 
+        Can be overwritten with both sync and async setup functions.
+
         """
         ...
 
@@ -295,8 +321,10 @@ class Node:
         do so carefully. If overwritten, the handling of inputs will have
         to be implemented as well.
 
-        One can have access to this information from ``self.in_bound_data``,
-        and ``self.new_data_available`` attributes.
+        To receive the data, use the EventBus to listen to the 'in_step'
+        event and emit the output data with 'out_step'.
+
+        Can be overwritten with both sync and async main functions.
 
         """
         ...
@@ -311,6 +339,8 @@ class Node:
 
         For a ``Node`` that have inputs, these will be executed when new
         data is received.
+
+        Can be overwritten with both sync and async step functions.
 
         Args:
             data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
@@ -329,6 +359,8 @@ class Node:
         This method provides a convienient way to shutdown services, such
         as closing files, signaling to sensors to stop, and making any
         last minute corrections to the data.
+
+        Can be overwritten with both sync and async teardown functions.
 
         """
         ...
@@ -353,24 +385,61 @@ class Node:
         # Saving configuration
         self.blocking = blocking
 
+        # Create the services
+        self._thread = AsyncLoopThread()
+        self._thread.start()
+
+        # Create the event bus for the Worker
+        self.eventbus = EventBus(thread=self._thread)
+
+        # Adding state to the WorkerCommsService
+        if self.worker_comms:
+            self.worker_comms.add_state(self.state)
+
+        # Configure the processor
+        # if self.__class__.__bases__[0].main.__code__ != self.main.__code__:
+        #     ...
+
+        # Create services
+        self.processor = ProcessorService(
+            name="processor",
+            state=self.state,
+            eventbus=self.eventbus,
+            in_bound_data=len(self.node_config.in_bound) != 0,
+            logger=self.logger,
+        )
+        self.recorder = RecordService(
+            name="recorder",
+            state=self.state,
+            eventbus=self.eventbus,
+            logger=self.logger,
+        )
+
+        # If in-bound, enable the poller service
+        if self.node_config and self.node_config.in_bound:
+            self.poller = PollerService(
+                name="poller",
+                in_bound=self.node_config.in_bound,
+                in_bound_by_name=self.node_config.in_bound_by_name,
+                follow=self.node_config.follow,
+                state=self.state,
+                eventbus=self.eventbus,
+                logger=self.logger,
+            )
+
+        # If out_bound, enable the publisher service
+        if self.node_config and self.node_config.out_bound:
+            self.publisher = PublisherService(
+                "publisher",
+                state=self.state,
+                eventbus=self.eventbus,
+                logger=self.logger,
+            )
+
         # Performing setup for the while loop
-        self._setup()
-        self._ready()
-        self._wait()
-        self._main()
+        future = self._exec_coro(self._eventloop)
 
         if self.blocking:
-            self._idle()
-            self._teardown()
-            # self.logger.debug(f"{self}: is exiting")
-        else:
-            self.state.fsm = "RECORDING"
+            future.result()
 
-    def shutdown(self, msg: Dict = {}):
-
-        self.running = False
-        # self.logger.debug(f"{self}: shutting down")
-
-        if not self.blocking:
-            self._teardown()
-            # self.logger.debug(f"{self}: is exiting")
+        return future
