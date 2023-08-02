@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import Dict
 
+from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
+from ..data_protocols import NodePubTable
 
 
 @dataclass
@@ -12,3 +14,20 @@ class NewInBoundDataEvent:
 @dataclass
 class NewOutBoundDataEvent:
     data_chunk: DataChunk
+
+
+@dataclass
+class ProcessNodePubTableEvent:
+    node_pub_table: NodePubTable
+
+
+@dataclass
+class RegisteredMethodEvent:
+    method_name: str
+    params: Dict[str, any]
+    client: Client
+
+
+@dataclass
+class GatherEvent:
+    client: Client

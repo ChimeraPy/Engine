@@ -261,10 +261,10 @@ class Node:
 
     async def _eventloop(self):
         await self._setup()
-        await self._ready()
-        await self._wait()
-        await self._main()
-        await self._idle()
+        # await self._ready()
+        # await self._wait()
+        # await self._main()
+        await self._idle() # stop, running, and collecting
         await self._teardown()
 
     async def _setup(self):
@@ -272,19 +272,19 @@ class Node:
         await self.eventbus.asend(Event("setup"))
         # self.logger.debug(f"{self}: finished setup")
 
-    async def _ready(self):
-        self.state.fsm = "READY"
-        await self.eventbus.asend(Event("ready"))
+    # async def _ready(self):
+    #     self.state.fsm = "READY"
+    #     await self.eventbus.asend(Event("ready"))
         # self.logger.debug(f"{self}: is ready")
 
-    async def _wait(self):
-        await self.eventbus.asend(Event("wait"))
-        # self.logger.debug(f"{self}: finished waiting")
+    # async def _wait(self):
+    #     await self.eventbus.asend(Event("wait"))
+    #     # self.logger.debug(f"{self}: finished waiting")
 
-    async def _main(self):
-        # self.state.fsm = "PREVIEWING"
-        await self.eventbus.asend(Event("main"))
-        # self.logger.debug(f"{self}: finished main")
+    # async def _main(self):
+    #     # self.state.fsm = "PREVIEWING"
+    #     await self.eventbus.asend(Event("main"))
+    #     # self.logger.debug(f"{self}: finished main")
 
     async def _idle(self):
 

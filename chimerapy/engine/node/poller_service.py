@@ -1,6 +1,6 @@
-from typing import Optional, Dict, Tuple, List
 import threading
 import logging
+from typing import Optional, Dict, Tuple, List
 
 import zmq
 
@@ -9,8 +9,8 @@ from ..states import NodeState
 from ..networking import Subscriber, DataChunk
 from ..data_protocols import NodePubTable, NodePubEntry
 from ..service import Service
-from ..eventbus import EventBus, Event
-from .events import NewInBoundDataEvent
+from ..eventbus import EventBus, Event, TypedObserver
+from .events import NewInBoundDataEvent, ProcessNodePubTableEvent
 
 
 class PollerService(Service):
@@ -48,6 +48,16 @@ class PollerService(Service):
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
         self.in_bound_data: Dict[str, DataChunk] = {}
+        
+        # Specify observers
+        self.observers: Dict[str, TypedObserver] = {
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
+            "setup_connections": TypedObserver("setup_connections", ProcessNodePubTableEvent, on_asend=self.setup_connections, handle_event="unpack"),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     ####################################################################
     ## Lifecycle Hooks

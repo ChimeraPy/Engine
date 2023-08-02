@@ -6,12 +6,18 @@ import asyncio
 from typing import Dict, List, Optional, Callable, Coroutine, Any, Literal
 
 from chimerapy.engine import _logger
+from ..networking.client import Client
+from ..networking.enums import NODE_MESSAGE
 from ..networking import DataChunk
 from ..states import NodeState
 from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
 from .registered_method import RegisteredMethod
-from .events import NewInBoundDataEvent, NewOutBoundDataEvent
+from .events import (
+    NewInBoundDataEvent, 
+    NewOutBoundDataEvent,
+    RegisteredMethodEvent
+)
 
 
 class ProcessorService(Service):
@@ -56,6 +62,7 @@ class ProcessorService(Service):
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
             "main": TypedObserver("main", on_asend=self.main, handle_event="drop"),
+            "registered_method": TypedObserver("registered_method", RegisteredMethodEvent, on_asend=self.execute_registered_method, handle_event='unpack'),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
@@ -116,6 +123,19 @@ class ProcessorService(Service):
                 await self.safe_exec(self.teardown_fn)
 
     ####################################################################
+    ## Debugging tools
+    ####################################################################
+
+    async def gather(self, client: Client):
+        await client.async_send(
+            signal=NODE_MESSAGE.REPORT_GATHER,
+            data={
+                "state": self.state.to_dict(),
+                "latest_value": self.latest_data_chunk.to_json(),
+            },
+        )
+
+    ####################################################################
     ## Async Registered Methods
     ####################################################################
 
@@ -123,7 +143,22 @@ class ProcessorService(Service):
         self,
         method_name: str,
         params: Dict,
+        client: Optional[Client]
     ) -> Dict[str, Any]:
+       
+        # First check if the request is valid
+        if method_name not in self.registered_node_fns:
+            results = {
+                "node_id": self.state.id,
+                "node_state": self.state.to_json(),
+                "success": False,
+                "output": None,
+            }
+            self.logger.warning(
+                f"{self}: Worker requested execution of registered method that doesn't \
+                exists: {method_name}"
+            )
+            return {'success': False, "output": None}
 
         # Extract the method
         function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
@@ -151,6 +186,16 @@ class ProcessorService(Service):
         else:
             self.logger.error(f"Invalid registered method request: style={style}")
             output = None
+
+        # Sending the information if client
+        if client:
+            results = {
+                'success': success,
+                'output': output,
+                'node_id': self.state.id,
+                'node_state': self.state.to_json()
+            }
+            await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
         return {"success": success, "output": output}
 

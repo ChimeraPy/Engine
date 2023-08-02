@@ -2,6 +2,7 @@ import pathlib
 import threading
 import datetime
 import logging
+import tempfile
 from typing import Dict, Optional
 
 from ..networking import Client
@@ -9,7 +10,13 @@ from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from ..data_protocols import NodePubTable
 from ..service import Service
+from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
+from .events import (
+    ProcessNodePubTableEvent,
+    RegisteredMethodEvent,
+    GatherEvent
+)
 
 
 class WorkerCommsService(Service):
@@ -18,10 +25,13 @@ class WorkerCommsService(Service):
         name: str,
         host: str,
         port: int,
-        worker_logdir: pathlib.Path,
         node_config: NodeConfig,
+        worker_logdir: Optional[pathlib.Path] = None,
         logging_level: int = logging.INFO,
         worker_logging_port: int = 5555,
+        state: Optional[NodeState] = None,
+        logger: Optional[logging.Logger] = None,
+        eventbus: Optional[EventBus] = None,
     ):
         super().__init__(name=name)
 
@@ -30,28 +40,44 @@ class WorkerCommsService(Service):
         self.port = port
         self.worker_logging_port = worker_logging_port
         self.logging_level = logging_level
-        self.worker_logdir = worker_logdir
         self.node_config = node_config
+        self.logger = logger
+        self.eventbus = eventbus
+
+        if worker_logdir:
+            self.worker_logdir = worker_logdir
+        else:
+            self.worker_logdir = pathlib.Path(tempfile.mktemp())
 
         # Internal state variables
         self.running: bool = False
-        self.logger = Optional[logging.Logger] = None
+
+        # If given the eventbus, add the observers
+        if self.eventbus:
+            self.add_observers()
+    
+    ####################################################################
+    ## Helper Functions
+    ####################################################################
+
+    def in_node_config(self, state: NodeState, logger: logging.Logger, eventbus: EventBus):
+
+        # Save parameters
+        self.state = state
+        self.logger = logger
+        self.eventbus = eventbus
+
+
+    def add_observers(self):
+        ...
+
+        # Add the observers
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
-    def add_state(self, state: NodeState):
-        self.state = state
-
-    def add_logger(self, logger: logging.Logger):
-        self.logger = logger
-
-    def setup(self):
-
-        # Events
-        self.worker_signal_start = threading.Event()
-        self.worker_signal_start.clear()
+    async def setup(self):
 
         # self.logger.debug(
         #     f"{self}: Prepping the networking component of the Node, connecting to \
@@ -75,38 +101,30 @@ class WorkerCommsService(Service):
                 WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
             },
             parent_logger=self.logger,
+            thread=self.eventbus.thread
         )
-        self.client.connect()
+        await self.client.async_connect()
 
         # Send publisher port and host information
-        self.client.send(
+        await self.client.async_send(
             signal=NODE_MESSAGE.STATUS,
             data=self.state.to_dict(),
         )
 
-    def ready(self):
-
-        # Only do so if connected to Worker and its connected
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
-
-    def wait(self):
-
-        # Wait until worker says to start
-        while self.running:
-            if self.worker_signal_start.wait(timeout=1):
-                break
-
-        # Only do so if connected to Worker and its connected
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
-
-    def teardown(self):
-
-        # Inform the worker that the Node has finished its saving of data
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.state.to_dict())
+    async def teardown(self):
 
         # Shutdown the client
-        self.client.shutdown()
+        await self.client.async_shutdown()
         # self.logger.debug(f"{self}: shutdown")
+    
+    ####################################################################
+    ## Helper Methods
+    ####################################################################
+
+    async def send_state(self):
+        await self.client.async_send(
+            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
+        )
 
     ####################################################################
     ## Message Reactivity API
@@ -115,36 +133,28 @@ class WorkerCommsService(Service):
     async def process_node_pub_table(self, msg: Dict):
 
         node_pub_table = NodePubTable.from_json(msg["data"])
-        # self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
 
         # Pass the information to the Poller Service
-        if "poller" in self.node.services:
-            self.node.services["poller"].setup_connections(node_pub_table)
+        event_data = ProcessNodePubTableEvent(node_pub_table)
+        await self.eventbus.asend(Event('setup_connections', event_data))
 
         self.state.fsm = "CONNECTED"
 
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
-        # self.logger.debug(f"{self}: Notifying Worker that Node is connected")
-
-    async def start_node(self, msg: Dict):
+    async def start_node(self, msg: Dict = {}):
+        await self.eventbus.asend(Event("start"))
         self.state.fsm = "PREVIEWING"
-        self.worker_signal_start.set()
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
 
     async def record_node(self, msg: Dict):
-        # self.logger.debug(f"{self}: start")
-        self.node.start_time = datetime.datetime.now()
+        await self.eventbus.asend(Event("record"))
         self.state.fsm = "RECORDING"
-        self.worker_signal_start.set()
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
+    
+    async def stop_node(self, msg: Dict):
+        await self.eventbus.asend(Event('stop'))
+        self.state.fsm = "STOPPED"
+    
+    async def provide_collect(self, msg: Dict):
+        await self.eventbus.asend(Event('collect'))
+        self.state.fsm = "SAVED"
 
     async def execute_registered_method(self, msg: Dict):
         # self.logger.debug(f"{self}: execute register method: {msg}")
@@ -152,57 +162,13 @@ class WorkerCommsService(Service):
         # Check first that the method exists
         method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
 
-        if method_name not in self.node.registered_methods:
-            results = {
-                "node_id": self.node.id,
-                "node_state": self.state.to_json(),
-                "success": False,
-                "output": None,
-            }
-            self.logger.warning(
-                f"{self}: Worker requested execution of registered method that doesn't \
-                exists: {method_name}"
-            )
-        else:
-            results = await self.node.services["processor"].execute_registered_method(
-                method_name, params
-            )
-            results.update(
-                {"node_id": self.node.id, "node_state": self.state.to_json()}
-            )
-
-        await self.client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
+        # Send the event
+        event_data = RegisteredMethodEvent(method_name=method_name, params=params, client=self.client)
+        await self.eventbus.asend(Event('registered_method', event_data))
 
     async def async_step(self, msg: Dict):
-        # Make the processor take a step
-        self.node.services["processor"].forward()
-
-    async def stop_node(self, msg: Dict):
-        # Stop by using running variable
-        self.state.fsm = "STOPPED"
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
+        await self.eventbus.asend(Event('manual_step'))
 
     async def provide_gather(self, msg: Dict):
-
-        latest_value = self.node.services["processor"].latest_data_chunk
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.REPORT_GATHER,
-            data={
-                "state": self.state.to_dict(),
-                "latest_value": latest_value.to_json(),
-            },
-        )
-
-    async def provide_collect(self, msg: Dict):
-
-        # Pass the information to the Record Service
-        self.node.services["record"].save()
-        self.state.fsm = "SAVED"
-        # self.running = False
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
+        event_data = GatherEvent(self.client)
+        await self.eventbus.asend(Event('gather', event_data))

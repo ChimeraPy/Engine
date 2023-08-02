@@ -1,5 +1,4 @@
 # Built-in
-from typing import Dict, Optional, Callable, Any
 import os
 import asyncio
 import threading
@@ -12,16 +11,18 @@ import json
 import enum
 import logging
 import traceback
+import atexit
 import multiprocess as mp
 from concurrent.futures import Future
+from typing import Dict, Optional, Callable, Any, Union, List, Coroutine
 
 # Third-party
 import aiohttp
 
 # Internal Imports
 from chimerapy.engine import config
+from ..utils import create_payload, async_waiting_for
 from .async_loop_thread import AsyncLoopThread
-from chimerapy.engine.utils import create_payload, async_waiting_for
 from .enums import GENERAL_MESSAGE
 
 # Logging
@@ -42,6 +43,7 @@ class Client:
         host: str,
         port: int,
         ws_handlers: Dict[enum.Enum, Callable] = {},
+        thread: Optional[AsyncLoopThread] = None,
         parent_logger: Optional[logging.Logger] = None,
     ):
 
@@ -52,23 +54,27 @@ class Client:
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._session = None
+        
+        # The EventLoop
+        if thread:
+            self._thread = thread
+        else:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
+
+        self.futures: List[Future] = []
 
         # State variables
         self.running = threading.Event()
         self.running.clear()
         self.msg_processed_counter = 0
-        self._client_shutdown_complete = threading.Event()
-        self._client_shutdown_complete.clear()
-
-        # Create thread to accept async request
-        self._thread = AsyncLoopThread()
-        self._thread.start()
+        self.uuid_records = collections.deque(maxlen=100)
 
         # Adding default client handlers
         self.ws_handlers.update(
             {
                 GENERAL_MESSAGE.OK.value: self._ok,
-                GENERAL_MESSAGE.SHUTDOWN.value: self._client_shutdown,
+                GENERAL_MESSAGE.SHUTDOWN.value: self.async_shutdown,
             }
         )
 
@@ -79,12 +85,28 @@ class Client:
             self.logger = _logger.fork(parent_logger, "client")
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
+        
+        # Make sure to shutdown correctly
+        atexit.register(self.shutdown)
 
     def __str__(self):
         return f"<Client {self.id}>"
 
     def setLogger(self, parent_logger: logging.Logger):
         self.logger = _logger.fork(parent_logger, "client")
+    
+    ####################################################################
+    # Helper Function
+    ####################################################################
+
+    def _exec_coro(self, coro: Coroutine) -> Future:
+        # Submitting the coroutine
+        future = self._thread.exec(coro)
+
+        # Saving the future for later use
+        self.futures.append(future)
+
+        return future
 
     ####################################################################
     # Client WS Handlers
@@ -163,8 +185,36 @@ class Client:
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
+    
+    async def _register(self):
 
-    async def _send_file_async(
+        # First message should be the client registering to the Server
+        await self._send_msg(
+            signal=GENERAL_MESSAGE.CLIENT_REGISTER,
+            data={"client_id": self.id},
+            ok=True,
+        )
+
+    ####################################################################
+    # Client Async Setup and Shutdown
+    ####################################################################
+
+    async def async_connect(self):
+
+        # Clearing queue
+        self.uuid_records.clear()
+
+        # Create the session
+        self._session = aiohttp.ClientSession()
+        self._ws = await self._session.ws_connect(f"http://{self.host}:{self.port}/ws")
+
+        # Create task to read
+        self._thread.exec(self._read_ws())
+
+        # Register the client
+        await self._register()
+
+    async def async_send_file(
         self, url: str, sender_id: str, filepath: pathlib.Path
     ) -> bool:
 
@@ -188,7 +238,7 @@ class Client:
 
         return True
 
-    async def _send_folder_async(self, sender_id: str, dir: pathlib.Path):
+    async def async_send_folder(self, sender_id: str, dir: pathlib.Path):
 
         if not dir.is_dir() and not dir.exists():
             self.logger.error(f"Cannot send non-existent dir: {dir}.")
@@ -232,65 +282,16 @@ class Client:
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Then send the file
-        await self._send_file_async(url, sender_id, zip_file)
+        await self.async_send_file(url, sender_id, zip_file)
 
         return True
 
-    ####################################################################
-    # Client Async Setup and Shutdown
-    ####################################################################
-
-    async def _register(self):
-
-        # First message should be the client registering to the Server
-        await self._send_msg(
-            signal=GENERAL_MESSAGE.CLIENT_REGISTER,
-            data={"client_id": self.id},
-            ok=True,
-        )
-
-        # Mark that client has connected
-        self._client_ready.set()
-
-    async def _main(self):
-
-        # Create record of message uuids
-        self.uuid_records = collections.deque(maxlen=100)
-
-        async with aiohttp.ClientSession() as session:
-            async with session.ws_connect(f"http://{self.host}:{self.port}/ws") as ws:
-
-                # Store the Client session
-                self._session = session
-                self._ws = ws
-
-                # Establish read and write
-                read_task = asyncio.create_task(self._read_ws())
-
-                # Register the client
-                await self._register()
-
-                # Continue executing them
-                await asyncio.gather(read_task)
-
-        # After the ws is closed, do the following
-        await self._client_shutdown()
-
-    async def _client_shutdown(self, msg: Dict = {}):
-
-        # Mark to stop and close things
-        self.running.clear()
+    async def async_shutdown(self, msg: Dict = {}):
 
         if self._ws:
-            await asyncio.wait_for(self._ws.close(), timeout=2)
+            await asyncio.wait_for(self._ws.close(), timeout=5)
         if self._session:
-            await asyncio.wait_for(self._session.close(), timeout=2)
-
-        self._client_shutdown_complete.set()
-
-    ####################################################################
-    # Client ASync Lifecyle API
-    ####################################################################
+            await asyncio.wait_for(self._session.close(), timeout=5)
 
     async def async_send(self, signal: enum.Enum, data: Any, ok: bool = False) -> bool:
 
@@ -320,7 +321,7 @@ class Client:
     def send_file(self, sender_id: str, filepath: pathlib.Path) -> Future[bool]:
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
-        return self._thread.exec(self._send_file_async(url, sender_id, filepath))
+        return self._exec_coro(self.async_send_file(url, sender_id, filepath))
 
     def send_folder(self, sender_id: str, dir: pathlib.Path) -> Future[bool]:
 
@@ -328,41 +329,20 @@ class Client:
             dir.is_dir() and dir.exists()
         ), f"Sending {dir} needs to be a folder that exists."
 
-        return self._thread.exec(self._send_folder_async(sender_id, dir))
+        return self._exec_coro(self.async_send_folder(sender_id, dir))
 
-    def connect(self):
+    def connect(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+        future = self._exec_coro(self.async_connect())
+        
+        if blocking:
+            return future.result(timeout=config.get('comms.timeout.client-ready'))
 
-        # Mark that the client is running
-        self.running.set()
+        return future
 
-        # Create async loop in thread
-        self._client_ready = threading.Event()
-        self._client_ready.clear()
+    def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+        future = self._exec_coro(self.async_shutdown())
 
-        # Start async execution
-        self._thread.exec(self._main())
+        if blocking:
+            return future.result(timeout=config.get('comms.timeout.client-shutdown'))
 
-        # Wait until client is ready
-        flag = self._client_ready.wait(timeout=config.get("comms.timeout.client-ready"))
-        if flag == 0:
-            self.shutdown()
-            raise TimeoutError(f"{self}: failed to connect, shutting down!")
-
-    def shutdown(self):
-
-        if self.running.is_set():
-
-            # Execute shutdown
-            self._thread.exec(self._client_shutdown())
-
-            # Wait for it
-            if not self._client_shutdown_complete.wait(
-                timeout=config.get("comms.timeout.client-shutdown")
-            ):
-                self.logger.warning(f"{self}: failed to gracefully shutdown")
-
-            # Stop threaded loop
-            self._thread.stop()
-
-    def __del__(self):
-        self.shutdown()
+        return future
