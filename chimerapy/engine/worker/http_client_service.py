@@ -309,7 +309,7 @@ class HttpClientService(Service):
         try:
             # Create a temporary HTTP client
             client = Client(self.state.id, host=host, port=port)
-            return await client._send_folder_async(
+            return await client.async_send_folder(
                 self.state.name, self.state.tempfolder
             )
         except (TimeoutError, SystemError) as error:

@@ -1,6 +1,4 @@
 import pathlib
-import threading
-import datetime
 import logging
 import tempfile
 from typing import Dict, Optional
@@ -10,13 +8,9 @@ from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from ..data_protocols import NodePubTable
 from ..service import Service
-from ..eventbus import EventBus, Event, TypedObserver
+from ..eventbus import EventBus, Event
 from .node_config import NodeConfig
-from .events import (
-    ProcessNodePubTableEvent,
-    RegisteredMethodEvent,
-    GatherEvent
-)
+from .events import ProcessNodePubTableEvent, RegisteredMethodEvent, GatherEvent
 
 
 class WorkerCommsService(Service):
@@ -41,6 +35,9 @@ class WorkerCommsService(Service):
         self.worker_logging_port = worker_logging_port
         self.logging_level = logging_level
         self.node_config = node_config
+
+        # Optional
+        self.state = state
         self.logger = logger
         self.eventbus = eventbus
 
@@ -51,22 +48,24 @@ class WorkerCommsService(Service):
 
         # Internal state variables
         self.running: bool = False
+        self.client: Optional[Client] = None
 
         # If given the eventbus, add the observers
         if self.eventbus:
             self.add_observers()
-    
+
     ####################################################################
     ## Helper Functions
     ####################################################################
 
-    def in_node_config(self, state: NodeState, logger: logging.Logger, eventbus: EventBus):
+    def in_node_config(
+        self, state: NodeState, logger: logging.Logger, eventbus: EventBus
+    ):
 
         # Save parameters
         self.state = state
         self.logger = logger
         self.eventbus = eventbus
-
 
     def add_observers(self):
         ...
@@ -78,6 +77,7 @@ class WorkerCommsService(Service):
     ####################################################################
 
     async def setup(self):
+        assert self.state and self.eventbus and self.logger
 
         # self.logger.debug(
         #     f"{self}: Prepping the networking component of the Node, connecting to \
@@ -101,7 +101,7 @@ class WorkerCommsService(Service):
                 WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
             },
             parent_logger=self.logger,
-            thread=self.eventbus.thread
+            thread=self.eventbus.thread,
         )
         await self.client.async_connect()
 
@@ -114,61 +114,76 @@ class WorkerCommsService(Service):
     async def teardown(self):
 
         # Shutdown the client
-        await self.client.async_shutdown()
+        if self.client:
+            await self.client.async_shutdown()
         # self.logger.debug(f"{self}: shutdown")
-    
+
     ####################################################################
     ## Helper Methods
     ####################################################################
 
     async def send_state(self):
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
-        )
+        assert self.state and self.eventbus and self.logger
+
+        if self.client:
+            await self.client.async_send(
+                signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
+            )
 
     ####################################################################
     ## Message Reactivity API
     ####################################################################
 
     async def process_node_pub_table(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
 
         node_pub_table = NodePubTable.from_json(msg["data"])
 
         # Pass the information to the Poller Service
         event_data = ProcessNodePubTableEvent(node_pub_table)
-        await self.eventbus.asend(Event('setup_connections', event_data))
+        await self.eventbus.asend(Event("setup_connections", event_data))
 
         self.state.fsm = "CONNECTED"
 
     async def start_node(self, msg: Dict = {}):
+        assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("start"))
         self.state.fsm = "PREVIEWING"
 
     async def record_node(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("record"))
         self.state.fsm = "RECORDING"
-    
+
     async def stop_node(self, msg: Dict):
-        await self.eventbus.asend(Event('stop'))
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("stop"))
         self.state.fsm = "STOPPED"
-    
+
     async def provide_collect(self, msg: Dict):
-        await self.eventbus.asend(Event('collect'))
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("collect"))
         self.state.fsm = "SAVED"
 
     async def execute_registered_method(self, msg: Dict):
-        # self.logger.debug(f"{self}: execute register method: {msg}")
-
+        assert self.state and self.eventbus and self.logger
         # Check first that the method exists
         method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
 
         # Send the event
-        event_data = RegisteredMethodEvent(method_name=method_name, params=params, client=self.client)
-        await self.eventbus.asend(Event('registered_method', event_data))
+        if self.client:
+            event_data = RegisteredMethodEvent(
+                method_name=method_name, params=params, client=self.client
+            )
+            await self.eventbus.asend(Event("registered_method", event_data))
 
     async def async_step(self, msg: Dict):
-        await self.eventbus.asend(Event('manual_step'))
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("manual_step"))
 
     async def provide_gather(self, msg: Dict):
-        event_data = GatherEvent(self.client)
-        await self.eventbus.asend(Event('gather', event_data))
+        assert self.state and self.eventbus and self.logger
+
+        if self.client:
+            event_data = GatherEvent(self.client)
+            await self.eventbus.asend(Event("gather", event_data))

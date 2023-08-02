@@ -54,7 +54,7 @@ class Client:
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
         self._ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self._session = None
-        
+
         # The EventLoop
         if thread:
             self._thread = thread
@@ -68,7 +68,8 @@ class Client:
         self.running = threading.Event()
         self.running.clear()
         self.msg_processed_counter = 0
-        self.uuid_records = collections.deque(maxlen=100)
+        self.uuid_records: collections.deque[str] = collections.deque(maxlen=100)
+        self.tasks: List[asyncio.Task] = []
 
         # Adding default client handlers
         self.ws_handlers.update(
@@ -85,7 +86,7 @@ class Client:
             self.logger = _logger.fork(parent_logger, "client")
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
-        
+
         # Make sure to shutdown correctly
         atexit.register(self.shutdown)
 
@@ -94,7 +95,7 @@ class Client:
 
     def setLogger(self, parent_logger: logging.Logger):
         self.logger = _logger.fork(parent_logger, "client")
-    
+
     ####################################################################
     # Helper Function
     ####################################################################
@@ -113,6 +114,7 @@ class Client:
     ####################################################################
 
     async def _ok(self, msg: Dict):
+        # self.logger.debug(f"{self}: received OK")
         self.uuid_records.append(msg["data"]["uuid"])
 
     ####################################################################
@@ -123,6 +125,8 @@ class Client:
         assert self._ws
 
         async for aiohttp_msg in self._ws:
+
+            # self.logger.debug(f"{self}: msg: {aiohttp_msg}")
 
             # Tracking the number of messages processed
             self.msg_processed_counter += 1
@@ -146,13 +150,6 @@ class Client:
                     # )
                     await self._ws.close()
                     return None
-
-    async def _write_ws(self, msg: Dict):
-        await self._send_msg(**msg)
-
-    ####################################################################
-    # Client Utilities
-    ####################################################################
 
     async def _send_msg(
         self,
@@ -185,7 +182,7 @@ class Client:
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
-    
+
     async def _register(self):
 
         # First message should be the client registering to the Server
@@ -195,13 +192,15 @@ class Client:
             ok=True,
         )
 
+        # self.logger.debug(f"{self}: registered!")
+
     ####################################################################
     # Client Async Setup and Shutdown
     ####################################################################
 
     async def async_connect(self):
 
-        # Clearing queue
+        # Reset
         self.uuid_records.clear()
 
         # Create the session
@@ -209,7 +208,9 @@ class Client:
         self._ws = await self._session.ws_connect(f"http://{self.host}:{self.port}/ws")
 
         # Create task to read
-        self._thread.exec(self._read_ws())
+        # self._thread.exec(self._read_ws())
+        task = asyncio.create_task(self._read_ws())
+        self.tasks.append(task)
 
         # Register the client
         await self._register()
@@ -300,14 +301,16 @@ class Client:
 
         # Create msg container and execute writing coroutine
         msg = {"signal": signal, "data": data, "msg_uuid": msg_uuid, "ok": ok}
-        await self._write_ws(msg)
+        await self._send_msg(**msg)
 
         if ok:
 
-            await async_waiting_for(
+            success = await async_waiting_for(
                 lambda: msg_uuid in self.uuid_records,
                 timeout=config.get("comms.timeout.ok"),
             )
+            if not success:
+                self.logger.warning(f"{self}: Timeout in OK")
 
         return True
 
@@ -333,9 +336,9 @@ class Client:
 
     def connect(self, blocking: bool = True) -> Union[bool, Future[bool]]:
         future = self._exec_coro(self.async_connect())
-        
+
         if blocking:
-            return future.result(timeout=config.get('comms.timeout.client-ready'))
+            return future.result(timeout=config.get("comms.timeout.client-ready"))
 
         return future
 
@@ -343,6 +346,6 @@ class Client:
         future = self._exec_coro(self.async_shutdown())
 
         if blocking:
-            return future.result(timeout=config.get('comms.timeout.client-shutdown'))
+            return future.result(timeout=config.get("comms.timeout.client-shutdown"))
 
         return future

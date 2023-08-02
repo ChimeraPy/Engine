@@ -254,7 +254,7 @@ class WorkerHandlerService(Service):
                     host=worker_data.ip,
                     port=worker_data.port,
                 )
-                await client._send_file_async(
+                await client.async_send_file(
                     url=f"{self._get_worker_ip(worker_id)}/file/post",
                     sender_id=self.state.id,
                     filepath=zip_package_dst,

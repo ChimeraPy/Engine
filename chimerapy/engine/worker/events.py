@@ -36,10 +36,10 @@ class ProcessNodePubTableEvent:
 
 
 @dataclass
-class registeredmethodevent:
+class RegisteredMethodEvent:
     node_id: str
     method_name: str
-    params: dict[str, any]
+    params: Dict[str, Any]
 
 
 @dataclass

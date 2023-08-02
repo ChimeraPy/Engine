@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Any
 
 from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
@@ -24,7 +24,7 @@ class ProcessNodePubTableEvent:
 @dataclass
 class RegisteredMethodEvent:
     method_name: str
-    params: Dict[str, any]
+    params: Dict[str, Any]
     client: Client
 
 

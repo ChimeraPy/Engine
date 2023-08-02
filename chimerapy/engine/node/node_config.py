@@ -18,7 +18,7 @@ class NodeConfig:
 
     def __init__(
         self,
-        node: "Node",
+        node: Optional["Node"] = None,
         in_bound: List[str] = [],
         in_bound_by_name: List[str] = [],
         out_bound: List[str] = [],
@@ -33,5 +33,9 @@ class NodeConfig:
         self.follow = follow
         self.context = context
 
-        self.id = node.id
-        self.pickled = dill.dumps(node, recurse=True)
+        if node:
+            self.id = node.id
+            self.pickled = dill.dumps(node, recurse=True)
+        else:
+            self.id = ""
+            self.pickled = bytes([])

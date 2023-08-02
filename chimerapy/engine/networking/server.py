@@ -18,7 +18,7 @@ from concurrent.futures import Future
 
 # Third-party
 from tqdm import tqdm
-from aiohttp import web, WSCloseCode
+from aiohttp import web
 
 # Internal Imports
 from chimerapy.engine import config
@@ -156,6 +156,7 @@ class Server:
         self.uuid_records.append(msg["data"]["uuid"])
 
     async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
+        # self.logger.debug(f"{self}: reigstered client: {msg['data']['client_id']}")
         # Storing the client information
         self.ws_clients[msg["data"]["client_id"]] = ws
 
@@ -245,6 +246,8 @@ class Server:
 
     async def _websocket_handler(self, request):
 
+        # self.logger.debug("Obtain WS connection")
+
         # Register new client
         ws = web.WebSocketResponse()
         await ws.prepare(request)
@@ -262,9 +265,12 @@ class Server:
                 handler = self.ws_handlers[msg["signal"]]
                 await handler(msg, ws)
 
+                # self.logger.debug(f"{self}: after handler")
+
                 # Send OK if requested
                 if msg["ok"]:
                     try:
+                        # self.logger.debug(f"{self}: sending OK")
                         await ws.send_json(
                             create_payload(GENERAL_MESSAGE.OK, {"uuid": msg["uuid"]})
                         )
@@ -274,8 +280,9 @@ class Server:
                         )
                         await ws.close()
 
-        except Exception as e:
-            self.logger.warning(f"{self}: WebSocket connection error: {e}")
+        except Exception:
+            self.logger.warning(traceback.format_exc())
+            # self.logger.warning(f"{self}: WebSocket connection error: {e}")
         finally:
 
             # Close websocket
@@ -319,7 +326,7 @@ class Server:
             await ws.send_json(payload)
         except ConnectionResetError:
             self.logger.warning(f"{self}: ConnectionResetError, shutting down ws")
-            await ws.close(code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown")
+            await ws.close()
             del self.ws_clients[client_id]
             return False
 
@@ -398,7 +405,7 @@ class Server:
         for ws in self.ws_clients.values():
             try:
                 await asyncio.wait_for(
-                    ws.close(code=WSCloseCode.GOING_AWAY, message=f"{self}: shutdown"),
+                    ws.close(),
                     timeout=2,
                 )
             except (asyncio.exceptions.TimeoutError, RuntimeError):
