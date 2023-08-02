@@ -13,7 +13,12 @@ from ..states import NodeState
 from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
 from .registered_method import RegisteredMethod
-from .events import NewInBoundDataEvent, NewOutBoundDataEvent, RegisteredMethodEvent
+from .events import (
+    NewInBoundDataEvent,
+    NewOutBoundDataEvent,
+    RegisteredMethodEvent,
+    GatherEvent,
+)
 
 
 class ProcessorService(Service):
@@ -67,6 +72,9 @@ class ProcessorService(Service):
                 RegisteredMethodEvent,
                 on_asend=self.execute_registered_method,
                 handle_event="unpack",
+            ),
+            "gather": TypedObserver(
+                "gather", GatherEvent, on_asend=self.gather, handle_event="unpack"
             ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
@@ -178,7 +186,7 @@ class ProcessorService(Service):
     ) -> Dict[str, Any]:
 
         # First check if the request is valid
-        if method_name not in self.registered_node_fns:
+        if method_name not in self.registered_methods:
             results = {
                 "node_id": self.state.id,
                 "node_state": self.state.to_json(),
@@ -186,8 +194,8 @@ class ProcessorService(Service):
                 "output": None,
             }
             self.logger.warning(
-                f"{self}: Worker requested execution of registered method that doesn't \
-                exists: {method_name}"
+                f"{self}: Worker requested execution of registered method that doesn't "
+                f"exists: {method_name}"
             )
             return {"success": False, "output": None}
 

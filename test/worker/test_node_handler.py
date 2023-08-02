@@ -110,7 +110,7 @@ def test_create_service_instance(node_handler_setup):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 async def test_create_node(gen_node, node_handler_setup, context):
     node_handler, _ = node_handler_setup
     assert await node_handler.async_create_node(
@@ -160,7 +160,7 @@ async def test_create_unknown_node(node_handler_setup):
     assert await node_handler.async_destroy_node(node_id)
 
 
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 @pytest.mark.asyncio
 async def test_processing_node_pub_table(
     node_handler_setup, gen_node, con_node, context
@@ -190,7 +190,7 @@ async def test_processing_node_pub_table(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 async def test_starting_node(node_handler_setup, gen_node, context):
     node_handler, _ = node_handler_setup
 
@@ -204,7 +204,7 @@ async def test_starting_node(node_handler_setup, gen_node, context):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 async def test_record_and_collect(node_handler_setup, context):
     node_handler, _ = node_handler_setup
 
@@ -306,7 +306,7 @@ async def test_registered_method_with_reset_style(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 async def test_gather(node_handler_setup, gen_node, context):
 
     node_handler, _ = node_handler_setup

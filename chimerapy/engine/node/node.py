@@ -18,12 +18,12 @@ from chimerapy.engine import _logger
 from ..states import NodeState
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
-from ..eventbus import EventBus, Event
+from ..eventbus import EventBus, Event, make_evented
 
 # Service Imports
 from .node_config import NodeConfig
-from .worker_comms_service import WorkerCommsService
 from .registered_method import RegisteredMethod
+from .worker_comms_service import WorkerCommsService
 from .record_service import RecordService
 from .processor_service import ProcessorService
 from .poller_service import PollerService
@@ -32,14 +32,14 @@ from .publisher_service import PublisherService
 
 class Node:
 
-    worker_comms: Optional[WorkerCommsService]
-    processor: Optional[ProcessorService]
-    recorder: Optional[RecordService]
-    poller: Optional[PollerService]
-    publisher: Optional[PublisherService]
+    # worker_comms: Optional[WorkerCommsService]
+    # processor: Optional[ProcessorService]
+    # recorder: Optional[RecordService]
+    # poller: Optional[PollerService]
+    # publisher: Optional[PublisherService]
 
-    registered_methods: Dict[str, RegisteredMethod] = {}
-    context: Literal["main", "multiprocessing", "threading"]
+    # registered_methods: Dict[str, RegisteredMethod] = {}
+    # context: Literal["main", "multiprocessing", "threading"]
 
     def __init__(
         self,
@@ -71,6 +71,10 @@ class Node:
         elif isinstance(logdir, str):
             logdir = pathlib.Path(logdir)
 
+        # Handle registered methods
+        if not hasattr(self, "registered_methods"):
+            self.registered_methods: Dict[str, RegisteredMethod] = {}
+
         # Saving input parameters
         self.state = NodeState(
             name=name, id=id, registered_methods=self.registered_methods, logdir=logdir
@@ -90,11 +94,11 @@ class Node:
 
         # Default values
         self.node_config = NodeConfig()
-        self.worker_comms = None
-        self.processor = None
-        self.recorder = None
-        self.poller = None
-        self.publisher = None
+        self.worker_comms: Optional[WorkerCommsService] = None
+        self.processor: Optional[ProcessorService] = None
+        self.recorder: Optional[RecordService] = None
+        self.poller: Optional[PollerService] = None
+        self.publisher: Optional[PublisherService] = None
 
     ####################################################################
     ## Properties
@@ -307,6 +311,7 @@ class Node:
     async def _setup(self):
         self.state.fsm = "INITIALIZED"
         await self.eventbus.asend(Event("setup"))
+        self.state.fsm = "READY"
         # self.logger.debug(f"{self}: finished setup")
 
     # async def _ready(self):
@@ -444,6 +449,9 @@ class Node:
                 state=self.state, eventbus=self.eventbus, logger=self.logger
             )
 
+        # Make the state evented
+        self.state = make_evented(self.state, self.eventbus)
+
         # Configure the processor's operational mode
         mode: Literal["main", "step"] = "step"  # default
         p_main = self.__class__.__bases__[0].main.__code__  # type: ignore[attr-defined]
@@ -456,6 +464,14 @@ class Node:
             main_fn = self.step
             mode = "step"
 
+        # Obtain the registerd methods for the processor
+        if self.registered_methods:
+            registered_fns = {
+                fname: getattr(self, fname) for fname in self.registered_methods
+            }
+        else:
+            registered_fns = {}
+
         # Create services
         self.processor = ProcessorService(
             name="processor",
@@ -463,6 +479,8 @@ class Node:
             main_fn=main_fn,
             teardown_fn=self.teardown,
             operation_mode=mode,
+            registered_methods=self.registered_methods,
+            registered_node_fns=registered_fns,
             state=self.state,
             eventbus=self.eventbus,
             in_bound_data=len(self.node_config.in_bound) != 0,

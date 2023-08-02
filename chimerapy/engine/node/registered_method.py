@@ -22,6 +22,10 @@ class register:
         self.kwargs = dict(kwargs)
 
     def __set_name__(self, owner, name: str):
+        # owner.registered_methods: Dict[str, RegisteredMethod] = {}
+        if not hasattr(owner, "registered_methods"):
+            owner.registered_methods = {}
+
         owner.registered_methods[name] = RegisteredMethod(name=name, **self.kwargs)
         setattr(owner, name, self.fn)
 

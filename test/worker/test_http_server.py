@@ -1,6 +1,5 @@
 import pickle
 import json
-import tempfile
 
 import aiohttp
 
@@ -14,6 +13,8 @@ from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine import _logger
+
+from ..conftest import TEST_DATA_DIR
 
 
 @pytest.fixture
@@ -54,7 +55,7 @@ def test_http_server_instanciate(http_server):
         ("get", "/nodes/pub_table", None),
         ("post", "/nodes/pub_table", NodePubTable().to_json()),
         ("get", "/nodes/gather", None),
-        ("post", "/nodes/collect", json.dumps({"path": tempfile.mkdtemp()})),
+        ("post", "/nodes/collect", json.dumps({"path": str(TEST_DATA_DIR)})),
         ("post", "/nodes/step", json.dumps({})),
         ("post", "/nodes/start", json.dumps({})),
         ("post", "/nodes/record", json.dumps({})),

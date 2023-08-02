@@ -77,6 +77,9 @@ class WorkerCommsService(Service):
 
         observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "NodeState.changed": TypedObserver(
+                "NodeState.changed", on_asend=self.send_state, handle_event="drop"
+            ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
