@@ -256,7 +256,7 @@ class NodeHandlerService(Service):
             self.state.nodes[id].name = node_object.name
 
             # Create worker service and inject to the Node
-            worker_service = WorkerCommsService(
+            worker_comms = WorkerCommsService(
                 name="worker",
                 host=self.state.ip,
                 port=self.state.port,
@@ -265,8 +265,8 @@ class NodeHandlerService(Service):
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
-            # worker_service.inject(node_object)
-            node_object.add_worker_service(worker_service)
+            # worker_comms.inject(node_object)
+            node_object.add_worker_comms(worker_comms)
 
             # Create controller
             controller = self.context_class_map[node_config.context](node_object)
@@ -330,7 +330,7 @@ class NodeHandlerService(Service):
                 "broadcast",
                 BroadcastEvent(
                     signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
-                    data=node_pub_table.to_json(),
+                    data=node_pub_table.to_dict(),
                 ),
             )
         )

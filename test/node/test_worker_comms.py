@@ -5,7 +5,7 @@ from aiohttp import web
 
 import chimerapy.engine as cpe
 from chimerapy.engine.node.worker_comms_service import WorkerCommsService
-from chimerapy.engine.networking.enums import NODE_MESSAGE
+from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus
@@ -93,7 +93,7 @@ async def test_setup(worker_comms_setup):
         ("stop_node", {}),
         ("provide_collect", {}),
         ("execute_registered_method", {"data": {"method_name": "", "params": {}}}),
-        ("process_node_pub_table", {"data": NodePubTable().to_json()}),
+        ("process_node_pub_table", {"data": NodePubTable().to_dict()}),
         ("async_step", {}),
         ("provide_gather", {}),
     ],
@@ -108,6 +108,35 @@ async def test_methods(worker_comms_setup, method_name, method_params):
     # Run method
     method = getattr(worker_comms, method_name)
     await method(method_params)
+
+    # Shutdown
+    await worker_comms.teardown()
+
+
+@pytest.mark.parametrize(
+    "signal, data",
+    [
+        (WORKER_MESSAGE.BROADCAST_NODE_SERVER, NodePubTable().to_dict()),
+        (WORKER_MESSAGE.REQUEST_STEP, {}),
+        (WORKER_MESSAGE.REQUEST_COLLECT, {}),
+        (WORKER_MESSAGE.REQUEST_GATHER, {}),
+        (WORKER_MESSAGE.START_NODES, {}),
+        (WORKER_MESSAGE.RECORD_NODES, {}),
+        (WORKER_MESSAGE.STOP_NODES, {}),
+        (WORKER_MESSAGE.REQUEST_METHOD, {"method_name": "", "params": {}}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_ws_signals(worker_comms_setup, signal, data):
+    worker_comms, server = worker_comms_setup
+
+    # Start the server
+    await worker_comms.setup()
+
+    # Run method
+    await server.async_send(
+        client_id=worker_comms.state.id, signal=signal, data=data, ok=True
+    )
 
     # Shutdown
     await worker_comms.teardown()

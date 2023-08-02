@@ -42,7 +42,7 @@ def test_instanciate(recorder):
 async def test_record_direct_submit(recorder):
 
     # Run the recorder
-    recorder.main()
+    recorder.setup()
 
     timestamp = datetime.datetime.now()
     video_entry = {
@@ -58,7 +58,7 @@ async def test_record_direct_submit(recorder):
     for _ in range(50):
         recorder.submit(video_entry)
 
-    recorder.save()
+    recorder.collect()
     recorder.teardown()
 
     expected_file = recorder.state.logdir / "test.mp4"

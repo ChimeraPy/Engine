@@ -8,7 +8,7 @@ from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from ..data_protocols import NodePubTable
 from ..service import Service
-from ..eventbus import EventBus, Event
+from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
 from .events import ProcessNodePubTableEvent, RegisteredMethodEvent, GatherEvent
 
@@ -67,10 +67,22 @@ class WorkerCommsService(Service):
         self.logger = logger
         self.eventbus = eventbus
 
-    def add_observers(self):
-        ...
+        # Then add observers
+        self.add_observers()
 
-        # Add the observers
+    def add_observers(self):
+        assert self.state and self.eventbus and self.logger
+
+        self.logger.debug(f"{self}: adding observers")
+
+        observers: Dict[str, TypedObserver] = {
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
+        }
+        for ob in observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     ####################################################################
     ## Lifecycle Hooks
@@ -80,8 +92,8 @@ class WorkerCommsService(Service):
         assert self.state and self.eventbus and self.logger
 
         # self.logger.debug(
-        #     f"{self}: Prepping the networking component of the Node, connecting to \
-        #     Worker at {self.host}:{self.port}"
+        #     f"{self}: Prepping the networking component of the Node, connecting to "
+        #     f"Worker at {self.host}:{self.port}"
         # )
 
         # Create client to the Worker
@@ -106,10 +118,7 @@ class WorkerCommsService(Service):
         await self.client.async_connect()
 
         # Send publisher port and host information
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS,
-            data=self.state.to_dict(),
-        )
+        await self.send_state()
 
     async def teardown(self):
 
@@ -137,7 +146,7 @@ class WorkerCommsService(Service):
     async def process_node_pub_table(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
 
-        node_pub_table = NodePubTable.from_json(msg["data"])
+        node_pub_table = NodePubTable.from_dict(msg["data"])
 
         # Pass the information to the Poller Service
         event_data = ProcessNodePubTableEvent(node_pub_table)

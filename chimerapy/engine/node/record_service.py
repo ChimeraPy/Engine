@@ -61,8 +61,13 @@ class RecordService(Service):
 
         # Put observers
         self.observers: Dict[str, TypedObserver] = {
-            "main": TypedObserver("main", on_asend=self.main, handle_event="drop"),
-            "save": TypedObserver("save", on_asend=self.save, handle_event="drop"),
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "record": TypedObserver(
+                "record", on_asend=self.record, handle_event="drop"
+            ),
+            "collect": TypedObserver(
+                "collect", on_asend=self.collect, handle_event="drop"
+            ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
@@ -74,11 +79,15 @@ class RecordService(Service):
     ## Lifecycle Hooks
     ####################################################################
 
-    def main(self):
+    def setup(self):
 
         # self.logger.debug(f"{self}: executing main")
         self._record_thread = threading.Thread(target=self.run)
         self._record_thread.start()
+
+    def record(self):
+        self.logger.debug(f"{self}: Starting recording")
+        ...
 
     def teardown(self):
 
@@ -134,7 +143,8 @@ class RecordService(Service):
 
         # self.logger.debug(f"{self}: Closed all entries")
 
-    def save(self):
+    def collect(self):
+        self.logger.debug(f"{self}: collecting recording")
 
         # Signal to stop and save
         self.is_running.clear()

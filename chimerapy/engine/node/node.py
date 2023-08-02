@@ -3,6 +3,7 @@ import logging
 import uuid
 import datetime
 import os
+import tempfile
 import asyncio
 from concurrent.futures import Future
 from typing import Dict, Any, Optional, Union, Literal, Coroutine, List
@@ -20,6 +21,7 @@ from ..networking.async_loop_thread import AsyncLoopThread
 from ..eventbus import EventBus, Event
 
 # Service Imports
+from .node_config import NodeConfig
 from .worker_comms_service import WorkerCommsService
 from .registered_method import RegisteredMethod
 from .record_service import RecordService
@@ -62,18 +64,22 @@ class Node:
 
         """
         # Handle optional parameters
-        kwargs = {"name": name, "registered_methods": self.registered_methods}
-        if id:
-            kwargs["id"] = id
-        if logdir:
-            kwargs["logdir"] = logdir
+        if not id:
+            id = str(uuid.uuid4())
+        if not logdir:
+            logdir = pathlib.Path(tempfile.mkdtemp())
+        elif isinstance(logdir, str):
+            logdir = pathlib.Path(logdir)
 
         # Saving input parameters
-        self.state = NodeState(**kwargs)
+        self.state = NodeState(
+            name=name, id=id, registered_methods=self.registered_methods, logdir=logdir
+        )
         self.debug_port = debug_port
 
         # State variables
-        self._running: Union[bool, mp.Value] = True
+        self._running: Union[bool, mp.Value] = True  # type: ignore
+        self.eventloop_future: Optional[Future] = None
         self.blocking = True
         self.task_futures: List[Future] = []
 
@@ -83,7 +89,7 @@ class Node:
         self.start_time = datetime.datetime.now()
 
         # Default values
-        self.node_config = None
+        self.node_config = NodeConfig()
         self.worker_comms = None
         self.processor = None
         self.recorder = None
@@ -133,7 +139,7 @@ class Node:
         logger.setLevel(self.logging_level)
 
         # Do not add handler in threaded mode
-        if self.context != "multiprocessing":
+        if self.node_config.context != "multiprocessing":
             return logger
 
         # If worker, add zmq handler
@@ -154,19 +160,21 @@ class Node:
 
         return logger
 
-    def add_worker_service(self, worker_service: WorkerCommsService):
+    def add_worker_comms(self, worker_comms: WorkerCommsService):
 
         # Store service
-        self.worker_service = worker_service
+        self.worker_comms = worker_comms
+        self.worker_comms
 
         # Add the context information
-        self.config = worker_service.node_config
+        self.config = worker_comms.node_config
 
         # Creating logdir after given the Node
-        self.state.logdir = str(worker_service.worker_logdir / self.state.name)
+        self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
 
     def _exec_coro(self, coro: Coroutine) -> Future:
+        assert self._thread
         # Submitting the coroutine
         future = self._thread.exec(coro)
 
@@ -180,6 +188,13 @@ class Node:
     ####################################################################
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
+
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
 
         if self.recorder.enabled:
             timestamp = datetime.datetime.now()
@@ -217,6 +232,13 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
+
         if self.recorder.enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
@@ -233,6 +255,13 @@ class Node:
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
+
         if self.recorder.enabled:
             tabular_entry = {
                 "uuid": uuid.uuid4(),
@@ -244,6 +273,12 @@ class Node:
             self.recorder.submit(tabular_entry)
 
     def save_image(self, name: str, data: np.ndarray):
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
 
         if self.recorder.enabled:
             image_entry = {
@@ -260,12 +295,14 @@ class Node:
     ####################################################################
 
     async def _eventloop(self):
+        self.logger.debug(f"{self}: within event loop")
         await self._setup()
         # await self._ready()
         # await self._wait()
         # await self._main()
-        await self._idle() # stop, running, and collecting
+        await self._idle()  # stop, running, and collecting
         await self._teardown()
+        return True
 
     async def _setup(self):
         self.state.fsm = "INITIALIZED"
@@ -275,7 +312,7 @@ class Node:
     # async def _ready(self):
     #     self.state.fsm = "READY"
     #     await self.eventbus.asend(Event("ready"))
-        # self.logger.debug(f"{self}: is ready")
+    # self.logger.debug(f"{self}: is ready")
 
     # async def _wait(self):
     #     await self.eventbus.asend(Event("wait"))
@@ -294,7 +331,7 @@ class Node:
         # self.logger.debug(f"{self}: exiting idle")
 
     async def _teardown(self):
-        await self.eventbus.asend("teardown")
+        await self.eventbus.asend(Event("teardown"))
         self.state.fsm = "SHUTDOWN"
         # self.logger.debug(f"{self}: finished teardown")
 
@@ -365,7 +402,12 @@ class Node:
         """
         ...
 
-    def run(self, blocking: bool = True, running: Optional[mp.Value] = None):
+    def run(
+        self,
+        blocking: bool = True,
+        running: Optional[mp.Value] = None,  # type: ignore
+        eventbus: Optional[EventBus] = None,
+    ):
         """The actual method that is executed in the new process.
 
         When working with ``multiprocessing.Process``, it should be
@@ -385,24 +427,42 @@ class Node:
         # Saving configuration
         self.blocking = blocking
 
-        # Create the services
-        self._thread = AsyncLoopThread()
-        self._thread.start()
+        # If given eventbus, use it
+        if eventbus:
+            self.eventbus = eventbus
+            self._thread = eventbus.thread
 
-        # Create the event bus for the Worker
-        self.eventbus = EventBus(thread=self._thread)
+        # Else, create the eventbus yourself
+        else:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
+            self.eventbus = EventBus(thread=self._thread)
 
         # Adding state to the WorkerCommsService
         if self.worker_comms:
-            self.worker_comms.add_state(self.state)
+            self.worker_comms.in_node_config(
+                state=self.state, eventbus=self.eventbus, logger=self.logger
+            )
 
-        # Configure the processor
-        # if self.__class__.__bases__[0].main.__code__ != self.main.__code__:
-        #     ...
+        # Configure the processor's operational mode
+        mode: Literal["main", "step"] = "step"  # default
+        p_main = self.__class__.__bases__[0].main.__code__  # type: ignore[attr-defined]
+        if p_main != self.main.__code__:
+            # self.logger.debug(f"{self}: selected 'main' operational mode")
+            main_fn = self.main
+            mode = "main"
+        else:
+            # self.logger.debug(f"{self}: selected 'step' operational mode")
+            main_fn = self.step
+            mode = "step"
 
         # Create services
         self.processor = ProcessorService(
             name="processor",
+            setup_fn=self.setup,
+            main_fn=main_fn,
+            teardown_fn=self.teardown,
+            operation_mode=mode,
             state=self.state,
             eventbus=self.eventbus,
             in_bound_data=len(self.node_config.in_bound) != 0,
@@ -437,9 +497,17 @@ class Node:
             )
 
         # Performing setup for the while loop
-        future = self._exec_coro(self._eventloop)
+        self.eventloop_future = self._exec_coro(self._eventloop())
 
         if self.blocking:
-            future.result()
+            self.eventloop_future.result()
 
-        return future
+    def shutdown(self, timeout: Optional[Union[float, int]] = None):
+
+        self.running = False
+
+        if self.eventloop_future:
+            if timeout:
+                self.eventloop_future.result(timeout=timeout)
+            else:
+                self.eventloop_future.result()

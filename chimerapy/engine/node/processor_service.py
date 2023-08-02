@@ -13,11 +13,7 @@ from ..states import NodeState
 from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
 from .registered_method import RegisteredMethod
-from .events import (
-    NewInBoundDataEvent, 
-    NewOutBoundDataEvent,
-    RegisteredMethodEvent
-)
+from .events import NewInBoundDataEvent, NewOutBoundDataEvent, RegisteredMethodEvent
 
 
 class ProcessorService(Service):
@@ -56,13 +52,22 @@ class ProcessorService(Service):
         # Containers
         self.latest_data_chunk = DataChunk()
         self.step_id: int = 0
-        self.running: bool = True
+        self.running: bool = False
+        self.running_task: Optional[asyncio.Task] = None
+        self.tasks: List[asyncio.Task] = []
+        self.main_thread: Optional[threading.Thread] = None
 
         # Put observers
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "main": TypedObserver("main", on_asend=self.main, handle_event="drop"),
-            "registered_method": TypedObserver("registered_method", RegisteredMethodEvent, on_asend=self.execute_registered_method, handle_event='unpack'),
+            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
+            "stop": TypedObserver("stop", on_asend=self.stop, handle_event="drop"),
+            "registered_method": TypedObserver(
+                "registered_method",
+                RegisteredMethodEvent,
+                on_asend=self.execute_registered_method,
+                handle_event="unpack",
+            ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
@@ -83,14 +88,31 @@ class ProcessorService(Service):
         if self.setup_fn:
             await self.safe_exec(self.setup_fn)
 
+    async def start(self):
+        self.logger.debug(f"{self}: started")
+
+        # Create a task
+        self.running_task = asyncio.create_task(self.main())
+
     async def main(self):
+
+        # Set the flag
+        self.running: bool = True
 
         # Only if method is provided
         if self.main_fn:
 
             # Handling different operational modes
             if self.operation_mode == "main":
-                await self.safe_exec(self.main_fn)
+                # self.logger.debug(f"{self}: operational mode = main")
+
+                if asyncio.iscoroutinefunction(self.main_fn):
+                    await self.safe_exec(self.main_fn)
+                else:
+                    self.main_thread = threading.Thread(target=self.main_fn)
+                    self.main_thread.start()
+
+                # self.logger.debug(f"{self}: continuing after main_fn")
 
             elif self.operation_mode == "step":
 
@@ -110,15 +132,27 @@ class ProcessorService(Service):
 
                 # If source, run as fast as possible
                 else:
-                    # self.logger.debug(f"{self}: source node: {self.running}")
                     while self.running:
                         await self.safe_step()
+
+    async def stop(self):
+        self.logger.debug(f"{self}: stopped")
+        self.running = False
 
     async def teardown(self):
 
         # Only teardown if running
         if self.running:
             self.running = False
+
+            # If main thread, stop
+            if self.main_thread:
+                self.main_thread.join()
+
+            # Shutting down running task
+            if self.running_task:
+                await self.running_task
+
             if self.teardown_fn:
                 await self.safe_exec(self.teardown_fn)
 
@@ -140,12 +174,9 @@ class ProcessorService(Service):
     ####################################################################
 
     async def execute_registered_method(
-        self,
-        method_name: str,
-        params: Dict,
-        client: Optional[Client]
+        self, method_name: str, params: Dict, client: Optional[Client]
     ) -> Dict[str, Any]:
-       
+
         # First check if the request is valid
         if method_name not in self.registered_node_fns:
             results = {
@@ -158,7 +189,7 @@ class ProcessorService(Service):
                 f"{self}: Worker requested execution of registered method that doesn't \
                 exists: {method_name}"
             )
-            return {'success': False, "output": None}
+            return {"success": False, "output": None}
 
         # Extract the method
         function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
@@ -190,10 +221,10 @@ class ProcessorService(Service):
         # Sending the information if client
         if client:
             results = {
-                'success': success,
-                'output': output,
-                'node_id': self.state.id,
-                'node_state': self.state.to_json()
+                "success": success,
+                "output": output,
+                "node_id": self.state.id,
+                "node_state": self.state.to_json(),
             }
             await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
@@ -223,6 +254,8 @@ class ProcessorService(Service):
         return output
 
     async def safe_step(self, data: Dict[str, DataChunk] = {}):
+
+        # self.logger.debug(f"{self}: safe_step")
 
         # Default value
         output = None
