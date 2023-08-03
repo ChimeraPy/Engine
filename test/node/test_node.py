@@ -14,6 +14,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.enums import WORKER_MESSAGE
 from chimerapy.engine.eventbus import EventBus, Event
 
+from ..conftest import GenNode, ConsumeNode
 from .test_worker_comms import server
 
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -28,33 +29,57 @@ __all__ = ["server"]
 
 
 class StepNode(cpe.Node):
+    def setup(self):
+        self.logger.debug(f"{self}: setup")
+
     def step(self):
         time.sleep(0.1)
         self.logger.debug(f"{self}: step")
         return 1
 
+    def teardown(self):
+        self.logger.debug(f"{self}: teardown")
+
 
 class AsyncStepNode(cpe.Node):
+    async def setup(self):
+        self.logger.debug(f"{self}: setup")
+
     async def step(self):
         await asyncio.sleep(0.1)
         self.logger.debug(f"{self}: step")
         return 1
 
+    async def teardown(self):
+        self.logger.debug(f"{self}: teardown")
+
 
 class MainNode(cpe.Node):
+    def setup(self):
+        self.logger.debug(f"{self}: setup")
+
     def main(self):
         while self.running:
             time.sleep(0.1)
             self.logger.debug(f"{self}: step")
         return 1
 
+    def teardown(self):
+        self.logger.debug(f"{self}: teardown")
+
 
 class AsyncMainNode(cpe.Node):
+    async def setup(self):
+        self.logger.debug(f"{self}: setup")
+
     async def main(self):
         while self.running:
             await asyncio.sleep(0.1)
             self.logger.debug(f"{self}: step")
         return 1
+
+    async def teardown(self):
+        self.logger.debug(f"{self}: teardown")
 
 
 @pytest.fixture
@@ -177,3 +202,49 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
     logger.debug("Shutting down Node")
 
     p.join()
+
+
+def test_node_connection(logreceiver, server, eventbus):
+
+    # Create the node
+    # node = node_cls(name="step", debug_port=logreceiver.port)
+    gen_node = GenNode(name="gen", debug_port=logreceiver.port, id="gen")
+    con_node = ConsumeNode(name="con", debug_port=logreceiver.port, id="con")
+
+    # Create the service
+    gen_worker_comms = WorkerCommsService(
+        "worker_comms",
+        host=server.host,
+        port=server.port,
+        node_config=NodeConfig(gen_node),
+    )
+
+    # Create the service
+    con_worker_comms = WorkerCommsService(
+        "worker_comms",
+        host=server.host,
+        port=server.port,
+        node_config=NodeConfig(con_node, in_bound=["gen"], in_bound_by_name=["gen"]),
+    )
+
+    # Add worker comms
+    gen_node.add_worker_comms(gen_worker_comms)
+    con_node.add_worker_comms(con_worker_comms)
+
+    # Running
+    logger.debug("Running Nodes")
+    gen_node.run(blocking=False, eventbus=eventbus)
+    con_node.run(blocking=False, eventbus=eventbus)
+
+    # Wait
+    time.sleep(0.5)
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    time.sleep(0.5)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
+    time.sleep(0.5)
+
+    logger.debug("Shutting down Node")
+    gen_node.shutdown()
+    con_node.shutdown()

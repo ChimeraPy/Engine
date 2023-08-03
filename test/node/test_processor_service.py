@@ -38,7 +38,7 @@ async def main():
     logger.debug("End of main")
 
 
-def step(data: Dict[str, DataChunk] = {}):
+def step(data_chunk: Dict[str, DataChunk] = {}):
     global CHANGE_FLAG
     CHANGE_FLAG = True
     time.sleep(1)

@@ -132,14 +132,15 @@ class ProcessorService(Service):
                         "in_step",
                         NewInBoundDataEvent,
                         on_asend=self.safe_step,
-                        handle_event="drop",
+                        handle_event="unpack",
                     )
                     await self.eventbus.asubscribe(observer)
                     self.observers["in_step"] = observer
-                    # self.logger.debug(f"{self}: step or sink node")
+                    self.logger.debug(f"{self}: step or sink node: {self.state.name}")
 
                 # If source, run as fast as possible
                 else:
+                    self.logger.debug(f"{self}: source node: {self.state.name}")
                     while self.running:
                         await self.safe_step()
 
@@ -149,20 +150,19 @@ class ProcessorService(Service):
 
     async def teardown(self):
 
-        # Only teardown if running
-        if self.running:
-            self.running = False
+        # Stop things
+        self.running = False
 
-            # If main thread, stop
-            if self.main_thread:
-                self.main_thread.join()
+        # If main thread, stop
+        if self.main_thread:
+            self.main_thread.join()
 
-            # Shutting down running task
-            if self.running_task:
-                await self.running_task
+        # Shutting down running task
+        if self.running_task:
+            await self.running_task
 
-            if self.teardown_fn:
-                await self.safe_exec(self.teardown_fn)
+        if self.teardown_fn:
+            await self.safe_exec(self.teardown_fn)
 
     ####################################################################
     ## Debugging tools
@@ -261,16 +261,23 @@ class ProcessorService(Service):
 
         return output
 
-    async def safe_step(self, data: Dict[str, DataChunk] = {}):
+    async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
 
-        # self.logger.debug(f"{self}: safe_step")
+        self.logger.debug(f"{self}: safe_step: {data_chunks}")
 
         # Default value
         output = None
 
         if self.main_fn:
             with self.step_lock:
-                output = await self.safe_exec(self.main_fn, kwargs=data)
+                if self.in_bound_data:
+                    self.logger.debug(f"{self}: safe_exec in step node")
+                    # output = await self.safe_exec(
+                    #     self.main_fn,
+                    #     kwargs={'data_chunks': data_chunks}
+                    # )
+                else:
+                    output = await self.safe_exec(self.main_fn)
 
         # If output generated, send it!
         if output:

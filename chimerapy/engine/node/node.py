@@ -171,7 +171,7 @@ class Node:
         self.worker_comms
 
         # Add the context information
-        self.config = worker_comms.node_config
+        self.node_config = worker_comms.node_config
 
         # Creating logdir after given the Node
         self.state.logdir = worker_comms.worker_logdir / self.state.name
@@ -313,20 +313,6 @@ class Node:
         await self.eventbus.asend(Event("setup"))
         self.state.fsm = "READY"
         # self.logger.debug(f"{self}: finished setup")
-
-    # async def _ready(self):
-    #     self.state.fsm = "READY"
-    #     await self.eventbus.asend(Event("ready"))
-    # self.logger.debug(f"{self}: is ready")
-
-    # async def _wait(self):
-    #     await self.eventbus.asend(Event("wait"))
-    #     # self.logger.debug(f"{self}: finished waiting")
-
-    # async def _main(self):
-    #     # self.state.fsm = "PREVIEWING"
-    #     await self.eventbus.asend(Event("main"))
-    #     # self.logger.debug(f"{self}: finished main")
 
     async def _idle(self):
 
@@ -472,6 +458,9 @@ class Node:
         else:
             registered_fns = {}
 
+        # Identity the type of Node (source, step, or sink)
+        in_bound_data = len(self.node_config.in_bound) != 0
+
         # Create services
         self.processor = ProcessorService(
             name="processor",
@@ -483,7 +472,7 @@ class Node:
             registered_node_fns=registered_fns,
             state=self.state,
             eventbus=self.eventbus,
-            in_bound_data=len(self.node_config.in_bound) != 0,
+            in_bound_data=in_bound_data,
             logger=self.logger,
         )
         self.recorder = RecordService(

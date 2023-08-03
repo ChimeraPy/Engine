@@ -48,13 +48,18 @@ class PollerService(Service):
         self.sub_poller = zmq.Poller()
         self.poll_inputs_thread: Optional[threading.Thread] = None
         self.in_bound_data: Dict[str, DataChunk] = {}
-        
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
-            "setup_connections": TypedObserver("setup_connections", ProcessNodePubTableEvent, on_asend=self.setup_connections, handle_event="unpack"),
+            "setup_connections": TypedObserver(
+                "setup_connections",
+                ProcessNodePubTableEvent,
+                on_asend=self.setup_connections,
+                handle_event="unpack",
+            ),
         }
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
@@ -89,9 +94,9 @@ class PollerService(Service):
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
 
-            self.logger.debug(
-                f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
-            )
+            # self.logger.debug(
+            #     f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
+            # )
 
             # Determine the host and port information
             in_bound_entry: NodePubEntry = node_pub_table.table[in_bound_id]
@@ -139,7 +144,7 @@ class PollerService(Service):
             # Else, update values
             for s in events:  # socket
 
-                self.logger.debug(f"{self}: processing event {s}")
+                # self.logger.debug(f"{self}: processing event {s}")
 
                 # Update
                 name, id = self.socket_to_sub_name_mapping[s]  # inbound
@@ -156,4 +161,4 @@ class PollerService(Service):
                 self.eventbus.send(
                     Event("in_step", NewInBoundDataEvent(self.in_bound_data))
                 )
-                # self.logger.debug(f"{self}: got inputs")
+                self.logger.debug(f"{self}: got inputs")

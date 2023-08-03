@@ -151,7 +151,7 @@ class GenNode(cpe.Node):
 
     def step(self):
         time.sleep(0.5)
-        # logger.debug(self.value)
+        self.logger.debug(self.value)
         return self.value
 
 
@@ -162,6 +162,7 @@ class ConsumeNode(cpe.Node):
     def step(self, data_chunks: Dict[str, cpe.DataChunk]):
         time.sleep(0.1)
         # Extract the data
+        self.logger.debug(f"{self}: {data_chunks}")
         # self.logger.debug(
         #     f"{self}: inside step, with {data_chunks} - {data_chunks['Gen1']}"
         # )

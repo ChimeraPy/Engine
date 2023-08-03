@@ -39,3 +39,15 @@ class NodeConfig:
         else:
             self.id = ""
             self.pickled = bytes([])
+
+    def __str__(self):
+        string = (
+            f"<{self.__class__.__name__}, id={self.id} "
+            f"in_bound={self.in_bound} "
+            f"in_bound_by_name={self.in_bound_by_name} "
+            f"out_bound={self.out_bound} "
+            f"follow={self.follow} "
+            f"context={self.context}>"
+        )
+
+        return string

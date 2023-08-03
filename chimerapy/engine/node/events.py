@@ -8,7 +8,7 @@ from ..data_protocols import NodePubTable
 
 @dataclass
 class NewInBoundDataEvent:
-    data: Dict[str, DataChunk]
+    data_chunks: Dict[str, DataChunk]
 
 
 @dataclass
