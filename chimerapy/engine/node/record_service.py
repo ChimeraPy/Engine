@@ -86,7 +86,7 @@ class RecordService(Service):
         self._record_thread.start()
 
     def record(self):
-        self.logger.debug(f"{self}: Starting recording")
+        # self.logger.debug(f"{self}: Starting recording")
         ...
 
     def teardown(self):
@@ -144,7 +144,7 @@ class RecordService(Service):
         # self.logger.debug(f"{self}: Closed all entries")
 
     def collect(self):
-        self.logger.debug(f"{self}: collecting recording")
+        # self.logger.debug(f"{self}: collecting recording")
 
         # Signal to stop and save
         self.is_running.clear()

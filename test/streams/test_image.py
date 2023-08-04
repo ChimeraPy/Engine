@@ -13,6 +13,8 @@ import pytest
 # Internal Imports
 import chimerapy.engine as cpe
 from chimerapy.engine.records.image_record import ImageRecord
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, Event
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -59,18 +61,29 @@ def test_image_record():
 
 def test_node_save_image_stream(image_node):
 
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
+
     # Check that the image was created
-    expected_image_path = pathlib.Path(image_node.logdir) / "test" / "0.png"
+    expected_image_path = pathlib.Path(image_node.state.logdir) / "test" / "0.png"
     try:
         os.rmdir(expected_image_path.parent)
     except OSError:
         ...
 
     # Stream
-    image_node.run(blocking=False)
+    image_node.run(blocking=False, eventbus=eventbus)
 
     # Wait to generate files
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    eventbus.send(Event("record")).result()
+    logger.debug("Finish record")
     time.sleep(3)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
 
     image_node.shutdown()
 

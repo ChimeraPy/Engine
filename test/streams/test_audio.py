@@ -14,6 +14,8 @@ import pyaudio
 # Internal Imports
 import chimerapy.engine as cpe
 from chimerapy.engine.records.audio_record import AudioRecord
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, Event
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -67,18 +69,29 @@ def test_audio_record():
 
 def test_node_save_audio_stream(audio_node):
 
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
+
     # Check that the audio was created
-    expected_audio_path = pathlib.Path(audio_node.logdir) / "test.wav"
+    expected_audio_path = pathlib.Path(audio_node.state.logdir) / "test.wav"
     try:
         os.remove(expected_audio_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    audio_node.run(blocking=False)
+    audio_node.run(blocking=False, eventbus=eventbus)
 
     # Wait to generate files
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    eventbus.send(Event("record")).result()
+    logger.debug("Finish record")
     time.sleep(3)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
 
     audio_node.shutdown()
 

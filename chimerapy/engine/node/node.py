@@ -23,6 +23,7 @@ from ..eventbus import EventBus, Event, make_evented
 # Service Imports
 from .node_config import NodeConfig
 from .registered_method import RegisteredMethod
+from .fsm_service import FSMService
 from .worker_comms_service import WorkerCommsService
 from .record_service import RecordService
 from .processor_service import ProcessorService
@@ -300,31 +301,20 @@ class Node:
 
     async def _eventloop(self):
         self.logger.debug(f"{self}: within event loop")
-        await self._setup()
-        # await self._ready()
-        # await self._wait()
-        # await self._main()
         await self._idle()  # stop, running, and collecting
         await self._teardown()
         return True
 
     async def _setup(self):
-        self.state.fsm = "INITIALIZED"
         await self.eventbus.asend(Event("setup"))
-        self.state.fsm = "READY"
-        # self.logger.debug(f"{self}: finished setup")
 
     async def _idle(self):
-
-        # self.logger.debug(f"{self}: idle")
         while self.running:
             await asyncio.sleep(1)
         # self.logger.debug(f"{self}: exiting idle")
 
     async def _teardown(self):
         await self.eventbus.asend(Event("teardown"))
-        self.state.fsm = "SHUTDOWN"
-        # self.logger.debug(f"{self}: finished teardown")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -438,6 +428,9 @@ class Node:
         # Make the state evented
         self.state = make_evented(self.state, self.eventbus)
 
+        # Add the FSM service
+        self.fsm_service = FSMService("fsm", self.state, self.eventbus, self.logger)
+
         # Configure the processor's operational mode
         mode: Literal["main", "step"] = "step"  # default
         p_main = self.__class__.__bases__[0].main.__code__  # type: ignore[attr-defined]
@@ -502,6 +495,10 @@ class Node:
                 eventbus=self.eventbus,
                 logger=self.logger,
             )
+
+        # Have to run setup before letting the system continue
+        self.eventbus.send(Event("initialize")).result()
+        self._exec_coro(self._setup()).result()
 
         # Performing setup for the while loop
         self.eventloop_future = self._exec_coro(self._eventloop())

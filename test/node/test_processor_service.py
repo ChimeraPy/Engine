@@ -38,7 +38,7 @@ async def main():
     logger.debug("End of main")
 
 
-def step(data_chunk: Dict[str, DataChunk] = {}):
+def step(data_chunks: Dict[str, DataChunk] = {}):
     global CHANGE_FLAG
     CHANGE_FLAG = True
     time.sleep(1)
@@ -67,7 +67,12 @@ async def receive_data(data_chunk):
 
 
 @pytest.fixture
-def step_processor(eventbus):
+def step_processor():
+
+    # Create eventbus
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
 
     # Create sample state
     state = NodeState()
@@ -82,14 +87,18 @@ def step_processor(eventbus):
         operation_mode="step",
     )
 
-    yield processor
+    yield (processor, eventbus)
 
-    logger.debug("Shutting down fixture")
-    eventbus.thread.exec(processor.teardown()).result(timeout=10)
+    thread.exec(processor.teardown()).result(timeout=10)
 
 
 @pytest.fixture
-def source_processor(eventbus):
+def source_processor():
+
+    # Create eventbus
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
 
     # Create sample state
     state = NodeState()
@@ -104,14 +113,18 @@ def source_processor(eventbus):
         operation_mode="step",
     )
 
-    yield processor
+    yield (processor, eventbus)
 
-    logger.debug("Shutting down fixture")
-    eventbus.thread.exec(processor.teardown()).result(timeout=10)
+    thread.exec(processor.teardown()).result(timeout=10)
 
 
 @pytest.fixture
-def main_processor(eventbus):
+def main_processor():
+
+    # Create eventbus
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
 
     # Create sample state
     state = NodeState()
@@ -126,25 +139,25 @@ def main_processor(eventbus):
         operation_mode="main",
     )
 
-    yield processor
+    yield (processor, eventbus)
 
     eventbus.send(Event("teardown")).result(timeout=10)
 
 
 @pytest.mark.parametrize(
-    "processor",
+    "processor_setup",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
         lazy_fixture("step_processor"),
     ],
 )
-def test_instanticate(processor):
+def test_instanticate(processor_setup):
     ...
 
 
 @pytest.mark.parametrize(
-    "processor",
+    "processor_setup",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
@@ -152,12 +165,13 @@ def test_instanticate(processor):
     ],
 )
 @pytest.mark.asyncio
-async def test_setup(processor):
+async def test_setup(processor_setup):
+    processor, _ = processor_setup
     await processor.setup()
 
 
 @pytest.mark.parametrize(
-    "ptype, processor",
+    "ptype, processor_setup",
     [
         ("source", lazy_fixture("source_processor")),
         ("main", lazy_fixture("main_processor")),
@@ -165,7 +179,8 @@ async def test_setup(processor):
     ],
 )
 @pytest.mark.asyncio
-async def test_main(eventbus, ptype, processor):
+async def test_main(ptype, processor_setup):
+    processor, eventbus = processor_setup
 
     # Reset
     global CHANGE_FLAG

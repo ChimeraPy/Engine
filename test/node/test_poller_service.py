@@ -43,6 +43,7 @@ def poller_setup():
 
     thread.exec(poller.teardown()).result(timeout=10)
     pub.shutdown()
+    logger.debug("poller_setup fixture: shutdown complete")
 
 
 def test_instanticate(poller_setup):

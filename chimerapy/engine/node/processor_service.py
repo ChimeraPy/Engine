@@ -97,8 +97,6 @@ class ProcessorService(Service):
             await self.safe_exec(self.setup_fn)
 
     async def start(self):
-        self.logger.debug(f"{self}: started")
-
         # Create a task
         self.running_task = asyncio.create_task(self.main())
 
@@ -135,13 +133,15 @@ class ProcessorService(Service):
                     await self.eventbus.asubscribe(observer)
                     self.observers["in_step"] = observer
 
+                    # self.logger.debug(f"{self}: step or sink node: {self.state.id}")
+
                 # If source, run as fast as possible
                 else:
+                    # self.logger.debug(f"{self}: source node: {self.state.id}")
                     while self.running:
                         await self.safe_step()
 
     async def stop(self):
-        self.logger.debug(f"{self}: stopped")
         self.running = False
 
     async def teardown(self):
@@ -269,9 +269,7 @@ class ProcessorService(Service):
                         self.main_fn, kwargs={"data_chunks": data_chunks}
                     )
                 else:
-                    await asyncio.sleep(0.1)
-                    output = 1
-                    # output = await self.safe_exec(self.main_fn)
+                    output = await self.safe_exec(self.main_fn)
 
         # If output generated, send it!
         if output:

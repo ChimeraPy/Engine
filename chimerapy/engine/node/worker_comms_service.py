@@ -155,27 +155,21 @@ class WorkerCommsService(Service):
         event_data = ProcessNodePubTableEvent(node_pub_table)
         await self.eventbus.asend(Event("setup_connections", event_data))
 
-        self.state.fsm = "CONNECTED"
-
     async def start_node(self, msg: Dict = {}):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("start"))
-        self.state.fsm = "PREVIEWING"
 
     async def record_node(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("record"))
-        self.state.fsm = "RECORDING"
 
     async def stop_node(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("stop"))
-        self.state.fsm = "STOPPED"
 
     async def provide_collect(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("collect"))
-        self.state.fsm = "SAVED"
 
     async def execute_registered_method(self, msg: Dict):
         assert self.state and self.eventbus and self.logger

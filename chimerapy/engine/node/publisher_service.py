@@ -37,6 +37,9 @@ class PublisherService(Service):
             "out_step": TypedObserver(
                 "out_step", on_asend=self.publish, handle_event="unpack"
             ),
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
         }
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)

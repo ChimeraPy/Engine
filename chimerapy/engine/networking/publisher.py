@@ -70,3 +70,7 @@ class Publisher:
         # Mark to stop
         self.running = False
         self._send_thread.join()
+
+        # Closing the socket
+        self._zmq_socket.close()
+        self._zmq_context.term()
