@@ -1,7 +1,7 @@
 [project]
 name = "chimerapy-engine"
 version = "0.1.0"
-description = "ChimeraPy-Engine: The Cluster Networking Engine for the ChimeraPy framework"
+description = "ChimeraPy-Engine: The Cluster Networking Engine for the ChimeraPy Framework"
 authors = [
     {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"},
     {name = "Umesh Timalsina", email="umesh.timalsina@vanderbilt.edu"}
@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
     'networkx',
     'dill',
-    'netifaces',
+    'ifaddr',
     'matplotlib',
     'multiprocess',
     'opencv-python',
@@ -81,9 +81,9 @@ examples = [
 ]
 
 [project.urls]
-homepath = "https://github.com/ChimeraPy/ChimeraPy-Engine"
+homepath = "https://github.com/ChimeraPy"
 documentation = "https://chimerapy-engine.readthedocs.io/en/latest/index.html"
-repository = "https://github.com/ChimeraPy/ChimeraPy-Engine"
+repository = "https://github.com/ChimeraPy/Engine"
 
 # Entrypoint
 [project.scripts]
