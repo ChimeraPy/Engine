@@ -1,37 +1,80 @@
+import time
+
 import pytest
 
+import chimerapy.engine as cpe
 from chimerapy.engine.node.poller_service import PollerService
-from ..conftest import GenNode
+from chimerapy.engine.states import NodeState
+from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.networking.data_chunk import DataChunk
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.networking.publisher import Publisher
+from chimerapy.engine.data_protocols import NodePubTable, NodePubEntry
 
 
-@pytest.mark.skip(reason="Possible test causing others to fail for no reason")
-def test_poller_service(logreceiver):
-    node = GenNode(name="Gen", debug_port=logreceiver.port)
-    service = PollerService(
-        name="poller",
-        in_bound=["3c767221-f173-4bae-829f-cf018053008c"],
-        in_bound_by_name=["3c767221-f173-4bae-829f-cf018053008c"],
-        follow="3c767221-f173-4bae-829f-cf018053008c",
+logger = cpe._logger.getLogger("chimerapy-engine")
+
+
+@pytest.fixture
+def poller_setup():
+
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
+
+    # Create sample state
+    state = NodeState()
+
+    # Create the service
+    poller = PollerService(
+        "poller",
+        in_bound=["pub_mock"],
+        in_bound_by_name=["pub_mock"],
+        follow="pub_mock",
+        state=state,
+        eventbus=eventbus,
     )
-    service.inject(node)
-    msg = {
-        "signal": 21,
-        "timestamp": "0:00:00",
-        "data": {
-            "3c767221-f173-4bae-829f-cf018053008c": {
-                "host": "10.76.221.127",
-                "port": 0,
-            },
-            "a50ab1e1-eaa7-49d5-bd84-70c3d8bdbfcf": {
-                "host": "10.76.221.127",
-                "port": 45917,
-            },
-        },
-        "uuid": "95c08c03-b267-41b7-945c-02e911e82ec3",
-        "ok": False,
-    }
 
-    service.setup_connections(msg)
+    pub = Publisher()
+    pub.start()
 
-    node.shutdown()
-    service.teardown()
+    yield (poller, pub)
+
+    thread.exec(poller.teardown()).result(timeout=10)
+    pub.shutdown()
+    logger.debug("poller_setup fixture: shutdown complete")
+
+
+def test_instanticate(poller_setup):
+    ...
+
+
+def test_setting_connections(poller_setup):
+
+    poller, pub = poller_setup
+
+    node_pub_table = NodePubTable(
+        {"pub_mock": NodePubEntry(ip=pub.host, port=pub.port)}
+    )
+    poller.setup_connections(node_pub_table)
+
+
+def test_poll_message(poller_setup):
+
+    poller, pub = poller_setup
+
+    # Setup
+    node_pub_table = NodePubTable(
+        {"pub_mock": NodePubEntry(ip=pub.host, port=pub.port)}
+    )
+    poller.setup_connections(node_pub_table)
+
+    # Send a message
+    time.sleep(1)
+    data_chunk = DataChunk()
+    pub.publish(data_chunk)
+
+    # Sleep
+    time.sleep(1)
+    assert poller.eventbus._event_counts > 0

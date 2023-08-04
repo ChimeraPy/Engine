@@ -18,7 +18,7 @@ class AudioNode(cpe.Node):
         channels: int = 2,
         format: int = pyaudio.paInt16,
         rate: int = 44100,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(name, **kwargs)
         self.chunk = chunk
@@ -50,6 +50,7 @@ class TabularNode(cpe.Node):
     def step(self):
 
         time.sleep(1 / 10)
+        self.logger.debug(f"{self}: step: {self.state.fsm}")
 
         # Testing different types
         data = {"time": time.time(), "content": "HELLO"}

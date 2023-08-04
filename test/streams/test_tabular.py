@@ -10,6 +10,8 @@ import time
 import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.records.tabular_record import TabularRecord
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, Event
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -56,18 +58,29 @@ def test_tabular_record():
 
 def test_node_save_tabular_stream(tabular_node):
 
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
+
     # Check that the tabular was created
-    expected_tabular_path = pathlib.Path(tabular_node.logdir) / "test.csv"
+    expected_tabular_path = pathlib.Path(tabular_node.state.logdir) / "test.csv"
     try:
         os.remove(expected_tabular_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    tabular_node.run(blocking=False)
+    tabular_node.run(blocking=False, eventbus=eventbus)
 
     # Wait to generate files
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    eventbus.send(Event("record")).result()
+    logger.debug("Finish record")
     time.sleep(3)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
 
     tabular_node.shutdown()
 

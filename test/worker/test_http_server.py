@@ -1,6 +1,5 @@
 import pickle
 import json
-import tempfile
 
 import aiohttp
 
@@ -10,10 +9,12 @@ from pytest_lazyfixture import lazy_fixture
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.data_protocols import NodePubTable
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine import _logger
+
+from ..conftest import TEST_DATA_DIR
 
 
 @pytest.fixture
@@ -28,7 +29,6 @@ def http_server():
     thread = AsyncLoopThread()
     thread.start()
     eventbus = EventBus(thread=thread)
-    configure(eventbus)
 
     # Requirements
     state = WorkerState()
@@ -55,7 +55,7 @@ def test_http_server_instanciate(http_server):
         ("get", "/nodes/pub_table", None),
         ("post", "/nodes/pub_table", NodePubTable().to_json()),
         ("get", "/nodes/gather", None),
-        ("post", "/nodes/collect", json.dumps({"path": tempfile.mkdtemp()})),
+        ("post", "/nodes/collect", json.dumps({"path": str(TEST_DATA_DIR)})),
         ("post", "/nodes/step", json.dumps({})),
         ("post", "/nodes/start", json.dumps({})),
         ("post", "/nodes/record", json.dumps({})),

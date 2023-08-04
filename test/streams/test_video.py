@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.records.video_record import VideoRecord
+from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.eventbus import EventBus, Event
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -30,6 +32,15 @@ def video_node(logreceiver):
     vn = VideoNode(name="vn", debug_port=logreceiver.port)
 
     return vn
+
+
+@pytest.fixture
+def eventbus():
+    # Event Loop
+    thread = AsyncLoopThread()
+    thread.start()
+    eventbus = EventBus(thread=thread)
+    return eventbus
 
 
 def test_video_record():
@@ -116,20 +127,26 @@ def test_video_record_with_unstable_frames():
     assert (num_frames - expected_num_frames) / expected_num_frames <= 0.02
 
 
-def test_node_save_video_stream(video_node):
+def test_node_save_video_stream(video_node, eventbus):
 
     # Check that the video was created
-    expected_video_path = pathlib.Path(video_node.logdir) / "test.mp4"
+    expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
         ...
 
     # Stream
-    video_node.run(blocking=False)
+    video_node.run(blocking=False, eventbus=eventbus)
 
     # Wait to generate files
-    time.sleep(5)
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    eventbus.send(Event("record")).result()
+    logger.debug("Finish record")
+    time.sleep(3)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
 
     video_node.shutdown()
 
@@ -139,10 +156,10 @@ def test_node_save_video_stream(video_node):
     cap.release()
 
 
-def test_node_save_video_stream_with_unstable_fps(video_node):
+def test_node_save_video_stream_with_unstable_fps(video_node, eventbus):
 
     # Check that the video was created
-    expected_video_path = pathlib.Path(video_node.logdir) / "test.mp4"
+    expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
@@ -153,10 +170,16 @@ def test_node_save_video_stream_with_unstable_fps(video_node):
     rec_time = 10
 
     # Stream
-    video_node.run(blocking=False)
+    video_node.run(blocking=False, eventbus=eventbus)
 
     # Wait to generate files
+    eventbus.send(Event("start")).result()
+    logger.debug("Finish start")
+    eventbus.send(Event("record")).result()
+    logger.debug("Finish record")
     time.sleep(rec_time)
+    eventbus.send(Event("stop")).result()
+    logger.debug("Finish stop")
 
     video_node.shutdown()
 

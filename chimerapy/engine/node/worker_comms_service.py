@@ -1,30 +1,31 @@
 import pathlib
-import os
 import logging
-import threading
-import datetime
-from typing import Dict
+import tempfile
+from typing import Dict, Optional
 
 from ..networking import Client
+from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
 from ..data_protocols import NodePubTable
-from .node_service import NodeService
-from .poller_service import PollerService
-from .publisher_service import PublisherService
-from .node import Node
+from ..service import Service
+from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
+from .events import ProcessNodePubTableEvent, RegisteredMethodEvent, GatherEvent
 
 
-class WorkerCommsService(NodeService):
+class WorkerCommsService(Service):
     def __init__(
         self,
         name: str,
         host: str,
         port: int,
-        worker_logdir: pathlib.Path,
         node_config: NodeConfig,
+        worker_logdir: Optional[pathlib.Path] = None,
         logging_level: int = logging.INFO,
         worker_logging_port: int = 5555,
+        state: Optional[NodeState] = None,
+        logger: Optional[logging.Logger] = None,
+        eventbus: Optional[EventBus] = None,
     ):
         super().__init__(name=name)
 
@@ -33,54 +34,76 @@ class WorkerCommsService(NodeService):
         self.port = port
         self.worker_logging_port = worker_logging_port
         self.logging_level = logging_level
-        self.worker_logdir = worker_logdir
         self.node_config = node_config
 
-    def inject(self, node: Node):
-        super().inject(node)
+        # Optional
+        self.state = state
+        self.logger = logger
+        self.eventbus = eventbus
 
-        # Add the context information
-        self.node.context = self.node_config.context
+        if worker_logdir:
+            self.worker_logdir = worker_logdir
+        else:
+            self.worker_logdir = pathlib.Path(tempfile.mktemp())
 
-        # Creating logdir after given the Node
-        self.node.logdir = str(self.worker_logdir / self.node.state.name)
-        os.makedirs(self.node.logdir, exist_ok=True)
+        # Internal state variables
+        self.running: bool = False
+        self.client: Optional[Client] = None
 
-        # If in-boudn, enable the poller service
-        if self.node_config.in_bound:
-            poll_service = PollerService(
-                "poller",
-                self.node_config.in_bound,
-                self.node_config.in_bound_by_name,
-                self.node_config.follow,
-            )
-            poll_service.inject(self.node)
+        # If given the eventbus, add the observers
+        if self.eventbus:
+            self.add_observers()
 
-        # If out_bound, enable the publisher service
-        if self.node_config.out_bound:
-            pub_service = PublisherService("publisher")
-            pub_service.inject(self.node)
+    ####################################################################
+    ## Helper Functions
+    ####################################################################
+
+    def in_node_config(
+        self, state: NodeState, logger: logging.Logger, eventbus: EventBus
+    ):
+
+        # Save parameters
+        self.state = state
+        self.logger = logger
+        self.eventbus = eventbus
+
+        # Then add observers
+        self.add_observers()
+
+    def add_observers(self):
+        assert self.state and self.eventbus and self.logger
+
+        self.logger.debug(f"{self}: adding observers")
+
+        observers: Dict[str, TypedObserver] = {
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "NodeState.changed": TypedObserver(
+                "NodeState.changed", on_asend=self.send_state, handle_event="drop"
+            ),
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
+        }
+        for ob in observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
-    def setup(self):
+    async def setup(self):
+        assert self.state and self.eventbus and self.logger
 
-        # Events
-        self.worker_signal_start = threading.Event()
-        self.worker_signal_start.clear()
-
-        # self.node.logger.debug(
-        #     f"{self}: Prepping the networking component of the Node, connecting to \
-        #     Worker at {self.host}:{self.port}"
+        # self.logger.debug(
+        #     f"{self}: Prepping the networking component of the Node, connecting to "
+        #     f"Worker at {self.host}:{self.port}"
         # )
 
         # Create client to the Worker
         self.client = Client(
             host=self.host,
             port=self.port,
-            id=self.node.state.id,
+            id=self.state.id,
             ws_handlers={
                 GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                 WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_pub_table,
@@ -92,136 +115,81 @@ class WorkerCommsService(NodeService):
                 WORKER_MESSAGE.STOP_NODES: self.stop_node,
                 WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
             },
-            parent_logger=self.node.logger,
+            parent_logger=self.logger,
+            thread=self.eventbus.thread,
         )
-        self.client.connect()
+        await self.client.async_connect()
 
         # Send publisher port and host information
-        self.client.send(
-            signal=NODE_MESSAGE.STATUS,
-            data=self.node.state.to_dict(),
-        )
+        await self.send_state()
 
-    def ready(self):
-
-        # Only do so if connected to Worker and its connected
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict())
-
-    def wait(self):
-
-        # Wait until worker says to start
-        while self.node.running:
-            if self.worker_signal_start.wait(timeout=1):
-                break
-
-        # Only do so if connected to Worker and its connected
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict())
-
-    def teardown(self):
-
-        # Inform the worker that the Node has finished its saving of data
-        self.client.send(signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict())
+    async def teardown(self):
 
         # Shutdown the client
-        self.client.shutdown()
+        if self.client:
+            await self.client.async_shutdown()
+        # self.logger.debug(f"{self}: shutdown")
 
-        # self.node.logger.debug(f"{self}: shutdown")
+    ####################################################################
+    ## Helper Methods
+    ####################################################################
+
+    async def send_state(self):
+        assert self.state and self.eventbus and self.logger
+
+        if self.client:
+            await self.client.async_send(
+                signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
+            )
 
     ####################################################################
     ## Message Reactivity API
     ####################################################################
 
     async def process_node_pub_table(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
 
-        node_pub_table = NodePubTable.from_json(msg["data"])
-        # self.node.logger.debug(f"{self}: setting up connections: {node_pub_table}")
+        node_pub_table = NodePubTable.from_dict(msg["data"])
 
         # Pass the information to the Poller Service
-        if "poller" in self.node.services:
-            self.node.services["poller"].setup_connections(node_pub_table)
+        event_data = ProcessNodePubTableEvent(node_pub_table)
+        await self.eventbus.asend(Event("setup_connections", event_data))
 
-        self.node.state.fsm = "CONNECTED"
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
-        )
-        # self.node.logger.debug(f"{self}: Notifying Worker that Node is connected")
-
-    async def start_node(self, msg: Dict):
-        self.node.state.fsm = "PREVIEWING"
-        self.worker_signal_start.set()
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
-        )
+    async def start_node(self, msg: Dict = {}):
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("start"))
 
     async def record_node(self, msg: Dict):
-        # self.node.logger.debug(f"{self}: start")
-        self.node.start_time = datetime.datetime.now()
-        self.node.state.fsm = "RECORDING"
-        self.worker_signal_start.set()
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("record"))
 
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
-        )
+    async def stop_node(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("stop"))
+
+    async def provide_collect(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("collect"))
 
     async def execute_registered_method(self, msg: Dict):
-        # self.node.logger.debug(f"{self}: execute register method: {msg}")
-
+        assert self.state and self.eventbus and self.logger
         # Check first that the method exists
         method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
 
-        if method_name not in self.node.registered_methods:
-            results = {
-                "node_id": self.node.id,
-                "node_state": self.node.state.to_json(),
-                "success": False,
-                "output": None,
-            }
-            self.node.logger.warning(
-                f"{self}: Worker requested execution of registered method that doesn't \
-                exists: {method_name}"
+        # Send the event
+        if self.client:
+            event_data = RegisteredMethodEvent(
+                method_name=method_name, params=params, client=self.client
             )
-        else:
-            results = await self.node.services["processor"].execute_registered_method(
-                method_name, params
-            )
-            results.update(
-                {"node_id": self.node.id, "node_state": self.node.state.to_json()}
-            )
-
-        await self.client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
+            await self.eventbus.asend(Event("registered_method", event_data))
 
     async def async_step(self, msg: Dict):
-        # Make the processor take a step
-        self.node.services["processor"].forward()
-
-    async def stop_node(self, msg: Dict):
-        # Stop by using running variable
-        self.node.state.fsm = "STOPPED"
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
-        )
+        assert self.state and self.eventbus and self.logger
+        await self.eventbus.asend(Event("manual_step"))
 
     async def provide_gather(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
 
-        latest_value = self.node.services["processor"].latest_data_chunk
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.REPORT_GATHER,
-            data={
-                "state": self.node.state.to_dict(),
-                "latest_value": latest_value.to_json(),
-            },
-        )
-
-    async def provide_collect(self, msg: Dict):
-
-        # Pass the information to the Record Service
-        self.node.services["record"].save()
-        self.node.state.fsm = "SAVED"
-        # self.node.running = False
-
-        await self.client.async_send(
-            signal=NODE_MESSAGE.STATUS, data=self.node.state.to_dict()
-        )
+        if self.client:
+            event_data = GatherEvent(self.client)
+            await self.eventbus.asend(Event("gather", event_data))

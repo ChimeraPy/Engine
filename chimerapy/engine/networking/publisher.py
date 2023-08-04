@@ -1,14 +1,12 @@
 # Built-in Imports
 import threading
-import time
 
 # Third-party Imports
 import zmq
 
 # Internal Imports
-from chimerapy.engine import config
+from ..utils import get_ip_address
 from .data_chunk import DataChunk
-from chimerapy.engine.utils import get_ip_address
 
 # Logging
 from chimerapy.engine import _logger
@@ -23,7 +21,7 @@ class Publisher:
     def __init__(self):
 
         # Storing state variables
-        self.port: int = -1
+        self.port: int = 0
         self.host: str = get_ip_address()
         self.running: bool = False
         self._data_chunk: DataChunk = DataChunk()
@@ -59,7 +57,7 @@ class Publisher:
         self._zmq_context = zmq.Context()
         self._zmq_socket = self._zmq_context.socket(zmq.PUB)
         self.port = self._zmq_socket.bind_to_random_port(f"tcp://{self.host}")
-        time.sleep(config.get("comms.timeout.pub-delay"))
+        # time.sleep(config.get("comms.timeout.pub-delay"))
 
         # Create send thread
         self._ready = threading.Event()
@@ -72,3 +70,7 @@ class Publisher:
         # Mark to stop
         self.running = False
         self._send_thread.join()
+
+        # Closing the socket
+        self._zmq_socket.close()
+        self._zmq_context.term()

@@ -1,36 +1,43 @@
 # Internal Imports
-from chimerapy.engine import _logger
-from ..records import VideoRecord, AudioRecord, TabularRecord, ImageRecord
-from .node_service import NodeService
-
 import os
 import threading
 import queue
 import pathlib
-from typing import Dict
+import logging
+from typing import Dict, Optional, Union
+
+from chimerapy.engine import _logger
+from ..states import NodeState
+from ..eventbus import EventBus, TypedObserver
+from ..records import Record, VideoRecord, AudioRecord, TabularRecord, ImageRecord
+from ..service import Service
 
 logger = _logger.getLogger("chimerapy-engine")
 
 
-class RecordService(NodeService):
+class RecordService(Service):
+    def __init__(
+        self,
+        name: str,
+        state: NodeState,
+        eventbus: EventBus,
+        logger: Optional[logging.Logger] = None,
+    ):
+        super().__init__(name)
 
-    ####################################################################
-    ## Lifecycle Hooks
-    ####################################################################
+        # Saving parameters
+        self.state = state
+        self.eventbus = eventbus
 
-    def setup(self):
-
-        # self.node.logger.debug(f"{self}: setup executed")
-
-        # Create IO queue
-        self.save_queue = queue.Queue()
+        # State variables
+        self.save_queue: queue.Queue = queue.Queue()
 
         # Saving thread state information
         self.is_running = threading.Event()
         self.is_running.set()
 
         # To keep record of entries
-        self.records = {}
+        self.records: Dict[str, Union[Record]] = {}
         self.record_map = {
             "video": VideoRecord,
             "audio": AudioRecord,
@@ -40,18 +47,56 @@ class RecordService(NodeService):
 
         # Creating thread for saving incoming data
         os.makedirs(
-            self.node.logdir, exist_ok=True
+            self.state.logdir, exist_ok=True
         )  # Triple-checking that it's there (Issue #155)
-        self._thread = threading.Thread(target=self.run)
-        self._thread.start()
+
+        # Making sure the attribute exists
+        self._record_thread: Optional[threading.Thread] = None
+
+        # Logging
+        if logger:
+            self.logger = logger
+        else:
+            self.logger = _logger.getLogger("chimerapy-engine")
+
+        # Put observers
+        self.observers: Dict[str, TypedObserver] = {
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "record": TypedObserver(
+                "record", on_asend=self.record, handle_event="drop"
+            ),
+            "collect": TypedObserver(
+                "collect", on_asend=self.collect, handle_event="drop"
+            ),
+            "teardown": TypedObserver(
+                "teardown", on_asend=self.teardown, handle_event="drop"
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
+
+    ####################################################################
+    ## Lifecycle Hooks
+    ####################################################################
+
+    def setup(self):
+
+        # self.logger.debug(f"{self}: executing main")
+        self._record_thread = threading.Thread(target=self.run)
+        self._record_thread.start()
+
+    def record(self):
+        # self.logger.debug(f"{self}: Starting recording")
+        ...
 
     def teardown(self):
 
         # First, indicate the end
         self.is_running.clear()
-        self._thread.join()
+        if self._record_thread:
+            self._record_thread.join()
 
-        # self.node.logger.debug(f"{self}: shutdown")
+        # self.logger.debug(f"{self}: shutdown")
 
     ####################################################################
     ## Helper Methods & Attributes
@@ -59,21 +104,21 @@ class RecordService(NodeService):
 
     @property
     def enabled(self) -> bool:
-        return self.node.state.fsm == "RECORDING"
+        return self.state.fsm == "RECORDING"
 
     def submit(self, entry: Dict):
         self.save_queue.put(entry)
 
     def run(self):
 
-        # self.node.logger.debug(f"{self}: Running poll threading")
+        # self.logger.debug(f"{self}: Running poll threading")
 
         # Continue checking for messages from client until not running
         while self.is_running.is_set() or self.save_queue.qsize() != 0:
 
             # Received data to save
             try:
-                # self.node.logger.debug(F"{self}: Checking save_queue")
+                # self.logger.debug(F"{self}: Checking save_queue")
                 data_entry = self.save_queue.get(timeout=1)
             except queue.Empty:
                 continue
@@ -82,12 +127,12 @@ class RecordService(NodeService):
             if data_entry["name"] not in self.records:
                 entry_cls = self.record_map[data_entry["dtype"]]
                 entry = entry_cls(
-                    dir=pathlib.Path(self.node.logdir), name=data_entry["name"]
+                    dir=pathlib.Path(self.state.logdir), name=data_entry["name"]
                 )
                 self.records[data_entry["name"]] = entry
 
             # Case 2
-            # self.node.logger.debug(
+            # self.logger.debug(
             #     f"{self}: Writing data entry for {data_entry['name']}"
             # )
             self.records[data_entry["name"]].write(data_entry)
@@ -96,12 +141,14 @@ class RecordService(NodeService):
         for entry in self.records.values():
             entry.close()
 
-        # self.node.logger.debug(f"{self}: Closed all entries")
+        # self.logger.debug(f"{self}: Closed all entries")
 
-    def save(self):
+    def collect(self):
+        # self.logger.debug(f"{self}: collecting recording")
 
         # Signal to stop and save
         self.is_running.clear()
-        self._thread.join()
+        if self._record_thread:
+            self._record_thread.join()
 
-        # self.node.logger.debug(f"{self}: Finish saving records")
+        # self.logger.debug(f"{self}: Finish saving records")

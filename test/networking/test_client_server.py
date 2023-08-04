@@ -91,6 +91,19 @@ def test_server_websocket_connection(server, client):
     assert client.id in list(server.ws_clients.keys())
 
 
+@pytest.mark.asyncio
+async def test_async_ws(server):
+    client = Client(
+        id="test_client",
+        host=server.host,
+        port=server.port,
+        ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
+    )
+    await client.async_connect()
+    assert client.id in list(server.ws_clients.keys())
+    await client.async_shutdown()
+
+
 def test_server_websocket_connection_shutdown(server, client):
     client.shutdown()
     time.sleep(1)
