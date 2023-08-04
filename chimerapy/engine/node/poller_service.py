@@ -94,10 +94,6 @@ class PollerService(Service):
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
 
-            # self.logger.debug(
-            #     f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
-            # )
-
             # Determine the host and port information
             in_bound_entry: NodePubEntry = node_pub_table.table[in_bound_id]
 
@@ -112,6 +108,10 @@ class PollerService(Service):
                 self.in_bound_by_name[i],
                 in_bound_id,
             )
+
+            # self.logger.debug(
+            #     f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
+            # )
 
         # After creating all subscribers, use a poller to track them all
         for sub in self.p2p_subs.values():
@@ -144,8 +144,6 @@ class PollerService(Service):
             # Else, update values
             for s in events:  # socket
 
-                # self.logger.debug(f"{self}: processing event {s}")
-
                 # Update
                 name, id = self.socket_to_sub_name_mapping[s]  # inbound
                 serial_data_chunk = s.recv()
@@ -158,7 +156,7 @@ class PollerService(Service):
 
             # If update on the follow and all inputs available, then use the inputs
             if follow_event and len(self.in_bound_data) == len(self.in_bound):
+                # self.logger.debug(f"{self}: got inputs")
                 self.eventbus.send(
                     Event("in_step", NewInBoundDataEvent(self.in_bound_data))
-                )
-                self.logger.debug(f"{self}: got inputs")
+                ).result()

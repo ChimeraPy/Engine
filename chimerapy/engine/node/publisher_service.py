@@ -1,10 +1,10 @@
 import logging
-from typing import Optional
+from typing import Optional, Dict
 
 from chimerapy.engine import _logger
 from ..service import Service
 from ..states import NodeState
-from ..eventbus import EventBus
+from ..eventbus import EventBus, TypedObserver
 from ..networking import Publisher, DataChunk
 
 
@@ -31,14 +31,22 @@ class PublisherService(Service):
         else:
             self.logger = _logger.getLogger("chimerapy-engine")
 
+        # Add observer
+        self.observers: Dict[str, TypedObserver] = {
+            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
+            "out_step": TypedObserver(
+                "out_step", on_asend=self.publish, handle_event="unpack"
+            ),
+        }
+        for ob in self.observers.values():
+            self.eventbus.subscribe(ob).result(timeout=1)
+
     def setup(self):
 
         # Creating publisher
         self.publisher = Publisher()
         self.publisher.start()
         self.state.port = self.publisher.port
-
-        # self.node.logger.debug(f"{self} setup")
 
     def publish(self, data_chunk: DataChunk):
         self.publisher.publish(data_chunk)
@@ -49,4 +57,4 @@ class PublisherService(Service):
         if self.publisher:
             self.publisher.shutdown()
 
-        # self.node.logger.debug(f"{self}: shutdown")
+        # self.logger.debug(f"{self}: shutdown")

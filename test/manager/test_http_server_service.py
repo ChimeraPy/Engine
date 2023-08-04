@@ -7,6 +7,8 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.states import ManagerState, WorkerState
 
+from ..conftest import TEST_DATA_DIR
+
 
 @pytest.fixture(scope="module")
 def http_server():
@@ -38,9 +40,18 @@ def test_http_server_instanciate(http_server):
 @pytest.mark.parametrize(
     "route, payload",
     [
-        ("/workers/register", WorkerState(id="NULL", name="NULL").to_json()),
-        ("/workers/deregister", WorkerState(id="NULL", name="NULL").to_json()),
-        ("/workers/node_status", WorkerState(id="NULL", name="NULL").to_json()),
+        (
+            "/workers/register",
+            WorkerState(id="NULL", name="NULL", tempfolder=TEST_DATA_DIR).to_json(),
+        ),
+        (
+            "/workers/deregister",
+            WorkerState(id="NULL", name="NULL", tempfolder=TEST_DATA_DIR).to_json(),
+        ),
+        (
+            "/workers/node_status",
+            WorkerState(id="NULL", name="NULL", tempfolder=TEST_DATA_DIR).to_json(),
+        ),
     ],
 )
 def test_http_server_routes(http_server, route, payload):

@@ -17,36 +17,48 @@ from chimerapy.engine.data_protocols import NodePubTable
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 
-async def node_status_update(msg: Dict, ws: web.WebSocketResponse):
-    ...
+class MockWorker:
+    def __init__(self):
+        self.node_states: Dict[str, NodeState] = {}
+        self.server = Server(
+            id="test_server",
+            port=0,
+            ws_handlers={
+                NODE_MESSAGE.STATUS: self.node_status_update,
+                NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
+                NODE_MESSAGE.REPORT_RESULTS: self.node_report_results,
+            },
+        )
+        self.server.serve()
 
+    async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-async def node_report_gather(msg: Dict, ws: web.WebSocketResponse):
-    ...
+        # self.logger.debug(f"{self}: note_status_update: ", msg)
+        node_state = NodeState.from_dict(msg["data"])
+        node_id = node_state.id
 
+        # Update our records by grabbing all data from the msg
+        self.node_states[node_id] = node_state
 
-async def node_report_results(msg: Dict, ws: web.WebSocketResponse):
-    ...
+    async def node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
+        ...
+
+    async def node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
+        ...
+
+    def shutdown(self):
+        self.server.shutdown()
 
 
 @pytest.fixture
-def server():
-    server = Server(
-        id="test_server",
-        port=0,
-        ws_handlers={
-            NODE_MESSAGE.STATUS: node_status_update,
-            NODE_MESSAGE.REPORT_GATHER: node_report_gather,
-            NODE_MESSAGE.REPORT_RESULTS: node_report_results,
-        },
-    )
-    server.serve()
-    yield server
-    server.shutdown()
+def mock_worker():
+    mock_worker = MockWorker()
+    yield mock_worker
+    mock_worker.shutdown()
 
 
 @pytest.fixture
-def worker_comms_setup(server):
+def worker_comms_setup(mock_worker):
 
     # Event Loop
     thread = AsyncLoopThread()
@@ -60,15 +72,15 @@ def worker_comms_setup(server):
     # Create the service
     worker_comms = WorkerCommsService(
         "worker_comms",
-        host=server.host,
-        port=server.port,
+        host=mock_worker.server.host,
+        port=mock_worker.server.port,
         node_config=node_config,
         state=state,
         eventbus=eventbus,
         logger=logger,
     )
 
-    return (worker_comms, server)
+    return (worker_comms, mock_worker.server)
 
 
 def test_instanticate(worker_comms_setup):

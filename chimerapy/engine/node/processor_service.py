@@ -120,8 +120,6 @@ class ProcessorService(Service):
                     self.main_thread = threading.Thread(target=self.main_fn)
                     self.main_thread.start()
 
-                # self.logger.debug(f"{self}: continuing after main_fn")
-
             elif self.operation_mode == "step":
 
                 # self.logger.debug(f"{self}: operational mode = step")
@@ -136,11 +134,9 @@ class ProcessorService(Service):
                     )
                     await self.eventbus.asubscribe(observer)
                     self.observers["in_step"] = observer
-                    self.logger.debug(f"{self}: step or sink node: {self.state.name}")
 
                 # If source, run as fast as possible
                 else:
-                    self.logger.debug(f"{self}: source node: {self.state.name}")
                     while self.running:
                         await self.safe_step()
 
@@ -263,21 +259,19 @@ class ProcessorService(Service):
 
     async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
 
-        self.logger.debug(f"{self}: safe_step: {data_chunks}")
-
         # Default value
         output = None
 
         if self.main_fn:
             with self.step_lock:
                 if self.in_bound_data:
-                    self.logger.debug(f"{self}: safe_exec in step node")
-                    # output = await self.safe_exec(
-                    #     self.main_fn,
-                    #     kwargs={'data_chunks': data_chunks}
-                    # )
+                    output = await self.safe_exec(
+                        self.main_fn, kwargs={"data_chunks": data_chunks}
+                    )
                 else:
-                    output = await self.safe_exec(self.main_fn)
+                    await asyncio.sleep(0.1)
+                    output = 1
+                    # output = await self.safe_exec(self.main_fn)
 
         # If output generated, send it!
         if output:
@@ -302,10 +296,6 @@ class ProcessorService(Service):
             # Send out the output to the OutputsHandler
             event_data = NewOutBoundDataEvent(output_data_chunk)
             await self.eventbus.asend(Event("out_step", event_data))
-
-            # self.logger.warning(
-            #     f"{self}: Do not have publisher yet given outputs"
-            # )
 
         # Update the counter
         self.step_id += 1

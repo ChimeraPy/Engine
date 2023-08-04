@@ -8,14 +8,16 @@ import pytest
 import multiprocessing as mp
 
 import chimerapy.engine as cpe
+from chimerapy.engine.utils import get_ip_address
 from chimerapy.engine.node.worker_comms_service import WorkerCommsService
 from chimerapy.engine.node.node_config import NodeConfig
+from chimerapy.engine.data_protocols import NodePubTable, NodePubEntry
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.enums import WORKER_MESSAGE
 from chimerapy.engine.eventbus import EventBus, Event
 
 from ..conftest import GenNode, ConsumeNode
-from .test_worker_comms import server
+from .test_worker_comms import mock_worker
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
@@ -25,7 +27,7 @@ CWD = pathlib.Path(os.path.abspath(__file__)).parent
 TEST_DATA_DIR = CWD / "data"
 
 # Added to prevent Ruff dropping "unused" import AKA fixtures
-__all__ = ["server"]
+__all__ = ["mock_worker"]
 
 
 class StepNode(cpe.Node):
@@ -94,17 +96,17 @@ def eventbus():
 
 
 @pytest.fixture
-def worker_comms_setup(server):
+def worker_comms_setup(mock_worker):
 
     # Create the service
     worker_comms = WorkerCommsService(
         "worker_comms",
-        host=server.host,
-        port=server.port,
+        host=mock_worker.server.host,
+        port=mock_worker.server.port,
         node_config=NodeConfig(),
     )
 
-    return (worker_comms, server)
+    return (worker_comms, mock_worker)
 
 
 @pytest.mark.parametrize("node_cls", [StepNode, AsyncStepNode, MainNode, AsyncMainNode])
@@ -170,7 +172,7 @@ def test_lifecycle_start_record_stop(logreceiver, node_cls: Type[cpe.Node], even
     ],
 )
 def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_setup):
-    worker_comms, server = worker_comms_setup
+    worker_comms, mock_worker = worker_comms_setup
 
     # Create the node
     node = node_cls(name="step", debug_port=logreceiver.port)
@@ -186,16 +188,24 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
     time.sleep(0.5)
 
     # Run method
-    server.send(client_id=id, signal=WORKER_MESSAGE.START_NODES, data={}, ok=True)
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.START_NODES, data={}, ok=True
+    )
     time.sleep(0.5)
 
-    server.send(client_id=id, signal=WORKER_MESSAGE.RECORD_NODES, data={}, ok=True)
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.RECORD_NODES, data={}, ok=True
+    )
     time.sleep(0.5)
 
-    server.send(client_id=id, signal=WORKER_MESSAGE.STOP_NODES, data={}, ok=True)
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.STOP_NODES, data={}, ok=True
+    )
     time.sleep(0.5)
 
-    server.send(client_id=id, signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}, ok=True)
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}, ok=True
+    )
     time.sleep(1)
 
     node.shutdown()
@@ -204,27 +214,37 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
     p.join()
 
 
-def test_node_connection(logreceiver, server, eventbus):
+def test_node_connection(logreceiver, mock_worker):
+
+    # Create evenbus for each node
+    g_loop = AsyncLoopThread()
+    g_loop.start()
+    g_eventbus = EventBus(thread=g_loop)
+    c_loop = AsyncLoopThread()
+    c_loop.start()
+    c_eventbus = EventBus(thread=c_loop)
 
     # Create the node
     # node = node_cls(name="step", debug_port=logreceiver.port)
-    gen_node = GenNode(name="gen", debug_port=logreceiver.port, id="gen")
-    con_node = ConsumeNode(name="con", debug_port=logreceiver.port, id="con")
+    gen_node = GenNode(name="Gen1", debug_port=logreceiver.port, id="Gen1")
+    con_node = ConsumeNode(name="Con1", debug_port=logreceiver.port, id="Con1")
 
     # Create the service
     gen_worker_comms = WorkerCommsService(
         "worker_comms",
-        host=server.host,
-        port=server.port,
-        node_config=NodeConfig(gen_node),
+        host=mock_worker.server.host,
+        port=mock_worker.server.port,
+        node_config=NodeConfig(gen_node, out_bound=["Gen1"]),
     )
 
     # Create the service
     con_worker_comms = WorkerCommsService(
         "worker_comms",
-        host=server.host,
-        port=server.port,
-        node_config=NodeConfig(con_node, in_bound=["gen"], in_bound_by_name=["gen"]),
+        host=mock_worker.server.host,
+        port=mock_worker.server.port,
+        node_config=NodeConfig(
+            con_node, in_bound=["Gen1"], in_bound_by_name=["Gen1"], follow="Gen1"
+        ),
     )
 
     # Add worker comms
@@ -233,17 +253,29 @@ def test_node_connection(logreceiver, server, eventbus):
 
     # Running
     logger.debug("Running Nodes")
-    gen_node.run(blocking=False, eventbus=eventbus)
-    con_node.run(blocking=False, eventbus=eventbus)
+    gen_node.run(blocking=False, eventbus=g_eventbus)
+    con_node.run(blocking=False, eventbus=c_eventbus)
+
+    # Create the connections
+    time.sleep(1)
+    node_pub_table = NodePubTable()
+    for id, node_state in mock_worker.node_states.items():
+        ip = get_ip_address()  # necessary
+        node_pub_table.table[id] = NodePubEntry(ip=ip, port=node_state.port)
+    mock_worker.server.broadcast(
+        signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER, data=node_pub_table.to_dict()
+    )
+    time.sleep(1)
 
     # Wait
-    time.sleep(0.5)
-    eventbus.send(Event("start")).result()
+    g_eventbus.send(Event("start")).result()
+    c_eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    time.sleep(0.5)
-    eventbus.send(Event("stop")).result()
+    time.sleep(3)
+    g_eventbus.send(Event("stop")).result()
+    c_eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")
-    time.sleep(0.5)
+    time.sleep(1)
 
     logger.debug("Shutting down Node")
     gen_node.shutdown()
