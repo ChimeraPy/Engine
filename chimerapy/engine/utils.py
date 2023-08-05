@@ -12,7 +12,7 @@ import errno
 
 # Third-party
 from tqdm import tqdm
-import netifaces as ni
+import ifaddr
 
 # Internal
 from chimerapy.engine import _logger
@@ -146,19 +146,19 @@ def get_open_port(start_port: int) -> socket.socket:
 
 def get_ip_address() -> str:
 
-    # Get gateway of the network
-    gws = ni.gateways()
-    try:
-        default_gw_name = gws["default"][ni.AF_INET][1]
-        # Get the ip in the default gateway
-        ip = ni.ifaddresses(default_gw_name)[ni.AF_INET][0]["addr"]
-    except KeyError:
-        logger.warning(
-            "ChimeraPy-Engine: Couldn't find connected network, using 127.0.0.1"
-        )
-        ip = "127.0.0.1"
+    # Get all the network adapters
+    adapters = ifaddr.get_adapters()
 
-    return ip
+    # Iterate through the adapters to find a suitable IP
+    for adapter in adapters:
+        for ip in adapter.ips:
+            # Check if it's an IPv4 address and not the local address
+            if isinstance(ip.ip, str) and ip.ip != "127.0.0.1":
+                return ip.ip
+
+    # Return the local address if no suitable IP is found
+    logger.warning("ChimeraPy-Engine: Couldn't find connected network, using 127.0.0.1")
+    return "127.0.0.1"
 
 
 def create_payload(
