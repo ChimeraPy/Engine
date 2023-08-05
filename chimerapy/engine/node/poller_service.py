@@ -1,5 +1,6 @@
 import threading
 import logging
+import datetime
 from typing import Optional, Dict, Tuple, List
 
 import zmq
@@ -144,10 +145,16 @@ class PollerService(Service):
             # Else, update values
             for s in events:  # socket
 
-                # Update
-                name, id = self.socket_to_sub_name_mapping[s]  # inbound
+                # Reconstruct the DataChunk and marked when it was received
                 serial_data_chunk = s.recv()
-                self.in_bound_data[name] = DataChunk.from_bytes(serial_data_chunk)
+                data_chunk = DataChunk.from_bytes(serial_data_chunk)
+                meta = data_chunk.get("meta")
+                meta["value"]["received"] = datetime.datetime.now()
+                data_chunk.update("meta", meta)
+
+                # Update the latest value
+                name, id = self.socket_to_sub_name_mapping[s]  # inbound
+                self.in_bound_data[name] = data_chunk
 
                 # Update flag if new values are coming from the node that is
                 # being followed

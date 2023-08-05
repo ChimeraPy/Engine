@@ -286,9 +286,7 @@ class ProcessorService(Service):
 
             # Add timestamp and step id to the DataChunk
             meta = output_data_chunk.get("meta")
-            meta["value"]["ownership"].append(
-                {"name": self.state.name, "timestamp": datetime.datetime.now()}
-            )
+            meta["value"]["transmitted"] = datetime.datetime.now()
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler

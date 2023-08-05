@@ -23,7 +23,7 @@ logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 # Constants
-CWD = pathlib.Path(os.path.abspath(__file__)).parent
+CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
 TEST_DATA_DIR = CWD / "data"
 
 # Added to prevent Ruff dropping "unused" import AKA fixtures
@@ -271,7 +271,7 @@ def test_node_connection(logreceiver, mock_worker):
     g_eventbus.send(Event("start")).result()
     c_eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    time.sleep(3)
+    time.sleep(100)
     g_eventbus.send(Event("stop")).result()
     c_eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")

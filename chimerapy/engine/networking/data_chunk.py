@@ -1,8 +1,9 @@
-from typing import Any, Literal, Dict, List
 import collections
 import pickle
+import uuid
 import blosc
 import datetime
+from typing import Any, Literal, Dict, List
 
 # Third-party Imports
 import numpy as np
@@ -16,6 +17,11 @@ logger = getLogger("chimerapy-engine")
 
 class DataChunk:
     def __init__(self):
+
+        # Adding UUID
+        self._uuid = str(uuid.uuid4())
+
+        # Storage
         self._container = collections.defaultdict(dict)
 
         # Creating mapping from content_type and compression method
@@ -33,6 +39,8 @@ class DataChunk:
             "value": {
                 "ownership": [],
                 "created": datetime.datetime.now(),
+                "transmitted": None,
+                "received": None,
             },
             "content-type": "meta",
         }
@@ -58,6 +66,13 @@ class DataChunk:
                 return False
 
         return True
+
+    def __del__(self):
+        del self._container
+
+    @property
+    def uuid(self):
+        return self._uuid
 
     ####################################################################
     # Content Type - Image
@@ -195,3 +210,11 @@ class DataChunk:
                 pre-existing one.
         """
         self._container[name] = record
+
+    def contains(self) -> List[str]:
+        keys = []
+        for key in self._container:
+            if key != "meta":
+                keys.append(key)
+
+        return keys

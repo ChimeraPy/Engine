@@ -35,3 +35,6 @@ config:
       client-shutdown: 10
       server-shutdown: 15
       pub-delay: 1
+  diagnostics:
+    deque-length: 100
+    interval: 10
