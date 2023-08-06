@@ -1,4 +1,3 @@
-from typing import Callable, Union, Optional, Any, Dict
 import queue
 import logging
 import json
@@ -9,6 +8,7 @@ import uuid
 import socket
 import asyncio
 import errno
+from typing import Callable, Union, Optional, Any, Dict
 
 # Third-party
 from tqdm import tqdm
@@ -186,3 +186,11 @@ def decode_payload(data: str) -> Dict[str, Any]:
 
 def megabytes_to_bytes(megabytes: int) -> int:
     return int(megabytes) * BYTES_PER_MB
+
+
+def update_dataclass(target, source):
+
+    for field in target.__dataclass_fields__.keys():
+        # Check if the source field has a non-None value before updating
+        if getattr(source, field) is not None:
+            setattr(target, field, getattr(source, field))

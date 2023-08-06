@@ -17,7 +17,7 @@ class NodePubTable(DataClassJsonMixin):
 
 
 @dataclass
-class NodeDiagnosticsEntry(DataClassJsonMixin):
+class NodeDiagnostics(DataClassJsonMixin):
     timestamp: str = field(
         default_factory=lambda: str(datetime.datetime.now().isoformat())
     )  # ISO str
@@ -26,8 +26,3 @@ class NodeDiagnosticsEntry(DataClassJsonMixin):
     memory_usage: float = 0  # KB
     cpu_usage: float = 0  # percentage
     num_of_steps: int = 0
-
-
-@dataclass
-class NodeDiagnosticsTable(DataClassJsonMixin):
-    table: Dict[str, NodeDiagnosticsEntry] = field(default_factory=dict)

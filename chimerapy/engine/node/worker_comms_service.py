@@ -6,7 +6,7 @@ from typing import Dict, Optional
 from ..networking import Client
 from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
-from ..data_protocols import NodePubTable, NodeDiagnosticsEntry
+from ..data_protocols import NodePubTable, NodeDiagnostics
 from ..service import Service
 from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
@@ -78,7 +78,7 @@ class WorkerCommsService(Service):
     def add_observers(self):
         assert self.state and self.eventbus and self.logger
 
-        self.logger.debug(f"{self}: adding observers")
+        # self.logger.debug(f"{self}: adding observers")
 
         observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -160,8 +160,10 @@ class WorkerCommsService(Service):
             event_data = GatherEvent(self.client)
             await self.eventbus.asend(Event("gather", event_data))
 
-    async def send_diagnostics(self, diagnostics: NodeDiagnosticsEntry):
+    async def send_diagnostics(self, diagnostics: NodeDiagnostics):
         assert self.state and self.eventbus and self.logger
+
+        # self.logger.debug(f"{self}: Sending Diagnostics")
 
         if self.client:
             data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}

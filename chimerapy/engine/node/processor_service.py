@@ -168,7 +168,7 @@ class ProcessorService(Service):
         await client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
-                "state": self.state.to_dict(),
+                "node_id": self.state.id,
                 "latest_value": self.latest_data_chunk.to_json(),
             },
         )

@@ -89,7 +89,7 @@ class DistributedLoggingService(Service):
     def _register_worker_to_logs_sink(self, worker_name: str, worker_id: str):
         if self.logs_sink:
             self.logs_sink.initialize_entity(worker_name, worker_id, self.state.logdir)
-            logger.info(f"Registered worker {worker_name} to logs sink")
+            # logger.info(f"Registered worker {worker_name} to logs sink")
 
     @staticmethod
     def _start_logs_sink() -> DistributedLogsMultiplexedFileSink:

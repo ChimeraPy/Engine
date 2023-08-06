@@ -9,7 +9,7 @@ import pandas as pd
 from psutil import Process
 
 from chimerapy.engine import config
-from ..data_protocols import NodeDiagnosticsEntry
+from ..data_protocols import NodeDiagnostics
 from ..async_timer import AsyncTimer
 from ..networking.data_chunk import DataChunk
 from ..service import Service
@@ -41,9 +41,6 @@ class ProfilerService(Service):
         self.log_file = self.state.logdir / "diagnostics.csv"
 
         # Add a timer function
-        # self.logger.debug(
-        #     f"{self}: AsyncTimer interval: {config.get('diagnostics.interval')}"
-        # )
         self.async_timer = AsyncTimer(
             self.diagnostics_report, config.get("diagnostics.interval")
         )
@@ -101,7 +98,7 @@ class ProfilerService(Service):
             total_payload = 0
 
         # Save information then
-        entry = NodeDiagnosticsEntry(
+        diag = NodeDiagnostics(
             timestamp=timestamp,
             latency=mean_latency,
             payload_size=total_payload,
@@ -111,8 +108,8 @@ class ProfilerService(Service):
         )
 
         # Send the information to the Worker and ultimately the Manager
-        event_data = DiagnosticsReportEvent(entry)
-        # self.logger.debug(f"{self}: data = {data}")
+        event_data = DiagnosticsReportEvent(diag)
+        # self.logger.debug(f"{self}: data = {diag}")
         await self.eventbus.asend(Event("diagnostics_report", event_data))
 
         # Write to a csv, if diagnostics enabled

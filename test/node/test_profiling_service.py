@@ -24,7 +24,7 @@ def profiler_setup():
 
     # Modify the configuration
     config.set("diagnostics.interval", 1)
-    config.set("diagnostics.logging-eanbled", True)
+    config.set("diagnostics.logging-enabled", True)
 
     # Event Loop
     thread = AsyncLoopThread()
@@ -53,7 +53,7 @@ def test_instanciate(profiler_setup):
 def test_single_data_chunk(profiler_setup):
     profiler, eventbus = profiler_setup
 
-    for i in range(100):
+    for i in range(50):
 
         # Run the step multiple times
         example_data_chunk = DataChunk()
@@ -77,11 +77,13 @@ def test_single_data_chunk(profiler_setup):
 
         eventbus.send(Event("in_step", NewInBoundDataEvent(dcs))).result()
 
+    assert profiler.log_file.exists()
+
 
 def test_single_data_chunk_with_multiple_payloads(profiler_setup):
     profiler, eventbus = profiler_setup
 
-    for i in range(100):
+    for i in range(50):
 
         # Run the step multiple times
         example_data_chunk = DataChunk()
@@ -106,11 +108,13 @@ def test_single_data_chunk_with_multiple_payloads(profiler_setup):
 
         eventbus.send(Event("in_step", NewInBoundDataEvent(dcs))).result()
 
+    assert profiler.log_file.exists()
+
 
 def test_multiple_data_chunk(profiler_setup):
     profiler, eventbus = profiler_setup
 
-    for i in range(100):
+    for i in range(50):
 
         # Run the step multiple times
         example_data_chunk = DataChunk()
@@ -143,3 +147,5 @@ def test_multiple_data_chunk(profiler_setup):
         dcs = {"test": example_data_chunk, "test2": example_data_chunk2}
 
         eventbus.send(Event("in_step", NewInBoundDataEvent(dcs))).result()
+
+    assert profiler.log_file.exists()

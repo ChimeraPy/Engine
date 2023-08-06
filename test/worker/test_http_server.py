@@ -11,7 +11,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.client import Client
 from chimerapy.engine.networking.enums import NODE_MESSAGE
-from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnosticsEntry
+from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
 from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine.node.node_config import NodeConfig
@@ -57,7 +57,7 @@ def ws_client(http_server):
         ws_handlers={},
         parent_logger=logger,
     )
-    client.connect()
+    assert client.connect()
     yield client
     client.shutdown()
 
@@ -110,7 +110,7 @@ async def test_http_server_routes(http_server, route_type, route, payload):
         (
             NODE_MESSAGE.REPORT_GATHER,
             {
-                "state": NodeState(logdir=TEST_DATA_DIR).to_dict(),
+                "node_id": "test",
                 "latest_value": DataChunk().to_json(),
             },
         ),
@@ -120,7 +120,7 @@ async def test_http_server_routes(http_server, route_type, route, payload):
         ),
         (
             NODE_MESSAGE.DIAGNOSTICS,
-            {"node_id": "test", "diagnostics": NodeDiagnosticsEntry().to_dict()},
+            {"node_id": "test", "diagnostics": NodeDiagnostics().to_dict()},
         ),
     ],
 )

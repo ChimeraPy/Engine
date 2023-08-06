@@ -11,7 +11,7 @@ from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.networking.server import Server
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.data_protocols import NodePubTable
+from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
 
 
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -27,6 +27,7 @@ class MockWorker:
                 NODE_MESSAGE.STATUS: self.node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self.node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self.node_report_results,
+                NODE_MESSAGE.DIAGNOSTICS: self.node_diagnostics,
             },
         )
         self.server.serve()
@@ -44,6 +45,9 @@ class MockWorker:
         ...
 
     async def node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
+        ...
+
+    async def node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
         ...
 
     def shutdown(self):
@@ -108,6 +112,7 @@ async def test_setup(worker_comms_setup):
         ("process_node_pub_table", {"data": NodePubTable().to_dict()}),
         ("async_step", {}),
         ("provide_gather", {}),
+        ("send_diagnostics", NodeDiagnostics()),
     ],
 )
 @pytest.mark.asyncio

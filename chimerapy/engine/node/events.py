@@ -3,7 +3,7 @@ from typing import Dict, Any
 
 from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
-from ..data_protocols import NodePubTable, NodeDiagnosticsEntry
+from ..data_protocols import NodePubTable, NodeDiagnostics
 
 
 @dataclass
@@ -35,4 +35,4 @@ class GatherEvent:
 
 @dataclass
 class DiagnosticsReportEvent:  # diagnostics_report
-    entry: NodeDiagnosticsEntry
+    diagnostics: NodeDiagnostics

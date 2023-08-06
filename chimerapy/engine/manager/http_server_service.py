@@ -8,6 +8,7 @@ from chimerapy.engine import config
 from chimerapy.engine import _logger
 from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
+from ..utils import update_dataclass
 from ..states import WorkerState, ManagerState
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
@@ -163,7 +164,7 @@ class HttpServerService(Service):
         worker_state = WorkerState.from_dict(msg)
 
         # Updating nodes status
-        self.state.workers[worker_state.id] = worker_state
+        update_dataclass(self.state.workers[worker_state.id], worker_state)
         # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         return web.HTTPOk()

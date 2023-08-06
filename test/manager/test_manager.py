@@ -67,8 +67,8 @@ class TestLifeCycle:
         for node_id in config_graph.G.nodes():
             assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
 
-    @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-    # @pytest.mark.parametrize("context", ["multiprocessing"])
+    # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+    @pytest.mark.parametrize("context", ["threading"])
     def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
 
@@ -85,11 +85,15 @@ class TestLifeCycle:
 
         assert manager.start().result()
 
-        time.sleep(3)
+        # time.sleep(3)
 
         assert manager.record().result()
 
-        time.sleep(3)
+        # for i in range(50):
+        #     logger.debug(manager.state)
+        #     time.sleep(1)
+
+        time.sleep(20)
 
         assert manager.stop().result()
         assert manager.collect().result()

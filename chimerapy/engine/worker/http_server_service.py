@@ -14,13 +14,12 @@ from ..states import NodeState, WorkerState
 from ..data_protocols import (
     NodePubTable,
     NodePubEntry,
-    NodeDiagnosticsEntry,
-    NodeDiagnosticsTable,
+    NodeDiagnostics,
 )
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
-from ..utils import async_waiting_for
+from ..utils import async_waiting_for, update_dataclass
 from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
     CreateNodeEvent,
@@ -54,7 +53,6 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
-        self.node_diagnostics_table = NodeDiagnosticsTable()
 
         # Create server
         self.server = Server(
@@ -310,16 +308,12 @@ class HttpServerService(Service):
 
         # Update our records by grabbing all data from the msg
         if node_id in self.state.nodes:
-            self.state.nodes[node_id] = node_state
+            update_dataclass(self.state.nodes[node_id], node_state)
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving gathering value
-        node_state = NodeState.from_dict(msg["data"]["state"])
-        node_id = node_state.id
-
-        if node_id in self.state.nodes:
-            self.state.nodes[node_id] = node_state
+        node_id = msg["data"]["node_id"]
 
         await self.eventbus.asend(
             Event(
@@ -340,7 +334,10 @@ class HttpServerService(Service):
 
     async def _async_node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
 
+        # self.logger.debug(f"{self}: received diagnostics: {msg}")
+
         # Create the entry and update the table
         node_id: str = msg["data"]["node_id"]
-        entry = NodeDiagnosticsEntry.from_dict(msg["data"]["diagnostics"])
-        self.node_diagnostics_table.table[node_id] = entry
+        diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
+        if node_id in self.state.nodes:
+            self.state.nodes[node_id].diagnostics = diag
