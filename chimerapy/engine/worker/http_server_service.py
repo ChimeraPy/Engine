@@ -11,7 +11,12 @@ from aiohttp import web
 from chimerapy.engine import config
 from ..service import Service
 from ..states import NodeState, WorkerState
-from ..data_protocols import NodePubTable, NodePubEntry
+from ..data_protocols import (
+    NodePubTable,
+    NodePubEntry,
+    NodeDiagnosticsEntry,
+    NodeDiagnosticsTable,
+)
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
@@ -49,6 +54,7 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
+        self.node_diagnostics_table = NodeDiagnosticsTable()
 
         # Create server
         self.server = Server(
@@ -73,6 +79,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.STATUS: self._async_node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
+                NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
             },
             parent_logger=self.logger,
             thread=self.thread,
@@ -330,3 +337,10 @@ class HttpServerService(Service):
                 UpdateResultsEvent(node_id=node_id, results=msg["data"]["output"]),
             )
         )
+
+    async def _async_node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
+
+        # Create the entry and update the table
+        node_id: str = msg["data"]["node_id"]
+        entry = NodeDiagnosticsEntry.from_dict(msg["data"]["diagnostics"])
+        self.node_diagnostics_table.table[node_id] = entry

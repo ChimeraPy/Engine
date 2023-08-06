@@ -24,6 +24,7 @@ def profiler_setup():
 
     # Modify the configuration
     config.set("diagnostics.interval", 1)
+    config.set("diagnostics.logging-eanbled", True)
 
     # Event Loop
     thread = AsyncLoopThread()

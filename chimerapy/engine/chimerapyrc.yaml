@@ -38,3 +38,4 @@ config:
   diagnostics:
     deque-length: 100
     interval: 10
+    logging-enabled: false

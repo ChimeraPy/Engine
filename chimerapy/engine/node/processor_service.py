@@ -193,7 +193,7 @@ class ProcessorService(Service):
                 f"{self}: Worker requested execution of registered method that doesn't "
                 f"exists: {method_name}"
             )
-            return {"success": False, "output": None}
+            return {"success": False, "output": None, "node_id": self.state.id}
 
         # Extract the method
         function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
@@ -228,7 +228,6 @@ class ProcessorService(Service):
                 "success": success,
                 "output": output,
                 "node_id": self.state.id,
-                "node_state": self.state.to_json(),
             }
             await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 

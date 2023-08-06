@@ -9,12 +9,13 @@ import pandas as pd
 from psutil import Process
 
 from chimerapy.engine import config
+from ..data_protocols import NodeDiagnosticsEntry
 from ..async_timer import AsyncTimer
 from ..networking.data_chunk import DataChunk
 from ..service import Service
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import EventBus, TypedObserver, Event
 from ..states import NodeState
-from .events import NewInBoundDataEvent
+from .events import NewInBoundDataEvent, DiagnosticsReportEvent
 
 
 class ProfilerService(Service):
@@ -40,11 +41,11 @@ class ProfilerService(Service):
         self.log_file = self.state.logdir / "diagnostics.csv"
 
         # Add a timer function
-        self.logger.debug(
-            f"{self}: AsyncTimer interval: {config.get('diagnostics.interval')}"
-        )
+        # self.logger.debug(
+        #     f"{self}: AsyncTimer interval: {config.get('diagnostics.interval')}"
+        # )
         self.async_timer = AsyncTimer(
-            self.report_diagnostics, config.get("diagnostics.interval")
+            self.diagnostics_report, config.get("diagnostics.interval")
         )
         assert self.eventbus.thread
         self.eventbus.thread.exec(self.async_timer.start()).result()
@@ -65,16 +66,19 @@ class ProfilerService(Service):
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
 
-        self.logger.debug(f"{self}: log_file={self.log_file}")
+        # self.logger.debug(f"{self}: log_file={self.log_file}")
 
     def setup(self):
-        self.logger.debug(f"{self}: setup")
+        # self.logger.debug(f"{self}: setup")
         self.process = Process(pid=os.getpid())
 
-    async def report_diagnostics(self):
+    async def diagnostics_report(self):
 
         if not self.process:
             return None
+
+        # Get the timestamp
+        timestamp = datetime.datetime.now().isoformat()
 
         # Get process-wide information
         memory = self.process.memory_info()
@@ -93,30 +97,45 @@ class ProfilerService(Service):
                 _deque.clear()
 
         else:
-            mean_latency = "-1"
-            total_payload = "0"
+            mean_latency = 0
+            total_payload = 0
 
         # Save information then
-        data = {
-            "timestamp": datetime.datetime.now().isoformat(),
-            "latency(ms)": mean_latency,
-            "payload_size(KB)": total_payload,
-            "memory_usage(KB)": memory_usage,
-            "cpu_usage(%)": cpu_usage,
-            "num_of_steps(int)": num_of_steps,
-        }
-        self.logger.debug(f"{self}: data = {data}")
-        df = pd.Series(data).to_frame().T
-
-        # Write to a csv
-        df.to_csv(
-            str(self.log_file),
-            mode="a",
-            header=not self.log_file.exists(),
-            index=False,
+        entry = NodeDiagnosticsEntry(
+            timestamp=timestamp,
+            latency=mean_latency,
+            payload_size=total_payload,
+            memory_usage=memory_usage,
+            cpu_usage=cpu_usage,
+            num_of_steps=num_of_steps,
         )
 
-        # self.logger.debug(f"{self}: report_diagnostics: FINISHED")
+        # Send the information to the Worker and ultimately the Manager
+        event_data = DiagnosticsReportEvent(entry)
+        # self.logger.debug(f"{self}: data = {data}")
+        await self.eventbus.asend(Event("diagnostics_report", event_data))
+
+        # Write to a csv, if diagnostics enabled
+        if config.get("diagnostics.logging-enabled"):
+
+            # Create dictionary with units
+            data = {
+                "timestamp": timestamp,
+                "latency(ms)": mean_latency,
+                "payload_size(KB)": total_payload,
+                "memory_usage(KB)": memory_usage,
+                "cpu_usage(%)": cpu_usage,
+                "num_of_steps(int)": num_of_steps,
+            }
+
+            df = pd.Series(data).to_frame().T
+
+            df.to_csv(
+                str(self.log_file),
+                mode="a",
+                header=not self.log_file.exists(),
+                index=False,
+            )
 
     async def pre_step(self, data_chunks: Dict[str, DataChunk]):
         # assert self.process

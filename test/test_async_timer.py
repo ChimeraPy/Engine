@@ -23,7 +23,7 @@ def timer():
 
 @pytest.mark.asyncio
 async def test_async_timer(timer):
-    timer.start()
+    await timer.start()
     await asyncio.sleep(2)
-    timer.stop()
+    await timer.stop()
     assert len(A_LIST) >= 7
