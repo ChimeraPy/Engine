@@ -81,16 +81,15 @@ class Worker:
             WorkerState(id=id, name=name, port=port, tempfolder=tempfolder),
             event_bus=self.eventbus,
         )
-
         # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
         self.logger = _logger.fork(parent_logger, name, id)
 
         # Create a log listener to read Node's information
         self.logreceiver = self._start_log_receiver()
-        self.logger.debug(
-            f"{self}: Log receiver started at port {self.logreceiver.port}"
-        )
+        # self.logger.debug(
+        #     f"{self}: Log receiver started at port {self.logreceiver.port}"
+        # )
 
         # Create the services
         self.http_client = HttpClientService(
@@ -258,6 +257,8 @@ class Worker:
         # Delete temp folder if requested
         if self.state.tempfolder.exists() and self.delete_temp:
             shutil.rmtree(self.state.tempfolder)
+
+        # self.logger.debug(f"{self}: finished shutdown")
 
         return True
 

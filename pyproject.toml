@@ -34,7 +34,8 @@ dependencies = [
     'dataclasses-json',
     'aiofiles',
     'zeroconf',
-    'aioreactive'
+    'aioreactive',
+    'psutil'
 ]
 
 [project.optional-dependencies]

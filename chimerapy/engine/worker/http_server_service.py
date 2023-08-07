@@ -11,11 +11,15 @@ from aiohttp import web
 from chimerapy.engine import config
 from ..service import Service
 from ..states import NodeState, WorkerState
-from ..data_protocols import NodePubTable, NodePubEntry
+from ..data_protocols import (
+    NodePubTable,
+    NodePubEntry,
+    NodeDiagnostics,
+)
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
-from ..utils import async_waiting_for
+from ..utils import async_waiting_for, update_dataclass
 from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
     CreateNodeEvent,
@@ -73,6 +77,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.STATUS: self._async_node_status_update,
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
+                NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
             },
             parent_logger=self.logger,
             thread=self.thread,
@@ -303,16 +308,12 @@ class HttpServerService(Service):
 
         # Update our records by grabbing all data from the msg
         if node_id in self.state.nodes:
-            self.state.nodes[node_id] = node_state
+            update_dataclass(self.state.nodes[node_id], node_state)
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
         # Saving gathering value
-        node_state = NodeState.from_dict(msg["data"]["state"])
-        node_id = node_state.id
-
-        if node_id in self.state.nodes:
-            self.state.nodes[node_id] = node_state
+        node_id = msg["data"]["node_id"]
 
         await self.eventbus.asend(
             Event(
@@ -330,3 +331,13 @@ class HttpServerService(Service):
                 UpdateResultsEvent(node_id=node_id, results=msg["data"]["output"]),
             )
         )
+
+    async def _async_node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
+
+        # self.logger.debug(f"{self}: received diagnostics: {msg}")
+
+        # Create the entry and update the table
+        node_id: str = msg["data"]["node_id"]
+        diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
+        if node_id in self.state.nodes:
+            self.state.nodes[node_id].diagnostics = diag

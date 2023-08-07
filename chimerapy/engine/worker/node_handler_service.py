@@ -21,7 +21,7 @@ from ..states import NodeState, WorkerState
 from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
-from ..eventbus import EventBus, TypedObserver, Event
+from ..eventbus import EventBus, TypedObserver, Event, make_evented
 from .events import (
     BroadcastEvent,
     SendMessageEvent,
@@ -43,10 +43,11 @@ class NodeController:
     gather: DataChunk = DataChunk()
     registered_method_results: Any = None
 
-    def __init__(self, node_object: "Node"):
+    def __init__(self, node_object: "Node", logger: logging.Logger):
 
         # Save parameters
         self.node_object = node_object
+        self.logger = logger
 
     def start(self):
         self.context.start()
@@ -63,8 +64,8 @@ class ThreadNodeController(NodeController):
     context: threading.Thread
     running: bool
 
-    def __init__(self, node_object: "Node"):
-        super().__init__(node_object)
+    def __init__(self, node_object: "Node", logger: logging.Logger):
+        super().__init__(node_object, logger)
 
         # Create a thread to run the Node
         self.context = threading.Thread(target=self.node_object.run, args=(True,))
@@ -73,8 +74,16 @@ class ThreadNodeController(NodeController):
         self.node_object.running = False
 
     def shutdown(self, timeout: Optional[Union[int, float]] = None):
+
+        if type(timeout) == type(None):
+            timeout = config.get("worker.timeout.node-shutdown")
+
         self.stop()
         self.context.join(timeout=timeout)
+        if self.context.is_alive():
+            self.logger.error(
+                f"Failed to JOIN thread controller for Node={self.node_object.state}"
+            )
 
 
 class MPNodeController(NodeController):
@@ -82,8 +91,8 @@ class MPNodeController(NodeController):
     context: mp.Process  # type: ignore
     running: mp.Value  # type: ignore
 
-    def __init__(self, node_object: "Node"):
-        super().__init__(node_object)
+    def __init__(self, node_object: "Node", logger: logging.Logger):
+        super().__init__(node_object, logger)
 
         # Create a process to run the Node
         self.running = mp.Value("i", True)  # type: ignore
@@ -99,6 +108,10 @@ class MPNodeController(NodeController):
         self.running.value = False
 
     def shutdown(self, timeout: Optional[Union[int, float]] = None):
+
+        if type(timeout) == type(None):
+            timeout = config.get("worker.timeout.node-shutdown")
+
         self.stop()
         self.context.join(timeout=timeout)
         self.context.terminate()
@@ -198,9 +211,7 @@ class NodeHandlerService(Service):
 
         # Then wait until close, or force
         for node_id in self.node_controllers:
-            self.node_controllers[node_id].shutdown(
-                timeout=config.get("worker.timeout.node-shutdown")
-            )
+            self.node_controllers[node_id].shutdown()
 
         # Clear node_controllers afterwards
         self.node_controllers = {}
@@ -238,12 +249,14 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        self.logger.debug(
-            f"{self}: received request for Node {node_config.id} creation:"
-        )
+        # self.logger.debug(
+        #     f"{self}: received request for Node {node_config.id} creation:"
+        # )
 
         # Saving the node data
-        self.state.nodes[id] = NodeState(id=id)
+        self.state.nodes[id] = make_evented(
+            NodeState(id=id), event_bus=self.eventbus, event_name="WorkerState.changed"
+        )
 
         # Keep trying to start a process until success
         success = False
@@ -269,11 +282,13 @@ class NodeHandlerService(Service):
             node_object.add_worker_comms(worker_comms)
 
             # Create controller
-            controller = self.context_class_map[node_config.context](node_object)
+            controller = self.context_class_map[node_config.context](
+                node_object, self.logger
+            )
 
             # Start the node
             controller.start()
-            self.logger.debug(f"{self}: started {node_object}")
+            # self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -299,7 +314,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            self.logger.debug(f"{self}: completed node creation: {id}")
+            # self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
@@ -343,7 +358,7 @@ class NodeHandlerService(Service):
                     condition=lambda: self.state.nodes[node_id].fsm == "CONNECTED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.logger.debug(f"{self}: Node {node_id} has connected: SUCCESS")
+                    # self.logger.debug(f"{self}: Node {node_id} has connected: SUCCES")
                     success.append(True)
                     break
                 else:
@@ -412,7 +427,7 @@ class NodeHandlerService(Service):
 
     async def async_gather(self) -> Dict:
 
-        self.logger.debug(f"{self}: reporting to Manager gather request")
+        # self.logger.debug(f"{self}: reporting to Manager gather request")
 
         for node_id in self.state.nodes:
             self.node_controllers[node_id].response = False
@@ -431,9 +446,9 @@ class NodeHandlerService(Service):
                     condition=lambda: self.node_controllers[node_id].response is True,
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to gather: SUCCESS"
-                    )
+                    # self.logger.debug(
+                    #     f"{self}: Node {node_id} responded to gather: SUCCESS"
+                    # )
                     success.append(True)
                     break
                 else:
@@ -472,9 +487,9 @@ class NodeHandlerService(Service):
                     condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
                     timeout=config.get("worker.timeout.info-request"),
                 ):
-                    self.logger.debug(
-                        f"{self}: Node {node_id} responded to saving request: SUCCESS"
-                    )
+                    # self.logger.debug(
+                    #     f"{self}: Node {node_id} responded to saving request: SUCCESS"
+                    # )
                     success.append(True)
                     break
                 else:

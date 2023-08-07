@@ -35,3 +35,7 @@ config:
       client-shutdown: 10
       server-shutdown: 15
       pub-delay: 1
+  diagnostics:
+    deque-length: 10000
+    interval: 10
+    logging-enabled: false

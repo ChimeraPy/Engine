@@ -198,13 +198,14 @@ class Client:
     # Client Async Setup and Shutdown
     ####################################################################
 
-    async def async_connect(self):
+    async def async_connect(self) -> bool:
 
         # Reset
         self.uuid_records.clear()
 
         # Create the session
         self._session = aiohttp.ClientSession()
+        assert self._session
         self._ws = await self._session.ws_connect(f"http://{self.host}:{self.port}/ws")
 
         # Create task to read
@@ -214,6 +215,8 @@ class Client:
 
         # Register the client
         await self._register()
+
+        return True
 
     async def async_send_file(
         self, url: str, sender_id: str, filepath: pathlib.Path

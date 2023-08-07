@@ -168,7 +168,7 @@ class ProcessorService(Service):
         await client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
             data={
-                "state": self.state.to_dict(),
+                "node_id": self.state.id,
                 "latest_value": self.latest_data_chunk.to_json(),
             },
         )
@@ -193,7 +193,7 @@ class ProcessorService(Service):
                 f"{self}: Worker requested execution of registered method that doesn't "
                 f"exists: {method_name}"
             )
-            return {"success": False, "output": None}
+            return {"success": False, "output": None, "node_id": self.state.id}
 
         # Extract the method
         function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
@@ -228,7 +228,6 @@ class ProcessorService(Service):
                 "success": success,
                 "output": output,
                 "node_id": self.state.id,
-                "node_state": self.state.to_json(),
             }
             await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
 
@@ -286,9 +285,7 @@ class ProcessorService(Service):
 
             # Add timestamp and step id to the DataChunk
             meta = output_data_chunk.get("meta")
-            meta["value"]["ownership"].append(
-                {"name": self.state.name, "timestamp": datetime.datetime.now()}
-            )
+            meta["value"]["transmitted"] = datetime.datetime.now()
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler

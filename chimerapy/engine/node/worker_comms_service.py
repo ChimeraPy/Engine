@@ -6,11 +6,16 @@ from typing import Dict, Optional
 from ..networking import Client
 from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
-from ..data_protocols import NodePubTable
+from ..data_protocols import NodePubTable, NodeDiagnostics
 from ..service import Service
 from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
-from .events import ProcessNodePubTableEvent, RegisteredMethodEvent, GatherEvent
+from .events import (
+    ProcessNodePubTableEvent,
+    RegisteredMethodEvent,
+    GatherEvent,
+    DiagnosticsReportEvent,
+)
 
 
 class WorkerCommsService(Service):
@@ -73,12 +78,18 @@ class WorkerCommsService(Service):
     def add_observers(self):
         assert self.state and self.eventbus and self.logger
 
-        self.logger.debug(f"{self}: adding observers")
+        # self.logger.debug(f"{self}: adding observers")
 
         observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
             "NodeState.changed": TypedObserver(
                 "NodeState.changed", on_asend=self.send_state, handle_event="drop"
+            ),
+            "diagnostics_report": TypedObserver(
+                "diagnostics_report",
+                DiagnosticsReportEvent,
+                on_asend=self.send_diagnostics,
+                handle_event="unpack",
             ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
@@ -131,7 +142,7 @@ class WorkerCommsService(Service):
         # self.logger.debug(f"{self}: shutdown")
 
     ####################################################################
-    ## Helper Methods
+    ## Message Requests
     ####################################################################
 
     async def send_state(self):
@@ -142,8 +153,24 @@ class WorkerCommsService(Service):
                 signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
             )
 
+    async def provide_gather(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
+
+        if self.client:
+            event_data = GatherEvent(self.client)
+            await self.eventbus.asend(Event("gather", event_data))
+
+    async def send_diagnostics(self, diagnostics: NodeDiagnostics):
+        assert self.state and self.eventbus and self.logger
+
+        # self.logger.debug(f"{self}: Sending Diagnostics")
+
+        if self.client:
+            data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
+            await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
+
     ####################################################################
-    ## Message Reactivity API
+    ## Message Responds
     ####################################################################
 
     async def process_node_pub_table(self, msg: Dict):
@@ -186,10 +213,3 @@ class WorkerCommsService(Service):
     async def async_step(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("manual_step"))
-
-    async def provide_gather(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-
-        if self.client:
-            event_data = GatherEvent(self.client)
-            await self.eventbus.asend(Event("gather", event_data))

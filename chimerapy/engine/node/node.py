@@ -23,6 +23,7 @@ from ..eventbus import EventBus, Event, make_evented
 # Service Imports
 from .node_config import NodeConfig
 from .registered_method import RegisteredMethod
+from .profiler_service import ProfilerService
 from .fsm_service import FSMService
 from .worker_comms_service import WorkerCommsService
 from .record_service import RecordService
@@ -300,7 +301,7 @@ class Node:
     ####################################################################
 
     async def _eventloop(self):
-        self.logger.debug(f"{self}: within event loop")
+        # self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
         await self._teardown()
         return True
@@ -470,6 +471,12 @@ class Node:
         )
         self.recorder = RecordService(
             name="recorder",
+            state=self.state,
+            eventbus=self.eventbus,
+            logger=self.logger,
+        )
+        self.profiler = ProfilerService(
+            name="profiler",
             state=self.state,
             eventbus=self.eventbus,
             logger=self.logger,

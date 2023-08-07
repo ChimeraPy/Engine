@@ -20,7 +20,7 @@ from ..service import Service
 from ..graph import Graph
 from ..exceptions import CommitGraphError
 from ..states import WorkerState, ManagerState
-from ..eventbus import EventBus, TypedObserver, Event
+from ..eventbus import EventBus, TypedObserver, Event, make_evented
 from .events import (
     WorkerRegisterEvent,
     WorkerDeregisterEvent,
@@ -105,7 +105,14 @@ class WorkerHandlerService(Service):
 
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
-        self.state.workers[worker_state.id] = worker_state
+        logger.debug(f"{self}: worker_state: {worker_state} BEFORE")
+        evented_worker_state = make_evented(
+            worker_state, event_bus=self.eventbus, event_name="ManagerState.changed"
+        )
+        logger.debug(
+            f"{self}: worker_state: {worker_state}: {evented_worker_state} AFTER"
+        )
+        self.state.workers[worker_state.id] = evented_worker_state
         logger.debug(
             f"Manager registered <Worker id={worker_state.id}"
             f" name={worker_state.name}> from {worker_state.ip}"
@@ -314,7 +321,7 @@ class WorkerHandlerService(Service):
         elif node_id not in self.graph.G:
             return False
 
-        logger.debug(f"{self}: Node requested to be created: {worker_id} - {node_id}")
+        # logger.debug(f"{self}: Node requested to be created: {worker_id} - {node_id}")
 
         # Extract the in_bound list and provide also the node's names
         in_bound = list(self.graph.G.predecessors(node_id))
@@ -340,19 +347,15 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=data) as resp:
                 if resp.ok:
-                    logger.debug(
-                        f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
-                    )
+                    # logger.debug(
+                    #     f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
+                    # )
                     return True
                 else:
                     logger.error(
                         f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
                     )
                     return False
-
-        logger.error(f"{self}: Worker {worker_id} didn't respond!")
-
-        return False
 
     async def _request_node_destruction(self, worker_id: str, node_id: str) -> bool:
         """Request destroying a Node from the Graph.
@@ -388,9 +391,9 @@ class WorkerHandlerService(Service):
         async with aiohttp.ClientSession() as client:
             async with client.post(url=url, data=json.dumps(data)) as resp:
                 if resp.ok:
-                    logger.debug(
-                        f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
-                    )
+                    # logger.debug(
+                    #     f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
+                    # )
                     return True
                 else:
 
@@ -398,10 +401,6 @@ class WorkerHandlerService(Service):
                         f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
                     )
                     return False
-
-        logger.error(f"{self}: Worker {worker_id} didn't respond!")
-
-        return False
 
     async def _request_node_pub_table(self, worker_id: str) -> bool:
         """Request Workers to provide information about Node's PUBs
@@ -423,9 +422,9 @@ class WorkerHandlerService(Service):
                         worker_node_pub_table = NodePubTable.from_json(data)
                         self.node_pub_table.table.update(worker_node_pub_table.table)
 
-                        logger.debug(
-                            f"{self}: Requesting Worker's node pub table: SUCCESS"
-                        )
+                        # logger.debug(
+                        #     f"{self}: Requesting Worker's node pub table: SUCCESS"
+                        # )
                         return True
 
                     else:
@@ -457,9 +456,9 @@ class WorkerHandlerService(Service):
                 ) as resp:
                     if resp.ok:
 
-                        logger.debug(
-                            f"{self}: receiving Worker's node pub table:" "SUCCESS"
-                        )
+                        # logger.debug(
+                        #     f"{self}: receiving Worker's node pub table:" "SUCCESS"
+                        # )
                         return True
 
                     return False
@@ -772,7 +771,7 @@ class WorkerHandlerService(Service):
             except Exception:
                 logger.error(traceback.format_exc())
 
-        logger.info(f"{self}: finished collect")
+        # logger.info(f"{self}: finished collect")
 
         return success
 

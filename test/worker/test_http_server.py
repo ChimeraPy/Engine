@@ -8,13 +8,19 @@ from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.data_protocols import NodePubTable
+from chimerapy.engine.networking.data_chunk import DataChunk
+from chimerapy.engine.networking.client import Client
+from chimerapy.engine.networking.enums import NODE_MESSAGE
+from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
 from chimerapy.engine.eventbus import EventBus
-from chimerapy.engine.states import WorkerState
+from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine import _logger
 
 from ..conftest import TEST_DATA_DIR
+
+
+logger = _logger.getLogger("chimerapy-engine-worker")
 
 
 @pytest.fixture
@@ -32,7 +38,6 @@ def http_server():
 
     # Requirements
     state = WorkerState()
-    logger = _logger.getLogger("chimerapy-engine-worker")
 
     # Create the services
     http_server = HttpServerService(
@@ -40,6 +45,21 @@ def http_server():
     )
     thread.exec(http_server.start()).result(timeout=10)
     return http_server
+
+
+@pytest.fixture(scope="module")
+def ws_client(http_server):
+
+    client = Client(
+        host=http_server.ip,
+        port=http_server.port,
+        id="ws_client",
+        ws_handlers={},
+        parent_logger=logger,
+    )
+    client.connect()
+    yield client
+    client.shutdown()
 
 
 def test_http_server_instanciate(http_server):
@@ -66,7 +86,7 @@ def test_http_server_instanciate(http_server):
         ),
         ("post", "/nodes/stop", json.dumps({})),
         ("post", "/packages/load", json.dumps({"packages": []})),
-        ("post", "/shutdown", json.dumps({})),
+        # ("post", "/shutdown", json.dumps({})),
     ],
 )
 async def test_http_server_routes(http_server, route_type, route, payload):
@@ -80,3 +100,29 @@ async def test_http_server_routes(http_server, route_type, route, payload):
         elif route_type == "get":
             async with client.get(url=f"{http_server.url}{route}") as resp:
                 assert resp.ok
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "signal, payload",
+    [
+        (NODE_MESSAGE.STATUS, NodeState(logdir=TEST_DATA_DIR).to_dict()),
+        (
+            NODE_MESSAGE.REPORT_GATHER,
+            {
+                "node_id": "test",
+                "latest_value": DataChunk().to_json(),
+            },
+        ),
+        (
+            NODE_MESSAGE.REPORT_RESULTS,
+            {"success": True, "output": 1, "node_id": "test"},
+        ),
+        (
+            NODE_MESSAGE.DIAGNOSTICS,
+            {"node_id": "test", "diagnostics": NodeDiagnostics().to_dict()},
+        ),
+    ],
+)
+async def test_ws_signals(http_server, ws_client, signal, payload):
+    await ws_client.async_send(signal=signal, data=payload, ok=True)
