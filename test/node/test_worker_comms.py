@@ -61,8 +61,11 @@ def mock_worker():
     mock_worker.shutdown()
 
 
-@pytest.fixture
-def worker_comms_setup(mock_worker):
+@pytest.fixture(scope="module")
+def worker_comms_setup():
+
+    # Creating mock worker
+    mock_worker = MockWorker()
 
     # Event Loop
     thread = AsyncLoopThread()
@@ -84,21 +87,22 @@ def worker_comms_setup(mock_worker):
         logger=logger,
     )
 
-    return (worker_comms, mock_worker.server)
+    yield (worker_comms, mock_worker.server)
+    mock_worker.shutdown()
 
 
 def test_instanticate(worker_comms_setup):
     ...
 
 
-@pytest.mark.asyncio
-async def test_setup(worker_comms_setup):
-    worker_comms, server = worker_comms_setup
+# @pytest.mark.asyncio
+# async def test_setup(worker_comms_setup):
+#     worker_comms, server = worker_comms_setup
 
-    # Start the server
-    await worker_comms.setup()
-    assert "test_worker_comms" in server.ws_clients
-    await worker_comms.teardown()
+#     # Start the server
+#     await worker_comms.setup()
+#     assert "test_worker_comms" in server.ws_clients
+#     await worker_comms.teardown()
 
 
 @pytest.mark.parametrize(

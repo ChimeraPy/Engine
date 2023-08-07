@@ -105,9 +105,14 @@ class WorkerHandlerService(Service):
 
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
-        self.state.workers[worker_state.id] = make_evented(
+        logger.debug(f"{self}: worker_state: {worker_state} BEFORE")
+        evented_worker_state = make_evented(
             worker_state, event_bus=self.eventbus, event_name="ManagerState.changed"
         )
+        logger.debug(
+            f"{self}: worker_state: {worker_state}: {evented_worker_state} AFTER"
+        )
+        self.state.workers[worker_state.id] = evented_worker_state
         logger.debug(
             f"Manager registered <Worker id={worker_state.id}"
             f" name={worker_state.name}> from {worker_state.ip}"

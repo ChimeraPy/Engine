@@ -328,7 +328,7 @@ class Manager:
 
         # Only let shutdown happen once
         if self.has_shutdown:
-            logger.debug(f"{self}: requested to shutdown twice, skipping.")
+            # logger.debug(f"{self}: requested to shutdown twice, skipping.")
             return True
 
         await self.eventbus.asend(Event("shutdown"))

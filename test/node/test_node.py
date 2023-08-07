@@ -271,7 +271,7 @@ def test_node_connection(logreceiver, mock_worker):
     g_eventbus.send(Event("start")).result()
     c_eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    time.sleep(100)
+    time.sleep(5)
     g_eventbus.send(Event("stop")).result()
     c_eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")

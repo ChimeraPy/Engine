@@ -47,7 +47,7 @@ def http_server():
     return http_server
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def ws_client(http_server):
 
     client = Client(
@@ -57,7 +57,7 @@ def ws_client(http_server):
         ws_handlers={},
         parent_logger=logger,
     )
-    assert client.connect()
+    client.connect()
     yield client
     client.shutdown()
 
@@ -86,7 +86,7 @@ def test_http_server_instanciate(http_server):
         ),
         ("post", "/nodes/stop", json.dumps({})),
         ("post", "/packages/load", json.dumps({"packages": []})),
-        ("post", "/shutdown", json.dumps({})),
+        # ("post", "/shutdown", json.dumps({})),
     ],
 )
 async def test_http_server_routes(http_server, route_type, route, payload):

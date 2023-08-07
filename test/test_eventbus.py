@@ -263,15 +263,18 @@ def test_make_evented_multiple(event_bus):
 
 @pytest.mark.asyncio
 async def test_make_evented_nested(event_bus):
+    data_class = NestedClass(
+        number=1,
+        subclass=HelloEventData(message="hello"),
+        map={"test": "test"},
+        vector=["hello", "there"],
+    )
     nested_data = make_evented(
-        NestedClass(
-            number=1,
-            subclass=HelloEventData(message="hello"),
-            map={"test": "test"},
-            vector=["hello", "there"],
-        ),
+        data_class,
         event_bus=event_bus,
     )
+
+    logger.debug(data_class)
 
     nested_data.number = 5
     await asyncio.sleep(1)

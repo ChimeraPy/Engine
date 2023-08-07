@@ -164,7 +164,10 @@ class HttpServerService(Service):
         worker_state = WorkerState.from_dict(msg)
 
         # Updating nodes status
-        update_dataclass(self.state.workers[worker_state.id], worker_state)
+        if worker_state.id in self.state.workers:
+            update_dataclass(self.state.workers[worker_state.id], worker_state)
+        else:
+            logger.error(f"{self}: non-registered Worker update: {worker_state.id}")
         # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         return web.HTTPOk()
