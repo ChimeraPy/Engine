@@ -1,19 +1,20 @@
-from .data_nodes import VideoNode
-
 # Built-in Imports
 import os
 import pathlib
 import time
-import uuid
+import datetime
 
 # Third-party
 import cv2
 import numpy as np
 import pytest
 import chimerapy.engine as cpe
-from chimerapy.engine.records.video_record import VideoRecord
+from chimerapy.engine.node.record_service.records.video_record import VideoRecord
+from chimerapy.engine.node.record_service.entry import VideoEntry
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
+
+from .data_nodes import VideoNode
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -53,22 +54,20 @@ def test_video_record():
         ...
 
     # Create the record
-    vr = VideoRecord(dir=TEST_DATA_DIR, name="test")
+    start_time = datetime.datetime.now()
+    vr = VideoRecord(dir=TEST_DATA_DIR, name="test", start_time=start_time)
 
     # Write to video file
     fps = 30
     for i in range(fps):
         data = np.random.rand(200, 300, 3) * 255
-        video_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": "test",
-            "data": data,
-            "dtype": "video",
-            "fps": fps,
-            "timestamp": i / fps,
-            "elapsed": i / fps,
-        }
-        vr.write(video_chunk)
+        video_entry = VideoEntry(
+            name="test",
+            data=data,
+            fps=fps,
+            timestamp=start_time + datetime.timedelta(seconds=(i / fps)),
+        )
+        vr.write(video_entry)
 
     # Close file
     vr.close()
@@ -92,7 +91,8 @@ def test_video_record_with_unstable_frames():
         ...
 
     # Create the record
-    vr = VideoRecord(dir=TEST_DATA_DIR, name="test")
+    start_time = datetime.datetime.now()
+    vr = VideoRecord(dir=TEST_DATA_DIR, name="test", start_time=start_time)
 
     # Write to video file
     fps = 30
@@ -101,18 +101,14 @@ def test_video_record_with_unstable_frames():
     for i in range(rec_time * actual_fps):
 
         # But actually, we are getting frames at 20 fps
-        timestamp = i / actual_fps
         data = np.random.rand(200, 300, 3) * 255
-        video_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": "test",
-            "data": data,
-            "dtype": "video",
-            "fps": fps,
-            "timestamp": timestamp,
-            "elapsed": timestamp,
-        }
-        vr.write(video_chunk)
+        video_entry = VideoEntry(
+            name="test",
+            data=data,
+            fps=fps,
+            timestamp=start_time + datetime.timedelta(seconds=(i / actual_fps)),
+        )
+        vr.write(video_entry)
 
     # Close file
     vr.close()

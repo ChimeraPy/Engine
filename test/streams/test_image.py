@@ -4,7 +4,6 @@ from .data_nodes import ImageNode
 import os
 import pathlib
 import time
-import uuid
 
 # Third-party
 import numpy as np
@@ -12,7 +11,8 @@ import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
-from chimerapy.engine.records.image_record import ImageRecord
+from chimerapy.engine.node.record_service.records.image_record import ImageRecord
+from chimerapy.engine.node.record_service.entry import ImageEntry
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
 
@@ -47,13 +47,8 @@ def test_image_record():
     # Write to image file
     for i in range(5):
         data = np.random.rand(200, 300, 3) * 255
-        image_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": "test",
-            "data": data,
-            "dtype": "image",
-        }
-        img_r.write(image_chunk)
+        image_entry = ImageEntry(name="test", data=data)
+        img_r.write(image_entry)
 
     # Check that the image was created
     assert expected_image_path.exists()

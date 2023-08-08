@@ -1,20 +1,18 @@
 # Built-in Imports
-from typing import Dict, Any
+from typing import Dict
 import pathlib
+import datetime
 
 # Third-party Imports
 import pandas as pd
 
 # Internal Import
+from ..entry import TabularEntry
 from .record import Record
 
 
 class TabularRecord(Record):
-    def __init__(
-        self,
-        dir: pathlib.Path,
-        name: str,
-    ):
+    def __init__(self, dir: pathlib.Path, name: str, start_time: datetime.datetime):
         """Construct an Tabular Record.
 
         Args:
@@ -23,22 +21,22 @@ class TabularRecord(Record):
             name (str): The name of the ``Record``.
 
         """
-        super().__init__()
+        super().__init__(dir=dir, name=name, start_time=start_time)
 
         # Saving the Record attributes
         self.dir = dir
         self.name = name
         self.tabular_file_path = self.dir / f"{self.name}.csv"
 
-    def write(self, data_chunk: Dict[str, Any]):
+    def write(self, entry: TabularEntry):
 
         # Ensure that data is a pd.DataFrame
-        if isinstance(data_chunk["data"], pd.DataFrame):
-            df = data_chunk["data"]
-        elif isinstance(data_chunk["data"], pd.Series):
-            df = data_chunk["data"].to_frame().T
-        elif isinstance(data_chunk["data"], Dict):
-            df = pd.Series(data_chunk["data"]).to_frame().T
+        if isinstance(entry.data, pd.DataFrame):
+            df = entry.data
+        elif isinstance(entry.data, pd.Series):
+            df = entry.data.to_frame().T
+        elif isinstance(entry.data, Dict):
+            df = pd.Series(entry.data).to_frame().T
         else:
             raise RuntimeError("Invalid input data for Tabular Record.")
 

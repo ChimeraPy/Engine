@@ -1,6 +1,6 @@
 # Built-in Imports
-from typing import Dict, Any
 import pathlib
+import datetime
 
 # Third-party Imports
 import numpy as np
@@ -8,14 +8,11 @@ import cv2
 
 # Internal Imports
 from .record import Record
+from ..entry import VideoEntry
 
 
 class VideoRecord(Record):
-    def __init__(
-        self,
-        dir: pathlib.Path,
-        name: str,
-    ):
+    def __init__(self, dir: pathlib.Path, name: str, start_time: datetime.datetime):
         """
         Args:
             dir (pathlib.Path): The directory/filepath to store the \
@@ -23,11 +20,9 @@ class VideoRecord(Record):
             name (str): The name of ``Record``.
 
         """
-        super().__init__()
+        super().__init__(dir=dir, name=name, start_time=start_time)
 
         # Saving the Record attributes
-        self.dir = dir
-        self.name = name
         self.first_frame = True
         self.video_file_path = self.dir / f"{self.name}.mp4"
         # self.video_fourcc = cv2.VideoWriter_fourcc(*'MP4V')
@@ -37,13 +32,13 @@ class VideoRecord(Record):
         self.frame_count: int = 0
         self.previous_frame: np.ndarray = np.array([])
 
-    def write(self, data_chunk: Dict[str, Any]):
+    def write(self, entry: VideoEntry):
         """Commit the unsaved changes to memory."""
 
         # Determine the size
-        frame = data_chunk["data"]
-        fps = data_chunk["fps"]
-        elapsed = data_chunk["elapsed"]
+        frame = entry.data
+        fps = entry.fps
+        elapsed = entry.timestamp - self.start_time  # This needs to be fixed!
         h, w = frame.shape[:2]
 
         # Determine if RGB or grey video
@@ -68,7 +63,7 @@ class VideoRecord(Record):
         else:
 
             # Account for possible unstable fps
-            delta = elapsed - (self.frame_count / fps)
+            delta = elapsed.total_seconds() - (self.frame_count / fps)
 
             # Case 1: Too late (padd with previous frame to match)
             num_missed_frames = int(delta // (1 / fps)) - 1

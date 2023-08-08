@@ -31,18 +31,11 @@ from .processor_service import ProcessorService
 from .poller_service import PollerService
 from .publisher_service import PublisherService
 
+# Additional tools
+from .record_service import ImageEntry, TabularEntry, VideoEntry, AudioEntry
+
 
 class Node:
-
-    # worker_comms: Optional[WorkerCommsService]
-    # processor: Optional[ProcessorService]
-    # recorder: Optional[RecordService]
-    # poller: Optional[PollerService]
-    # publisher: Optional[PublisherService]
-
-    # registered_methods: Dict[str, RegisteredMethod] = {}
-    # context: Literal["main", "multiprocessing", "threading"]
-
     def __init__(
         self,
         name: str,
@@ -203,16 +196,7 @@ class Node:
             return False
 
         if self.recorder.enabled:
-            timestamp = datetime.datetime.now()
-            video_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "video",
-                "fps": fps,
-                "elapsed": (timestamp - self.start_time).total_seconds(),
-                "timestamp": timestamp,
-            }
+            video_entry = VideoEntry(name=name, data=data, fps=fps)
             self.recorder.submit(video_entry)
 
     def save_audio(
@@ -246,16 +230,9 @@ class Node:
             return False
 
         if self.recorder.enabled:
-            audio_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "audio",
-                "channels": channels,
-                "format": format,
-                "rate": rate,
-                "timestamp": datetime.datetime.now(),
-            }
+            audio_entry = AudioEntry(
+                name=name, data=data, channels=channels, format=format, rate=rate
+            )
             self.recorder.submit(audio_entry)
 
     def save_tabular(
@@ -269,13 +246,7 @@ class Node:
             return False
 
         if self.recorder.enabled:
-            tabular_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "tabular",
-                "timestamp": datetime.datetime.now(),
-            }
+            tabular_entry = TabularEntry(name=name, data=data)
             self.recorder.submit(tabular_entry)
 
     def save_image(self, name: str, data: np.ndarray):
@@ -287,13 +258,7 @@ class Node:
             return False
 
         if self.recorder.enabled:
-            image_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "image",
-                "timestamp": datetime.datetime.now(),
-            }
+            image_entry = ImageEntry(name=name, data=data)
             self.recorder.submit(image_entry)
 
     ####################################################################

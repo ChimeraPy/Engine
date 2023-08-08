@@ -3,7 +3,6 @@ from .data_nodes import AudioNode
 # Built-in Imports
 import os
 import pathlib
-import uuid
 import time
 
 # Third-party
@@ -13,7 +12,8 @@ import pyaudio
 
 # Internal Imports
 import chimerapy.engine as cpe
-from chimerapy.engine.records.audio_record import AudioRecord
+from chimerapy.engine.node.record_service.records.audio_record import AudioRecord
+from chimerapy.engine.node.record_service.entry import AudioEntry
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
 
@@ -53,16 +53,10 @@ def test_audio_record():
     # Write to audio file
     for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
         data = (np.random.rand(CHUNK) * 2 - 1) * (i * 0.1)
-        audio_chunk = {
-            "uuid": uuid.uuid4(),
-            "name": "test",
-            "data": data,
-            "dtype": "audio",
-            "channels": CHANNELS,
-            "format": FORMAT,
-            "rate": RATE,
-        }
-        ar.write(audio_chunk)
+        audio_entry = AudioEntry(
+            name="test", data=data, channels=CHANNELS, format=FORMAT, rate=RATE
+        )
+        ar.write(audio_entry)
 
     assert expected_audio_path.exists()
 
@@ -92,6 +86,8 @@ def test_node_save_audio_stream(audio_node):
     time.sleep(3)
     eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")
+    eventbus.send(Event("collect")).result()
+    logger.debug("Finish collect")
 
     audio_node.shutdown()
 

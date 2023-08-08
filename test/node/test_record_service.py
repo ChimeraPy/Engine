@@ -1,11 +1,13 @@
-import datetime
 import uuid
+from typing import List
 
 import pytest
 import numpy as np
 
 import chimerapy.engine as cpe
 from chimerapy.engine.node.record_service import RecordService
+from chimerapy.engine.node.record_service.recording import Recording
+from chimerapy.engine.node.record_service.entry import VideoEntry
 from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus, Event
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
@@ -14,7 +16,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def recorder():
 
     # Event Loop
@@ -38,28 +40,47 @@ def test_instanciate(recorder):
     ...
 
 
-@pytest.mark.asyncio
-async def test_record_direct_submit(recorder):
+def test_record_direct_submit(recorder):
 
     # Run the recorder
-    recorder.setup()
+    recording = recorder.record(str(uuid.uuid4()))
 
-    timestamp = datetime.datetime.now()
-    video_entry = {
-        "uuid": uuid.uuid4(),
-        "name": "test",
-        "data": np.ndarray([255, 255]),
-        "dtype": "video",
-        "fps": 30,
-        "elapsed": 0,
-        "timestamp": timestamp,
-    }
+    video_entry = VideoEntry(name="test", data=np.ndarray([255, 255, 3]))
 
     for _ in range(50):
         recorder.submit(video_entry)
 
     recorder.collect()
-    recorder.teardown()
 
-    expected_file = recorder.state.logdir / "test.mp4"
+    expected_file = recording.dir / "test.mp4"
     assert expected_file.exists()
+
+
+def test_multiple_recordings(recorder):
+
+    N = 10
+
+    recordings: List[Recording] = []
+    for i in range(N):
+
+        logger.debug(f"Starting recording {i}")
+
+        # Run the recorder
+        recording = recorder.record(str(uuid.uuid4()))
+        recordings.append(recording)
+
+        video_entry = VideoEntry(name="test", data=np.ndarray([255, 255, 3]))
+
+        for _ in range(50):
+            recorder.submit(video_entry)
+
+        # Mark recordings to start stopping
+        recorder.stop()
+
+    # For all recordings to stop
+    recorder.collect()
+
+    for recording in recordings:
+
+        expected_file = recording.dir / "test.mp4"
+        assert expected_file.exists()
