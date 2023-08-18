@@ -252,7 +252,7 @@ def test_node_connection(logreceiver, mock_worker):
     con_node.add_worker_comms(con_worker_comms)
 
     # Running
-    logger.debug("Running Nodes")
+    logger.debug(f"Running Nodes: {gen_node.state}, {con_node.state}")
     gen_node.run(blocking=False, eventbus=g_eventbus)
     con_node.run(blocking=False, eventbus=c_eventbus)
 

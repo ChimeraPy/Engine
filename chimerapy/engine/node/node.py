@@ -1,3 +1,4 @@
+import pathlib
 import logging
 import uuid
 import datetime
@@ -46,7 +47,7 @@ class Node:
         self,
         name: str,
         debug_port: Optional[int] = None,
-        logdir: Optional[str] = None,
+        logdir: Optional[pathlib.Path] = None,
         id: Optional[str] = None,
     ):
         """Create a basic unit of computation in ChimeraPy-Engine.
@@ -67,8 +68,6 @@ class Node:
         # Handle optional parameters
         if not id:
             id = str(uuid.uuid4())
-        if not logdir:
-            logdir = tempfile.mkdtemp()
 
         # Handle registered methods
         if not hasattr(self, "registered_methods"):
@@ -173,7 +172,7 @@ class Node:
         self.node_config = worker_comms.node_config
 
         # Creating logdir after given the Node
-        self.state.logdir = str(worker_comms.worker_logdir / self.state.name)
+        self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
 
     def _exec_coro(self, coro: Coroutine) -> Future:
@@ -422,6 +421,14 @@ class Node:
             self.worker_comms.in_node_config(
                 state=self.state, eventbus=self.eventbus, logger=self.logger
             )
+        else:
+            self.state.logdir = pathlib.Path(tempfile.mktemp())
+
+        # Create the directory
+        if self.state.logdir:
+            os.makedirs(self.state.logdir, exist_ok=True)
+        else:
+            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
         # Make the state evented
         self.state = make_evented(self.state, self.eventbus)

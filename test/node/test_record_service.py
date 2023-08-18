@@ -1,6 +1,7 @@
 import datetime
 import uuid
 import pathlib
+import tempfile
 
 import pytest
 import numpy as np
@@ -24,7 +25,7 @@ def recorder():
     eventbus = EventBus(thread=thread)
 
     # Create sample state
-    state = NodeState()
+    state = NodeState(logdir=pathlib.Path(tempfile.mkdtemp()))
     state.fsm = "PREVIEWING"
 
     # Create the recorder
@@ -62,5 +63,5 @@ async def test_record_direct_submit(recorder):
     recorder.collect()
     recorder.teardown()
 
-    expected_file = pathlib.Path(recorder.state.logdir) / "test.mp4"
+    expected_file = recorder.state.logdir / "test.mp4"
     assert expected_file.exists()
