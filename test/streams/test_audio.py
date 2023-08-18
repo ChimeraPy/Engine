@@ -33,7 +33,7 @@ RECORD_SECONDS = 2
 def audio_node():
 
     # Create a node
-    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE)
+    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE, logdir=TEST_DATA_DIR)
 
     return an
 

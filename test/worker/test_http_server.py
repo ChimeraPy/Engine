@@ -106,7 +106,7 @@ async def test_http_server_routes(http_server, route_type, route, payload):
 @pytest.mark.parametrize(
     "signal, payload",
     [
-        (NODE_MESSAGE.STATUS, NodeState(logdir=TEST_DATA_DIR).to_dict()),
+        (NODE_MESSAGE.STATUS, NodeState(logdir=None).to_dict()),
         (
             NODE_MESSAGE.REPORT_GATHER,
             {

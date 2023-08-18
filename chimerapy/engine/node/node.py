@@ -421,7 +421,7 @@ class Node:
             self.worker_comms.in_node_config(
                 state=self.state, eventbus=self.eventbus, logger=self.logger
             )
-        else:
+        elif not self.state.logdir:
             self.state.logdir = pathlib.Path(tempfile.mktemp())
 
         # Create the directory

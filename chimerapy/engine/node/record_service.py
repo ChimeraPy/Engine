@@ -2,7 +2,7 @@
 import threading
 import queue
 import logging
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 from chimerapy.engine import _logger
 from ..states import NodeState
@@ -35,7 +35,7 @@ class RecordService(Service):
         self.is_running.set()
 
         # To keep record of entries
-        self.records: Dict[str, Union[Record]] = {}
+        self.records: Dict[str, Record] = {}
         self.record_map = {
             "video": VideoRecord,
             "audio": AudioRecord,
@@ -104,7 +104,7 @@ class RecordService(Service):
 
     def run(self):
 
-        # self.logger.debug(f"{self}: Running poll threading")
+        # self.logger.debug(f"{self}: Running poll threading, {self.state.logdir}")
 
         # Continue checking for messages from client until not running
         while self.is_running.is_set() or self.save_queue.qsize() != 0:
