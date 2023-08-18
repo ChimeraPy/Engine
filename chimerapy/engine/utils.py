@@ -12,7 +12,6 @@ from typing import Callable, Union, Optional, Any, Dict
 
 # Third-party
 from tqdm import tqdm
-import ifaddr
 
 # Internal
 from chimerapy.engine import _logger
@@ -145,20 +144,22 @@ def get_open_port(start_port: int) -> socket.socket:
 
 
 def get_ip_address() -> str:
+    """Get the IP address of the current machine."""
 
-    # Get all the network adapters
-    adapters = ifaddr.get_adapters()
+    # https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0)
 
-    # Iterate through the adapters to find a suitable IP
-    for adapter in adapters:
-        for ip in adapter.ips:
-            # Check if it's an IPv4 address and not the local address
-            if isinstance(ip.ip, str) and ip.ip != "127.0.0.1":
-                return ip.ip
+    try:
+        # doesn't even have to be reachable
+        s.connect(("10.254.254.254", 1))
+        ip = str(s.getsockname()[0])
+    except:  # noqa E722
+        ip = "127.0.0.1"
+    finally:
+        s.close()
 
-    # Return the local address if no suitable IP is found
-    logger.warning("ChimeraPy-Engine: Couldn't find connected network, using 127.0.0.1")
-    return "127.0.0.1"
+    return ip
 
 
 def create_payload(
