@@ -34,9 +34,7 @@ class NodeState(DataClassJsonMixin):
     registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
     # Session logs
-    logdir: pathlib.Path = field(
-        default_factory=lambda: pathlib.Path(tempfile.mkdtemp())
-    )
+    logdir: Optional[pathlib.Path] = None
 
     # Profiler
     diagnostics: NodeDiagnostics = field(default_factory=NodeDiagnostics)

@@ -27,7 +27,7 @@ TEST_DATA_DIR = CWD / "data"
 def image_node():
 
     # Create a node
-    img_n = ImageNode(name="img_n")
+    img_n = ImageNode(name="img_n", logdir=TEST_DATA_DIR)
 
     return img_n
 

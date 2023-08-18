@@ -1,5 +1,7 @@
 import datetime
 import time
+import pathlib
+import tempfile
 
 import numpy as np
 import pytest
@@ -33,7 +35,7 @@ def profiler_setup():
 
     # Create sample state
     # state = NodeState(logdir=TEST_DATA_DIR)
-    state = NodeState()
+    state = NodeState(logdir=pathlib.Path(tempfile.mkdtemp()))
 
     # Create the profiler
     profiler = ProfilerService(

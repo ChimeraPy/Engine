@@ -148,9 +148,11 @@ class WorkerCommsService(Service):
     async def send_state(self):
         assert self.state and self.eventbus and self.logger
 
+        jsonable_state = self.state.to_dict()
+        jsonable_state["logdir"] = str(jsonable_state["logdir"])
         if self.client:
             await self.client.async_send(
-                signal=NODE_MESSAGE.STATUS, data=self.state.to_dict()
+                signal=NODE_MESSAGE.STATUS, data=jsonable_state
             )
 
     async def provide_gather(self, msg: Dict):

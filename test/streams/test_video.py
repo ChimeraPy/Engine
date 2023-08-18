@@ -29,7 +29,7 @@ TEST_DATA_DIR = CWD / "data"
 def video_node(logreceiver):
 
     # Create a node
-    vn = VideoNode(name="vn", debug_port=logreceiver.port)
+    vn = VideoNode(name="vn", debug_port=logreceiver.port, logdir=TEST_DATA_DIR)
 
     return vn
 

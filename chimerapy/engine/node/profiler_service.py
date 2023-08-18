@@ -38,7 +38,11 @@ class ProfilerService(Service):
         self.seen_uuids: deque[str] = deque(
             maxlen=config.get("diagnostics.deque-length")
         )
-        self.log_file = self.state.logdir / "diagnostics.csv"
+
+        if self.state.logdir:
+            self.log_file = self.state.logdir / "diagnostics.csv"
+        else:
+            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
         # Add a timer function
         self.async_timer = AsyncTimer(

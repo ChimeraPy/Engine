@@ -25,7 +25,7 @@ TEST_DATA_DIR = CWD / "data"
 def tabular_node():
 
     # Create a node
-    an = TabularNode(name="tn")
+    an = TabularNode(name="tn", logdir=TEST_DATA_DIR)
 
     return an
 

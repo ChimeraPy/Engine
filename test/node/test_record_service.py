@@ -1,5 +1,7 @@
 import datetime
 import uuid
+import pathlib
+import tempfile
 
 import pytest
 import numpy as np
@@ -23,7 +25,7 @@ def recorder():
     eventbus = EventBus(thread=thread)
 
     # Create sample state
-    state = NodeState()
+    state = NodeState(logdir=pathlib.Path(tempfile.mkdtemp()))
     state.fsm = "PREVIEWING"
 
     # Create the recorder
