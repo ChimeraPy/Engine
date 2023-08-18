@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import datetime
+import pathlib
 from collections import deque
 from typing import Dict, Optional, Any, List
 
@@ -38,7 +39,7 @@ class ProfilerService(Service):
         self.seen_uuids: deque[str] = deque(
             maxlen=config.get("diagnostics.deque-length")
         )
-        self.log_file = self.state.logdir / "diagnostics.csv"
+        self.log_file = pathlib.Path(self.state.logdir) / "diagnostics.csv"
 
         # Add a timer function
         self.async_timer = AsyncTimer(

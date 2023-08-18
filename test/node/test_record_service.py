@@ -1,5 +1,6 @@
 import datetime
 import uuid
+import pathlib
 
 import pytest
 import numpy as np
@@ -61,5 +62,5 @@ async def test_record_direct_submit(recorder):
     recorder.collect()
     recorder.teardown()
 
-    expected_file = recorder.state.logdir / "test.mp4"
+    expected_file = pathlib.Path(recorder.state.logdir) / "test.mp4"
     assert expected_file.exists()
