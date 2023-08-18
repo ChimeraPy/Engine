@@ -19,7 +19,6 @@ classifiers = [
 dependencies = [
     'networkx',
     'dill',
-    'ifaddr',
     'matplotlib',
     'multiprocess',
     'opencv-python',
