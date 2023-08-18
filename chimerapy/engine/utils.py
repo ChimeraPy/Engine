@@ -153,7 +153,7 @@ def get_ip_address() -> str:
     try:
         # doesn't even have to be reachable
         s.connect(("10.254.254.254", 1))
-        ip = s.getsockname()[0]
+        ip = str(s.getsockname()[0])
     except:  # noqa E722
         ip = "127.0.0.1"
     finally:
