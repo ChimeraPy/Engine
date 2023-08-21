@@ -28,3 +28,6 @@ Contributions are welcomed! Our [Developer Documentation](https://chimerapy.read
 ## License
 
 ChimeraPy and ChimeraPy-Engine uses the GNU GENERAL PUBLIC LICENSE, as found in [LICENSE](./LICENSE.txt) file.
+
+## Funding Info
+This project is supported by the [National Science Foundation](https://www.nsf.gov/) under AI Institute  Grant No. [DRL-2112635](https://www.nsf.gov/awardsearch/showAward?AWD_ID=2112635&HistoricalAwards=false).
