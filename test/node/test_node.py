@@ -8,6 +8,7 @@ import pytest
 import multiprocessing as mp
 
 import chimerapy.engine as cpe
+from chimerapy.engine import config
 from chimerapy.engine.utils import get_ip_address
 from chimerapy.engine.node.worker_comms_service import WorkerCommsService
 from chimerapy.engine.node.node_config import NodeConfig
@@ -16,7 +17,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.enums import WORKER_MESSAGE
 from chimerapy.engine.eventbus import EventBus, Event
 
-from ..conftest import GenNode, ConsumeNode
+from ..conftest import GenNode, ConsumeNode, linux_run_only
 from .test_worker_comms import mock_worker
 
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -98,12 +99,15 @@ def eventbus():
 @pytest.fixture
 def worker_comms_setup(mock_worker):
 
+    config.set("diagnostics.logging-enabled", True)
+
     # Create the service
     worker_comms = WorkerCommsService(
         "worker_comms",
         host=mock_worker.server.host,
         port=mock_worker.server.port,
         node_config=NodeConfig(),
+        worker_config=config.config,
     )
 
     return (worker_comms, mock_worker)
@@ -184,6 +188,52 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
 
     # Adding shared variable that would be typically added by the Worker
     p = mp.Process(target=node.run)
+    p.start()
+    time.sleep(0.5)
+
+    # Run method
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.START_NODES, data={}, ok=True
+    )
+    time.sleep(0.5)
+
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.RECORD_NODES, data={}, ok=True
+    )
+    time.sleep(0.5)
+
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.STOP_NODES, data={}, ok=True
+    )
+    time.sleep(0.5)
+
+    mock_worker.server.send(
+        client_id=id, signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}, ok=True
+    )
+    time.sleep(1)
+
+    node.shutdown()
+    logger.debug("Shutting down Node")
+
+    p.join()
+
+
+@linux_run_only
+@pytest.mark.parametrize("context", ["fork", "spawn"])
+def test_node_in_process_different_context(logreceiver, worker_comms_setup, context):
+    worker_comms, mock_worker = worker_comms_setup
+
+    # Create the node
+    node = StepNode(name="step", debug_port=logreceiver.port)
+    id = node.id
+
+    # Add worker_comms
+    node.add_worker_comms(worker_comms)
+    node.running = mp.Value("i", True)
+
+    # Adding shared variable that would be typically added by the Worker
+    ctx = mp.get_context(context)
+    p = ctx.Process(target=node.run)
     p.start()
     time.sleep(0.5)
 
