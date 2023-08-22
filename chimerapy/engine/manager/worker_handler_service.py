@@ -26,7 +26,6 @@ from .events import (
     WorkerDeregisterEvent,
     RegisterEntityEvent,
     DeregisterEntityEvent,
-    MoveTransferredFilesEvent,
 )
 
 logger = _logger.getLogger("chimerapy-engine")
@@ -54,6 +53,12 @@ class WorkerHandlerService(Service):
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "record": TypedObserver(
+                "record", on_asend=self.record, handle_event="drop"
+            ),
+            "collect": TypedObserver(
+                "collect", on_asend=self.collect, handle_event="drop"
             ),
             "worker_register": TypedObserver(
                 "worker_register",
@@ -695,16 +700,12 @@ class WorkerHandlerService(Service):
 
         return success
 
-    async def record(self) -> bool:
-
-        # Mark the start time
-        await self.eventbus.asend(Event("start_recording"))
+    async def record(self, uuid: str) -> bool:
 
         # Tell the cluster to start
-        success = await self._broadcast_request("post", "/nodes/record")
-
-        # Updating meta just in case of failure
-        await self.eventbus.asend(Event("save_meta"))
+        success = await self._broadcast_request(
+            htype="post", route="/nodes/record", data={"recording_uuid": uuid}
+        )
 
         return success
 
@@ -741,15 +742,12 @@ class WorkerHandlerService(Service):
 
     async def stop(self) -> bool:
 
-        # Mark the start time
-        await self.eventbus.asend(Event("stop_recording"))
-
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/stop")
 
         return success
 
-    async def collect(self, unzip: bool = True) -> bool:
+    async def collect(self) -> bool:
 
         # Then tell them to send the data to the Manager
         success = await self._broadcast_request(
@@ -761,17 +759,8 @@ class WorkerHandlerService(Service):
         await asyncio.sleep(1)
 
         if success:
-            try:
-                await self.eventbus.asend(Event("save_meta"))
-                await self.eventbus.asend(
-                    Event(
-                        "move_transferred_files", MoveTransferredFilesEvent(unzip=unzip)
-                    )
-                )
-            except Exception:
-                logger.error(traceback.format_exc())
-
-        # logger.info(f"{self}: finished collect")
+            # Message that the collection was successful and needs to be processed
+            await self.eventbus.asend(Event("move_transferred_files"))
 
         return success
 

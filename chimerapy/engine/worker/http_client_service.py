@@ -275,7 +275,7 @@ class HttpClientService(Service):
         return True
 
     async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
-        self.logger.debug(f"{self}: sending archive locally")
+        # self.logger.debug(f"{self}: sending archive locally")
 
         # First rename and then move
         delay = 1
@@ -302,8 +302,7 @@ class HttpClientService(Service):
         return new_folder_name
 
     async def _send_archive_remotely(self, host: str, port: int) -> bool:
-
-        self.logger.debug(f"{self}: sending archive via network")
+        # self.logger.debug(f"{self}: sending archive via network")
 
         # Else, send the archive data to the manager via network
         try:
@@ -313,7 +312,6 @@ class HttpClientService(Service):
                 self.state.name, self.state.tempfolder
             )
         except (TimeoutError, SystemError) as error:
-            self.delete_temp = False
             self.logger.exception(
                 f"{self}: Failed to transmit files to Manager - {error}."
             )

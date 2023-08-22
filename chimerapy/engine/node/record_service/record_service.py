@@ -10,6 +10,7 @@ from ...eventbus import EventBus, TypedObserver
 from ...service import Service
 from .recording import Recording
 from .entry import Entry
+from ..events import RecordEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -46,7 +47,7 @@ class RecordService(Service):
         # Put observers
         self.observers: Dict[str, TypedObserver] = {
             "record": TypedObserver(
-                "record", on_asend=self.record, handle_event="drop"
+                "record", RecordEvent, on_asend=self.record, handle_event="unpack"
             ),
             "stop": TypedObserver("stop", on_asend=self.stop, handle_event="drop"),
             "collect": TypedObserver(
@@ -63,7 +64,7 @@ class RecordService(Service):
     ## Lifecycle Hooks
     ####################################################################
 
-    def record(self, recording_uuid: Optional[str] = None) -> Optional[Recording]:
+    def record(self, recording_uuid: str = None) -> Optional[Recording]:
 
         # First check that their isn't another recording
         if self.current_recording_key:

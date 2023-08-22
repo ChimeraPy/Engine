@@ -29,6 +29,11 @@ class RegisteredMethodEvent:
 
 
 @dataclass
+class RecordEvent:
+    recording_uuid: str
+
+
+@dataclass
 class GatherEvent:
     client: Client
 

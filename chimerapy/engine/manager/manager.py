@@ -103,9 +103,7 @@ class Manager:
             name="zeroconf", eventbus=self.eventbus, state=self.state
         )
         self.session_record = SessionRecordService(
-            name="session_record",
-            eventbus=self.eventbus,
-            state=self.state,
+            name="session_record", eventbus=self.eventbus, state=self.state
         )
         self.distributed_logging = DistributedLoggingService(
             name="distributed_logging",
@@ -306,7 +304,7 @@ class Manager:
         return await self.worker_handler.start_workers()
 
     async def async_record(self) -> bool:
-        return await self.worker_handler.record()
+        return await self.session_record.record()
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict[str, Any] = {}
@@ -316,10 +314,10 @@ class Manager:
         )
 
     async def async_stop(self) -> bool:
-        return await self.worker_handler.stop()
+        return await self.session_record.stop()
 
     async def async_collect(self, unzip: bool = True) -> bool:
-        return await self.worker_handler.collect(unzip)
+        return await self.session_record.collect()
 
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)

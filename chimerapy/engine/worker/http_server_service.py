@@ -1,4 +1,3 @@
-import sys
 import pickle
 import asyncio
 import enum
@@ -8,7 +7,6 @@ from typing import Dict, List
 
 from aiohttp import web
 
-from chimerapy.engine import config
 from ..service import Service
 from ..states import NodeState, WorkerState
 from ..data_protocols import (
@@ -19,7 +17,7 @@ from ..data_protocols import (
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
-from ..utils import async_waiting_for, update_dataclass
+from ..utils import update_dataclass
 from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
     CreateNodeEvent,
@@ -31,6 +29,7 @@ from .events import (
     BroadcastEvent,
     SendMessageEvent,
     SendArchiveEvent,
+    RecordEvent,
 )
 
 
@@ -159,54 +158,54 @@ class HttpServerService(Service):
     ## HTTP Routes
     ####################################################################
 
-    async def _async_load_sent_packages(self, request: web.Request) -> web.Response:
-        msg = await request.json()
+    # async def _async_load_sent_packages(self, request: web.Request) -> web.Response:
+    #     msg = await request.json()
 
-        # For each package, extract it from the client's tempfolder
-        # and load it to the sys.path
-        for sent_package in msg["packages"]:
+    #     # For each package, extract it from the client's tempfolder
+    #     # and load it to the sys.path
+    #     for sent_package in msg["packages"]:
 
-            # Wait until the sent package are started
-            success = await async_waiting_for(
-                condition=lambda: f"{sent_package}.zip"
-                in self.server.file_transfer_records["Manager"],
-                timeout=config.get("worker.timeout.package-delivery"),
-            )
+    #         # Wait until the sent package are started
+    #         success = await async_waiting_for(
+    #             condition=lambda: f"{sent_package}.zip"
+    #             in self.server.file_transfer_records["Manager"],
+    #             timeout=config.get("worker.timeout.package-delivery"),
+    #         )
 
-            if success:
-                self.logger.debug(
-                    f"{self}: Waiting for package {sent_package}: SUCCESS"
-                )
-            else:
-                self.logger.error(f"{self}: Waiting for package {sent_package}: FAILED")
-                return web.HTTPError()
+    #         if success:
+    #             self.logger.debug(
+    #                 f"{self}: Waiting for package {sent_package}: SUCCESS"
+    #             )
+    #         else:
+    #             self.logger.error(f"{self}: Waiting for package {sent_package}: FAILED")
+    #             return web.HTTPError()
 
-            # Get the path
-            package_zip_path = self.server.file_transfer_records["Manager"][
-                f"{sent_package}.zip"
-            ]["dst_filepath"]
+    #         # Get the path
+    #         package_zip_path = self.server.file_transfer_records["Manager"][
+    #             f"{sent_package}.zip"
+    #         ]["dst_filepath"]
 
-            # Wait until the sent package is complete
-            success = await async_waiting_for(
-                condition=lambda: self.server.file_transfer_records["Manager"][
-                    f"{sent_package}.zip"
-                ]["complete"]
-                is True,
-                timeout=config.get("worker.timeout.package-delivery"),
-            )
+    #         # Wait until the sent package is complete
+    #         success = await async_waiting_for(
+    #             condition=lambda: self.server.file_transfer_records["Manager"][
+    #                 f"{sent_package}.zip"
+    #             ]["complete"]
+    #             is True,
+    #             timeout=config.get("worker.timeout.package-delivery"),
+    #         )
 
-            if success:
-                self.logger.debug(f"{self}: Package {sent_package} loading: SUCCESS")
-            else:
-                self.logger.debug(f"{self}: Package {sent_package} loading: FAILED")
+    #         if success:
+    #             self.logger.debug(f"{self}: Package {sent_package} loading: SUCCESS")
+    #         else:
+    #             self.logger.debug(f"{self}: Package {sent_package} loading: FAILED")
 
-            assert (
-                package_zip_path.exists()
-            ), f"{self}: {package_zip_path} doesn't exists!?"
-            sys.path.insert(0, str(package_zip_path))
+    #         assert (
+    #             package_zip_path.exists()
+    #         ), f"{self}: {package_zip_path} doesn't exists!?"
+    #         sys.path.insert(0, str(package_zip_path))
 
-        # Send message back to the Manager letting them know that
-        return web.HTTPOk()
+    #     # Send message back to the Manager letting them know that
+    #     return web.HTTPOk()
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
         msg_bytes = await request.read()
@@ -251,7 +250,10 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("record_nodes"))
+        msg = await request.json()
+        recording_uuid = msg["recording_uuid"]
+        event_data = RecordEvent(uuid=recording_uuid)
+        await self.eventbus.asend(Event("record_nodes", event_data))
         return web.HTTPOk()
 
     async def _async_request_method_route(self, request: web.Request) -> web.Response:

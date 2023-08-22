@@ -1,9 +1,8 @@
-from .data_nodes import ImageNode
-
 # Built-in Imports
 import os
 import pathlib
 import time
+import datetime
 
 # Third-party
 import numpy as np
@@ -14,7 +13,10 @@ import chimerapy.engine as cpe
 from chimerapy.engine.node.record_service.records.image_record import ImageRecord
 from chimerapy.engine.node.record_service.entry import ImageEntry
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
+from chimerapy.engine.node.events import RecordEvent
 from chimerapy.engine.eventbus import EventBus, Event
+
+from .data_nodes import ImageNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -42,7 +44,9 @@ def test_image_record():
         ...
 
     # Create the record
-    img_r = ImageRecord(dir=TEST_DATA_DIR, name="test")
+    img_r = ImageRecord(
+        dir=TEST_DATA_DIR, name="test", start_time=datetime.datetime.now()
+    )
 
     # Write to image file
     for i in range(5):
@@ -62,7 +66,7 @@ def test_node_save_image_stream(image_node):
     eventbus = EventBus(thread=thread)
 
     # Check that the image was created
-    expected_image_path = pathlib.Path(image_node.state.logdir) / "test" / "0.png"
+    expected_image_path = image_node.state.logdir / "test" / "test" / "0.png"
     try:
         os.rmdir(expected_image_path.parent)
     except OSError:
@@ -74,11 +78,13 @@ def test_node_save_image_stream(image_node):
     # Wait to generate files
     eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    eventbus.send(Event("record", RecordEvent("test"))).result()
     logger.debug("Finish record")
     time.sleep(3)
     eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")
+    eventbus.send(Event("collect")).result()
+    logger.debug("Finish collect")
 
     image_node.shutdown()
 

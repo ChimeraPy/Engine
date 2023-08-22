@@ -35,7 +35,8 @@ dependencies = [
     'aiofiles',
     'zeroconf',
     'aioreactive',
-    'psutil'
+    'psutil',
+    'aioshutil'
 ]
 
 [project.optional-dependencies]

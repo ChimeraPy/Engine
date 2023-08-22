@@ -13,7 +13,7 @@ from ..states import WorkerState, ManagerState
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
-from .events import WorkerRegisterEvent, WorkerDeregisterEvent
+from .events import WorkerRegisterEvent, WorkerDeregisterEvent, SessionFilesEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -120,8 +120,10 @@ class HttpServerService(Service):
             except Exception:
                 logger.error(traceback.format_exc())
 
-    def move_transferred_files(self, unzip: bool) -> bool:
-        return self._server.move_transfer_files(self.state.logdir, unzip)
+    async def move_transferred_files(self) -> bool:
+        event_data = SessionFilesEvent(self._server.file_transfer_records)
+        await self.eventbus.asend(Event("session_files", event_data))
+        return True
 
     #####################################################################################
     ## Worker -> Manager Routes

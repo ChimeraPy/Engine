@@ -95,21 +95,11 @@ def test_instanticate(worker_comms_setup):
     ...
 
 
-# @pytest.mark.asyncio
-# async def test_setup(worker_comms_setup):
-#     worker_comms, server = worker_comms_setup
-
-#     # Start the server
-#     await worker_comms.setup()
-#     assert "test_worker_comms" in server.ws_clients
-#     await worker_comms.teardown()
-
-
 @pytest.mark.parametrize(
     "method_name, method_params",
     [
         ("start_node", {}),
-        ("record_node", {}),
+        ("record_node", {"data": {"recording_uuid": "test"}}),
         ("stop_node", {}),
         ("provide_collect", {}),
         ("execute_registered_method", {"data": {"method_name": "", "params": {}}}),

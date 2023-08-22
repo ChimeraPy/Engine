@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from ..networking.server import FileTransferTable
 from ..states import WorkerState
 
 
@@ -30,5 +31,10 @@ class DeregisterEntityEvent:  # entity_deregister
 
 
 @dataclass
-class MoveTransferredFilesEvent:  # move_transferred_files
-    unzip: bool
+class SessionFilesEvent:  # session_files
+    file_transfer_records: FileTransferTable
+
+
+@dataclass
+class RecordEvent:
+    uuid: str

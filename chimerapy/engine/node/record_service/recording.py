@@ -47,6 +47,31 @@ class Recording:
         self._record_thread = threading.Thread(target=self.run)
         self._record_thread.start()
 
+    # def _save_meta(self):
+    #     # Get the times, handle Optional
+    #     if self.start_time:
+    #         start_time = self.start_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
+    #     else:
+    #         start_time = None
+
+    #     if self.stop_time:
+    #         stop_time = self.stop_time.strftime("%Y_%m_%d_%H_%M_%S.%f%z")
+    #     else:
+    #         stop_time = None
+
+    #     # Generate meta record
+    #     meta = {
+    #         "workers": list(self.state.workers.keys()),
+    #         # "nodes": list(self.services.worker_handler.graph.G.nodes()),
+    #         # "worker_graph_map": self.services.worker_handler.worker_graph_map,
+    #         # "nodes_server_table": self.services.worker_handler.nodes_server_table,
+    #         "start_time": start_time,
+    #         "stop_time": stop_time,
+    #     }
+
+    #     with open(self.state.logdir / "meta.json", "w") as f:
+    #         json.dump(meta, f, indent=2)
+
     def submit(self, entry: Entry):
         self.save_queue.put(entry)
 

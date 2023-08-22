@@ -15,6 +15,7 @@ from .events import (
     RegisteredMethodEvent,
     GatherEvent,
     DiagnosticsReportEvent,
+    RecordEvent,
 )
 
 
@@ -163,8 +164,6 @@ class WorkerCommsService(Service):
     async def send_diagnostics(self, diagnostics: NodeDiagnostics):
         assert self.state and self.eventbus and self.logger
 
-        # self.logger.debug(f"{self}: Sending Diagnostics")
-
         if self.client:
             data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
             await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
@@ -188,7 +187,11 @@ class WorkerCommsService(Service):
 
     async def record_node(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("record"))
+
+        recording_uuid = msg["data"]["recording_uuid"]
+
+        event_data = RecordEvent(recording_uuid)
+        await self.eventbus.asend(Event("record", event_data))
 
     async def stop_node(self, msg: Dict):
         assert self.state and self.eventbus and self.logger

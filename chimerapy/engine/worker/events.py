@@ -57,3 +57,8 @@ class UpdateResultsEvent:
 @dataclass
 class SendArchiveEvent:
     path: pathlib.Path
+
+
+@dataclass
+class RecordEvent:
+    uuid: str

@@ -11,6 +11,7 @@ import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.node.record_service.records.video_record import VideoRecord
 from chimerapy.engine.node.record_service.entry import VideoEntry
+from chimerapy.engine.node.events import RecordEvent
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
 
@@ -126,7 +127,7 @@ def test_video_record_with_unstable_frames():
 def test_node_save_video_stream(video_node, eventbus):
 
     # Check that the video was created
-    expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
+    expected_video_path = video_node.state.logdir / "test" / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
@@ -138,11 +139,13 @@ def test_node_save_video_stream(video_node, eventbus):
     # Wait to generate files
     eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    eventbus.send(Event("record", RecordEvent("test"))).result()
     logger.debug("Finish record")
     time.sleep(3)
     eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")
+    eventbus.send(Event("collect")).result()
+    logger.debug("Finish collect")
 
     video_node.shutdown()
 
@@ -155,7 +158,7 @@ def test_node_save_video_stream(video_node, eventbus):
 def test_node_save_video_stream_with_unstable_fps(video_node, eventbus):
 
     # Check that the video was created
-    expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
+    expected_video_path = video_node.state.logdir / "test" / "test.mp4"
     try:
         os.remove(expected_video_path)
     except FileNotFoundError:
@@ -171,11 +174,13 @@ def test_node_save_video_stream_with_unstable_fps(video_node, eventbus):
     # Wait to generate files
     eventbus.send(Event("start")).result()
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    eventbus.send(Event("record", RecordEvent("test"))).result()
     logger.debug("Finish record")
     time.sleep(rec_time)
     eventbus.send(Event("stop")).result()
     logger.debug("Finish stop")
+    eventbus.send(Event("collect")).result()
+    logger.debug("Finish collect")
 
     video_node.shutdown()
 

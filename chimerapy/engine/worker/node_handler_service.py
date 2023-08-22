@@ -31,6 +31,7 @@ from .events import (
     RegisteredMethodEvent,
     UpdateResultsEvent,
     UpdateGatherEvent,
+    RecordEvent,
 )
 
 
@@ -173,7 +174,10 @@ class NodeHandlerService(Service):
                 "start_nodes", on_asend=self.async_start_nodes, handle_event="drop"
             ),
             "record_nodes": TypedObserver(
-                "record_nodes", on_asend=self.async_record_nodes, handle_event="drop"
+                "record_nodes",
+                RecordEvent,
+                on_asend=self.async_record_nodes,
+                handle_event="unpack",
             ),
             "registered_method": TypedObserver(
                 "registered_method",
@@ -377,10 +381,16 @@ class NodeHandlerService(Service):
         )
         return True
 
-    async def async_record_nodes(self) -> bool:
+    async def async_record_nodes(self, recording_uuid: str) -> bool:
         # Send message to nodes to start
         await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.RECORD_NODES))
+            Event(
+                "broadcast",
+                BroadcastEvent(
+                    signal=WORKER_MESSAGE.RECORD_NODES,
+                    data={"recording_uuid": recording_uuid},
+                ),
+            )
         )
         return True
 
