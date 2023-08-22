@@ -15,6 +15,7 @@ import pandas as pd
 
 # Internal Imports
 from chimerapy.engine import _logger
+from chimerapy.engine import config
 from ..states import NodeState
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
@@ -421,6 +422,8 @@ class Node:
             self.worker_comms.in_node_config(
                 state=self.state, eventbus=self.eventbus, logger=self.logger
             )
+            if self.worker_comms.worker_config:
+                config.update_defaults(self.worker_comms.worker_config)
         elif not self.state.logdir:
             self.state.logdir = pathlib.Path(tempfile.mktemp())
 

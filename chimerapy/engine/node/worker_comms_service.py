@@ -26,6 +26,7 @@ class WorkerCommsService(Service):
         port: int,
         node_config: NodeConfig,
         worker_logdir: Optional[pathlib.Path] = None,
+        worker_config: Optional[Dict] = None,
         logging_level: int = logging.INFO,
         worker_logging_port: int = 5555,
         state: Optional[NodeState] = None,
@@ -38,6 +39,7 @@ class WorkerCommsService(Service):
         self.host = host
         self.port = port
         self.worker_logging_port = worker_logging_port
+        self.worker_config = worker_config
         self.logging_level = logging_level
         self.node_config = node_config
 

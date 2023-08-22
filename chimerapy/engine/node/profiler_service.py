@@ -1,5 +1,5 @@
 import os
-import sys
+import pickle
 import logging
 import datetime
 from collections import deque
@@ -184,7 +184,8 @@ class ProfilerService(Service):
         self.deques["payload_size(KB)"].append(payload_size)
 
     def get_object_kilobytes(self, payload: Any) -> float:
-        return sys.getsizeof(payload) / 1024
+        # return sys.getsizeof(payload) / 1024
+        return len(pickle.dumps(payload))
 
     async def teardown(self):
         await self.async_timer.stop()

@@ -274,6 +274,7 @@ class NodeHandlerService(Service):
                 host=self.state.ip,
                 port=self.state.port,
                 worker_logdir=self.state.tempfolder,
+                worker_config=config.config,
                 node_config=node_config,
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
