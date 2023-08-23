@@ -1,7 +1,6 @@
 import os
 import pickle
 import logging
-import datetime
 from collections import deque
 from typing import Dict, Optional, Any, List
 
@@ -9,6 +8,7 @@ import pandas as pd
 from psutil import Process
 
 from chimerapy.engine import config
+from chimerapy.engine import clock
 from ..data_protocols import NodeDiagnostics
 from ..async_timer import AsyncTimer
 from ..networking.data_chunk import DataChunk
@@ -79,7 +79,7 @@ class ProfilerService(Service):
             return None
 
         # Get the timestamp
-        timestamp = datetime.datetime.now().isoformat()
+        timestamp = clock.now().isoformat()
 
         # Get process-wide information
         memory = self.process.memory_info()

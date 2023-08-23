@@ -1,9 +1,10 @@
 import logging
-from datetime import datetime
 from logging import Filter, Formatter, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Union, Dict
+
+from chimerapy.engine import clock
 
 MAX_BYTES_PER_FILE = 100 * 1024 * 1024  # 100MB
 
@@ -117,7 +118,7 @@ class MultiplexedEntityHandler(Handler):
     @staticmethod
     def timestamp() -> str:
         """Return the current timestamp in the format YYYY-MM-DD_HH-MM-SS."""
-        return datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        return clock.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 class MultiplexedRotatingFileHandler(MultiplexedEntityHandler):

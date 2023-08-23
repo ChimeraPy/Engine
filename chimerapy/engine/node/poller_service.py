@@ -1,10 +1,10 @@
 import threading
 import logging
-import datetime
 from typing import Optional, Dict, Tuple, List
 
 import zmq
 
+from chimerapy.engine import clock
 from chimerapy.engine import _logger
 from ..states import NodeState
 from ..networking import Subscriber, DataChunk
@@ -149,7 +149,7 @@ class PollerService(Service):
                 serial_data_chunk = s.recv()
                 data_chunk = DataChunk.from_bytes(serial_data_chunk)
                 meta = data_chunk.get("meta")
-                meta["value"]["received"] = datetime.datetime.now()
+                meta["value"]["received"] = clock.now()
                 data_chunk.update("meta", meta)
 
                 # Update the latest value

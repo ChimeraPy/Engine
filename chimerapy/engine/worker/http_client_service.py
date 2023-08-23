@@ -6,6 +6,7 @@ import socket
 import asyncio
 import pathlib
 import logging
+import datetime
 from typing import Optional, Literal, Union, Tuple, Dict
 
 import aiohttp
@@ -18,8 +19,8 @@ from ..states import WorkerState
 from ..networking import Client
 from ..utils import get_ip_address
 from ..service import Service
-from ..eventbus import EventBus, TypedObserver
-from .events import SendArchiveEvent
+from ..eventbus import EventBus, TypedObserver, Event
+from .events import SendArchiveEvent, ManagerWorkerTimeDeltaEvent
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -46,6 +47,7 @@ class HttpClientService(Service):
         self.manager_host = "0.0.0.0"
         self.manager_port = -1
         self.manager_url = ""
+        self.manager_datetime_now: Optional[datetime.datetime] = None
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
@@ -169,9 +171,26 @@ class HttpClientService(Service):
 
                 if resp.ok:
 
+                    # Track time
+                    worker_datetime_now = datetime.datetime.utcnow()
+
                     # Get JSON
                     data = await resp.json()
 
+                    # Compute the time difference
+                    manager_datetime_now = datetime.datetime.fromisoformat(
+                        data.get("manager_datetime_now", None)
+                    )
+                    manager_worker_timedelta = (
+                        worker_datetime_now - manager_datetime_now
+                    )
+
+                    event_data = ManagerWorkerTimeDeltaEvent(manager_worker_timedelta)
+                    await self.eventbus.asend(
+                        Event("manager_worker_timedelta", event_data)
+                    )
+
+                    # Update data
                     config.update_defaults(data.get("config", {}))
                     logs_push_info = data.get("logs_push_info", {})
 

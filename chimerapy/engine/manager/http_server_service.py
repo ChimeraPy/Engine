@@ -1,4 +1,5 @@
 import traceback
+import datetime
 from concurrent.futures import Future
 from typing import List, Dict
 
@@ -143,6 +144,7 @@ class HttpServerService(Service):
                 "port": self.port,
             },
             "config": config.config,
+            "manager_datetime_now": datetime.datetime.utcnow().isoformat(),
         }
 
         # Broadcast changes
@@ -168,7 +170,6 @@ class HttpServerService(Service):
             update_dataclass(self.state.workers[worker_state.id], worker_state)
         else:
             logger.error(f"{self}: non-registered Worker update: {worker_state.id}")
-        # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
 
         return web.HTTPOk()
 

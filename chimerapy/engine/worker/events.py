@@ -1,4 +1,5 @@
 import pathlib
+import datetime
 from dataclasses import dataclass, field
 from typing import Dict, Any
 from enum import Enum
@@ -11,6 +12,11 @@ from ..data_protocols import NodePubTable
 class BroadcastEvent:
     signal: Enum
     data: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ManagerWorkerTimeDeltaEvent:
+    manager_worker_timedelta: datetime.timedelta
 
 
 @dataclass

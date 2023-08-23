@@ -1,8 +1,11 @@
 import pathlib
 import logging
 import tempfile
+import datetime
 from typing import Dict, Optional
 
+from chimerapy.engine import config
+from chimerapy.engine import clock
 from ..networking import Client
 from ..states import NodeState
 from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
@@ -25,6 +28,7 @@ class WorkerCommsService(Service):
         host: str,
         port: int,
         node_config: NodeConfig,
+        manager_worker_timedelta: Optional[datetime.timedelta] = None,
         worker_logdir: Optional[pathlib.Path] = None,
         worker_config: Optional[Dict] = None,
         logging_level: int = logging.INFO,
@@ -42,6 +46,7 @@ class WorkerCommsService(Service):
         self.worker_config = worker_config
         self.logging_level = logging_level
         self.node_config = node_config
+        self.manager_worker_timedelta = manager_worker_timedelta
 
         # Optional
         self.state = state
@@ -76,6 +81,14 @@ class WorkerCommsService(Service):
 
         # Then add observers
         self.add_observers()
+
+        # Update config if possible
+        if self.worker_config:
+            config.update_defaults(self.worker_config)
+
+        # Set clock if possible
+        if self.manager_worker_timedelta:
+            clock.update_reference_time(self.manager_worker_timedelta)
 
     def add_observers(self):
         assert self.state and self.eventbus and self.logger
