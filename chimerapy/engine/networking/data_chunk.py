@@ -102,7 +102,7 @@ class DataChunk:
         # Obtain header first
         header = simplejpeg.decode_jpeg_header(image_bytes)
         if header[2] == "Gray":
-            return simplejpeg.decode_jpeg(image_bytes, colorspace="GRAY")
+            return np.squeeze(simplejpeg.decode_jpeg(image_bytes, colorspace="GRAY"))
         return simplejpeg.decode_jpeg(image_bytes)
 
     def _serialize_images(self, images: List[np.ndarray]):

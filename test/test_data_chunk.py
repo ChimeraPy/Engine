@@ -33,7 +33,7 @@ def grey_images_data_chunk():
     data_chunk = cpe.DataChunk()
     data_chunk.add(
         "images",
-        [(np.random.rand(10, 10, 1) * 255).astype(np.uint8) for _ in range(10)],
+        [(np.random.rand(10, 10) * 255).astype(np.uint8) for _ in range(10)],
     )
     return data_chunk
 
