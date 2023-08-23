@@ -27,11 +27,13 @@ class DataChunk:
         # Creating mapping from content_type and compression method
         self._content_type_2_serial_mapping = {
             "image": (self._serialize_image, self._deserialize_image),
+            "images": (self._serialize_images, self._deserialize_images),
         }
 
         # Creating mapping for checking content_type
         self._content_type_2_checks_mapping = {
             "image": self._check_image,
+            "images": self._check_images,
         }
 
         # Adding default key-value pair
@@ -86,11 +88,20 @@ class DataChunk:
             image.dtype == np.uint8
         ), f"Numpy image needs to be np.uint8, currently {image.dtype}"
 
+    def _check_images(self, images: List[np.ndarray]):
+        assert isinstance(images, list)
+
     def _serialize_image(self, image: np.ndarray):
         return simplejpeg.encode_jpeg(np.ascontiguousarray(image))
 
     def _deserialize_image(self, image_bytes: bytes):
         return simplejpeg.decode_jpeg(image_bytes)
+
+    def _serialize_images(self, images: List[np.ndarray]):
+        return [self._serialize_image(image) for image in images]
+
+    def _deserialize_images(self, images_bytes: List[bytes]):
+        return [self._deserialize_image(image_bytes) for image_bytes in images_bytes]
 
     ####################################################################
     # (De)Serialization
