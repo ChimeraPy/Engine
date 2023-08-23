@@ -28,11 +28,22 @@ def images_data_chunk():
     return data_chunk
 
 
+@pytest.fixture
+def grey_images_data_chunk():
+    data_chunk = cpe.DataChunk()
+    data_chunk.add(
+        "images",
+        [(np.random.rand(10, 10, 1) * 255).astype(np.uint8) for _ in range(10)],
+    )
+    return data_chunk
+
+
 @pytest.mark.parametrize(
     "data_chunk",
     [
         (lazy_fixture("video_data_chunk")),
         (lazy_fixture("images_data_chunk")),
+        (lazy_fixture("grey_images_data_chunk")),
     ],
 )
 def test_jsonify_data_chunk(data_chunk):

@@ -92,9 +92,17 @@ class DataChunk:
         assert isinstance(images, list)
 
     def _serialize_image(self, image: np.ndarray):
+        if len(image.shape) == 2:
+            return simplejpeg.encode_jpeg(
+                np.ascontiguousarray(np.expand_dims(image, axis=-1)), colorspace="GRAY"
+            )
         return simplejpeg.encode_jpeg(np.ascontiguousarray(image))
 
     def _deserialize_image(self, image_bytes: bytes):
+        # Obtain header first
+        header = simplejpeg.decode_jpeg_header(image_bytes)
+        if header[2] == "Gray":
+            return simplejpeg.decode_jpeg(image_bytes, colorspace="GRAY")
         return simplejpeg.decode_jpeg(image_bytes)
 
     def _serialize_images(self, images: List[np.ndarray]):
