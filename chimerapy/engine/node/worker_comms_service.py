@@ -87,8 +87,7 @@ class WorkerCommsService(Service):
             config.update_defaults(self.worker_config)
 
         # Set clock if possible
-        if self.manager_worker_timedelta:
-            clock.update_reference_time(self.manager_worker_timedelta)
+        clock.sync()
 
     def add_observers(self):
         assert self.state and self.eventbus and self.logger

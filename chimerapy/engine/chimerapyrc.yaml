@@ -39,3 +39,5 @@ config:
     deque-length: 10000
     interval: 10
     logging-enabled: false
+  sync:
+    attempts: 10
