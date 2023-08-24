@@ -35,7 +35,7 @@ dependencies = [
     'zeroconf',
     'aioreactive',
     'psutil',
-    'nptlib'
+    'ntplib'
 ]
 
 [project.optional-dependencies]
