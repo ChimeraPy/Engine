@@ -1,7 +1,6 @@
 import pathlib
 import logging
 import uuid
-import datetime
 import os
 import tempfile
 import asyncio
@@ -15,7 +14,7 @@ import pandas as pd
 
 # Internal Imports
 from chimerapy.engine import _logger
-from chimerapy.engine import config
+from chimerapy.engine import clock
 from ..states import NodeState
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
@@ -89,7 +88,7 @@ class Node:
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
         self.logging_level: int = logging.DEBUG
-        self.start_time = datetime.datetime.now()
+        self.start_time = clock.now()
 
         # Default values
         self.node_config = NodeConfig()
@@ -200,7 +199,7 @@ class Node:
             return False
 
         if self.recorder.enabled:
-            timestamp = datetime.datetime.now()
+            timestamp = clock.now()
             video_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -251,7 +250,7 @@ class Node:
                 "channels": channels,
                 "format": format,
                 "rate": rate,
-                "timestamp": datetime.datetime.now(),
+                "timestamp": clock.now(),
             }
             self.recorder.submit(audio_entry)
 
@@ -271,7 +270,7 @@ class Node:
                 "name": name,
                 "data": data,
                 "dtype": "tabular",
-                "timestamp": datetime.datetime.now(),
+                "timestamp": clock.now(),
             }
             self.recorder.submit(tabular_entry)
 
@@ -289,7 +288,7 @@ class Node:
                 "name": name,
                 "data": data,
                 "dtype": "image",
-                "timestamp": datetime.datetime.now(),
+                "timestamp": clock.now(),
             }
             self.recorder.submit(image_entry)
 
@@ -422,8 +421,6 @@ class Node:
             self.worker_comms.in_node_config(
                 state=self.state, eventbus=self.eventbus, logger=self.logger
             )
-            if self.worker_comms.worker_config:
-                config.update_defaults(self.worker_comms.worker_config)
         elif not self.state.logdir:
             self.state.logdir = pathlib.Path(tempfile.mktemp())
 

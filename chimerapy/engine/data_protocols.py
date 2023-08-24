@@ -1,8 +1,9 @@
-import datetime
 from typing import Dict
 from dataclasses import dataclass, field
 
 from dataclasses_json import DataClassJsonMixin
+
+from chimerapy.engine import clock
 
 
 @dataclass
@@ -19,7 +20,7 @@ class NodePubTable(DataClassJsonMixin):
 @dataclass
 class NodeDiagnostics(DataClassJsonMixin):
     timestamp: str = field(
-        default_factory=lambda: str(datetime.datetime.now().isoformat())
+        default_factory=lambda: str(clock.now().isoformat())
     )  # ISO str
     latency: float = 0  # ms
     payload_size: float = 0  # KB

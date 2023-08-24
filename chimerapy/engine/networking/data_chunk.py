@@ -2,7 +2,6 @@ import collections
 import pickle
 import uuid
 import blosc
-import datetime
 from typing import Any, Literal, Dict, List
 
 # Third-party Imports
@@ -10,6 +9,7 @@ import numpy as np
 import simplejpeg
 
 # Internal Imports
+from chimerapy.engine import clock
 from chimerapy.engine._logger import getLogger
 
 logger = getLogger("chimerapy-engine")
@@ -40,7 +40,7 @@ class DataChunk:
         self._container["meta"] = {
             "value": {
                 "ownership": [],
-                "created": datetime.datetime.now(),
+                "created": clock.now(),
                 "transmitted": None,
                 "received": None,
             },

@@ -1,11 +1,11 @@
 import threading
 import traceback
-import datetime
 import logging
 import asyncio
 from typing import Dict, List, Optional, Callable, Coroutine, Any, Literal
 
 from chimerapy.engine import _logger
+from chimerapy.engine import clock
 from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
 from ..networking import DataChunk
@@ -285,7 +285,7 @@ class ProcessorService(Service):
 
             # Add timestamp and step id to the DataChunk
             meta = output_data_chunk.get("meta")
-            meta["value"]["transmitted"] = datetime.datetime.now()
+            meta["value"]["transmitted"] = clock.now()
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler

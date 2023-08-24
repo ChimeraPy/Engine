@@ -1,6 +1,5 @@
 import uuid
 import asyncio
-from datetime import datetime
 from collections import deque
 from concurrent.futures import Future
 from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar
@@ -8,6 +7,7 @@ from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, T
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
 from dataclasses import dataclass, field
 
+from chimerapy.engine import clock
 from .. import _logger
 from ..networking.async_loop_thread import AsyncLoopThread
 
@@ -21,7 +21,7 @@ class Event:
     type: str
     data: Optional[Any] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = field(default_factory=lambda: clock.now().isoformat())
 
 
 class EventBus(AsyncObservable):

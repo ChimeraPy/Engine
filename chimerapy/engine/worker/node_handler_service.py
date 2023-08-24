@@ -2,6 +2,7 @@ import threading
 import typing
 import warnings
 import logging
+import datetime
 from typing import Dict, Any, Union, Type, Optional
 
 if typing.TYPE_CHECKING:
@@ -31,6 +32,7 @@ from .events import (
     RegisteredMethodEvent,
     UpdateResultsEvent,
     UpdateGatherEvent,
+    ManagerWorkerTimeDeltaEvent,
 )
 
 
@@ -133,6 +135,7 @@ class NodeHandlerService(Service):
         self.eventbus = eventbus
         self.logger = logger
         self.logreceiver = logreceiver
+        self.manager_worker_timedelta: Optional[datetime.timedelta] = None
 
         # Containers
         self.node_controllers: Dict[str, NodeController] = {}
@@ -147,6 +150,12 @@ class NodeHandlerService(Service):
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
+            ),
+            "manager_worker_timedelta": TypedObserver(
+                "manager_worker_timedelta",
+                ManagerWorkerTimeDeltaEvent,
+                on_asend=self.async_manager_worker_timedelta,
+                handle_event="unpack",
             ),
             "create_node": TypedObserver(
                 "create_node",
@@ -230,6 +239,11 @@ class NodeHandlerService(Service):
         self.node_controllers[node_id].registered_method_results = results
         self.node_controllers[node_id].response = True
 
+    def async_manager_worker_timedelta(
+        self, manager_worker_timedelta: Optional[datetime.timedelta]
+    ):
+        self.manager_worker_timedelta = manager_worker_timedelta
+
     ###################################################################################
     ## Node Handling
     ###################################################################################
@@ -273,6 +287,7 @@ class NodeHandlerService(Service):
                 name="worker",
                 host=self.state.ip,
                 port=self.state.port,
+                manager_worker_timedelta=self.manager_worker_timedelta,
                 worker_logdir=self.state.tempfolder,
                 worker_config=config.config,
                 node_config=node_config,
