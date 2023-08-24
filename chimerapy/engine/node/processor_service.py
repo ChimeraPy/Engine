@@ -3,6 +3,7 @@ import traceback
 import datetime
 import logging
 import asyncio
+import time
 from typing import Dict, List, Optional, Callable, Coroutine, Any, Literal
 
 from chimerapy.engine import _logger
@@ -245,30 +246,36 @@ class ProcessorService(Service):
         output = None
 
         try:
+            tic = time.perf_counter()
             if asyncio.iscoroutinefunction(func):
                 output = await func(*args, **kwargs)
             else:
                 await asyncio.sleep(1 / 1000)  # Allow other functions to run as well
                 output = func(*args, **kwargs)
+            toc = time.perf_counter()
         except Exception:
             traceback_info = traceback.format_exc()
             self.logger.error(traceback_info)
 
-        return output
+        # Compute delta
+        delta = (toc - tic) * 1000
+
+        return output, delta
 
     async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
 
         # Default value
         output = None
+        delta = 0
 
-        if self.main_fn:
+        if self.main_fn: # If user-defined ``step``
             with self.step_lock:
                 if self.in_bound_data:
-                    output = await self.safe_exec(
+                    output, delta = await self.safe_exec(
                         self.main_fn, kwargs={"data_chunks": data_chunks}
                     )
                 else:
-                    output = await self.safe_exec(self.main_fn)
+                    output, delta = await self.safe_exec(self.main_fn)
 
         # If output generated, send it!
         if output:
@@ -286,6 +293,7 @@ class ProcessorService(Service):
             # Add timestamp and step id to the DataChunk
             meta = output_data_chunk.get("meta")
             meta["value"]["transmitted"] = datetime.datetime.now()
+            meta["value"]["delta"] = delta
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler

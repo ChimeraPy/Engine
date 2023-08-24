@@ -41,6 +41,7 @@ class DataChunk:
             "value": {
                 "ownership": [],
                 "created": datetime.datetime.now(),
+                "delta": 0, # ms
                 "transmitted": None,
                 "received": None,
             },
