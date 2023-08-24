@@ -167,7 +167,7 @@ class ProfilerService(Service):
         self.deques["payload_size(KB)"].append(payload_size)
 
     def get_object_kilobytes(self, payload: Any) -> float:
-        return len(pickle.dumps(payload)) / 1000
+        return len(pickle.dumps(payload)) / 1024
 
     async def teardown(self):
         await self.async_timer.stop()
