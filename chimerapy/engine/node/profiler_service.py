@@ -163,11 +163,11 @@ class ProfilerService(Service):
         payload_size = sum(payload_sizes)
 
         # Store results
-        self.deques["latency(ms)"].append(meta['delta'])
+        self.deques["latency(ms)"].append(meta["delta"])
         self.deques["payload_size(KB)"].append(payload_size)
 
     def get_object_kilobytes(self, payload: Any) -> float:
-        return len(pickle.dumps(payload))
+        return len(pickle.dumps(payload)) / 1000
 
     async def teardown(self):
         await self.async_timer.stop()
