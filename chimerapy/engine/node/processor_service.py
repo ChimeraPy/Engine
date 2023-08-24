@@ -205,17 +205,17 @@ class ProcessorService(Service):
         success = False
         if style == "concurrent":
             # output = await function(**params)  # type: ignore[call-arg]
-            output = await self.safe_exec(function, kwargs=params)
+            output, _ = await self.safe_exec(function, kwargs=params)
             success = True
 
         elif style == "blocking":
             with self.step_lock:
-                output = await self.safe_exec(function, kwargs=params)
+                output, _ = await self.safe_exec(function, kwargs=params)
                 success = True
 
         elif style == "reset":
             with self.step_lock:
-                output = await self.safe_exec(function, kwargs=params)
+                output, _ = await self.safe_exec(function, kwargs=params)
                 await self.eventbus.asend(Event("reset"))
                 success = True
 
@@ -268,7 +268,7 @@ class ProcessorService(Service):
         output = None
         delta = 0
 
-        if self.main_fn: # If user-defined ``step``
+        if self.main_fn:  # If user-defined ``step``
             with self.step_lock:
                 if self.in_bound_data:
                     output, delta = await self.safe_exec(
