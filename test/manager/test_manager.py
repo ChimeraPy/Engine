@@ -4,6 +4,7 @@ import pathlib
 
 import pytest
 
+from chimerapy.engine import config
 import chimerapy.engine as cpe
 from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
 
@@ -72,6 +73,9 @@ class TestLifeCycle:
     def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
 
+        # Enable diagnostics
+        config.set("diagnostics.logging-enabled", True)
+
         # Define graph
         gen_node = GenNode(name="Gen1")
         con_node = ConsumeNode(name="Con1")
@@ -84,16 +88,9 @@ class TestLifeCycle:
         manager.commit_graph(graph, mapping, context=context).result(timeout=30)
 
         assert manager.start().result()
-
-        # time.sleep(3)
-
         assert manager.record().result()
 
-        # for i in range(50):
-        #     logger.debug(manager.state)
-        #     time.sleep(1)
-
-        time.sleep(20)
+        time.sleep(5)
 
         assert manager.stop().result()
         assert manager.collect().result()

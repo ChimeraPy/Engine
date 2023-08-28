@@ -15,7 +15,7 @@ from ..networking.data_chunk import DataChunk
 from ..service import Service
 from ..eventbus import EventBus, TypedObserver, Event
 from ..states import NodeState
-from .events import NewInBoundDataEvent, DiagnosticsReportEvent
+from .events import NewOutBoundDataEvent, DiagnosticsReportEvent
 
 
 class ProfilerService(Service):
@@ -54,10 +54,10 @@ class ProfilerService(Service):
         # Add observers to profile
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "in_step": TypedObserver(
-                "in_step",
-                NewInBoundDataEvent,
-                on_asend=self.pre_step,
+            "out_step": TypedObserver(
+                "out_step",
+                NewOutBoundDataEvent,
+                on_asend=self.post_step,
                 handle_event="unpack",
             ),
             "teardown": TypedObserver(
@@ -113,7 +113,7 @@ class ProfilerService(Service):
 
         # Send the information to the Worker and ultimately the Manager
         event_data = DiagnosticsReportEvent(diag)
-        # self.logger.debug(f"{self}: data = {diag}")
+        self.logger.debug(f"{self}: data = {diag}")
         await self.eventbus.asend(Event("diagnostics_report", event_data))
 
         # Write to a csv, if diagnostics enabled
@@ -138,54 +138,36 @@ class ProfilerService(Service):
                 index=False,
             )
 
-    async def pre_step(self, data_chunks: Dict[str, DataChunk]):
+    async def post_step(self, data_chunk: DataChunk):
         # assert self.process
         if not self.process:
             return None
 
-        # Computing the diagnostics metrics per step (multiple datachunks)
-        mean_latency = 0.0
+        # Computing the diagnostics metrics per step
         payload_size = 0.0
 
         # Containers to compute metrics
-        latencies: List[float] = []
         payload_sizes: List[float] = []
 
-        # First compute latency
-        for name, chunk in data_chunks.items():
+        # Obtain the meta data of the data chunk
+        meta = data_chunk.get("meta")["value"]
 
-            # Only process unseen data_chunks, as in the "in_step" event,
-            # it is possible for the same data chunks to be re-used in the step
-            if chunk.uuid in self.seen_uuids:
-                continue
-            else:
-                self.seen_uuids.append(chunk.uuid)
+        # Get the payload size (of all keys)
+        total_size = 0.0
+        for key in data_chunk.contains():
+            payload = data_chunk.get(key)["value"]
+            total_size += self.get_object_kilobytes(payload)
+        payload_sizes.append(total_size)
 
-            # Obtain the meta data of the data chunk
-            meta = chunk.get("meta")["value"]
-
-            # Get latency
-            latency = (meta["received"] - meta["transmitted"]).total_seconds() * 1000
-            latencies.append(latency)
-
-            # Get the payload size (of all keys)
-            total_size = 0.0
-            for key in chunk.contains():
-                payload = chunk.get(key)["value"]
-                total_size += self.get_object_kilobytes(payload)
-            payload_sizes.append(total_size)
-
-        # After processing all data_chunks, get latency and payload means
-        mean_latency = sum(latencies) / len(latencies)
+        # After processing all data_chunk keys, get payload total
         payload_size = sum(payload_sizes)
 
         # Store results
-        self.deques["latency(ms)"].append(mean_latency)
+        self.deques["latency(ms)"].append(meta["delta"])
         self.deques["payload_size(KB)"].append(payload_size)
 
     def get_object_kilobytes(self, payload: Any) -> float:
-        # return sys.getsizeof(payload) / 1024
-        return len(pickle.dumps(payload))
+        return len(pickle.dumps(payload)) / 1024
 
     async def teardown(self):
         await self.async_timer.stop()
