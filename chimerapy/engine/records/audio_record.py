@@ -31,17 +31,34 @@ class AudioRecord(Record):
         if self.first_frame:
 
             # Set recording hyperparameters
-            self.audio_writer.setnchannels(data_chunk["channels"])
-            self.audio_writer.setsampwidth(
-                pyaudio.get_sample_size(data_chunk["format"])
-            )
-            self.audio_writer.setframerate(data_chunk["rate"])
+            if data_chunk.get("recorder_version") == 1:
+                self.audio_writer.setnchannels(data_chunk["channels"])
+                self.audio_writer.setsampwidth(
+                    pyaudio.get_sample_size(data_chunk["format"])
+                )
+                self.audio_writer.setframerate(data_chunk["rate"])
+            else:
+                params = (
+                    data_chunk["channels"],
+                    data_chunk["sampwidth"],
+                    data_chunk["framerate"],
+                    data_chunk["nframes"],
+                    "NONE",
+                    "NONE",
+                )
+
+                self.audio_writer.setparams(params)
 
             # Avoid rewriting the parameters
             self.first_frame = False
 
         # Write
-        prepped_data = data_chunk["data"].tobytes()
+        recorder_version = data_chunk.get("recorder_version", 1)
+        prepped_data = (
+            data_chunk["data"].tobytes()
+            if recorder_version == 1
+            else data_chunk["data"]
+        )
         self.audio_writer.writeframes(prepped_data)
 
     def close(self):

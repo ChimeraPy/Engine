@@ -251,6 +251,55 @@ class Node:
                 "channels": channels,
                 "format": format,
                 "rate": rate,
+                "recorder_version": 1,
+                "timestamp": datetime.datetime.now(),
+            }
+            self.recorder.submit(audio_entry)
+
+    def save_audio_v2(
+        self,
+        name: str,
+        data: bytes,
+        channels: int,
+        sampwidth: int,
+        framerate: int,
+        nframes: int,
+    ) -> None:
+        """Record audio data version 2.
+
+        Parameters
+        ----------
+        name : str
+            Name of the audio data (.wav extension will be suffixed).
+        data : bytes
+            Audio data as a bytes object.
+        channels : int
+            Number of channels.
+        sampwidth : int
+            Sample width in bytes.
+        framerate : int
+            Sampling rate of the audio data.
+        nframes : int
+            Number of frames.
+        """
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return
+
+        if self.recorder.enabled:
+            audio_entry = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "audio",
+                "channels": channels,
+                "sampwidth": sampwidth,
+                "framerate": framerate,
+                "nframes": nframes,
+                "recorder_version": 2,
                 "timestamp": datetime.datetime.now(),
             }
             self.recorder.submit(audio_entry)
