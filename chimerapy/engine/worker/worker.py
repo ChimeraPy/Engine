@@ -66,7 +66,7 @@ class Worker:
         self.task_futures: List[Future] = []
 
         # Instance variables
-        self.has_shutdown: bool = False
+        self._alive: bool = False
         self.shutdown_task: Optional[Task] = None
 
         # Create with thread
@@ -87,9 +87,6 @@ class Worker:
 
         # Create a log listener to read Node's information
         self.logreceiver = self._start_log_receiver()
-        # self.logger.debug(
-        #     f"{self}: Log receiver started at port {self.logreceiver.port}"
-        # )
 
         # Create the services
         self.http_client = HttpClientService(
@@ -116,6 +113,7 @@ class Worker:
 
         # Start all services
         self.eventbus.send(Event("start")).result(timeout=10)
+        self._alive = True
 
         # Register shutdown
         atexit.register(self.shutdown)
@@ -129,6 +127,10 @@ class Worker:
     ####################################################################
     ## Properties
     ####################################################################
+
+    @property
+    def alive(self) -> bool:
+        return self._alive
 
     @property
     def id(self) -> str:
@@ -246,10 +248,10 @@ class Worker:
     async def async_shutdown(self) -> bool:
 
         # Check if shutdown has been called already
-        if self.has_shutdown:
+        if not self._alive:
             return True
         else:
-            self.has_shutdown = True
+            self._alive = False
 
         # Shutdown all services and Wait until all complete
         await self.eventbus.asend(Event("shutdown"))
@@ -339,7 +341,7 @@ class Worker:
 
     def idle(self):
 
-        while not self.has_shutdown:
+        while self._alive:
             time.sleep(2)
 
     def shutdown(self, blocking: bool = True) -> Union[Future[bool], bool]:
@@ -354,6 +356,9 @@ class Worker:
             shutdown message to ``Worker``.
 
         """
+        if not self._alive:
+            return True
+        
         self.logger.info(f"{self}: Shutting down")
 
         # Only execute if thread exists
