@@ -1,4 +1,3 @@
-import asyncio
 import os
 import shutil
 
@@ -81,10 +80,7 @@ async def test_worker_state_changed_updates(http_client, manager):
 
     # Change the state
     http_client.state.nodes["test"] = NodeState(id="test", name="test")
-
-    # Wait for the update
-    logger.debug("Sleeping for 1")
-    await asyncio.sleep(1)
+    assert await http_client._async_node_status_update()
 
     # Check
     assert "test" in manager.state.workers[http_client.state.id].nodes
