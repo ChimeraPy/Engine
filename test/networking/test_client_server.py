@@ -80,8 +80,8 @@ def client_list(server):
 
 def test_server_instanciate(server):
     ...
-
-
+    
+    
 def test_server_http_req_res(server):
     r = requests.get(f"http://{server.host}:{server.port}")
     assert r.status_code == 200 and r.text == "Hello, world"

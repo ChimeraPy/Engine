@@ -52,7 +52,7 @@ class EventBus(AsyncObservable):
         assert isinstance(self.thread, AsyncLoopThread)
         return self.thread.exec(self.asend(event))
 
-    def subscribe(self, observer: AsyncObserver):
+    def subscribe(self, observer: AsyncObserver) -> Future:
         assert isinstance(self.thread, AsyncLoopThread)
         return self.thread.exec(self.asubscribe(observer))
 

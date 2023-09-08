@@ -1,6 +1,7 @@
 # Built-in Imports
 import time
 import asyncio
+import threading
 
 # Third-party Imports
 import pytest
@@ -31,8 +32,8 @@ def test_coroutine_waitable_execution(thread):
         await queue.put(1)
         logger.debug("FINISHED PUT")
 
-    finished = thread.exec(put(queue))
-    finished.result(timeout=5)
+    future = thread.exec(put(queue))
+    future.result(timeout=5)
     assert queue.qsize() == 1
 
 
@@ -56,6 +57,40 @@ def test_callback_execution_with_wait(thread):
         logger.debug("put called")
         queue.put_nowait(1)
 
-    finished = thread.exec_noncoro(put, args=[queue], waitable=True)
-    assert finished.wait(timeout=5)
+    future = thread.exec_noncoro(put, args=[queue], waitable=True)
+    future.result(timeout=5)
     assert queue.qsize() == 1
+    
+
+def test_keyboard_interrupt_handling_noncoro(thread):
+    queue = asyncio.Queue()
+    
+    # Let's simulate a KeyboardInterrupt using threading after a short delay.
+    def raise_keyboard_interrupt(queue):
+        time.sleep(1)
+        queue.put_nowait(1)
+        raise KeyboardInterrupt
+    
+    future = thread.exec_noncoro(raise_keyboard_interrupt, args=[queue], waitable=True)
+    future.result(timeout=5)
+    assert queue.qsize() == 1
+    thread.join()
+    assert thread._loop.is_closed()
+    
+    
+def test_keyboard_interrupt_handling_coro(thread):
+    queue = asyncio.Queue()
+    
+    # Let's simulate a KeyboardInterrupt using threading after a short delay.
+    async def raise_keyboard_interrupt(queue):
+        await asyncio.sleep(1)
+        await queue.put(1)
+        raise KeyboardInterrupt
+    
+    future = thread.exec(raise_keyboard_interrupt(queue))
+    future.result(timeout=5)
+    assert queue.qsize() == 1
+    
+    thread.join()
+    assert thread._loop.is_closed()
+    

@@ -1,11 +1,21 @@
 # Built-in Imports
 import argparse
+import time
 
 from chimerapy.engine import _logger
 
 logger = _logger.getLogger("chimerapy-engine")
 
-
+def routine(worker, d_args):
+    if d_args["zeroconf"]:
+        worker.connect(method="zeroconf")
+    else:
+        if d_args["ip"] == "" or d_args["port"] == -1:
+            logger.info("IP or Port not provided. Worker not connected")
+        else:        
+            worker.connect(method="ip", host=d_args["ip"], port=d_args["port"])
+    worker.idle()
+    
 def main():
 
     # Internal Imports
@@ -42,23 +52,13 @@ def main():
         id=d_args["id"],
         port=d_args["wport"],
     )
-    if d_args["zeroconf"]:
-        worker.connect(method="zeroconf")
-    else:
 
-        # Check inputs
-        if d_args["ip"] == "" or d_args["port"] == -1:
-            worker.shutdown()
-            raise argparse.ArgumentError(
-                "When not using Zeroconf, an ``ip`` and ``port`` are needed"
-            )
-
-        worker.connect(method="ip", host=d_args["ip"], port=d_args["port"])
-
-    # Wait until told to shutdown
-    worker.idle()
-    worker.shutdown()
-
+    try:
+        routine(worker, d_args)
+    except KeyboardInterrupt:
+        ...
+    finally:
+        worker.shutdown()
 
 if __name__ == "__main__":
     main()

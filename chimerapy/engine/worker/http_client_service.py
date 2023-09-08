@@ -324,6 +324,9 @@ class HttpClientService(Service):
 
         # self.logger.debug(f"{self}: WorkerState update: {self.state}")
 
+        if not self.connected_to_manager:
+            return False
+        
         async with aiohttp.ClientSession(self.manager_url) as session:
             async with session.post(
                 "/workers/node_status", data=self.state.to_json()
