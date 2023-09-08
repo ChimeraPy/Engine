@@ -69,7 +69,7 @@ class TestLifeCycle:
             assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
 
     # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-    @pytest.mark.parametrize("context", ["threading"])
+    @pytest.mark.parametrize("context", ["multiprocessing"])
     def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
 

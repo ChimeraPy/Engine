@@ -19,7 +19,7 @@ from chimerapy.engine import config
 from ..states import NodeState
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
-from ..eventbus import EventBus, Event, make_evented
+from ..eventbus import EventBus, Event
 
 # Service Imports
 from .node_config import NodeConfig
@@ -483,7 +483,7 @@ class Node:
             raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
         # Make the state evented
-        self.state = make_evented(self.state, self.eventbus)
+        self.state = self.state
 
         # Add the FSM service
         self.fsm_service = FSMService("fsm", self.state, self.eventbus, self.logger)

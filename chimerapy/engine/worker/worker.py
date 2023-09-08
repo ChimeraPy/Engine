@@ -14,7 +14,7 @@ from ..networking.async_loop_thread import AsyncLoopThread
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..states import WorkerState, NodeState
 from ..node import NodeConfig
-from ..eventbus import EventBus, Event, make_evented
+from ..eventbus import EventBus, Event
 from .http_server_service import HttpServerService
 from .http_client_service import HttpClientService
 from .node_handler_service import NodeHandlerService
@@ -77,10 +77,8 @@ class Worker:
         self.eventbus = EventBus(thread=self._thread)
 
         # Creating state
-        self.state = make_evented(
-            WorkerState(id=id, name=name, port=port, tempfolder=tempfolder),
-            event_bus=self.eventbus,
-        )
+        self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
+
         # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
         self.logger = _logger.fork(parent_logger, name, id)
@@ -358,7 +356,7 @@ class Worker:
         """
         if not self._alive:
             return True
-        
+
         self.logger.info(f"{self}: Shutting down")
 
         # Only execute if thread exists

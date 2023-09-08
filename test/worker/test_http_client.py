@@ -1,4 +1,3 @@
-import asyncio
 import os
 import shutil
 
@@ -7,7 +6,7 @@ import pytest
 from chimerapy.engine.worker.http_client_service import HttpClientService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.server import Server
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.eventbus import EventBus, Event
 from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine import _logger
 
@@ -36,7 +35,7 @@ def http_client():
     eventbus = EventBus(thread=thread)
 
     # Requirements
-    state = make_evented(WorkerState(), event_bus=eventbus)
+    state = WorkerState()
     logger = _logger.getLogger("chimerapy-engine-worker")
     log_receiver = _logger.get_node_id_zmq_listener()
     log_receiver.start(register_exit_handlers=True)
@@ -81,10 +80,7 @@ async def test_worker_state_changed_updates(http_client, manager):
 
     # Change the state
     http_client.state.nodes["test"] = NodeState(id="test", name="test")
-
-    # Wait for the update
-    logger.debug("Sleeping for 1")
-    await asyncio.sleep(1)
+    assert await http_client._async_node_status_update()
 
     # Check
     assert "test" in manager.state.workers[http_client.state.id].nodes

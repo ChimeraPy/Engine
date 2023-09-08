@@ -168,7 +168,9 @@ class HttpServerService(Service):
             update_dataclass(self.state.workers[worker_state.id], worker_state)
         else:
             logger.error(f"{self}: non-registered Worker update: {worker_state.id}")
-        # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
+
+        # Broadcast changes
+        await self._broadcast_network_status_update()
 
         return web.HTTPOk()
 

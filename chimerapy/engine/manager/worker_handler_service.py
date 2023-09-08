@@ -20,8 +20,9 @@ from ..service import Service
 from ..graph import Graph
 from ..exceptions import CommitGraphError
 from ..states import WorkerState, ManagerState
-from ..eventbus import EventBus, TypedObserver, Event, make_evented
+from ..eventbus import EventBus, TypedObserver, Event
 from .events import (
+    ManagerStateChangedEvent,
     WorkerRegisterEvent,
     WorkerDeregisterEvent,
     RegisterEntityEvent,
@@ -99,16 +100,17 @@ class WorkerHandlerService(Service):
     ## Helper Function
     #####################################################################################
 
+    async def emit_change(self):
+        data = ManagerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("ManagerState.changed", data))
+
     def _get_worker_ip(self, worker_id: str) -> str:
         worker_info = self.state.workers[worker_id]
         return f"http://{worker_info.ip}:{worker_info.port}"
 
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
-        evented_worker_state = make_evented(
-            worker_state, event_bus=self.eventbus, event_name="ManagerState.changed"
-        )
-        self.state.workers[worker_state.id] = evented_worker_state
+        self.state.workers[worker_state.id] = worker_state
         logger.debug(
             f"Manager registered <Worker id={worker_state.id}"
             f" name={worker_state.name}> from {worker_state.ip}"
@@ -124,6 +126,7 @@ class WorkerHandlerService(Service):
             )
         )
 
+        await self.emit_change()
         return True
 
     async def _deregister_worker(self, worker_id: str) -> bool:
@@ -143,6 +146,7 @@ class WorkerHandlerService(Service):
 
             return True
 
+        await self.emit_change()
         return False
 
     def _register_graph(self, graph: Graph):
