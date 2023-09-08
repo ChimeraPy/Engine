@@ -20,69 +20,55 @@ class AsyncLoopThread(threading.Thread):
         super().__init__(daemon=True)
         self._loop = asyncio.new_event_loop()
 
-    def callback(self, coro: Coroutine) -> Tuple[Future, Coroutine]:
-        
-        future = Future()
-        
-        async def _wrapper():
-            output = None
-            try:
-                output = await coro
-            except KeyboardInterrupt:
-                logger.debug("KeyboardInterrupt DETECTED")
-                future.set_result(None)
-                self.stop()
-                return None
-            except Exception:
-                logger.error(traceback.format_exc())
-                
-            future.set_result(output)
+    def callback(
+        self, func: Union[Callable, Coroutine], args: Optional[List[Any]] = None
+    ) -> Tuple[Future, Coroutine]:
 
-        return future, _wrapper()
-    
-    def waitable_callback(
-        self, callback: Callable, args: List[Any]
-    ) -> Tuple[Future, Callable]:
+        future: Future = Future()
 
-        future = Future()
+        if args is None:
+            args = []
 
         # Create wrapper that signals when the callback finished
-        def _wrapper(func: Callable, *args) -> Any:
-            output = None
+        async def _wrapper(func: Union[Callable, Coroutine], *args) -> Any:
             try:
-                output = func(*args)
-            except KeyboardInterrupt:
-                logger.debug("KeyboardInterrupt DETECTED")
-                future.set_result(None)
+                if asyncio.iscoroutine(func):
+                    result = await func  # type: ignore
+                else:
+                    result = func(*args)  # type: ignore
+                future.set_result(result)
+                return result
+            except (KeyboardInterrupt, Exception) as e:
+                if isinstance(e, KeyboardInterrupt):
+                    logger.debug("KeyboardInterrupt DETECTED")
+                else:
+                    logger.error(traceback.format_exc())
+                future.set_exception(e)
                 self.stop()
                 return None
-            except Exception as e:
-                logger.error(traceback.format_exc())
 
-            future.set_result(output)
-            return output
-
-        wrapper = _wrapper(callback, *args)
+        wrapper = _wrapper(func, *args)
         return future, wrapper
 
-    def exec(self, coro: Coroutine) -> threading.Event:
+    def exec(self, coro: Coroutine) -> Future:
+        if self._loop.is_closed():
+            raise RuntimeError(
+                "AsyncLoopThread: Event loop is closed, but a coroutine was sent to it."
+            )
+
         finished, wrapper = self.callback(coro)
         asyncio.run_coroutine_threadsafe(wrapper, self._loop)
         return finished
-    
-    def exec_noncoro(
-        self, callback: Callable, args: List[Any], waitable: bool = False
-    ) -> Optional[threading.Event]:
 
-        if waitable:
-            finished, wrapper = self.waitable_callback(callback, args)
-            self._loop.call_soon_threadsafe(wrapper, *args)
-            return finished
+    def exec_noncoro(self, callback: Callable, args: List[Any]) -> Future:
+        if self._loop.is_closed():
+            raise RuntimeError(
+                "AsyncLoopThread: Event loop is closed, but a coroutine was sent to it."
+            )
 
-        else:
-            self._loop.call_soon_threadsafe(callback, *args)
-
-        return None
+        finished, wrapper = self.callback(callback, args)
+        asyncio.run_coroutine_threadsafe(wrapper, self._loop)
+        return finished
 
     def run(self):
         asyncio.set_event_loop(self._loop)
@@ -91,13 +77,14 @@ class AsyncLoopThread(threading.Thread):
         except KeyboardInterrupt:
             ...
         finally:
+            self.stop()
             self._loop.close()
-            
-    def flush(self, timeout: Optional[Union[int, float]] = None): 
+
+    def flush(self, timeout: Optional[Union[int, float]] = None):
         tasks = asyncio.all_tasks(self._loop)
         if tasks:
             coro = asyncio.gather(*tasks)
-            self.exec(coro).result(timeout=timeout)
+            self.exec(coro).result(timeout=timeout)  # type: ignore
 
     def stop(self):
         # Cancel all tasks
