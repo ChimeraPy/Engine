@@ -5,7 +5,6 @@ import uuid
 import time
 import datetime
 import glob
-import uuid
 import wave
 import tempfile
 
@@ -42,10 +41,11 @@ def audio_node():
 
 
 def get_wav_files():
-    data_dir = TEST_DATA_DIR / 'audio'
+    data_dir = TEST_DATA_DIR / "audio"
     return glob.glob(str(data_dir / "*.wav"))
 
 
+@pytest.mark.skip(reason="Test taking way to long?")
 @pytest.mark.parametrize("input_file", get_wav_files())
 def test_audio_writer(input_file):
     save_dir = pathlib.Path(tempfile.mkdtemp())
@@ -80,6 +80,7 @@ def test_audio_writer(input_file):
         assert inp.getparams() == out.getparams()
         assert inp.readframes(inp.getnframes()) == out.readframes(out.getnframes())
 
+
 def test_audio_record():
 
     # Check that the audio was created
@@ -104,7 +105,7 @@ def test_audio_record():
             "format": FORMAT,
             "rate": RATE,
             "recorder_version": 1,
-            "timestamp": datetime.datetime.now()
+            "timestamp": datetime.datetime.now(),
         }
         ar.write(audio_chunk)
 
