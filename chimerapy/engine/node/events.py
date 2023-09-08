@@ -4,6 +4,12 @@ from typing import Dict, Any
 from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
 from ..data_protocols import NodePubTable, NodeDiagnostics
+from ..states import NodeState
+
+
+@dataclass
+class NodeStateChangedEvent:
+    state: NodeState
 
 
 @dataclass

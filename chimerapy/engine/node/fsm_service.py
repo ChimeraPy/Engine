@@ -3,7 +3,8 @@ from typing import Dict
 
 from ..states import NodeState
 from ..service import Service
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import EventBus, TypedObserver, Event
+from .events import NodeStateChangedEvent
 
 
 class FSMService(Service):
@@ -43,26 +44,38 @@ class FSMService(Service):
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
 
+    async def emit_change(self):
+        data = NodeStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("NodeState.changed", data))
+
     async def init(self):
         self.state.fsm = "INITIALIZED"
+        await self.emit_change()
 
     async def setup(self):
         self.state.fsm = "READY"
+        await self.emit_change()
 
     async def setup_connections(self):
         self.state.fsm = "CONNECTED"
+        await self.emit_change()
 
     async def start(self):
         self.state.fsm = "PREVIEWING"
+        await self.emit_change()
 
     async def record(self):
         self.state.fsm = "RECORDING"
+        await self.emit_change()
 
     async def stop(self):
         self.state.fsm = "STOPPED"
+        await self.emit_change()
 
     async def collect(self):
         self.state.fsm = "SAVED"
+        await self.emit_change()
 
     async def teardown(self):
         self.state.fsm = "SHUTDOWN"
+        await self.emit_change()
