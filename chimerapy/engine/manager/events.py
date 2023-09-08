@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 
-from ..states import WorkerState
+from ..states import WorkerState, ManagerState
+
+
+@dataclass
+class ManagerStateChangedEvent:
+    state: ManagerState
 
 
 @dataclass

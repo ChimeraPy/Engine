@@ -14,7 +14,7 @@ from chimerapy.engine.states import ManagerState, WorkerState
 from chimerapy.engine.graph import Graph
 
 # Eventbus
-from ..eventbus import EventBus, Event, make_evented
+from ..eventbus import EventBus, Event
 
 # from .events import StartEvent
 
@@ -82,10 +82,7 @@ class Manager:
         os.makedirs(logdir, exist_ok=True)
 
         # Create state information container
-        self.state = make_evented(
-            ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir),
-            event_bus=self.eventbus,
-        )
+        self.state = ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir)
 
         # Create the services
         self.http_server = HttpServerService(
