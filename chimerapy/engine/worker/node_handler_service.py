@@ -21,8 +21,9 @@ from ..states import NodeState, WorkerState
 from ..networking import DataChunk
 from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
-from ..eventbus import EventBus, TypedObserver, Event, make_evented
+from ..eventbus import EventBus, TypedObserver, Event
 from .events import (
+    WorkerStateChangedEvent,
     BroadcastEvent,
     SendMessageEvent,
     CreateNodeEvent,
@@ -254,9 +255,7 @@ class NodeHandlerService(Service):
         # )
 
         # Saving the node data
-        self.state.nodes[id] = make_evented(
-            NodeState(id=id), event_bus=self.eventbus, event_name="WorkerState.changed"
-        )
+        self.state.nodes[id] = NodeState(id=id)
 
         # Keep trying to start a process until success
         success = False
@@ -322,6 +321,8 @@ class NodeHandlerService(Service):
             self.logger.error(f"{self}: Node {id} failed to create")
             return False
 
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return success
 
     async def async_destroy_node(self, node_id: str) -> bool:
@@ -337,6 +338,8 @@ class NodeHandlerService(Service):
 
             success = True
 
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return success
 
     async def async_process_node_pub_table(self, node_pub_table: NodePubTable) -> bool:
@@ -369,6 +372,8 @@ class NodeHandlerService(Service):
         if not all(success):
             self.logger.error(f"{self}: Nodes failed to establish P2P connections")
 
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return all(success)
 
     async def async_start_nodes(self) -> bool:
@@ -376,6 +381,9 @@ class NodeHandlerService(Service):
         await self.eventbus.asend(
             Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.START_NODES))
         )
+
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return True
 
     async def async_record_nodes(self) -> bool:
@@ -383,6 +391,9 @@ class NodeHandlerService(Service):
         await self.eventbus.asend(
             Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.RECORD_NODES))
         )
+
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return True
 
     async def async_step(self) -> bool:
@@ -390,6 +401,9 @@ class NodeHandlerService(Service):
         await self.eventbus.asend(
             Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_STEP))
         )
+
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return True
 
     async def async_stop_nodes(self) -> bool:
@@ -397,6 +411,9 @@ class NodeHandlerService(Service):
         await self.eventbus.asend(
             Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.STOP_NODES))
         )
+
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
         return True
 
     async def async_request_registered_method(
@@ -501,5 +518,8 @@ class NodeHandlerService(Service):
 
         if not all(success):
             self.logger.error(f"{self}: Nodes failed to report to saving")
+
+        event_data = WorkerStateChangedEvent(state=self.state)
+        await self.eventbus.asend(Event("WorkerState.changed", event_data))
 
         return all(success)

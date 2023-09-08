@@ -5,6 +5,12 @@ from enum import Enum
 
 from ..node.node_config import NodeConfig
 from ..data_protocols import NodePubTable
+from ..states import WorkerState
+
+
+@dataclass
+class WorkerStateChangedEvent:
+    state: WorkerState
 
 
 @dataclass

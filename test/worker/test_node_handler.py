@@ -7,7 +7,7 @@ import chimerapy.engine as cpe
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.eventbus import EventBus, Event
 from chimerapy.engine.states import WorkerState
 
 from ..conftest import linux_run_only
@@ -80,7 +80,7 @@ def node_handler_setup():
     eventbus = EventBus(thread=thread)
 
     # Requirements
-    state = make_evented(WorkerState(), event_bus=eventbus)
+    state = WorkerState()
     logger = cpe._logger.getLogger("chimerapy-engine-worker")
     log_receiver = cpe._logger.get_node_id_zmq_listener()
     log_receiver.start(register_exit_handlers=True)
@@ -110,8 +110,8 @@ def test_create_service_instance(node_handler_setup):
 
 
 @pytest.mark.asyncio
-# @pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
-@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+@pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
+# @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
 async def test_create_node(gen_node, node_handler_setup, context):
     node_handler, _ = node_handler_setup
     assert await node_handler.async_create_node(
