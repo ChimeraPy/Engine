@@ -86,7 +86,7 @@ class Server:
         self.msg_processed_counter = 0
 
         # Create AIOHTTP server
-        self._app = web.Application()
+        self._app = web.Application(middlewares=[self.logging_middleware])
 
         # Adding default routes
         self._app.add_routes([web.post("/file/post", self._file_receive)])
@@ -140,6 +140,25 @@ class Server:
         self.futures.append(future)
 
         return future
+
+    ####################################################################
+    # Middleware
+    ####################################################################
+
+    async def logging_middleware(self, app, handler):
+        async def middleware_handler(request):
+            # Log the incoming request
+            # print(f"Received request: {request.method} {request.path}")
+
+            # Process the request
+            response = await handler(request)
+            self.logger.info(f"{request.method} {request.path} - {response.status}")
+
+            # Log the response (you can enhance this to provide more detailed logging)
+            # print(f"Response: {response.status} - {response.reason}")
+            return response
+
+        return middleware_handler
 
     ####################################################################
     # Server Setters and Getters
