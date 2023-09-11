@@ -35,7 +35,7 @@ class JSONRecord(Record):
             self.file_handler = self.jsonl_path.open("w")
             self.first_frame = True
 
-        json_data = json.dumps(data_chunk["data"])
+        json_data = json.dumps(data_chunk["data"], indent=0)
         assert self.file_handler is not None
         self.file_handler.write(f"{json_data}\n")
 
