@@ -35,9 +35,9 @@ def json_node():
 def test_image_record():
 
     # Check that the image was created
-    expected_image_path = TEST_DATA_DIR / "test-5.jsonl"
+    expected_jsonl_path = TEST_DATA_DIR / "test-5.jsonl"
     try:
-        os.rmdir(expected_image_path.parent)
+        os.rmdir(expected_jsonl_path.parent)
     except OSError:
         ...
 
@@ -78,9 +78,9 @@ def test_image_record():
         json_r.write(json_chunk)
 
     # Check that the image was created
-    assert expected_image_path.exists()
+    assert expected_jsonl_path.exists()
 
-    with expected_image_path.open("r") as jlf:
+    with expected_jsonl_path.open("r") as jlf:
         for line in jlf:
             data_cp = json.loads(line)
             assert data_cp == data
@@ -94,9 +94,9 @@ def test_node_save_json_stream(json_node):
     eventbus = EventBus(thread=thread)
 
     # Check that the image was created
-    expected_image_path = pathlib.Path(json_node.state.logdir) / "test.jsonl"
+    expected_jsonl_path = pathlib.Path(json_node.state.logdir) / "test.jsonl"
     try:
-        os.rmdir(expected_image_path.parent)
+        os.rmdir(expected_jsonl_path.parent)
     except OSError:
         ...
 
@@ -115,4 +115,4 @@ def test_node_save_json_stream(json_node):
     json_node.shutdown()
 
     # Check that the image was created
-    assert expected_image_path.exists()
+    assert expected_jsonl_path.exists()
