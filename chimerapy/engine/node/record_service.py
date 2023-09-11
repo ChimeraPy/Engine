@@ -7,7 +7,14 @@ from typing import Dict, Optional
 from chimerapy.engine import _logger
 from ..states import NodeState
 from ..eventbus import EventBus, TypedObserver
-from ..records import Record, VideoRecord, AudioRecord, TabularRecord, ImageRecord
+from ..records import (
+    Record,
+    VideoRecord,
+    AudioRecord,
+    TabularRecord,
+    ImageRecord,
+    JSONRecord,
+)
 from ..service import Service
 
 logger = _logger.getLogger("chimerapy-engine")
@@ -41,6 +48,7 @@ class RecordService(Service):
             "audio": AudioRecord,
             "tabular": TabularRecord,
             "image": ImageRecord,
+            "json": JSONRecord,
         }
 
         # Making sure the attribute exists
