@@ -591,6 +591,9 @@ class WorkerHandlerService(Service):
     ## Front-facing ASync API
     ####################################################################
 
+    async def diagnostics(self, enable: bool = True) -> bool:
+        return await self._broadcast_request("post", "/nodes/diagnostics", data={'enable': enable})
+
     async def commit(
         self,
         graph: Graph,

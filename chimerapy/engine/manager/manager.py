@@ -247,11 +247,13 @@ class Manager:
     ####################################################################
 
     async def async_zeroconf(self, enable: bool = True) -> bool:
-
         if enable:
             return await self.zeroconf_service.enable()
         else:
             return await self.zeroconf_service.disable()
+
+    async def async_diagnostics(self, enable: bool = True) -> bool:
+        return await self.worker_handler.diagnostics(enable)
 
     async def async_commit(
         self,
@@ -342,6 +344,9 @@ class Manager:
 
     def zeroconf(self, enable: bool = True, timeout: Union[int, float] = 5) -> bool:
         return self._exec_coro(self.async_zeroconf(enable)).result(timeout)
+
+    def diagnostics(self, enable: bool = True, timeout: Union[int, float] = 5) -> bool:
+        return self._exec_coro(self.async_diagnostics(enable)).result(timeout)
 
     def commit_graph(
         self,

@@ -15,7 +15,11 @@ from ..networking.data_chunk import DataChunk
 from ..service import Service
 from ..eventbus import EventBus, TypedObserver, Event
 from ..states import NodeState
-from .events import NewOutBoundDataEvent, DiagnosticsReportEvent
+from .events import (
+    NewOutBoundDataEvent, 
+    DiagnosticsReportEvent, 
+    EnableDiagnosticsEvent
+)
 
 
 class ProfilerService(Service):
@@ -30,6 +34,7 @@ class ProfilerService(Service):
         self.logger = logger
 
         # State variables
+        self._enable: bool = False
         self.process: Optional[Process] = None
         self.deques: Dict[str, deque[float]] = {
             "latency(ms)": deque(maxlen=config.get("diagnostics.deque-length")),
@@ -38,28 +43,19 @@ class ProfilerService(Service):
         self.seen_uuids: deque[str] = deque(
             maxlen=config.get("diagnostics.deque-length")
         )
+        self.async_timer = AsyncTimer(
+            self.diagnostics_report, config.get("diagnostics.interval")
+        )
 
         if self.state.logdir:
             self.log_file = self.state.logdir / "diagnostics.csv"
         else:
             raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
-        # Add a timer function
-        self.async_timer = AsyncTimer(
-            self.diagnostics_report, config.get("diagnostics.interval")
-        )
-        assert self.eventbus.thread
-        self.eventbus.thread.exec(self.async_timer.start()).result()
-
         # Add observers to profile
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "out_step": TypedObserver(
-                "out_step",
-                NewOutBoundDataEvent,
-                on_asend=self.post_step,
-                handle_event="unpack",
-            ),
+            "enable_diagnostics": TypedObserver("enable_diagnostics", EnableDiagnosticsEvent, on_asend=self.enable, handle_event='unpack'),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
@@ -69,13 +65,43 @@ class ProfilerService(Service):
 
         # self.logger.debug(f"{self}: log_file={self.log_file}")
 
+    async def enable(self, enable: bool = True):
+        
+        if enable != self._enable:
+            
+            if enable:
+                assert self.eventbus.thread
+                
+                # Add a timer function
+                await self.async_timer.start()
+
+                # Add observer
+                observer = TypedObserver(
+                    "out_step",
+                    NewOutBoundDataEvent,
+                    on_asend=self.post_step,
+                    handle_event="unpack",
+                )
+                self.observers['out_step'] = observer
+                await self.eventbus.asubscribe(observer)
+
+            else:
+                # Stop the timer and remove the observer
+                await self.async_timer.stop()
+
+                observer = self.observers['enable_diagnostics']
+                await self.eventbus.aunsubscribe(observer)
+
+            # Update
+            self._enable = enable
+
+
     def setup(self):
-        # self.logger.debug(f"{self}: setup")
         self.process = Process(pid=os.getpid())
 
     async def diagnostics_report(self):
 
-        if not self.process:
+        if not self.process or not self._enable:
             return None
 
         # Get the timestamp
@@ -113,7 +139,7 @@ class ProfilerService(Service):
 
         # Send the information to the Worker and ultimately the Manager
         event_data = DiagnosticsReportEvent(diag)
-        self.logger.debug(f"{self}: data = {diag}")
+        # self.logger.debug(f"{self}: data = {diag}")
         await self.eventbus.asend(Event("diagnostics_report", event_data))
 
         # Write to a csv, if diagnostics enabled
@@ -151,6 +177,7 @@ class ProfilerService(Service):
 
         # Obtain the meta data of the data chunk
         meta = data_chunk.get("meta")["value"]
+        self.seen_uuids.append(data_chunk._uuid)
 
         # Get the payload size (of all keys)
         total_size = 0.0

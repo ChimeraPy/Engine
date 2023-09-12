@@ -8,6 +8,11 @@ from ..data_protocols import NodePubTable
 
 
 @dataclass
+class EnableDiagnosticsEvent:
+    enable: bool
+
+
+@dataclass
 class BroadcastEvent:
     signal: Enum
     data: Dict[str, Any] = field(default_factory=dict)

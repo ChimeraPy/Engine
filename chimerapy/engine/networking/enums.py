@@ -25,6 +25,7 @@ class WORKER_MESSAGE(Enum):
     RECORD_NODES = 25
     STOP_NODES = 26
     REQUEST_METHOD = 27
+    DIAGNOSTICS = 28
 
 
 # Node -> Worker

@@ -23,6 +23,7 @@ from ..networking.enums import WORKER_MESSAGE
 from ..utils import async_waiting_for
 from ..eventbus import EventBus, TypedObserver, Event, make_evented
 from .events import (
+    EnableDiagnosticsEvent,
     BroadcastEvent,
     SendMessageEvent,
     CreateNodeEvent,
@@ -186,6 +187,9 @@ class NodeHandlerService(Service):
             ),
             "gather_nodes": TypedObserver(
                 "gather_nodes", on_asend=self.async_gather, handle_event="drop"
+            ),
+            "diagnostics": TypedObserver(
+                "diagnostics", EnableDiagnosticsEvent, on_asend=self.async_diagnostics, handle_event='unpack'
             ),
             "update_gather": TypedObserver(
                 "update_gather",
@@ -425,6 +429,12 @@ class NodeHandlerService(Service):
             "success": success,
             "output": self.node_controllers[node_id].registered_method_results,
         }
+
+    async def async_diagnostics(self, enable: bool) -> bool:
+        await self.eventbus.asend(
+                Event('broadcast', BroadcastEvent(signal=WORKER_MESSAGE.DIAGNOSTICS, data={'enable': enable}))
+        )
+        return True
 
     async def async_gather(self) -> Dict:
 

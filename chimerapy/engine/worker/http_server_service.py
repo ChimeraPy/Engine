@@ -22,6 +22,7 @@ from ..networking.enums import NODE_MESSAGE
 from ..utils import async_waiting_for, update_dataclass
 from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
+    EnableDiagnosticsEvent,
     CreateNodeEvent,
     DestroyNodeEvent,
     ProcessNodePubTableEvent,
@@ -70,6 +71,7 @@ class HttpServerService(Service):
                 web.post("/nodes/record", self._async_record_route),
                 web.post("/nodes/registered_methods", self._async_request_method_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
+                web.post("/nodes/diagnostics", self._async_diagnostics_route),
                 web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -288,6 +290,14 @@ class HttpServerService(Service):
         event_data = SendArchiveEvent(pathlib.Path(data["path"]))
         await self.eventbus.asend(Event("send_archive", event_data))
 
+        return web.HTTPOk()
+
+    async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
+        data= await request.json()
+
+        # Determine if enable/disable
+        event_data = EnableDiagnosticsEvent(data['enable'])
+        await self.eventbus.asend(Event('diagnostics', event_data))
         return web.HTTPOk()
 
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:

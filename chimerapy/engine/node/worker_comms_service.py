@@ -11,6 +11,7 @@ from ..service import Service
 from ..eventbus import EventBus, Event, TypedObserver
 from .node_config import NodeConfig
 from .events import (
+    EnableDiagnosticsEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
     GatherEvent,
@@ -127,6 +128,7 @@ class WorkerCommsService(Service):
                 WORKER_MESSAGE.RECORD_NODES: self.record_node,
                 WORKER_MESSAGE.STOP_NODES: self.stop_node,
                 WORKER_MESSAGE.REQUEST_METHOD: self.execute_registered_method,
+                WORKER_MESSAGE.DIAGNOSTICS: self.enable_diagnostics,
             },
             parent_logger=self.logger,
             thread=self.eventbus.thread,
@@ -217,3 +219,10 @@ class WorkerCommsService(Service):
     async def async_step(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
         await self.eventbus.asend(Event("manual_step"))
+
+    async def enable_diagnostics(self, msg: Dict):
+        assert self.state and self.eventbus and self.logger
+        enable = msg['data']['enable']
+
+        event_data = EnableDiagnosticsEvent(enable)
+        await self.eventbus.asend(Event("enable_diagnostics", event_data))

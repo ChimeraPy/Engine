@@ -98,6 +98,31 @@ async def test_event_null_data():
 
 
 @pytest.mark.asyncio
+async def test_subscribe_and_unsubscribe():
+    
+    event_bus = EventBus()
+    null_observer = TypedObserver("null")
+
+    # Subscribe to the event bus
+    await event_bus.asubscribe(null_observer)
+
+    # Create the event
+    null_event = Event("null")
+    null2_event = Event("null")
+
+    # Send some events
+    await event_bus.asend(null_event)
+
+    # Unsubscribe and then send the event
+    await event_bus.aunsubscribe(null_observer)
+    await event_bus.asend(null2_event)
+
+    assert null_event.id in null_observer.received
+    assert null2_event.id not in null_observer.received
+
+
+
+@pytest.mark.asyncio
 async def test_sync_and_async_binding():
 
     event_bus = EventBus()
