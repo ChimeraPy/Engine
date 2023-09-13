@@ -472,6 +472,9 @@ class WorkerHandlerService(Service):
         report_exceptions: bool = True,
     ) -> bool:
 
+        if not self.state.workers:
+            return True
+
         # Create a new session for the moment
         tasks: List[asyncio.Task] = []
         sessions: List[aiohttp.ClientSession] = []
@@ -592,7 +595,9 @@ class WorkerHandlerService(Service):
     ####################################################################
 
     async def diagnostics(self, enable: bool = True) -> bool:
-        return await self._broadcast_request("post", "/nodes/diagnostics", data={'enable': enable})
+        return await self._broadcast_request(
+            "post", "/nodes/diagnostics", data={"enable": enable}
+        )
 
     async def commit(
         self,

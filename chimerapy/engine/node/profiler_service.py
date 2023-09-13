@@ -15,11 +15,7 @@ from ..networking.data_chunk import DataChunk
 from ..service import Service
 from ..eventbus import EventBus, TypedObserver, Event
 from ..states import NodeState
-from .events import (
-    NewOutBoundDataEvent, 
-    DiagnosticsReportEvent, 
-    EnableDiagnosticsEvent
-)
+from .events import NewOutBoundDataEvent, DiagnosticsReportEvent, EnableDiagnosticsEvent
 
 
 class ProfilerService(Service):
@@ -55,7 +51,12 @@ class ProfilerService(Service):
         # Add observers to profile
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "enable_diagnostics": TypedObserver("enable_diagnostics", EnableDiagnosticsEvent, on_asend=self.enable, handle_event='unpack'),
+            "enable_diagnostics": TypedObserver(
+                "enable_diagnostics",
+                EnableDiagnosticsEvent,
+                on_asend=self.enable,
+                handle_event="unpack",
+            ),
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
@@ -66,12 +67,13 @@ class ProfilerService(Service):
         # self.logger.debug(f"{self}: log_file={self.log_file}")
 
     async def enable(self, enable: bool = True):
-        
+
         if enable != self._enable:
-            
+
             if enable:
+                # self.logger.debug(f"{self}: enabled")
                 assert self.eventbus.thread
-                
+
                 # Add a timer function
                 await self.async_timer.start()
 
@@ -82,19 +84,19 @@ class ProfilerService(Service):
                     on_asend=self.post_step,
                     handle_event="unpack",
                 )
-                self.observers['out_step'] = observer
+                self.observers["out_step"] = observer
                 await self.eventbus.asubscribe(observer)
 
             else:
+                # self.logger.debug(f"{self}: disabled")
                 # Stop the timer and remove the observer
                 await self.async_timer.stop()
 
-                observer = self.observers['enable_diagnostics']
+                observer = self.observers["enable_diagnostics"]
                 await self.eventbus.aunsubscribe(observer)
 
             # Update
             self._enable = enable
-
 
     def setup(self):
         self.process = Process(pid=os.getpid())

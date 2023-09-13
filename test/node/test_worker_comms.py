@@ -117,6 +117,7 @@ def test_instanticate(worker_comms_setup):
         ("async_step", {}),
         ("provide_gather", {}),
         ("send_diagnostics", NodeDiagnostics()),
+        ("enable_diagnostics", {"data": {"enable": True}}),
     ],
 )
 @pytest.mark.asyncio
@@ -145,6 +146,7 @@ async def test_methods(worker_comms_setup, method_name, method_params):
         (WORKER_MESSAGE.RECORD_NODES, {}),
         (WORKER_MESSAGE.STOP_NODES, {}),
         (WORKER_MESSAGE.REQUEST_METHOD, {"method_name": "", "params": {}}),
+        (WORKER_MESSAGE.DIAGNOSTICS, {"enable": False}),
     ],
 )
 @pytest.mark.asyncio
