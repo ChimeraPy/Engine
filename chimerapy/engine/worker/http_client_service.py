@@ -76,7 +76,7 @@ class HttpClientService(Service):
             try:
                 success = await self.async_deregister()
             except Exception:
-                self.logger.warning(f"{self}: Failed to properly deregister")
+                # self.logger.warning(f"{self}: Failed to properly deregister")
                 success = False
 
         return success
@@ -326,7 +326,7 @@ class HttpClientService(Service):
 
         if not self.connected_to_manager:
             return False
-        
+
         async with aiohttp.ClientSession(self.manager_url) as session:
             async with session.post(
                 "/workers/node_status", data=self.state.to_json()

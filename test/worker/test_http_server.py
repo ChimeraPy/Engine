@@ -79,6 +79,7 @@ def test_http_server_instanciate(http_server):
         ("post", "/nodes/step", json.dumps({})),
         ("post", "/nodes/start", json.dumps({})),
         ("post", "/nodes/record", json.dumps({})),
+        ("post", "/nodes/diagnostics", json.dumps({"enable": True})),
         (
             "post",
             "/nodes/registered_methods",

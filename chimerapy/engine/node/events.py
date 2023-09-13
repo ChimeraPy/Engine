@@ -7,6 +7,11 @@ from ..data_protocols import NodePubTable, NodeDiagnostics
 
 
 @dataclass
+class EnableDiagnosticsEvent: # enable_diagnostics
+    enable: bool
+
+
+@dataclass
 class NewInBoundDataEvent:
     data_chunks: Dict[str, DataChunk]
 

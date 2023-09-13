@@ -3,7 +3,7 @@ import asyncio
 from datetime import datetime
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar
+from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar, Dict
 
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
 from dataclasses import dataclass, field
@@ -31,6 +31,9 @@ class EventBus(AsyncObservable):
         self._sub_counts: int = 0
         self.thread = thread
 
+        # State information
+        self.subscription_map: Dict[AsyncObserver, Any] = {}
+
     ####################################################################
     ## Async
     ####################################################################
@@ -42,7 +45,16 @@ class EventBus(AsyncObservable):
 
     async def asubscribe(self, observer: AsyncObserver):
         self._sub_counts += 1
-        await self.stream.subscribe_async(observer)
+        subscription = await self.stream.subscribe_async(observer)
+        self.subscription_map[observer] = subscription
+
+    async def aunsubscribe(self, observer: AsyncObserver):
+        if observer not in self.subscription_map:
+            raise RuntimeError("Trying to unsubscribe an Observer that is not subscribed")
+
+        self._sub_counts -= 1
+        subscription = self.subscription_map[observer]
+        await subscription.dispose_async()
 
     ####################################################################
     ## Sync
