@@ -342,6 +342,40 @@ class Node:
             }
             self.recorder.submit(image_entry)
 
+    def save_json(self, name: str, data: Dict[Any, Any]):
+        """Record json data from the node to a JSON Lines file.
+
+        Parameters
+        ----------
+        name : str
+            Name of the json file (.jsonl extension will be suffixed).
+
+        data : Dict[Any, Any]
+            The data to be recorded.
+
+        Notes
+        -----
+        The data is recorded in JSON Lines format, which is a sequence of JSON objects.
+        The data dictionary provided must be JSON serializable.
+        """
+
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
+
+        if self.recorder.enabled:
+            json_entry = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "dtype": "json",
+                "timestamp": datetime.datetime.now(),
+            }
+            self.recorder.submit(json_entry)
+
     ####################################################################
     ## Back-End Lifecycle API
     ####################################################################

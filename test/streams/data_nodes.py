@@ -68,3 +68,10 @@ class VideoNode(cpe.Node):
         time.sleep(1 / 15)
         rand_frame = np.random.rand(720, 1280, 3) * 255
         self.save_video(name="test", data=rand_frame, fps=15)
+
+
+class JSONNode(cpe.Node):
+    def step(self):
+        time.sleep(1 / 10)
+        data = {"time": time.time(), "content": "HELLO"}
+        self.save_json(name="test", data=data)
