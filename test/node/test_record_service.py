@@ -40,7 +40,6 @@ def test_instanciate(recorder):
     ...
 
 
-@pytest.mark.asyncio
 async def test_record_direct_submit(recorder):
 
     # Run the recorder

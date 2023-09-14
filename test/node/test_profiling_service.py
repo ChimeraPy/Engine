@@ -1,5 +1,3 @@
-import datetime
-import time
 import pathlib
 import tempfile
 import random
@@ -22,7 +20,6 @@ from chimerapy.engine.networking.data_chunk import DataChunk
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 
-@pytest.mark.asyncio
 @pytest.fixture
 def profiler_setup():
 
@@ -53,7 +50,6 @@ def test_instanciate(profiler_setup):
     ...
 
 
-@pytest.mark.asyncio
 async def test_single_data_chunk(profiler_setup):
     profiler, eventbus = profiler_setup
     await profiler.enable()
@@ -67,16 +63,17 @@ async def test_single_data_chunk(profiler_setup):
         # Mock how the processor marks the time when it got the datachunk
         # and transmitted it
         meta = example_data_chunk.get("meta")
-        meta["value"]["delta"] = random.randrange(500, 1500, 1) # ms
+        meta["value"]["delta"] = random.randrange(500, 1500, 1)  # ms
         example_data_chunk.update("meta", meta)
 
-        await eventbus.asend(Event("out_step", NewOutBoundDataEvent(example_data_chunk)))
+        await eventbus.asend(
+            Event("out_step", NewOutBoundDataEvent(example_data_chunk))
+        )
 
     await profiler.diagnostics_report()
     assert profiler.log_file.exists()
 
 
-@pytest.mark.asyncio
 async def test_single_data_chunk_with_multiple_payloads(profiler_setup):
     profiler, eventbus = profiler_setup
     await profiler.enable()
@@ -94,16 +91,17 @@ async def test_single_data_chunk_with_multiple_payloads(profiler_setup):
         meta["value"]["delta"] = random.randrange(500, 1500, 1)
         example_data_chunk.update("meta", meta)
 
-        await eventbus.asend(Event("out_step", NewOutBoundDataEvent(example_data_chunk)))
+        await eventbus.asend(
+            Event("out_step", NewOutBoundDataEvent(example_data_chunk))
+        )
 
     await profiler.diagnostics_report()
     assert profiler.log_file.exists()
 
 
-@pytest.mark.asyncio
 async def test_enable_disable(profiler_setup):
     profiler, eventbus = profiler_setup
-    
+
     for i in range(50):
 
         # Run the step multiple times
@@ -113,14 +111,16 @@ async def test_enable_disable(profiler_setup):
         # Mock how the processor marks the time when it got the datachunk
         # and transmitted it
         meta = example_data_chunk.get("meta")
-        meta["value"]["delta"] = random.randrange(500, 1500, 1) # ms
+        meta["value"]["delta"] = random.randrange(500, 1500, 1)  # ms
         example_data_chunk.update("meta", meta)
 
-        await eventbus.asend(Event("out_step", NewOutBoundDataEvent(example_data_chunk)))
+        await eventbus.asend(
+            Event("out_step", NewOutBoundDataEvent(example_data_chunk))
+        )
 
     assert len(profiler.seen_uuids) == 0
     await profiler.enable(True)
-    
+
     for i in range(50):
 
         # Run the step multiple times
@@ -130,13 +130,14 @@ async def test_enable_disable(profiler_setup):
         # Mock how the processor marks the time when it got the datachunk
         # and transmitted it
         meta = example_data_chunk.get("meta")
-        meta["value"]["delta"] = random.randrange(500, 1500, 1) # ms
+        meta["value"]["delta"] = random.randrange(500, 1500, 1)  # ms
         example_data_chunk.update("meta", meta)
 
-        await eventbus.asend(Event("out_step", NewOutBoundDataEvent(example_data_chunk)))
+        await eventbus.asend(
+            Event("out_step", NewOutBoundDataEvent(example_data_chunk))
+        )
 
     await profiler.diagnostics_report()
     await profiler.enable(False)
     assert len(profiler.seen_uuids) != 0
     assert profiler.log_file.exists()
-
