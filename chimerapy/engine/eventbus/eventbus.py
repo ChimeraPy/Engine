@@ -3,7 +3,17 @@ import asyncio
 from datetime import datetime
 from collections import deque
 from concurrent.futures import Future
-from typing import Any, Generic, Type, Callable, Awaitable, Optional, Literal, TypeVar, Dict
+from typing import (
+    Any,
+    Generic,
+    Type,
+    Callable,
+    Awaitable,
+    Optional,
+    Literal,
+    TypeVar,
+    Dict,
+)
 
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
 from dataclasses import dataclass, field
@@ -32,6 +42,7 @@ class EventBus(AsyncObservable):
         self.thread = thread
 
         # State information
+        self.awaitable_events: Dict[str, asyncio.Event] = {}
         self.subscription_map: Dict[AsyncObserver, Any] = {}
 
     ####################################################################
@@ -43,6 +54,11 @@ class EventBus(AsyncObservable):
         self._event_counts += 1
         await self.stream.asend(event)
 
+        if event.type in self.awaitable_events:
+            self.latest_event = event
+            self.awaitable_events[event.type].set()
+            del self.awaitable_events[event.type]
+
     async def asubscribe(self, observer: AsyncObserver):
         self._sub_counts += 1
         subscription = await self.stream.subscribe_async(observer)
@@ -50,11 +66,21 @@ class EventBus(AsyncObservable):
 
     async def aunsubscribe(self, observer: AsyncObserver):
         if observer not in self.subscription_map:
-            raise RuntimeError("Trying to unsubscribe an Observer that is not subscribed")
+            raise RuntimeError(
+                "Trying to unsubscribe an Observer that is not subscribed"
+            )
 
         self._sub_counts -= 1
         subscription = self.subscription_map[observer]
         await subscription.dispose_async()
+
+    async def await_event(self, event_type: str) -> Event:
+        if event_type not in self.awaitable_events:
+            self.awaitable_events[event_type] = asyncio.Event()
+
+        event_trigger = self.awaitable_events[event_type]
+        await event_trigger.wait()
+        return self.latest_event
 
     ####################################################################
     ## Sync

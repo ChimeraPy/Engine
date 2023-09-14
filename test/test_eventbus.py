@@ -55,7 +55,6 @@ def event_bus():
     return event_bus
 
 
-@pytest.mark.asyncio
 async def test_msg_filtering():
 
     event_bus = EventBus()
@@ -76,7 +75,6 @@ async def test_msg_filtering():
     assert hello_event.id in hello_observer.received
 
 
-@pytest.mark.asyncio
 async def test_event_null_data():
 
     event_bus = EventBus()
@@ -97,9 +95,8 @@ async def test_event_null_data():
     assert null_event.id in null_observer.received
 
 
-@pytest.mark.asyncio
 async def test_subscribe_and_unsubscribe():
-    
+
     event_bus = EventBus()
     null_observer = TypedObserver("null")
 
@@ -121,8 +118,21 @@ async def test_subscribe_and_unsubscribe():
     assert null2_event.id not in null_observer.received
 
 
+async def test_awaitable_event():
 
-@pytest.mark.asyncio
+    event_bus = EventBus()
+    null_event = Event("null")
+
+    async def later_event():
+        await asyncio.sleep(1)
+        await event_bus.asend(null_event)
+
+    asyncio.create_task(later_event())
+
+    null2_event = await event_bus.await_event("null")
+    assert null2_event == null_event
+
+
 async def test_sync_and_async_binding():
 
     event_bus = EventBus()
@@ -159,7 +169,6 @@ async def test_sync_and_async_binding():
     assert len(async_local_variable) != 0
 
 
-@pytest.mark.asyncio
 async def test_event_handling():
 
     event_bus = EventBus()
@@ -205,7 +214,6 @@ async def test_event_handling():
     assert len(drop_variable) != 0
 
 
-@pytest.mark.asyncio
 async def test_evented_dataclass(event_bus):
 
     # Creating the observer and its binding
@@ -234,7 +242,6 @@ async def test_evented_dataclass(event_bus):
     assert isinstance(data.to_json(), str)
 
 
-@pytest.mark.asyncio
 async def test_evented_wrapper(event_bus):
 
     # Creating the observer and its binding
@@ -286,7 +293,6 @@ def test_make_evented_multiple(event_bus):
     make_evented(SomeClass(number=1, string="hello"), event_bus=event_bus)
 
 
-@pytest.mark.asyncio
 async def test_make_evented_nested(event_bus):
     data_class = NestedClass(
         number=1,
