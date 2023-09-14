@@ -173,6 +173,9 @@ class NodeHandlerService(Service):
             "start_nodes": TypedObserver(
                 "start_nodes", on_asend=self.async_start_nodes, handle_event="drop"
             ),
+            "stop_nodes": TypedObserver(
+                "stop_nodes", on_asend=self.async_stop_nodes, handle_event="drop"
+            ),
             "record_nodes": TypedObserver(
                 "record_nodes", on_asend=self.async_record_nodes, handle_event="drop"
             ),
@@ -189,7 +192,10 @@ class NodeHandlerService(Service):
                 "gather_nodes", on_asend=self.async_gather, handle_event="drop"
             ),
             "diagnostics": TypedObserver(
-                "diagnostics", EnableDiagnosticsEvent, on_asend=self.async_diagnostics, handle_event='unpack'
+                "diagnostics",
+                EnableDiagnosticsEvent,
+                on_asend=self.async_diagnostics,
+                handle_event="unpack",
             ),
             "update_gather": TypedObserver(
                 "update_gather",
@@ -401,6 +407,14 @@ class NodeHandlerService(Service):
         await self.eventbus.asend(
             Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.STOP_NODES))
         )
+        await async_waiting_for(
+            lambda: all(
+                [
+                    x.fsm in ["STOPPED", "SAVED", "SHUTDOWN"]
+                    for x in self.state.nodes.values()
+                ]
+            )
+        )
         return True
 
     async def async_request_registered_method(
@@ -432,7 +446,12 @@ class NodeHandlerService(Service):
 
     async def async_diagnostics(self, enable: bool) -> bool:
         await self.eventbus.asend(
-                Event('broadcast', BroadcastEvent(signal=WORKER_MESSAGE.DIAGNOSTICS, data={'enable': enable}))
+            Event(
+                "broadcast",
+                BroadcastEvent(
+                    signal=WORKER_MESSAGE.DIAGNOSTICS, data={"enable": enable}
+                ),
+            )
         )
         return True
 
@@ -496,7 +515,7 @@ class NodeHandlerService(Service):
 
                 if await async_waiting_for(
                     condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
-                    timeout=config.get("worker.timeout.info-request"),
+                    timeout=None,
                 ):
                     # self.logger.debug(
                     #     f"{self}: Node {node_id} responded to saving request: SUCCESS"

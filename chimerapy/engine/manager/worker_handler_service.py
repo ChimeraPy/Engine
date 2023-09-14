@@ -13,6 +13,7 @@ import networkx as nx
 
 from chimerapy.engine import config
 from chimerapy.engine import _logger
+from ..utils import async_waiting_for
 from ..data_protocols import NodePubTable
 from ..node import NodeConfig
 from ..networking import Client, DataChunk
@@ -27,6 +28,7 @@ from .events import (
     RegisterEntityEvent,
     DeregisterEntityEvent,
     MoveTransferredFilesEvent,
+    UpdateSendArchiveEvent,
 )
 
 logger = _logger.getLogger("chimerapy-engine")
@@ -46,6 +48,7 @@ class WorkerHandlerService(Service):
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
         self.node_pub_table = NodePubTable()
+        self.collected_workers: Dict[str, bool] = {}
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -65,6 +68,12 @@ class WorkerHandlerService(Service):
                 "worker_deregister",
                 on_asend=self._deregister_worker,
                 event_data_cls=WorkerDeregisterEvent,
+                handle_event="unpack",
+            ),
+            "update_send_archive": TypedObserver(
+                "update_send_archive",
+                on_asend=self.update_send_archive,
+                event_data_cls=UpdateSendArchiveEvent,
                 handle_event="unpack",
             ),
         }
@@ -126,24 +135,27 @@ class WorkerHandlerService(Service):
 
         return True
 
-    async def _deregister_worker(self, worker_id: str) -> bool:
+    async def _deregister_worker(self, worker_state: WorkerState) -> bool:
 
         # Deregister entity from logging
         await self.eventbus.asend(
-            Event("entity_deregister", DeregisterEntityEvent(worker_id=worker_id))
+            Event("entity_deregister", DeregisterEntityEvent(worker_id=worker_state.id))
         )
 
-        if worker_id in self.state.workers:
-            state = self.state.workers[worker_id]
+        if worker_state.id in self.state.workers:
+            state = self.state.workers[worker_state.id]
             logger.info(
-                f"Manager deregistered <Worker id={worker_id} name={state.name}> \
+                f"Manager deregistered <Worker id={worker_state.id} name={state.name}> \
                 from {state.ip}"
             )
-            del self.state.workers[worker_id]
+            del self.state.workers[worker_state.id]
 
             return True
 
         return False
+
+    async def update_send_archive(self, worker_id: str, success: bool):
+        self.collected_workers[worker_id] = success
 
     def _register_graph(self, graph: Graph):
         """Verifying that a Graph is valid, that is a DAG.
@@ -590,6 +602,47 @@ class WorkerHandlerService(Service):
 
         return all(results)
 
+    async def _single_worker_collect(self, worker_id: str) -> bool:
+
+        # Just requesting for the collection to start
+        data = {"path": str(self.state.logdir)}
+        async with aiohttp.ClientSession() as client:
+            async with client.post(
+                f"{self._get_worker_ip(worker_id)}/nodes/collect",
+                data=json.dumps(data),
+            ) as resp:
+
+                if not resp.ok:
+                    logger.error(
+                        f"{self}: Collection failed, <Worker {worker_id}> "
+                        "responded {resp.ok} to collect request"
+                    )
+                    return False
+
+        # Now we have to wait until worker says they finished transferring
+        await async_waiting_for(condition=lambda: worker_id in self.collected_workers)
+        success = self.collected_workers[worker_id]
+        if not success:
+            logger.error(
+                f"{self}: Collection failed, <Worker {worker_id}> "
+                "never updated on archival completion"
+            )
+
+        # Move files to their destination
+        try:
+            await self.eventbus.asend(
+                Event(
+                    "move_transferred_files",
+                    MoveTransferredFilesEvent(
+                        worker_state=self.state.workers[worker_id]
+                    ),
+                )
+            )
+        except Exception:
+            logger.error(traceback.format_exc())
+
+        return success
+
     ####################################################################
     ## Front-facing ASync API
     ####################################################################
@@ -753,31 +806,24 @@ class WorkerHandlerService(Service):
 
         return success
 
-    async def collect(self, unzip: bool = True) -> bool:
+    async def collect(self) -> bool:
 
-        # Then tell them to send the data to the Manager
-        success = await self._broadcast_request(
-            htype="post",
-            route="/nodes/collect",
-            data={"path": str(self.state.logdir)},
-            timeout=None,
-        )
-        await asyncio.sleep(1)
+        # Clear
+        self.collected_workers.clear()
 
-        if success:
-            try:
-                await self.eventbus.asend(Event("save_meta"))
-                await self.eventbus.asend(
-                    Event(
-                        "move_transferred_files", MoveTransferredFilesEvent(unzip=unzip)
-                    )
-                )
-            except Exception:
-                logger.error(traceback.format_exc())
+        # Request all workers
+        coros: List[Coroutine] = []
+        for worker_id in self.state.workers:
+            coros.append(self._single_worker_collect(worker_id))
 
-        # logger.info(f"{self}: finished collect")
+        try:
+            results = await asyncio.gather(*coros)
+        except Exception:
+            logger.error(traceback.format_exc())
+            return False
 
-        return success
+        await self.eventbus.asend(Event("save_meta"))
+        return all(results)
 
     async def reset(self, keep_workers: bool = True):
 
@@ -796,8 +842,8 @@ class WorkerHandlerService(Service):
 
         # If not keep Workers, then deregister all
         if not keep_workers:
-            for worker_id in self.state.workers:
-                await self._deregister_worker(worker_id)
+            for worker_state in self.state.workers.values():
+                await self._deregister_worker(worker_state)
 
         # Update variable data
         self.node_pub_table = NodePubTable()

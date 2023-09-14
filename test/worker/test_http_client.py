@@ -51,31 +51,27 @@ def http_client():
     )
     yield http_client
 
-    eventbus.send(Event("shutdown"))
+    eventbus.send(Event("shutdown")).result()
 
 
 def test_http_client_instanciate(http_client):
     ...
 
 
-@pytest.mark.asyncio
 async def test_connect_via_ip(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
 
 
-@pytest.mark.asyncio
 async def test_connect_via_zeroconf(http_client, manager):
     await manager.async_zeroconf()
     assert await http_client._async_connect_via_zeroconf()
 
 
-@pytest.mark.asyncio
 async def test_node_status_update(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
     assert await http_client._async_node_status_update()
 
 
-@pytest.mark.asyncio
 async def test_worker_state_changed_updates(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
 
@@ -90,7 +86,6 @@ async def test_worker_state_changed_updates(http_client, manager):
     assert "test" in manager.state.workers[http_client.state.id].nodes
 
 
-@pytest.mark.asyncio
 async def test_send_archive_locally(http_client):
 
     # Adding simple file
@@ -117,7 +112,6 @@ async def test_send_archive_locally(http_client):
         assert f.read() == "hello"
 
 
-@pytest.mark.asyncio
 async def test_send_archive_remotely(http_client, server):
 
     # Make a copy of example logs
@@ -128,8 +122,5 @@ async def test_send_archive_remotely(http_client, server):
 
     assert await http_client._send_archive_remotely(server.host, server.port)
 
-    logger.debug(server.file_transfer_records)
-
-    # Also check that the file exists
-    for record in server.file_transfer_records[http_client.state.id].values():
-        assert record["dst_filepath"].exists()
+    for record in server.file_transfer_records.records.values():
+        assert record.sender_id == http_client.state.name

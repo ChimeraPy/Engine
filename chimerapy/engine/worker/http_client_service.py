@@ -1,5 +1,6 @@
 import os
 import shutil
+import json
 import uuid
 import traceback
 import socket
@@ -176,9 +177,9 @@ class HttpClientService(Service):
                     logs_push_info = data.get("logs_push_info", {})
 
                     if logs_push_info["enabled"]:
-                        self.logger.info(
-                            f"{self}: enabling logs push to Manager: {logs_push_info}"
-                        )
+                        # self.logger.info(
+                        #     f"{self}: enabling logs push to Manager: {logs_push_info}"
+                        # )
                         for logging_entity in [
                             self.logger,
                             self.logreceiver,
@@ -263,16 +264,28 @@ class HttpClientService(Service):
         else:
             send_locally = False
 
+        success = False
         try:
             if send_locally:
                 await self._send_archive_locally(path)
             else:
                 await self._send_archive_remotely(manager_host, manager_port)
+            success = True
         except Exception:
             self.logger.error(traceback.format_exc())
-            return False
 
-        return True
+        # Send information to manager about success
+        if self.connected_to_manager:
+            data = {"worker_id": self.state.id, "success": success}
+            async with aiohttp.ClientSession(self.manager_url) as session:
+                async with session.post(
+                    "/workers/send_archive", data=json.dumps(data)
+                ) as _:
+                    ...
+                    # self.logger.debug(f"{self}: send "
+                    # "archive update confirmation: {resp.ok}")
+
+        return success
 
     async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
         self.logger.debug(f"{self}: sending archive locally")

@@ -66,7 +66,6 @@ def test_http_server_instanciate(http_server):
     ...
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "route_type, route, payload",
     [
@@ -103,7 +102,6 @@ async def test_http_server_routes(http_server, route_type, route, payload):
                 assert resp.ok
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "signal, payload",
     [
