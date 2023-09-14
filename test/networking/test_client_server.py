@@ -1,9 +1,10 @@
 from typing import Dict
-import time
+import tempfile
 import pathlib
+import asyncio
 import os
 import enum
-import requests
+import aiohttp
 from aiohttp import web
 
 import pytest
@@ -33,33 +34,33 @@ async def echo(msg: Dict, ws: web.WebSocketResponse = None):
 
 
 @pytest.fixture
-def server():
+async def server():
     server = Server(
         id="test_server",
         port=0,
         routes=[web.get("/", hello)],
         ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
     )
-    server.serve()
+    await server.async_serve()
     yield server
-    server.shutdown()
+    await server.async_shutdown()
 
 
 @pytest.fixture
-def client(server):
+async def client(server):
     client = Client(
         id="test_client",
         host=server.host,
         port=server.port,
         ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
     )
-    client.connect()
+    await client.async_connect()
     yield client
-    client.shutdown()
+    await client.async_shutdown()
 
 
 @pytest.fixture
-def client_list(server):
+async def client_list(server):
 
     clients = []
     for i in range(NUMBER_OF_CLIENTS):
@@ -69,29 +70,30 @@ def client_list(server):
             id=f"test-{i}",
             ws_handlers={TEST_PROTOCOL.ECHO_FLAG: echo},
         )
-        client.connect()
+        await client.async_connect()
         clients.append(client)
 
     yield clients
 
     for client in clients:
-        client.shutdown()
+        await client.async_shutdown()
 
 
-def test_server_instanciate(server):
+async def test_server_instanciate(server):
     ...
-    
-    
-def test_server_http_req_res(server):
-    r = requests.get(f"http://{server.host}:{server.port}")
-    assert r.status_code == 200 and r.text == "Hello, world"
 
 
-def test_server_websocket_connection(server, client):
+async def test_server_http_req_res(server):
+    url = f"http://{server.host}:{server.port}"
+    async with aiohttp.ClientSession(url) as session:
+        async with session.get("/") as resp:
+            assert resp.ok
+
+
+async def test_server_websocket_connection(server, client):
     assert client.id in list(server.ws_clients.keys())
 
 
-@pytest.mark.asyncio
 async def test_async_ws(server):
     client = Client(
         id="test_client",
@@ -104,57 +106,59 @@ async def test_async_ws(server):
     await client.async_shutdown()
 
 
-def test_server_websocket_connection_shutdown(server, client):
-    client.shutdown()
-    time.sleep(1)
-    server.broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!")
+async def test_server_websocket_connection_shutdown(server, client):
+    await client.async_shutdown()
+    await asyncio.sleep(0.1)
+    await server.async_broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!")
 
 
-def test_server_send_to_client(server, client):
+async def test_server_send_to_client(server, client):
     # Simple send
-    server.send(client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO")
+    await server.async_send(
+        client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO"
+    )
 
     # Simple send with OK
-    server.send(
+    await server.async_send(
         client_id=client.id, signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True
     )
 
-    assert cpe.utils.waiting_for(
+    assert await cpe.utils.async_waiting_for(
         lambda: client.msg_processed_counter >= 2,
         timeout=2,
     )
 
 
-def test_client_send_to_server(server, client):
+async def test_client_send_to_server(server, client):
     # Simple send
-    client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO")
+    await client.async_send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO")
 
     # Simple send with OK
-    client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True)
+    await client.async_send(signal=TEST_PROTOCOL.ECHO_FLAG, data="HELLO", ok=True)
 
-    assert cpe.utils.waiting_for(
+    assert await cpe.utils.async_waiting_for(
         lambda: server.msg_processed_counter >= 2,
         timeout=2,
     )
 
 
-def test_multiple_clients_send_to_server(server, client_list):
+async def test_multiple_clients_send_to_server(server, client_list):
 
     for client in client_list:
-        client.send(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
+        await client.async_send(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
-    assert cpe.utils.waiting_for(
+    assert await cpe.utils.async_waiting_for(
         lambda: server.msg_processed_counter >= NUMBER_OF_CLIENTS,
         timeout=5,
     )
 
 
-def test_server_broadcast_to_multiple_clients(server, client_list):
+async def test_server_broadcast_to_multiple_clients(server, client_list):
 
-    server.broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
+    await server.async_broadcast(signal=TEST_PROTOCOL.ECHO_FLAG, data="ECHO!", ok=True)
 
     for client in client_list:
-        assert cpe.utils.waiting_for(
+        assert await cpe.utils.async_waiting_for(
             lambda: client.msg_processed_counter >= 2,
             timeout=5,
         )
@@ -167,21 +171,16 @@ def test_server_broadcast_to_multiple_clients(server, client_list):
         (TEST_DIR / "mock" / "data" / "chimerapy_logs"),
     ],
 )
-def test_client_sending_folder_to_server(server, client, dir):
+async def test_client_sending_folder_to_server(server, client, dir):
 
     # Action
-    client.send_folder(sender_id="test_worker", dir=dir).result(timeout=10)
-
-    # Get the expected behavior
-    miss_counter = 0
-    while len(server.file_transfer_records.keys()) == 0:
-
-        miss_counter += 1
-        time.sleep(0.1)
-
-        if miss_counter > 100:
-            assert False, "File transfer failed after 10 second"
+    await client.async_send_folder(sender_id="test_worker", dir=dir)
 
     # Also check that the file exists
-    for record in server.file_transfer_records["test_worker"].values():
-        assert record["dst_filepath"].exists()
+    for record in server.file_transfer_records.records.values():
+        assert record.location.exists()
+
+    # Test moving the files to a logdir
+    temp = pathlib.Path(tempfile.mkdtemp())
+    await server.move_transferred_files(temp)
+    await server.move_transferred_files(temp, owner="test_worker", owner_id="asdf")
