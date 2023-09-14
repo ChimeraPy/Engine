@@ -252,12 +252,12 @@ class ProcessorService(Service):
             else:
                 await asyncio.sleep(1 / 1000)  # Allow other functions to run as well
                 output = func(*args, **kwargs)
-            toc = time.perf_counter()
         except Exception:
             traceback_info = traceback.format_exc()
             self.logger.error(traceback_info)
 
         # Compute delta
+        toc = time.perf_counter()
         delta = (toc - tic) * 1000
 
         return output, delta

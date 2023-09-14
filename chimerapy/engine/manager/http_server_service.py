@@ -53,6 +53,7 @@ class HttpServerService(Service):
             id="Manager",
             routes=[
                 # Worker API
+                web.get("/", self._home),
                 web.post("/workers/register", self._register_worker_route),
                 web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
@@ -131,6 +132,13 @@ class HttpServerService(Service):
         return await self._server.move_transferred_files(
             self.state.logdir, owner=worker_state.name, owner_id=worker_state.id
         )
+
+    #####################################################################################
+    ## Manager User Routes
+    #####################################################################################
+
+    async def _home(self, request: web.Request):
+        return web.Response(text="ChimeraPy Manager running!")
 
     #####################################################################################
     ## Worker -> Manager Routes

@@ -340,9 +340,12 @@ class HttpClientService(Service):
         if not self.connected_to_manager:
             return False
 
-        async with aiohttp.ClientSession(self.manager_url) as session:
-            async with session.post(
-                "/workers/node_status", data=self.state.to_json()
-            ) as resp:
+        try:
+            async with aiohttp.ClientSession(self.manager_url) as session:
+                async with session.post(
+                    "/workers/node_status", data=self.state.to_json()
+                ) as resp:
 
-                return resp.ok
+                    return resp.ok
+        except aiohttp.client_exceptions.ClientOSError:
+            return False

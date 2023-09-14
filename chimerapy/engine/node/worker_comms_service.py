@@ -183,6 +183,7 @@ class WorkerCommsService(Service):
         assert self.state and self.eventbus and self.logger
 
         node_pub_table = NodePubTable.from_dict(msg["data"])
+        self.logger.debug(f"{self}: NodePubTable received: {node_pub_table}")
 
         # Pass the information to the Poller Service
         event_data = ProcessNodePubTableEvent(node_pub_table)
@@ -222,7 +223,7 @@ class WorkerCommsService(Service):
 
     async def enable_diagnostics(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
-        enable = msg['data']['enable']
+        enable = msg["data"]["enable"]
 
         event_data = EnableDiagnosticsEvent(enable)
         await self.eventbus.asend(Event("enable_diagnostics", event_data))
