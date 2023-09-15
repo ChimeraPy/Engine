@@ -259,9 +259,9 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        # self.logger.debug(
-        #     f"{self}: received request for Node {node_config.id} creation:"
-        # )
+        self.logger.debug(
+            f"{self}: received request for Node {node_config.id} creation:"
+        )
 
         # Saving the node data
         self.state.nodes[id] = make_evented(
@@ -299,7 +299,7 @@ class NodeHandlerService(Service):
 
             # Start the node
             controller.start()
-            # self.logger.debug(f"{self}: started {node_object}")
+            self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -325,7 +325,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            # self.logger.debug(f"{self}: completed node creation: {id}")
+            self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:

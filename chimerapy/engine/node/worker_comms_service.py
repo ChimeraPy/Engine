@@ -183,7 +183,6 @@ class WorkerCommsService(Service):
         assert self.state and self.eventbus and self.logger
 
         node_pub_table = NodePubTable.from_dict(msg["data"])
-        self.logger.debug(f"{self}: NodePubTable received: {node_pub_table}")
 
         # Pass the information to the Poller Service
         event_data = ProcessNodePubTableEvent(node_pub_table)

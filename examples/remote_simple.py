@@ -44,8 +44,7 @@ if __name__ == "__main__":
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs")
     manager.zeroconf()
-    graph = SimpleGraph()
-    worker = cpe.Worker(name="local")
+    worker = cpe.Worker(name="local", id="local")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -65,7 +64,7 @@ if __name__ == "__main__":
         # For mutliple workers (remote and local)
         graph = cpe.Graph()
         con_node = Consumer(name="cons")
-        graph.add_node(con_node)
+        graph.add_nodes_from([con_node])
         mapping = {worker.id: [con_node.id]}
 
         for worker_id in manager.workers:

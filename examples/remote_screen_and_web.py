@@ -129,7 +129,7 @@ if __name__ == "__main__":
                 mapping[worker_id] = [web_node.id, screen_node.id]
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
+    manager.commit_graph(graph=graph, mapping=mapping).result()
     manager.start().result(timeout=5)
 
     # Wail until user stops

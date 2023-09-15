@@ -92,7 +92,7 @@ class PollerService(Service):
 
     def setup_connections(self, node_pub_table: NodePubTable):
 
-        self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
+        # self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
 
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
@@ -112,9 +112,9 @@ class PollerService(Service):
                 in_bound_id,
             )
 
-            self.logger.debug(
-                f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
-            )
+            # self.logger.debug(
+            #     f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
+            # )
 
         # After creating all subscribers, use a poller to track them all
         for sub in self.p2p_subs.values():
@@ -133,13 +133,13 @@ class PollerService(Service):
             # Wait until we get data from any of the subscribers
             events = dict(self.sub_poller.poll(timeout=1000))
 
-            self.logger.debug(f"{self}: polling inputs: {events}")
+            # self.logger.debug(f"{self}: polling inputs: {events}")
 
             # Empty if no events
             if len(events) == 0:
                 continue
 
-            self.logger.debug(f"{self}: polling event processing {len(events)}")
+            # self.logger.debug(f"{self}: polling event processing {len(events)}")
 
             # Default value
             follow_event = False

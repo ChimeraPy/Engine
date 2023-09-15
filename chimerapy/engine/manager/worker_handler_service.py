@@ -145,8 +145,8 @@ class WorkerHandlerService(Service):
         if worker_state.id in self.state.workers:
             state = self.state.workers[worker_state.id]
             logger.info(
-                f"Manager deregistered <Worker id={worker_state.id} name={state.name}> \
-                from {state.ip}"
+                f"Manager deregistered <Worker id={worker_state.id} name={state.name}> "
+                f"from {state.ip}"
             )
             del self.state.workers[worker_state.id]
 
