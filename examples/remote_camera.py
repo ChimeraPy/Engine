@@ -82,7 +82,7 @@ if __name__ == "__main__":
             if worker_id == "local":
                 continue
             else:
-                web_node = WebcamNode(name="web")
+                web_node = WebcamNode(name=f"web-{worker_id}")
                 graph.add_nodes_from([web_node])
                 graph.add_edges_from([(web_node, show_node)])
                 mapping[worker_id] = [web_node.id]
@@ -93,10 +93,10 @@ if __name__ == "__main__":
         assert manager.start().result(timeout=5)
 
         # Wail until user stops
-        while True:
-            q = input("Ready to start? (Y/n)")
-            if q.lower() == "y":
-                break
+        # while True:
+        #     q = input("Ready to start? (Y/n)")
+        #     if q.lower() == "y":
+        #         break
 
         assert manager.record().result(timeout=5)
 

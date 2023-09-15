@@ -53,8 +53,8 @@ class TqdmToLogger(object):
         self.buf = ""
 
     def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.level, line)
+        if buf.rstrip():
+            self.logger.log(self.level, buf.rstrip())
 
     def flush(self):
         pass

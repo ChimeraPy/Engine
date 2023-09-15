@@ -26,7 +26,6 @@ from chimerapy.engine.utils import (
     create_payload,
     async_waiting_for,
     get_ip_address,
-    TqdmToLogger,
 )
 from .enums import GENERAL_MESSAGE
 
@@ -220,17 +219,16 @@ class Server:
 
         # Reading the buffer and writing the file
         async with aiofiles.open(location, "wb") as f:
-            tqdm_out = TqdmToLogger(self.logger, level=logging.INFO)
+            # tqdm_out = TqdmToLogger(self.logger, level=logging.INFO)
             with tqdm(
                 total=1,
                 unit="B",
                 unit_scale=True,
                 desc=f"File {field.filename}",
-                miniters=1,
-                file=tqdm_out,
+                # file=tqdm_out,
             ) as pbar:
                 while True:
-                    chunk = await field.read_chunk()  # 8192 bytes by default.
+                    chunk = await field.read_chunk(8192 * 10)  # 8192 bytes by default.
                     if not chunk:
                         break
                     await f.write(chunk)
