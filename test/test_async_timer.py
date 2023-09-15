@@ -21,7 +21,6 @@ def timer():
     return timer
 
 
-@pytest.mark.asyncio
 async def test_async_timer(timer):
     await timer.start()
     await asyncio.sleep(2)

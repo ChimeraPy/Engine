@@ -34,7 +34,6 @@ class WebcamNode(cpe.Node):
 
 class ScreenCaptureNode(cpe.Node):
     def setup(self):
-
         if platform.system() == "Windows":
             import dxcam
 
@@ -94,6 +93,7 @@ if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs", port=9000)
+    manager.zeroconf()
     worker = cpe.Worker(name="local", id="local", port=0)
 
     # Then register graph to Manager
@@ -110,6 +110,11 @@ if __name__ == "__main__":
         graph = RemoteCameraGraph()
         mapping = {worker.id: graph.node_ids}
     else:
+
+        print(
+            "WARNING: ScreenCaptureNode is faulty for this "
+            "configuration for unknown reasons"
+        )
 
         # For mutliple workers (remote and local)
         graph = cpe.Graph()
@@ -128,7 +133,7 @@ if __name__ == "__main__":
                 mapping[worker_id] = [web_node.id, screen_node.id]
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
+    manager.commit_graph(graph=graph, mapping=mapping).result()
     manager.start().result(timeout=5)
 
     # Wail until user stops

@@ -1,4 +1,5 @@
 import requests
+import json
 
 import pytest
 
@@ -52,6 +53,7 @@ def test_http_server_instanciate(http_server):
             "/workers/node_status",
             WorkerState(id="NULL", name="NULL", tempfolder=TEST_DATA_DIR).to_json(),
         ),
+        ("/workers/send_archive", json.dumps({"worker_id": "test", "success": True})),
     ],
 )
 def test_http_server_routes(http_server, route, payload):

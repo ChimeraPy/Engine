@@ -1,19 +1,18 @@
 # Built-in
-from typing import Callable, Dict, Optional, Any, List, Coroutine
+from typing import Callable, Dict, Optional, List, Coroutine
 import asyncio
 import logging
 import uuid
 import collections
-import time
 import pathlib
 import tempfile
-import shutil
-import os
+import aioshutil
+import asyncio_atexit
 import json
 import enum
 import traceback
 import aiofiles
-import atexit
+from dataclasses import dataclass, field
 from concurrent.futures import Future
 
 # Third-party
@@ -26,7 +25,6 @@ from .async_loop_thread import AsyncLoopThread
 from chimerapy.engine.utils import (
     create_payload,
     async_waiting_for,
-    waiting_for,
     get_ip_address,
 )
 from .enums import GENERAL_MESSAGE
@@ -42,6 +40,21 @@ from chimerapy.engine import _logger
 # https://stackoverflow.com/questions/58455058/how-do-i-avoid-the-loop-argument
 # https://docs.aiohttp.org/en/stable/web_advanced.html?highlight=weakref#graceful-shutdown
 # https://docs.aiohttp.org/en/stable/web_quickstart.html#file-uploads
+
+
+@dataclass
+class FileTransferRecord:
+    sender_id: str
+    uuid: str
+    filename: str
+    location: pathlib.Path
+    size: int
+    complete: bool = False
+
+
+@dataclass
+class FileTransferTable:
+    records: Dict[str, FileTransferRecord] = field(default_factory=dict)
 
 
 class Server:
@@ -73,12 +86,7 @@ class Server:
         self.ws_handlers = {k.value: v for k, v in ws_handlers.items()}
 
         # The EventLoop
-        if thread:
-            self._thread = thread
-        else:
-            self._thread = AsyncLoopThread()
-            self._thread.start()
-
+        self._thread = thread
         self.futures: List[Future] = []
 
         # Using flag for marking if system should be running
@@ -111,19 +119,12 @@ class Server:
 
         # Adding file transfer capabilities
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
-        self.file_transfer_records: Dict[
-            str, Dict[str, Dict[str, Any]]
-        ] = collections.defaultdict(
-            dict
-        )  # Need to refactor this!
+        self.file_transfer_records = FileTransferTable()
 
         if parent_logger is not None:
             self.logger = _logger.fork(parent_logger, "server")
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
-
-        # Make sure to shutdown correctly
-        atexit.register(self.shutdown)
 
     def __str__(self):
         return f"<Server {self.id}>"
@@ -133,6 +134,7 @@ class Server:
     ####################################################################
 
     def _exec_coro(self, coro: Coroutine) -> Future:
+        assert self._thread
         # Submitting the coroutine
         future = self._thread.exec(coro)
 
@@ -140,6 +142,27 @@ class Server:
         self.futures.append(future)
 
         return future
+
+    async def move_transferred_files(
+        self,
+        dst: pathlib.Path,
+        owner: Optional[str] = None,
+        owner_id: Optional[str] = None,
+    ) -> bool:
+
+        for id, file_record in self.file_transfer_records.records.items():
+
+            if owner and owner != file_record.sender_id:
+                continue
+
+            await aioshutil.unpack_archive(file_record.location, dst)
+
+            if owner:
+                new_file = dst / ".".join(file_record.filename.split(".")[:-1])
+                dst_file = dst / f"{owner}-{owner_id}-{str(uuid.uuid4())[:4]}"
+                await aioshutil.move(new_file, dst_file)
+
+        return True
 
     ####################################################################
     # Server Setters and Getters
@@ -149,19 +172,10 @@ class Server:
         self._app.add_routes(routes)
 
     ####################################################################
-    # Server WS Handlers
+    # Server Routes
     ####################################################################
 
-    async def _ok(self, msg: Dict, ws: web.WebSocketResponse):
-        self.uuid_records.append(msg["data"]["uuid"])
-
-    async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
-        # self.logger.debug(f"{self}: reigstered client: {msg['data']['client_id']}")
-        # Storing the client information
-        self.ws_clients[msg["data"]["client_id"]] = ws
-
-    async def _file_receive(self, request):
-
+    async def _file_receive(self, request) -> web.Response:
         reader = await request.multipart()
 
         # /!\ Don't forget to validate your inputs /!\
@@ -179,24 +193,24 @@ class Server:
         filename = field.filename
 
         # Attaching a UUID to prevent possible collision
-        id = uuid.uuid4()
+        id = str(uuid.uuid4())
         filename_list = filename.split(".")
         uuid_filename = str(id) + "." + filename_list[1]
 
         # Create dst filepath
-        dst_filepath = self.tempfolder / uuid_filename
+        location = self.tempfolder / uuid_filename
 
         # Create the record and mark that is not complete
+        file_entry = FileTransferRecord(
+            sender_id=meta["sender_id"],
+            filename=filename,
+            uuid=id,
+            location=location,
+            size=meta["size"],
+        )
+
         # Keep record of the files sent!
-        self.file_transfer_records[meta["sender_id"]][filename] = {
-            "uuid": id,
-            "uuid_filename": uuid_filename,
-            "filename": filename,
-            "dst_filepath": dst_filepath,
-            "read": 0,
-            "size": meta["size"],
-            "complete": False,
-        }
+        self.file_transfer_records.records[id] = file_entry
 
         # You cannot rely on Content-Length if transfer is chunked.
         read = 0
@@ -204,16 +218,17 @@ class Server:
         prev_n = 0
 
         # Reading the buffer and writing the file
-        async with aiofiles.open(dst_filepath, "wb") as f:
+        async with aiofiles.open(location, "wb") as f:
+            # tqdm_out = TqdmToLogger(self.logger, level=logging.INFO)
             with tqdm(
                 total=1,
                 unit="B",
                 unit_scale=True,
                 desc=f"File {field.filename}",
-                miniters=1,
+                # file=tqdm_out,
             ) as pbar:
                 while True:
-                    chunk = await field.read_chunk()  # 8192 bytes by default.
+                    chunk = await field.read_chunk(8192 * 10)  # 8192 bytes by default.
                     if not chunk:
                         break
                     await f.write(chunk)
@@ -223,13 +238,22 @@ class Server:
                         prev_n = pbar.n
 
         # After finishing, mark the size and that is complete
-        self.file_transfer_records[meta["sender_id"]][filename].update(
-            {"size": total_size, "complete": True}
-        )
+        self.file_transfer_records.records[id].size = total_size
+        self.file_transfer_records.records[id].complete = True
 
-        return web.Response(
-            text=f"{filename} sized of {total_size} successfully stored"
-        )
+        return web.HTTPOk()
+
+    ####################################################################
+    # Server WS Handlers
+    ####################################################################
+
+    async def _ok(self, msg: Dict, ws: web.WebSocketResponse):
+        self.uuid_records.append(msg["data"]["uuid"])
+
+    async def _register_ws_client(self, msg: Dict, ws: web.WebSocketResponse):
+        # self.logger.debug(f"{self}: reigstered client: {msg['data']['client_id']}")
+        # Storing the client information
+        self.ws_clients[msg["data"]["client_id"]] = ws
 
     ####################################################################
     # IO Main Methods
@@ -361,6 +385,9 @@ class Server:
         # Set flag
         self.running = True
 
+        # Make sure to shutdown correctly
+        asyncio_atexit.register(self.async_shutdown)
+
         return True
 
     async def async_send(
@@ -423,6 +450,13 @@ class Server:
 
     def serve(self, blocking: bool = True) -> Optional[Future]:
 
+        if not self._thread:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
+        else:
+            if not self._thread.is_alive():
+                self._thread.start()
+
         # Cannot serve twice
         if self.running:
             self.logger.warning(f"{self}: Requested to re-serve HTTP Server")
@@ -446,66 +480,6 @@ class Server:
         # Create msg container and execute writing coroutine for all
         # clients
         return self._exec_coro(self.async_broadcast(signal, data, ok))
-
-    def move_transfer_files(self, dst: pathlib.Path, unzip: bool) -> bool:
-
-        for name, filepath_dict in self.file_transfer_records.items():
-            # Create a folder for the name
-            named_dst = dst / name
-            os.mkdir(named_dst)
-
-            # Move all the content inside
-            for filename, file_meta in filepath_dict.items():
-
-                # Extract data
-                filepath = file_meta["dst_filepath"]
-
-                # Wait until filepath is completely written
-                success = waiting_for(
-                    condition=lambda: filepath.exists(),
-                    timeout=config.get("comms.timeout.zip-time-write"),
-                )
-
-                if not success:
-                    return False
-
-                # If not unzip, just move it
-                if not unzip:
-                    shutil.move(filepath, named_dst / filename)
-
-                # Otherwise, unzip, move content to the original folder,
-                # and delete the zip file
-                else:
-                    shutil.unpack_archive(filepath, named_dst)
-
-                    # Handling if temp folder includes a _ in the beginning
-                    new_filename = file_meta["filename"]
-                    if new_filename[0] == "_":
-                        new_filename = new_filename[1:]
-                    new_filename = new_filename.split(".")[0]
-
-                    new_file = named_dst / new_filename
-
-                    # Wait until file is ready
-                    miss_counter = 0
-                    delay = 0.5
-                    timeout = config.get("comms.timeout.zip-time")
-
-                    while not new_file.exists():
-                        time.sleep(delay)
-                        miss_counter += 1
-                        if timeout < delay * miss_counter:
-                            self.logger.error(
-                                f"File zip unpacking took too long! - \
-                                {name}:{filepath}:{new_file}"
-                            )
-                            return False
-
-                    for file in new_file.iterdir():
-                        shutil.move(file, named_dst)
-                    shutil.rmtree(new_file)
-
-        return True
 
     def shutdown(self, blocking: bool = True) -> Optional[Future]:
 

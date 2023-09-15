@@ -92,6 +92,8 @@ class PollerService(Service):
 
     def setup_connections(self, node_pub_table: NodePubTable):
 
+        # self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
+
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
 

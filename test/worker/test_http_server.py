@@ -66,7 +66,6 @@ def test_http_server_instanciate(http_server):
     ...
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "route_type, route, payload",
     [
@@ -86,7 +85,7 @@ def test_http_server_instanciate(http_server):
             json.dumps({"node_id": "1", "method_name": "a", "params": {}}),
         ),
         ("post", "/nodes/stop", json.dumps({})),
-        ("post", "/packages/load", json.dumps({"packages": []})),
+        # ("post", "/packages/load", json.dumps({"packages": []})),
         # ("post", "/shutdown", json.dumps({})),
     ],
 )
@@ -103,7 +102,6 @@ async def test_http_server_routes(http_server, route_type, route, payload):
                 assert resp.ok
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "signal, payload",
     [

@@ -23,6 +23,8 @@ dependencies = [
     'multiprocess',
     'opencv-python',
     'pyaudio',
+    'aioshutil',
+    'asyncio-atexit',
     'pandas',
     'tqdm',
     'pyzmq',
@@ -53,11 +55,9 @@ test = [
     'numpy',
     'imutils',
     'pillow',
-    'requests',
     'bump2version'
 ]
 types = [
-    'types-requests',
     'types-PyYAML',
     'types-aiofiles'
 ]
@@ -109,7 +109,9 @@ ignore_missing_imports = true
 
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
+
 [tool.pytest.ini_options]
+asyncio_mode = 'auto'
 
 # Logging + CLI
 log_cli = true

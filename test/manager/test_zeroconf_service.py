@@ -58,7 +58,6 @@ def zeroconf_service():
     return zeroconf_service
 
 
-@pytest.mark.asyncio
 async def test_enable_and_disable_zeroconf(zeroconf_service):
 
     assert await zeroconf_service.enable()
@@ -66,7 +65,6 @@ async def test_enable_and_disable_zeroconf(zeroconf_service):
     assert await zeroconf_service.disable()
 
 
-@pytest.mark.asyncio
 async def test_zeroconf_connect(zeroconf_service):
 
     assert await zeroconf_service.enable()

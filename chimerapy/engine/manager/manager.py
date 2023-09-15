@@ -320,8 +320,8 @@ class Manager:
     async def async_stop(self) -> bool:
         return await self.worker_handler.stop()
 
-    async def async_collect(self, unzip: bool = True) -> bool:
-        return await self.worker_handler.collect(unzip)
+    async def async_collect(self) -> bool:
+        return await self.worker_handler.collect()
 
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)
@@ -454,20 +454,17 @@ class Manager:
         """
         return self._exec_coro(self.async_stop())
 
-    def collect(self, unzip: bool = True) -> Future[bool]:
+    def collect(self) -> Future[bool]:
         """Collect data from the Workers
 
         First, we wait until all the Nodes have finished save their data.\
         Then, manager request that Nodes' from the Workers.
 
-        Args:
-            unzip (bool): Should the .zip archives be extracted.
-
         Returns:
             Future[bool]: Future of success in collect data from Workers
 
         """
-        return self._exec_coro(self.async_collect(unzip))
+        return self._exec_coro(self.async_collect())
 
     def reset(
         self, keep_workers: bool = True, blocking: bool = True

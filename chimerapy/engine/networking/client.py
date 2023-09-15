@@ -5,14 +5,13 @@ import threading
 import collections
 import uuid
 import pathlib
-import shutil
+import aioshutil
 import tempfile
 import json
 import enum
 import logging
 import traceback
-import atexit
-import multiprocess as mp
+import asyncio_atexit
 from concurrent.futures import Future
 from typing import Dict, Optional, Callable, Any, Union, List, Coroutine
 
@@ -56,12 +55,7 @@ class Client:
         self._session = None
 
         # The EventLoop
-        if thread:
-            self._thread = thread
-        else:
-            self._thread = AsyncLoopThread()
-            self._thread.start()
-
+        self._thread = thread
         self.futures: List[Future] = []
 
         # State variables
@@ -87,9 +81,6 @@ class Client:
         else:
             self.logger = _logger.getLogger("chimerapy-engine-networking")
 
-        # Make sure to shutdown correctly
-        atexit.register(self.shutdown)
-
     def __str__(self):
         return f"<Client {self.id}>"
 
@@ -101,6 +92,7 @@ class Client:
     ####################################################################
 
     def _exec_coro(self, coro: Coroutine) -> Future:
+        assert self._thread
         # Submitting the coroutine
         future = self._thread.exec(coro)
 
@@ -209,12 +201,14 @@ class Client:
         self._ws = await self._session.ws_connect(f"http://{self.host}:{self.port}/ws")
 
         # Create task to read
-        # self._thread.exec(self._read_ws())
         task = asyncio.create_task(self._read_ws())
         self.tasks.append(task)
 
         # Register the client
         await self._register()
+
+        # Make sure to shutdown correctly
+        asyncio_atexit.register(self.async_shutdown)
 
         return True
 
@@ -242,53 +236,25 @@ class Client:
 
         return True
 
-    async def async_send_folder(self, sender_id: str, dir: pathlib.Path):
+    async def async_send_folder(self, sender_id: str, dir: pathlib.Path) -> bool:
 
         if not dir.is_dir() and not dir.exists():
             self.logger.error(f"Cannot send non-existent dir: {dir}.")
             return False
 
-        # Having continuing attempts to make the zip folder
-        miss_counter = 0
-        delay = 1
-        zip_timeout = config.get("comms.timeout.zip-time")
-
-        # First, we need to archive the folder into a zip file
-        while True:
-            try:
-                process = mp.Process(
-                    target=shutil.make_archive,
-                    args=(
-                        str(dir),
-                        "zip",
-                        dir.parent,
-                        dir.name,
-                    ),
-                )
-                process.start()
-                process.join()
-                assert process.exitcode == 0
-
-                break
-            except Exception:
-                self.logger.warning("Temp folder couldn't be zipped.")
-                self.logger.error(traceback.format_exc())
-                await asyncio.sleep(delay)
-                miss_counter += 1
-
-                if zip_timeout < delay * miss_counter:
-                    self.logger.error("Temp folder couldn't be zipped.")
-                    return False
-
         zip_file = dir.parent / f"{dir.name}.zip"
+        try:
+            await aioshutil.make_archive(str(dir), "zip", dir.parent, dir.name)
+        except Exception:
+            self.logger.warning(f"{self}: Temp folder couldn't be zipped.")
+            self.logger.error(traceback.format_exc())
+            return False
 
         # Compose the url
         url = f"http://{self.host}:{self.port}/file/post"
 
         # Then send the file
-        await self.async_send_file(url, sender_id, zip_file)
-
-        return True
+        return await self.async_send_file(url, sender_id, zip_file)
 
     async def async_shutdown(self, msg: Dict = {}):
 
@@ -322,7 +288,7 @@ class Client:
     ####################################################################
 
     def send(self, signal: enum.Enum, data: Any, ok: bool = False) -> Future[bool]:
-        return self._thread.exec(self.async_send(signal, data, ok))
+        return self._exec_coro(self.async_send(signal, data, ok))
 
     def send_file(self, sender_id: str, filepath: pathlib.Path) -> Future[bool]:
         # Compose the url
@@ -338,6 +304,14 @@ class Client:
         return self._exec_coro(self.async_send_folder(sender_id, dir))
 
     def connect(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+
+        if not self._thread:
+            self._thread = AsyncLoopThread()
+            self._thread.start()
+        else:
+            if not self._thread.is_alive():
+                self._thread.start()
+
         future = self._exec_coro(self.async_connect())
 
         if blocking:

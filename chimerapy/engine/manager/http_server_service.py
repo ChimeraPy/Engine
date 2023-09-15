@@ -13,7 +13,12 @@ from ..states import WorkerState, ManagerState
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
-from .events import WorkerRegisterEvent, WorkerDeregisterEvent
+from .events import (
+    MoveTransferredFilesEvent,
+    WorkerRegisterEvent,
+    WorkerDeregisterEvent,
+    UpdateSendArchiveEvent,
+)
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -48,9 +53,11 @@ class HttpServerService(Service):
             id="Manager",
             routes=[
                 # Worker API
+                web.get("/", self._home),
                 web.post("/workers/register", self._register_worker_route),
                 web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
+                web.post("/workers/send_archive", self._update_send_archive),
             ],
             thread=self._thread,
         )
@@ -68,6 +75,7 @@ class HttpServerService(Service):
             ),
             "move_transferred_files": TypedObserver(
                 "move_transferred_files",
+                MoveTransferredFilesEvent,
                 on_asend=self.move_transferred_files,
                 handle_event="unpack",
             ),
@@ -120,8 +128,17 @@ class HttpServerService(Service):
             except Exception:
                 logger.error(traceback.format_exc())
 
-    def move_transferred_files(self, unzip: bool) -> bool:
-        return self._server.move_transfer_files(self.state.logdir, unzip)
+    async def move_transferred_files(self, worker_state: WorkerState) -> bool:
+        return await self._server.move_transferred_files(
+            self.state.logdir, owner=worker_state.name, owner_id=worker_state.id
+        )
+
+    #####################################################################################
+    ## Manager User Routes
+    #####################################################################################
+
+    async def _home(self, request: web.Request):
+        return web.Response(text="ChimeraPy Manager running!")
 
     #####################################################################################
     ## Worker -> Manager Routes
@@ -167,9 +184,14 @@ class HttpServerService(Service):
         if worker_state.id in self.state.workers:
             update_dataclass(self.state.workers[worker_state.id], worker_state)
         else:
-            logger.error(f"{self}: non-registered Worker update: {worker_state.id}")
-        # logger.debug(f"{self}: Nodes status update to: {self.state.workers}")
+            logger.warning(f"{self}: non-registered Worker update: {worker_state.id}")
 
+        return web.HTTPOk()
+
+    async def _update_send_archive(self, request: web.Request):
+        msg = await request.json()
+        event_data = UpdateSendArchiveEvent(**msg)
+        await self.eventbus.asend(Event("update_send_archive", event_data))
         return web.HTTPOk()
 
     #####################################################################################

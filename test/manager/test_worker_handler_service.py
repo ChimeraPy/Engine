@@ -67,7 +67,6 @@ def test_instanticate(testbed_setup):
     ...
 
 
-@pytest.mark.asyncio
 async def test_worker_handler_create_node(testbed_setup):
     worker_handler, worker, simple_graph = testbed_setup
 
@@ -83,12 +82,12 @@ async def test_worker_handler_create_node(testbed_setup):
     assert await worker_handler._request_node_destruction(
         worker_id=worker.id, node_id="Gen1"
     )
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
+
     assert "Gen1" not in worker.state.nodes
     assert "Gen1" not in worker_handler.state.workers[worker.id].nodes
 
 
-@pytest.mark.asyncio
 async def test_worker_handler_create_connections(testbed_setup):
     worker_handler, worker, simple_graph = testbed_setup
 
@@ -114,7 +113,6 @@ async def test_worker_handler_create_connections(testbed_setup):
     assert await worker_handler.reset()
 
 
-@pytest.mark.asyncio
 async def test_worker_handler_lifecycle_graph(testbed_setup):
     worker_handler, worker, simple_graph = testbed_setup
 
@@ -135,7 +133,6 @@ async def test_worker_handler_lifecycle_graph(testbed_setup):
     assert await worker_handler.reset()
 
 
-@pytest.mark.asyncio
 async def test_worker_handler_enable_diagnostics(testbed_setup):
     worker_handler, worker, simple_graph = testbed_setup
 

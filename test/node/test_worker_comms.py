@@ -95,7 +95,7 @@ def test_instanticate(worker_comms_setup):
     ...
 
 
-# @pytest.mark.asyncio
+# @
 # async def test_setup(worker_comms_setup):
 #     worker_comms, server = worker_comms_setup
 
@@ -120,7 +120,6 @@ def test_instanticate(worker_comms_setup):
         ("enable_diagnostics", {"data": {"enable": True}}),
     ],
 )
-@pytest.mark.asyncio
 async def test_methods(worker_comms_setup, method_name, method_params):
     worker_comms, _ = worker_comms_setup
 
@@ -149,7 +148,6 @@ async def test_methods(worker_comms_setup, method_name, method_params):
         (WORKER_MESSAGE.DIAGNOSTICS, {"enable": False}),
     ],
 )
-@pytest.mark.asyncio
 async def test_ws_signals(worker_comms_setup, signal, data):
     worker_comms, server = worker_comms_setup
 

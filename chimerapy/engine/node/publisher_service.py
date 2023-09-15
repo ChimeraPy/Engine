@@ -52,6 +52,7 @@ class PublisherService(Service):
         self.state.port = self.publisher.port
 
     def publish(self, data_chunk: DataChunk):
+        # self.logger.debug(f"{self}: publishing {data_chunk}")
         self.publisher.publish(data_chunk)
 
     def teardown(self):

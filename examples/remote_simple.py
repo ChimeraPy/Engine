@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict
 import time
 import pathlib
 import os
@@ -14,6 +14,7 @@ class Producer(cpe.Node):
 
     def step(self):
         time.sleep(1)
+        self.logger.debug("Producer step")
         current_counter = self.counter
         self.counter += 1
         data_chunk = cpe.DataChunk()
@@ -22,9 +23,9 @@ class Producer(cpe.Node):
 
 
 class Consumer(cpe.Node):
-    def step(self, data: Dict[str, Any]):
-        d = data["prod"].get("counter")["value"]
-        print("Consumer got data: ", d)
+    def step(self, data_chunks: Dict[str, cpe.DataChunk]):
+        d = data_chunks["prod"].get("counter")["value"]
+        self.logger.debug(f"Consumer step: {d}")
 
 
 class SimpleGraph(cpe.Graph):
@@ -42,8 +43,8 @@ if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs")
-    graph = SimpleGraph()
-    worker = cpe.Worker(name="local")
+    manager.zeroconf()
+    worker = cpe.Worker(name="local", id="local")
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
@@ -54,14 +55,29 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
-    # Assuming one worker
-    # mapping = {worker.id: graph.node_ids}
-    # mapping = {worker.id: [graph.prod.id], 'remote': [graph.cons.id]}
-    mapping = {worker.id: [graph.cons.id], "remote": [graph.prod.id]}
+    # For local only
+    if len(manager.workers) == 1:
+        graph = SimpleGraph()
+        mapping = {worker.id: graph.node_ids}
+    else:
+
+        # For mutliple workers (remote and local)
+        graph = cpe.Graph()
+        con_node = Consumer(name="cons")
+        graph.add_nodes_from([con_node])
+        mapping = {worker.id: [con_node.id]}
+
+        for worker_id in manager.workers:
+            if worker_id == "local":
+                continue
+            else:
+                prod_node = Producer(name="prod")
+                graph.add_nodes_from([prod_node])
+                graph.add_edge(src=prod_node, dst=con_node)
+                mapping[worker_id] = [prod_node.id]
 
     # Commit the graph
     manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
-    manager.start().result(timeout=5)
 
     # Wail until user stops
     while True:
@@ -69,6 +85,7 @@ if __name__ == "__main__":
         if q.lower() == "y":
             break
 
+    manager.start().result(timeout=5)
     manager.record().result(timeout=5)
 
     # Wail until user stops

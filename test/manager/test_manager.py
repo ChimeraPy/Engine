@@ -4,7 +4,6 @@ import pathlib
 
 import pytest
 
-from chimerapy.engine import config
 import chimerapy.engine as cpe
 from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
 
@@ -68,13 +67,10 @@ class TestLifeCycle:
         for node_id in config_graph.G.nodes():
             assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
 
-    # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-    @pytest.mark.parametrize("context", ["threading"])
+    @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+    # @pytest.mark.parametrize("context", ["multiprocessing"])
     def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
-
-        # Enable diagnostics
-        config.set("diagnostics.logging-enabled", True)
 
         # Define graph
         gen_node = GenNode(name="Gen1")
@@ -114,9 +110,6 @@ class TestLifeCycle:
 
         manager.commit_graph(graph=simple_graph, mapping=mapping).result(timeout=30)
         assert manager.start().result()
-
-        time.sleep(3)
-
         assert manager.record().result()
 
         time.sleep(3)

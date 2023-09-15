@@ -164,7 +164,6 @@ def test_instanticate(processor_setup):
         lazy_fixture("step_processor"),
     ],
 )
-@pytest.mark.asyncio
 async def test_setup(processor_setup):
     processor, _ = processor_setup
     await processor.setup()
@@ -178,7 +177,6 @@ async def test_setup(processor_setup):
         ("step", lazy_fixture("step_processor")),
     ],
 )
-@pytest.mark.asyncio
 async def test_main(ptype, processor_setup):
     processor, eventbus = processor_setup
 

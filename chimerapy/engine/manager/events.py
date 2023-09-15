@@ -9,6 +9,12 @@ class StartEvent:
 
 
 @dataclass
+class UpdateSendArchiveEvent:  # update_send_archive
+    worker_id: str
+    success: bool
+
+
+@dataclass
 class WorkerRegisterEvent:  # worker_register
     worker_state: WorkerState
 
@@ -31,4 +37,4 @@ class DeregisterEntityEvent:  # entity_deregister
 
 @dataclass
 class MoveTransferredFilesEvent:  # move_transferred_files
-    unzip: bool
+    worker_state: WorkerState

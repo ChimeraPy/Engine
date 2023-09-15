@@ -31,7 +31,7 @@ class ShowWindow(cpe.Node):
     def step(self, data_chunks: Dict[str, cpe.DataChunk]):
 
         for name, data_chunk in data_chunks.items():
-            self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
+            # self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
 
             cv2.imshow(name, data_chunk.get("frame")["value"])
             cv2.waitKey(1)
@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs")
-    graph = RemoteCameraGraph()
+    manager.zeroconf()
     worker = cpe.Worker(name="local", id="local")
 
     # Then register graph to Manager
@@ -66,26 +66,49 @@ if __name__ == "__main__":
 
     # Assuming one worker
     # mapping = {"remote": [graph.web.id], worker.id: [graph.show.id]}
-    mapping = {worker.id: graph.node_ids}
+    # For local only
+    if len(manager.workers) == 1:
+        graph = RemoteCameraGraph()
+        mapping = {worker.id: graph.node_ids}
+    else:
+
+        # For mutliple workers (remote and local)
+        graph = cpe.Graph()
+        show_node = ShowWindow(name="show")
+        graph.add_node(show_node)
+        mapping = {worker.id: [show_node.id]}
+
+        for worker_id in manager.workers:
+            if worker_id == "local":
+                continue
+            else:
+                web_node = WebcamNode(name=f"web-{worker_id}")
+                graph.add_nodes_from([web_node])
+                graph.add_edges_from([(web_node, show_node)])
+                mapping[worker_id] = [web_node.id]
 
     # Commit the graph
-    manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
-    manager.start().result(timeout=5)
+    try:
+        assert manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
+        assert manager.start().result(timeout=5)
 
-    # Wail until user stops
-    while True:
-        q = input("Ready to start? (Y/n)")
-        if q.lower() == "y":
-            break
+        # Wail until user stops
+        # while True:
+        #     q = input("Ready to start? (Y/n)")
+        #     if q.lower() == "y":
+        #         break
 
-    manager.record().result(timeout=5)
+        assert manager.record().result(timeout=5)
 
-    # Wail until user stops
-    while True:
-        q = input("Stop? (Y/n)")
-        if q.lower() == "y":
-            break
+        # Wail until user stops
+        while True:
+            q = input("Stop? (Y/n)")
+            if q.lower() == "y":
+                break
 
-    manager.stop().result(timeout=5)
-    manager.collect().result()
-    manager.shutdown()
+        assert manager.stop().result(timeout=5)
+        assert manager.collect().result()
+    except Exception:
+        print("System failed")
+    finally:
+        manager.shutdown()

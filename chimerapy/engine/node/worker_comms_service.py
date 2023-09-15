@@ -222,7 +222,7 @@ class WorkerCommsService(Service):
 
     async def enable_diagnostics(self, msg: Dict):
         assert self.state and self.eventbus and self.logger
-        enable = msg['data']['enable']
+        enable = msg["data"]["enable"]
 
         event_data = EnableDiagnosticsEvent(enable)
         await self.eventbus.asend(Event("enable_diagnostics", event_data))
