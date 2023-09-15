@@ -34,7 +34,6 @@ class WebcamNode(cpe.Node):
 
 class ScreenCaptureNode(cpe.Node):
     def setup(self):
-
         if platform.system() == "Windows":
             import dxcam
 
@@ -111,6 +110,11 @@ if __name__ == "__main__":
         graph = RemoteCameraGraph()
         mapping = {worker.id: graph.node_ids}
     else:
+
+        print(
+            "WARNING: ScreenCaptureNode is faulty for this "
+            "configuration for unknown reasons"
+        )
 
         # For mutliple workers (remote and local)
         graph = cpe.Graph()

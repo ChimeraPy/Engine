@@ -11,7 +11,6 @@ import errno
 from typing import Callable, Union, Optional, Any, Dict
 
 # Third-party
-from tqdm import tqdm
 
 # Internal
 from chimerapy.engine import _logger
@@ -45,34 +44,20 @@ def clear_queue(input_queue: queue.Queue):
 # https://github.com/tqdm/tqdm/issues/313#issuecomment-850698822
 
 
-class logging_tqdm(tqdm):
-    def __init__(
-        self,
-        *args,
-        logger: logging.Logger = None,
-        mininterval: float = 1,
-        bar_format: str = "{desc}{percentage:3.0f}%{r_bar}",
-        desc: str = "progress: ",
-        **kwargs,
-    ):
-        self._logger = logger
-        super().__init__(
-            *args, mininterval=mininterval, bar_format=bar_format, desc=desc, **kwargs
-        )
+class TqdmToLogger(object):
+    """Adapter to redirect tqdm output to a logger"""
 
-    @property
-    def logger(self):
-        if self._logger is not None:
-            return self._logger
-        return logger
+    def __init__(self, logger, level=logging.INFO):
+        self.logger = logger
+        self.level = level
+        self.buf = ""
 
-    def display(self, msg=None, pos=None):
-        if not self.n:
-            # skip progress bar before having processed anything
-            return
-        if not msg:
-            msg = self.__str__()
-        self.logger.info("%s", msg)
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.level, line)
+
+    def flush(self):
+        pass
 
 
 async def async_waiting_for(
