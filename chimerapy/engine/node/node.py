@@ -89,7 +89,6 @@ class Node:
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
         self.logging_level: int = logging.DEBUG
-        self.start_time = datetime.datetime.now()
 
         # Default values
         self.node_config = NodeConfig()
@@ -207,7 +206,6 @@ class Node:
                 "data": data,
                 "dtype": "video",
                 "fps": fps,
-                "elapsed": (timestamp - self.start_time).total_seconds(),
                 "timestamp": timestamp,
             }
             self.recorder.submit(video_entry)
