@@ -1,23 +1,25 @@
-import threading
 import typing
 import logging
-from typing import Any, Union, Optional
+import abc
+from typing import Any, Awaitable, Union, Optional
 
 # Third-party Imports
 import multiprocess as mp
 
-from chimerapy.engine import config
 from ...networking import DataChunk
+from .context_session import ContextSession
 
 if typing.TYPE_CHECKING:
     from ...node.node import Node
 
+manager = mp.Manager()
 
-class NodeController:
+
+class NodeController(abc.ABC):
+
+    running: Union[bool, mp.Value]
     node_object: "Node"
-
-    context: Union[threading.Thread, mp.Process]  # type: ignore
-
+    future: Optional[Awaitable]
     response: bool = False
     gather: DataChunk = DataChunk()
     registered_method_results: Any = None
@@ -27,57 +29,48 @@ class NodeController:
         # Save parameters
         self.node_object = node_object
         self.logger = logger
+        self.future = None
 
-    def start(self):
-        self.context.start()
+    @abc.abstractmethod
+    def run(self, context: ContextSession):
+        ...
 
+    @abc.abstractmethod
     def stop(self):
         ...
 
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-        ...
+    async def shutdown(self):
+        if self.future:
+            self.stop()
+            await self.future
 
 
 class ThreadNodeController(NodeController):
 
-    context: threading.Thread
     running: bool
 
     def __init__(self, node_object: "Node", logger: logging.Logger):
         super().__init__(node_object, logger)
 
-        # Create a thread to run the Node
-        self.context = threading.Thread(target=self.node_object.run, args=(True,))
+    def run(self, context: ContextSession):
+        self.future = context.add(self.node_object.run, (True,))
 
     def stop(self):
         self.node_object.running = False
 
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-
-        if type(timeout) == type(None):
-            timeout = config.get("worker.timeout.node-shutdown")
-
-        self.stop()
-        self.context.join(timeout=timeout)
-        if self.context.is_alive():
-            self.logger.error(
-                f"Failed to JOIN thread controller for Node={self.node_object.state}"
-            )
-
 
 class MPNodeController(NodeController):
 
-    context: mp.Process  # type: ignore
     running: mp.Value  # type: ignore
 
     def __init__(self, node_object: "Node", logger: logging.Logger):
         super().__init__(node_object, logger)
+        self.running = manager.Value("i", True)  # type: ignore
 
-        # Create a process to run the Node
-        self.running = mp.Value("i", True)  # type: ignore
-        self.context = mp.Process(  # type: ignore
-            target=self.node_object.run,
-            args=(
+    def run(self, context: ContextSession):
+        self.future = context.add(
+            self.node_object.run,
+            (
                 True,
                 self.running,
             ),
@@ -85,12 +78,3 @@ class MPNodeController(NodeController):
 
     def stop(self):
         self.running.value = False
-
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-
-        if type(timeout) == type(None):
-            timeout = config.get("worker.timeout.node-shutdown")
-
-        self.stop()
-        self.context.join(timeout=timeout)
-        self.context.terminate()

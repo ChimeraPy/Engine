@@ -1,5 +1,6 @@
 import warnings
 import logging
+import asyncio
 from typing import Dict, Any, Union, Type
 
 # Third-party Imports
@@ -28,6 +29,7 @@ from ..events import (
     UpdateGatherEvent,
 )
 from .node_controller import NodeController, ThreadNodeController, MPNodeController
+from .context_session import MPSession, ThreadSession, ContextSession
 
 
 class NodeHandlerService(Service):
@@ -47,7 +49,7 @@ class NodeHandlerService(Service):
         self.logger = logger
         self.logreceiver = logreceiver
 
-        # Containers
+        # State information
         self.node_controllers: Dict[str, NodeController] = {}
 
         # Map cls to context
@@ -58,6 +60,7 @@ class NodeHandlerService(Service):
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
+            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
@@ -125,15 +128,23 @@ class NodeHandlerService(Service):
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
 
+    async def start(self) -> bool:
+        # Containers
+        self.mp_session = MPSession()
+        self.thread_session = ThreadSession()
+        self.context_session_map: Dict[str, ContextSession] = {
+            "multiprocessing": self.mp_session,
+            "threading": self.thread_session,
+        }
+        return True
+
     async def shutdown(self) -> bool:
 
-        # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.node_controllers:
-            self.node_controllers[node_id].stop()
-
-        # Then wait until close, or force
-        for node_id in self.node_controllers:
+        tasks = [
             self.node_controllers[node_id].shutdown()
+            for node_id in self.node_controllers
+        ]
+        await asyncio.gather(*tasks)
 
         # Clear node_controllers afterwards
         self.node_controllers = {}
@@ -208,10 +219,8 @@ class NodeHandlerService(Service):
             controller = self.context_class_map[node_config.context](
                 node_object, self.logger
             )
-
-            # Start the node
-            controller.start()
-            # self.logger.debug(f"{self}: started {node_object}")
+            controller.run(self.context_session_map[node_config.context])
+            self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -220,7 +229,7 @@ class NodeHandlerService(Service):
             )
 
             if not success:
-                controller.shutdown()
+                await controller.shutdown()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
@@ -230,7 +239,7 @@ class NodeHandlerService(Service):
             )
 
             if not success:
-                controller.shutdown()
+                await controller.shutdown()
                 continue
 
             # Save all important external attributes of the node
@@ -252,7 +261,7 @@ class NodeHandlerService(Service):
         success = False
 
         if node_id in self.node_controllers:
-            self.node_controllers[node_id].shutdown()
+            await self.node_controllers[node_id].shutdown()
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]

@@ -98,7 +98,8 @@ def node_handler_setup():
     http_server = HttpServerService(
         name="http_server", state=state, thread=thread, eventbus=eventbus, logger=logger
     )
-    thread.exec(http_server.start()).result(timeout=10)
+    # thread.exec(http_server.start()).result(timeout=10)
+    eventbus.send(Event("start")).result(timeout=10)
 
     yield (node_handler, http_server)
 

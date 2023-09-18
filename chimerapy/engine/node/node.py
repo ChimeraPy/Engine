@@ -34,16 +34,6 @@ from .publisher_service import PublisherService
 
 
 class Node:
-
-    # worker_comms: Optional[WorkerCommsService]
-    # processor: Optional[ProcessorService]
-    # recorder: Optional[RecordService]
-    # poller: Optional[PollerService]
-    # publisher: Optional[PublisherService]
-
-    # registered_methods: Dict[str, RegisteredMethod] = {}
-    # context: Literal["main", "multiprocessing", "threading"]
-
     def __init__(
         self,
         name: str,
@@ -381,7 +371,7 @@ class Node:
     ####################################################################
 
     async def _eventloop(self):
-        # self.logger.debug(f"{self}: within event loop")
+        self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
         await self._teardown()
         return True
