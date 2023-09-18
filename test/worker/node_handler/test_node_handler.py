@@ -10,9 +10,9 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import WorkerState
 
-from ..conftest import linux_run_only
-from ..streams.data_nodes import VideoNode, ImageNode, TabularNode
-from ..networking.test_client_server import server
+from ...conftest import linux_run_only
+from ...streams.data_nodes import VideoNode, ImageNode, TabularNode
+from ...networking.test_client_server import server
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

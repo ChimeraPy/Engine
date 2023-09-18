@@ -12,7 +12,7 @@ from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import ManagerState
 
-N = 10
+N = 100
 M = 10
 
 
@@ -156,4 +156,5 @@ async def main_multiple_creation():
 
 
 if __name__ == "__main__":
+    # asyncio.run(main())
     asyncio.run(main_multiple_creation())
