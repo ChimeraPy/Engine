@@ -593,6 +593,8 @@ class Node:
         if self.blocking:
             self.eventloop_future.result()
 
+        return 1
+
     def shutdown(self, timeout: Optional[Union[float, int]] = None):
 
         self.running = False
