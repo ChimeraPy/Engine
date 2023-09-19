@@ -9,6 +9,8 @@ import cv2
 # Internal Imports
 from .record import Record
 
+from datetime import datetime
+
 
 class VideoRecord(Record):
     def __init__(
@@ -36,6 +38,7 @@ class VideoRecord(Record):
         # Handling unstable FPS
         self.frame_count: int = 0
         self.previous_frame: np.ndarray = np.array([])
+        self.start_time: datetime = datetime.now()
 
     def write(self, data_chunk: Dict[str, Any]):
         """Commit the unsaved changes to memory."""
@@ -43,7 +46,8 @@ class VideoRecord(Record):
         # Determine the size
         frame = data_chunk["data"]
         fps = data_chunk["fps"]
-        elapsed = data_chunk["elapsed"]
+        timestamp = data_chunk["timestamp"]
+        elapsed = (timestamp - self.start_time).total_seconds()
         h, w = frame.shape[:2]
 
         # Determine if RGB or grey video
@@ -60,7 +64,6 @@ class VideoRecord(Record):
                 self.video_writer = cv2.VideoWriter(
                     str(self.video_file_path), self.video_fourcc, fps, (w, h), 0
                 )
-
             # Write
             self.first_frame = False
             self.video_writer.write(np.uint8(frame))
