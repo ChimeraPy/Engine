@@ -314,7 +314,7 @@ class Server:
 
             # Remove client id
             target_client_id: Optional[str] = None
-            for client_id, client_ws in self.ws_clients.values():
+            for client_id, client_ws in self.ws_clients.items():
                 if client_ws == ws:
                     target_client_id = client_id
 
