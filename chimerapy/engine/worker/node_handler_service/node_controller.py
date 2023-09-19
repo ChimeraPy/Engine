@@ -53,7 +53,7 @@ class ThreadNodeController(NodeController):
         super().__init__(node_object, logger)
 
     def run(self, context: ContextSession):
-        self.future = context.add(self.node_object.run, (True,))
+        self.future = context.add(self.node_object.run, True)
 
     def stop(self):
         self.node_object.running = False
@@ -65,15 +65,13 @@ class MPNodeController(NodeController):
 
     def __init__(self, node_object: "Node", logger: logging.Logger):
         super().__init__(node_object, logger)
-        self.running = manager.Value("i", True)  # type: ignore
+        self.running = manager.Value("i", 1)  # type: ignore
 
     def run(self, context: ContextSession):
         self.future = context.add(
             self.node_object.run,
-            (
-                True,
-                self.running,
-            ),
+            True,
+            self.running,
         )
 
     def stop(self):

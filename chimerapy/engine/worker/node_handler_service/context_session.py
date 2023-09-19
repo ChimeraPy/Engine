@@ -1,15 +1,18 @@
 import abc
 import asyncio
 from functools import partial
-from typing import List, Awaitable, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, Future
+from typing import List, Awaitable, Callable, Union, Optional
 
 import multiprocess as mp
 
 
 class MultiprocessExecutor:
-    def __init__(self, processes=None):
-        self.pool = mp.Pool(processes)
+    def __init__(self, pool: Optional[mp.Pool] = None, processes=None):
+        if pool is not None:
+            self.pool = pool
+        else:
+            self.pool = mp.Pool(processes)
 
     def submit(self, fn, *args, **kwargs):
         future = Future()
@@ -33,26 +36,32 @@ class ContextSession(abc.ABC):
 
     futures: List[Awaitable]
     loop: asyncio.AbstractEventLoop
-    pool: Union[MultiprocessExecutor, ThreadPoolExecutor]
+    pool: Optional[mp.Pool]
+    executor: Union[MultiprocessExecutor, ThreadPoolExecutor]
 
     async def wait_for_all(self):
         await asyncio.wait(self.futures)
 
     def add(self, f: Callable, *args, **kwargs) -> Awaitable:
-        ret = self.loop.run_in_executor(self.pool, partial(f, *args, **kwargs))
+        ret = self.loop.run_in_executor(self.executor, partial(f, *args, **kwargs))
         self.futures.append(ret)
         return ret
+
+    def shutdown(self):
+        self.executor.shutdown()
 
 
 class MPSession(ContextSession):
     def __init__(self):
         self.loop = asyncio.get_running_loop()
-        self.pool = MultiprocessExecutor()
+        self.pool = mp.Pool(processes=1)
+        self.executor = MultiprocessExecutor(self.pool)
         self.futures = []
 
 
 class ThreadSession(ContextSession):
     def __init__(self):
         self.loop = asyncio.get_running_loop()
-        self.pool = ThreadPoolExecutor()
+        self.pool = None
+        self.executor = ThreadPoolExecutor()
         self.futures = []

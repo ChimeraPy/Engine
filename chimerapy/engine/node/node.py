@@ -371,9 +371,10 @@ class Node:
     ####################################################################
 
     async def _eventloop(self):
-        self.logger.debug(f"{self}: within event loop")
+        # self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
         await self._teardown()
+        # self.logger.debug(f"{self}: exiting")
         return True
 
     async def _setup(self):
@@ -382,7 +383,6 @@ class Node:
     async def _idle(self):
         while self.running:
             await asyncio.sleep(1)
-        # self.logger.debug(f"{self}: exiting idle")
 
     async def _teardown(self):
         await self.eventbus.asend(Event("teardown"))
