@@ -99,7 +99,7 @@ class Worker:
         self.http_server = HttpServerService(
             name="http_server",
             state=self.state,
-            thread=self._thread,
+            # thread=self._thread,
             eventbus=self.eventbus,
             logger=self.logger,
         )
@@ -358,7 +358,7 @@ class Worker:
         """
         if not self._alive:
             return True
-        
+
         self.logger.info(f"{self}: Shutting down")
 
         # Only execute if thread exists

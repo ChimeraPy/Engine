@@ -7,7 +7,6 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.client import Client
 from chimerapy.engine.networking.enums import NODE_MESSAGE
@@ -28,27 +27,25 @@ def pickled_gen_node_config(gen_node):
     return pickle.dumps(NodeConfig(gen_node))
 
 
-@pytest.fixture(scope="module")
-def http_server():
+@pytest.fixture
+async def http_server():
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Requirements
     state = WorkerState()
 
     # Create the services
     http_server = HttpServerService(
-        name="http_server", state=state, thread=thread, eventbus=eventbus, logger=logger
+        name="http_server", state=state, eventbus=eventbus, logger=logger
     )
-    thread.exec(http_server.start()).result(timeout=10)
+    await http_server.start()
     return http_server
 
 
-@pytest.fixture(scope="module")
-def ws_client(http_server):
+@pytest.fixture
+async def ws_client(http_server):
 
     client = Client(
         host=http_server.ip,
@@ -57,12 +54,12 @@ def ws_client(http_server):
         ws_handlers={},
         parent_logger=logger,
     )
-    client.connect()
+    await client.async_connect()
     yield client
-    client.shutdown()
+    await client.async_shutdown()
 
 
-def test_http_server_instanciate(http_server):
+async def test_http_server_instanciate(http_server):
     ...
 
 

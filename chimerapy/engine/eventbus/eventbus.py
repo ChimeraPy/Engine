@@ -13,6 +13,8 @@ from typing import (
     Literal,
     TypeVar,
     Dict,
+    Coroutine,
+    Tuple,
 )
 
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
@@ -32,6 +34,20 @@ class Event:
     data: Optional[Any] = None
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+def future_wrapper(coroutine: Coroutine) -> Tuple[Coroutine, Future]:
+
+    future: Future = Future()
+
+    async def wrapper():
+        try:
+            result = await coroutine
+            future.set_result(result)
+        except Exception as e:
+            future.set_exception(e)
+
+    return wrapper(), future
 
 
 class EventBus(AsyncObservable):
@@ -87,12 +103,22 @@ class EventBus(AsyncObservable):
     ####################################################################
 
     def send(self, event: Event) -> Future:
-        assert isinstance(self.thread, AsyncLoopThread)
-        return self.thread.exec(self.asend(event))
+        if isinstance(self.thread, AsyncLoopThread):
+            return self.thread.exec(self.asend(event))
+        else:
+            loop = asyncio.get_event_loop()
+            wrapper, future = future_wrapper(self.asend(event))
+            loop.create_task(wrapper)
+            return future
 
     def subscribe(self, observer: AsyncObserver) -> Future:
-        assert isinstance(self.thread, AsyncLoopThread)
-        return self.thread.exec(self.asubscribe(observer))
+        if isinstance(self.thread, AsyncLoopThread):
+            return self.thread.exec(self.asubscribe(observer))
+        else:
+            loop = asyncio.get_event_loop()
+            wrapper, future = future_wrapper(self.asubscribe(observer))
+            loop.create_task(wrapper)
+            return future
 
 
 class TypedObserver(AsyncObserver, Generic[T]):

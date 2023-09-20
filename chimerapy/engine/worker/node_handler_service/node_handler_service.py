@@ -58,6 +58,8 @@ class NodeHandlerService(Service):
             "threading": ThreadNodeController,
         }
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
@@ -126,7 +128,7 @@ class NodeHandlerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     async def start(self) -> bool:
         # Containers
@@ -246,7 +248,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            # self.logger.debug(f"{self}: completed node creation: {id}")
+            self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
@@ -261,7 +263,9 @@ class NodeHandlerService(Service):
         success = False
 
         if node_id in self.node_controllers:
+            self.logger.debug(f"{self}: destroying Node {node_id}")
             await self.node_controllers[node_id].shutdown()
+            self.logger.debug(f"{self}: destroyed Node {node_id}")
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]

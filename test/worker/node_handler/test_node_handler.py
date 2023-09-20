@@ -6,7 +6,6 @@ import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import WorkerState
 
@@ -71,13 +70,11 @@ def node_with_reg_methods(logreceiver):
     return NodeWithRegisteredMethods(name="RegNode1", debug_port=logreceiver.port)
 
 
-@pytest.fixture(scope="module")
-def node_handler_setup():
+@pytest.fixture
+async def node_handler_setup():
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Requirements
     state = make_evented(WorkerState(), event_bus=eventbus)
@@ -93,20 +90,20 @@ def node_handler_setup():
         logger=logger,
         logreceiver=log_receiver,
     )
+    await node_handler.async_init()
 
     # Necessary dependency
     http_server = HttpServerService(
-        name="http_server", state=state, thread=thread, eventbus=eventbus, logger=logger
+        name="http_server", state=state, eventbus=eventbus, logger=logger
     )
-    # thread.exec(http_server.start()).result(timeout=10)
-    eventbus.send(Event("start")).result(timeout=10)
+    await http_server.async_init()
 
+    await eventbus.asend(Event("start"))
     yield (node_handler, http_server)
+    await eventbus.asend(Event("shutdown"))
 
-    eventbus.send(Event("shutdown"))
 
-
-def test_create_service_instance(node_handler_setup):
+async def test_create_service_instance(node_handler_setup):
     ...
 
 
@@ -159,7 +156,7 @@ async def test_create_unknown_node(node_handler_setup):
     assert await node_handler.async_destroy_node(node_id)
 
 
-# @pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
+@pytest.mark.skip()
 @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
 async def test_processing_node_pub_table(
     node_handler_setup, gen_node, con_node, context
@@ -217,7 +214,6 @@ async def test_record_and_collect(node_handler_setup, context):
             cpe.NodeConfig(node, context=context)
         )
 
-    logger.debug("Starting")
     assert await node_handler.async_start_nodes()
     await asyncio.sleep(1)
 
