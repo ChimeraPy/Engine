@@ -1,5 +1,6 @@
 # Build-in Imports
 import time
+import random
 
 # Third-party Imports
 import pyaudio
@@ -75,3 +76,18 @@ class JSONNode(cpe.Node):
         time.sleep(1 / 10)
         data = {"time": time.time(), "content": "HELLO"}
         self.save_json(name="test", data=data)
+
+
+class TextNode(cpe.Node):
+    def setup(self):
+        self.step_count = 0
+
+    def step(self):
+        time.sleep(1 / 10)
+        num_lines = random.randint(1, 5)
+        self.step_count += 1
+        lines = []
+        for j in range(num_lines):
+            lines.append(f"This is a test - Step Count - {self.step_count + 1}\n")
+
+        self.save_text(name="test", data="".join(lines), suffix="text")
