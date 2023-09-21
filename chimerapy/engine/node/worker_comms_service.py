@@ -58,30 +58,11 @@ class WorkerCommsService(Service):
         self.running: bool = False
         self.client: Optional[Client] = None
 
-        # If given the eventbus, add the observers
-        if self.eventbus:
-            self.add_observers()
+    async def async_init(self):
 
-    ####################################################################
-    ## Helper Functions
-    ####################################################################
-
-    def in_node_config(
-        self, state: NodeState, logger: logging.Logger, eventbus: EventBus
-    ):
-
-        # Save parameters
-        self.state = state
-        self.logger = logger
-        self.eventbus = eventbus
-
-        # Then add observers
-        self.add_observers()
-
-    def add_observers(self):
         assert self.state and self.eventbus and self.logger
 
-        # self.logger.debug(f"{self}: adding observers")
+        self.logger.debug(f"{self}: adding observers")
 
         observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -99,7 +80,20 @@ class WorkerCommsService(Service):
             ),
         }
         for ob in observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
+
+    ####################################################################
+    ## Helper Functions
+    ####################################################################
+
+    def in_node_config(
+        self, state: NodeState, logger: logging.Logger, eventbus: EventBus
+    ):
+
+        # Save parameters
+        self.state = state
+        self.logger = logger
+        self.eventbus = eventbus
 
     ####################################################################
     ## Lifecycle Hooks

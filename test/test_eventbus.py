@@ -14,7 +14,6 @@ from chimerapy.engine.eventbus import (
     configure,
     make_evented,
 )
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.states import ManagerState, WorkerState, NodeState
 
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -48,9 +47,7 @@ class NestedClass(DataClassJsonMixin):
 @pytest.fixture
 def event_bus():
     # Creating the configuration for the eventbus and dataclasses
-    thread = AsyncLoopThread()
-    thread.start()
-    event_bus = EventBus(thread=thread)
+    event_bus = EventBus()
     configure(event_bus)
     return event_bus
 

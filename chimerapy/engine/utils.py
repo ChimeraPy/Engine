@@ -1,5 +1,4 @@
 import queue
-import logging
 import json
 import time
 import enum
@@ -8,7 +7,8 @@ import uuid
 import socket
 import asyncio
 import errno
-from typing import Callable, Union, Optional, Any, Dict
+from concurrent.futures import Future
+from typing import Callable, Union, Optional, Any, Dict, Coroutine, Tuple
 
 # Third-party
 
@@ -44,20 +44,18 @@ def clear_queue(input_queue: queue.Queue):
 # https://github.com/tqdm/tqdm/issues/313#issuecomment-850698822
 
 
-class TqdmToLogger(object):
-    """Adapter to redirect tqdm output to a logger"""
+def future_wrapper(coroutine: Coroutine) -> Tuple[Coroutine, Future]:
 
-    def __init__(self, logger, level=logging.INFO):
-        self.logger = logger
-        self.level = level
-        self.buf = ""
+    future: Future = Future()
 
-    def write(self, buf):
-        if buf.rstrip():
-            self.logger.log(self.level, buf.rstrip())
+    async def wrapper():
+        try:
+            result = await coroutine
+            future.set_result(result)
+        except Exception as e:
+            future.set_exception(e)
 
-    def flush(self):
-        pass
+    return wrapper(), future
 
 
 async def async_waiting_for(

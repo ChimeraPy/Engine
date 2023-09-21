@@ -13,8 +13,6 @@ from typing import (
     Literal,
     TypeVar,
     Dict,
-    Coroutine,
-    Tuple,
 )
 
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
@@ -22,6 +20,7 @@ from dataclasses import dataclass, field
 
 from .. import _logger
 from ..networking.async_loop_thread import AsyncLoopThread
+from ..utils import future_wrapper
 
 T = TypeVar("T")
 
@@ -36,20 +35,6 @@ class Event:
     timestamp: str = field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
-def future_wrapper(coroutine: Coroutine) -> Tuple[Coroutine, Future]:
-
-    future: Future = Future()
-
-    async def wrapper():
-        try:
-            result = await coroutine
-            future.set_result(result)
-        except Exception as e:
-            future.set_exception(e)
-
-    return wrapper(), future
-
-
 class EventBus(AsyncObservable):
     def __init__(self, thread: Optional[AsyncLoopThread] = None):
         self.stream = AsyncSubject()
@@ -60,6 +45,13 @@ class EventBus(AsyncObservable):
         # State information
         self.awaitable_events: Dict[str, asyncio.Event] = {}
         self.subscription_map: Dict[AsyncObserver, Any] = {}
+
+    ####################################################################
+    ## Getters and Setters
+    ####################################################################
+
+    def set_thread(self, thread: AsyncLoopThread):
+        self.thread = thread
 
     ####################################################################
     ## Async
@@ -102,11 +94,14 @@ class EventBus(AsyncObservable):
     ## Sync
     ####################################################################
 
-    def send(self, event: Event) -> Future:
+    def send(
+        self, event: Event, loop: Optional[asyncio.AbstractEventLoop] = None
+    ) -> Future:
         if isinstance(self.thread, AsyncLoopThread):
             return self.thread.exec(self.asend(event))
         else:
-            loop = asyncio.get_event_loop()
+            if loop is None:
+                loop = asyncio.get_event_loop()
             wrapper, future = future_wrapper(self.asend(event))
             loop.create_task(wrapper)
             return future

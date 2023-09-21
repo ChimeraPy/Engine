@@ -5,8 +5,9 @@ import datetime
 import os
 import tempfile
 import asyncio
+from asyncio import Task
 from concurrent.futures import Future
-from typing import Dict, Any, Optional, Union, Literal, Coroutine, List
+from typing import Dict, Any, Optional, Union, Literal, Coroutine, List, Tuple
 
 # Third-party Imports
 import multiprocess as mp
@@ -20,6 +21,7 @@ from ..states import NodeState
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..eventbus import EventBus, Event, make_evented
+from ..utils import future_wrapper
 
 # Service Imports
 from .node_config import NodeConfig
@@ -71,9 +73,10 @@ class Node:
         self.debug_port = debug_port
 
         # State variables
+        self._thread: Optional[AsyncLoopThread] = None
         self._running: Union[bool, mp.Value] = True  # type: ignore
         self.eventloop_future: Optional[Future] = None
-        self.blocking = True
+        self.eventloop_task: Optional[Task] = None
         self.task_futures: List[Future] = []
 
         # Generic Node needs
@@ -166,15 +169,19 @@ class Node:
         self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
 
-    def _exec_coro(self, coro: Coroutine) -> Future:
-        assert self._thread
-        # Submitting the coroutine
-        future = self._thread.exec(coro)
+    def _exec_coro(self, coro: Coroutine) -> Tuple[Future, Optional[Task]]:
+        if isinstance(self._thread, AsyncLoopThread):
+            future = self._thread.exec(coro)
+            task = None
+        else:
+            loop = asyncio.get_event_loop()
+            wrapper, future = future_wrapper(coro)
+            task = loop.create_task(wrapper)
 
         # Saving the future for later use
         self.task_futures.append(future)
 
-        return future
+        return future, task
 
     ####################################################################
     ## Saving Data Stream API
@@ -370,125 +377,7 @@ class Node:
     ## Back-End Lifecycle API
     ####################################################################
 
-    async def _eventloop(self):
-        # self.logger.debug(f"{self}: within event loop")
-        await self._idle()  # stop, running, and collecting
-        await self._teardown()
-        # self.logger.debug(f"{self}: exiting")
-        return True
-
     async def _setup(self):
-        await self.eventbus.asend(Event("setup"))
-
-    async def _idle(self):
-        while self.running:
-            await asyncio.sleep(1)
-
-    async def _teardown(self):
-        await self.eventbus.asend(Event("teardown"))
-
-    ####################################################################
-    ## Front-facing Node Lifecycle API
-    ####################################################################
-
-    def setup(self):
-        """User-defined method for ``Node`` setup.
-
-        In this method, the setup logic of the ``Node`` is executed. This
-        would include opening files, creating connections to sensors, and
-        calibrating sensors.
-
-        Can be overwritten with both sync and async setup functions.
-
-        """
-        ...
-
-    def main(self):
-        """User-possible overwritten method.
-
-        This method can also be overwritten, through it is recommend to
-        do so carefully. If overwritten, the handling of inputs will have
-        to be implemented as well.
-
-        To receive the data, use the EventBus to listen to the 'in_step'
-        event and emit the output data with 'out_step'.
-
-        Can be overwritten with both sync and async main functions.
-
-        """
-        ...
-
-    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
-        """User-define method.
-
-        In this method, the logic that is executed within the ``Node``'s
-        while loop. For data sources (no inputs), the ``step`` method
-        will execute as fast as possible; therefore, it is important to
-        add ``time.sleep`` to specify the sampling rate.
-
-        For a ``Node`` that have inputs, these will be executed when new
-        data is received.
-
-        Can be overwritten with both sync and async step functions.
-
-        Args:
-            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
-            parameter should not be considered (as they don't have inputs).\
-            For step and sink nodes, the ``data_dict`` must be included\
-            to avoid an error. The variable is a dictionary, where the\
-            key is the in-bound ``Node``'s name and the value is the\
-            output of the in-bound ``Node``'s ``step`` function.
-
-        """
-        ...
-
-    def teardown(self):
-        """User-define method.
-
-        This method provides a convienient way to shutdown services, such
-        as closing files, signaling to sensors to stop, and making any
-        last minute corrections to the data.
-
-        Can be overwritten with both sync and async teardown functions.
-
-        """
-        ...
-
-    def run(
-        self,
-        blocking: bool = True,
-        running: Optional[mp.Value] = None,  # type: ignore
-        eventbus: Optional[EventBus] = None,
-    ):
-        """The actual method that is executed in the new process.
-
-        When working with ``multiprocessing.Process``, it should be
-        considered that the creation of a new process can yield
-        unexpected behavior if not carefull. It is recommend that one
-        reads the ``mutliprocessing`` documentation to understand the
-        implications.
-
-        """
-        self.logger = self.get_logger()
-        self.logger.setLevel(self.logging_level)
-
-        # Saving synchronized variable
-        if type(running) != type(None):
-            self._running = running
-
-        # Saving configuration
-        self.blocking = blocking
-
-        # If given eventbus, use it
-        if eventbus:
-            self.eventbus = eventbus
-            self._thread = eventbus.thread
-
-        # Else, create the eventbus yourself
-        else:
-            self._thread = AsyncLoopThread()
-            self._thread.start()
-            self.eventbus = EventBus(thread=self._thread)
 
         # Adding state to the WorkerCommsService
         if self.worker_comms:
@@ -507,7 +396,7 @@ class Node:
             raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
         # Make the state evented
-        self.state = make_evented(self.state, self.eventbus)
+        self.state = make_evented(self.state, event_bus=self.eventbus)
 
         # Add the FSM service
         self.fsm_service = FSMService("fsm", self.state, self.eventbus, self.logger)
@@ -583,24 +472,157 @@ class Node:
                 logger=self.logger,
             )
 
+        # Initialize all services
+        if self.worker_comms:
+            await self.worker_comms.async_init()
+        await self.processor.async_init()
+        await self.recorder.async_init()
+        await self.profiler.async_init()
+        await self.fsm_service.async_init()
+
+        # Start all services
+        await self.eventbus.asend(Event("setup"))
+
+    async def _eventloop(self):
+        # self.logger.debug(f"{self}: within event loop")
+        await self._idle()  # stop, running, and collecting
+        await self._teardown()
+        # self.logger.debug(f"{self}: exiting")
+        return True
+
+    async def _idle(self):
+        while self.running:
+            await asyncio.sleep(0.2)
+
+    async def _teardown(self):
+        await self.eventbus.asend(Event("teardown"))
+
+    ####################################################################
+    ## Front-facing Node Lifecycle API
+    ####################################################################
+
+    def setup(self):
+        """User-defined method for ``Node`` setup.
+
+        In this method, the setup logic of the ``Node`` is executed. This
+        would include opening files, creating connections to sensors, and
+        calibrating sensors.
+
+        Can be overwritten with both sync and async setup functions.
+
+        """
+        ...
+
+    def main(self):
+        """User-possible overwritten method.
+
+        This method can also be overwritten, through it is recommend to
+        do so carefully. If overwritten, the handling of inputs will have
+        to be implemented as well.
+
+        To receive the data, use the EventBus to listen to the 'in_step'
+        event and emit the output data with 'out_step'.
+
+        Can be overwritten with both sync and async main functions.
+
+        """
+        ...
+
+    def step(self, data_chunks: Dict[str, DataChunk] = {}) -> Union[DataChunk, Any]:
+        """User-define method.
+
+        In this method, the logic that is executed within the ``Node``'s
+        while loop. For data sources (no inputs), the ``step`` method
+        will execute as fast as possible; therefore, it is important to
+        add ``time.sleep`` to specify the sampling rate.
+
+        For a ``Node`` that have inputs, these will be executed when new
+        data is received.
+
+        Can be overwritten with both sync and async step functions.
+
+        Args:
+            data_chunks (Optional[Dict[str, DataChunk]]): For source nodes, this \
+            parameter should not be considered (as they don't have inputs).\
+            For step and sink nodes, the ``data_dict`` must be included\
+            to avoid an error. The variable is a dictionary, where the\
+            key is the in-bound ``Node``'s name and the value is the\
+            output of the in-bound ``Node``'s ``step`` function.
+
+        """
+        ...
+
+    def teardown(self):
+        """User-define method.
+
+        This method provides a convienient way to shutdown services, such
+        as closing files, signaling to sensors to stop, and making any
+        last minute corrections to the data.
+
+        Can be overwritten with both sync and async teardown functions.
+
+        """
+        ...
+
+    def run(
+        self,
+        eventbus: Optional[EventBus] = None,
+        running: Optional[mp.Value] = None,  # type: ignore
+    ):
+        """The actual method that is executed in the new process.
+
+        When working with ``multiprocessing.Process``, it should be
+        considered that the creation of a new process can yield
+        unexpected behavior if not carefull. It is recommend that one
+        reads the ``mutliprocessing`` documentation to understand the
+        implications.
+
+        """
+        self.logger = self.get_logger()
+        self.logger.setLevel(self.logging_level)
+
+        # Saving synchronized variable
+        if type(running) != type(None):
+            self._running = running
+
+        # Start an async loop
+        self._thread = AsyncLoopThread()
+        self._thread.start()
+
+        if not eventbus:
+            self.eventbus = EventBus(thread=self._thread)
+        else:
+            self.eventbus = eventbus
+            self.eventbus.set_thread(self._thread)
+
         # Have to run setup before letting the system continue
-        self.eventbus.send(Event("initialize")).result()
-        self._exec_coro(self._setup()).result()
+        self.eventloop_future, self.eventloop_task = self._exec_coro(
+            self.arun(self.eventbus)
+        )
 
-        # Performing setup for the while loop
-        self.eventloop_future = self._exec_coro(self._eventloop())
+        return self.eventloop_future
 
-        if self.blocking:
-            self.eventloop_future.result()
+    async def arun(self, eventbus: Optional[EventBus] = None):
+        self.logger = self.get_logger()
+        self.logger.setLevel(self.logging_level)
 
-        return 1
+        # Save parameters
+        if eventbus:
+            self.eventbus = eventbus
+        else:
+            self.eventbus = EventBus()
+
+        await self._setup()
+        self.eventloop_task = asyncio.create_task(self._eventloop())
 
     def shutdown(self, timeout: Optional[Union[float, int]] = None):
-
         self.running = False
-
         if self.eventloop_future:
             if timeout:
                 self.eventloop_future.result(timeout=timeout)
             else:
                 self.eventloop_future.result()
+
+    async def ashutdown(self):
+        self.running = False
+        await self.eventloop_task

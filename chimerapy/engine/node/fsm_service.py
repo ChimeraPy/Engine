@@ -17,6 +17,8 @@ class FSMService(Service):
         self.eventbus = eventbus
         self.logger = logger
 
+    async def async_init(self):
+
         # Add observers
         self.observers: Dict[str, TypedObserver] = {
             "initialize": TypedObserver(
@@ -41,7 +43,7 @@ class FSMService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     async def init(self):
         self.state.fsm = "INITIALIZED"

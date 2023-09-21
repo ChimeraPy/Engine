@@ -60,6 +60,8 @@ class RecordService(Service):
         else:
             self.logger = _logger.getLogger("chimerapy-engine")
 
+    async def async_init(self):
+
         # Put observers
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -74,23 +76,23 @@ class RecordService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
-    def setup(self):
+    async def setup(self):
 
         # self.logger.debug(f"{self}: executing main")
         self._record_thread = threading.Thread(target=self.run)
         self._record_thread.start()
 
-    def record(self):
+    async def record(self):
         # self.logger.debug(f"{self}: Starting recording")
         ...
 
-    def teardown(self):
+    async def teardown(self):
 
         # First, indicate the end
         self.is_running.clear()

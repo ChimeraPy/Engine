@@ -11,7 +11,6 @@ from chimerapy.engine.node.profiler_service import ProfilerService
 from chimerapy.engine.node.events import NewOutBoundDataEvent
 from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus, Event
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.data_chunk import DataChunk
 
 # from ..conftest import TEST_DATA_DIR
@@ -21,16 +20,14 @@ logger = cpe._logger.getLogger("chimerapy-engine")
 
 
 @pytest.fixture
-def profiler_setup():
+async def profiler_setup():
 
     # Modify the configuration
     config.set("diagnostics.interval", 1)
     config.set("diagnostics.logging-enabled", True)
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Create sample state
     state = NodeState(logdir=pathlib.Path(tempfile.mkdtemp()))
@@ -39,14 +36,13 @@ def profiler_setup():
     profiler = ProfilerService(
         name="profiler", state=state, eventbus=eventbus, logger=logger
     )
-    eventbus.send(Event("setup")).result(timeout=10)
-
+    await profiler.async_init()
+    await profiler.setup()
     yield (profiler, eventbus)
+    await profiler.teardown()
 
-    eventbus.send(Event("teardown")).result(timeout=10)
 
-
-def test_instanciate(profiler_setup):
+async def test_instanciate(profiler_setup):
     ...
 
 
