@@ -42,7 +42,7 @@ class NodeController(abc.ABC):
     async def shutdown(self):
         if self.future:
             self.stop()
-            await self.future
+            return await self.future
 
 
 class ThreadNodeController(NodeController):
@@ -53,7 +53,7 @@ class ThreadNodeController(NodeController):
         super().__init__(node_object, logger)
 
     def run(self, context: ContextSession):
-        self.future = context.add(self.node_object.run, True)
+        self.future = context.add(self.node_object.run)
 
     def stop(self):
         self.node_object.running = False
@@ -70,7 +70,7 @@ class MPNodeController(NodeController):
     def run(self, context: ContextSession):
         self.future = context.add(
             self.node_object.run,
-            True,
+            None,
             self.running,
         )
 

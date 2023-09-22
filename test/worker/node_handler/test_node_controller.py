@@ -26,8 +26,8 @@ async def test_mp_node_controller():
     node_controller.run(session)
     await asyncio.sleep(0.25)
 
-    await node_controller.shutdown()
-    assert node_controller.future.result() == OUTPUT
+    output = await node_controller.shutdown()
+    assert output == OUTPUT
 
 
 async def test_thread_node_controller():
@@ -38,5 +38,5 @@ async def test_thread_node_controller():
     node_controller.run(session)
     await asyncio.sleep(0.25)
 
-    await node_controller.shutdown()
-    assert node_controller.future.result() == OUTPUT
+    output = await node_controller.shutdown()
+    assert output == OUTPUT

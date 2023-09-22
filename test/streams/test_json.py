@@ -1,11 +1,9 @@
-from .data_nodes import JSONNode
-import json
-
 # Built-in Imports
 import os
 import pathlib
-import time
 import uuid
+import asyncio
+import json
 
 # Third-party
 import pytest
@@ -13,8 +11,9 @@ import pytest
 # Internal Imports
 import chimerapy.engine as cpe
 from chimerapy.engine.records.json_record import JSONRecord
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
+
+from .data_nodes import JSONNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -28,7 +27,6 @@ def json_node():
 
     # Create a node
     json_n = JSONNode(name="img_n", logdir=TEST_DATA_DIR)
-
     return json_n
 
 
@@ -86,12 +84,10 @@ def test_image_record():
             assert data_cp == data
 
 
-def test_node_save_json_stream(json_node):
+async def test_node_save_json_stream(json_node):
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Check that the image was created
     expected_jsonl_path = pathlib.Path(json_node.state.logdir) / "test.jsonl"
@@ -101,18 +97,18 @@ def test_node_save_json_stream(json_node):
         ...
 
     # Stream
-    json_node.run(blocking=False, eventbus=eventbus)
+    await json_node.arun(eventbus=eventbus)
 
     # Wait to generate files
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(3)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(3)
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
 
-    json_node.shutdown()
+    await json_node.ashutdown()
 
     # Check that the image was created
     assert expected_jsonl_path.exists()

@@ -62,8 +62,6 @@ class WorkerCommsService(Service):
 
         assert self.state and self.eventbus and self.logger
 
-        self.logger.debug(f"{self}: adding observers")
-
         observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
             "NodeState.changed": TypedObserver(

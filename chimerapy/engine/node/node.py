@@ -488,7 +488,7 @@ class Node:
         await self._idle()  # stop, running, and collecting
         await self._teardown()
         # self.logger.debug(f"{self}: exiting")
-        return True
+        return 1
 
     async def _idle(self):
         while self.running:
@@ -596,11 +596,8 @@ class Node:
             self.eventbus.set_thread(self._thread)
 
         # Have to run setup before letting the system continue
-        self.eventloop_future, self.eventloop_task = self._exec_coro(
-            self.arun(self.eventbus)
-        )
-
-        return self.eventloop_future
+        self.eventloop_future, _ = self._exec_coro(self.arun(self.eventbus))
+        return 1
 
     async def arun(self, eventbus: Optional[EventBus] = None):
         self.logger = self.get_logger()
@@ -614,6 +611,7 @@ class Node:
 
         await self._setup()
         self.eventloop_task = asyncio.create_task(self._eventloop())
+        return 1
 
     def shutdown(self, timeout: Optional[Union[float, int]] = None):
         self.running = False

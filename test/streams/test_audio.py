@@ -1,8 +1,8 @@
 # Built-in Imports
 import os
 import pathlib
+import asyncio
 import uuid
-import time
 import datetime
 import glob
 import wave
@@ -16,7 +16,6 @@ import pyaudio
 # Internal Imports
 import chimerapy.engine as cpe
 from chimerapy.engine.records.audio_record import AudioRecord
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import AudioNode
@@ -112,12 +111,10 @@ def test_audio_record():
     assert expected_audio_path.exists()
 
 
-def test_node_save_audio_stream(audio_node):
+async def test_node_save_audio_stream(audio_node):
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Check that the audio was created
     expected_audio_path = pathlib.Path(audio_node.state.logdir) / "test.wav"
@@ -127,18 +124,18 @@ def test_node_save_audio_stream(audio_node):
     #     ...
 
     # Stream
-    audio_node.run(blocking=False, eventbus=eventbus)
+    await audio_node.arun(eventbus=eventbus)
 
     # Wait to generate files
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(3)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(3)
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
 
-    audio_node.shutdown()
+    await audio_node.ashutdown()
 
     # Check that the audio was created
     assert expected_audio_path.exists()
