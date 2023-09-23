@@ -91,6 +91,3 @@ class AsyncLoopThread(threading.Thread):
         for task in asyncio.all_tasks(self._loop):
             task.cancel()
         self._loop.stop()
-
-    def __del__(self):
-        self.stop()

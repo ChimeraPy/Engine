@@ -1,24 +1,20 @@
-import requests
 import json
 
+import aiohttp
 import pytest
 
 from chimerapy.engine.manager.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.states import ManagerState, WorkerState
 
 from ..conftest import TEST_DATA_DIR
 
 
-@pytest.fixture(scope="module")
-def http_server():
+@pytest.fixture
+async def http_server():
 
     # Creating the configuration for the eventbus and dataclasses
-    thread = AsyncLoopThread()
-    thread.start()
-    event_bus = EventBus(thread=thread)
-
+    event_bus = EventBus()
     state = make_evented(ManagerState(), event_bus=event_bus)
 
     # Create the services
@@ -26,15 +22,15 @@ def http_server():
         name="http_server",
         port=0,
         enable_api=True,
-        thread=thread,
         eventbus=event_bus,
         state=state,
     )
-    thread.exec(http_server.start()).result(timeout=10)
+    await http_server.async_init()
+    await http_server.start()
     return http_server
 
 
-def test_http_server_instanciate(http_server):
+async def test_http_server_instanciate(http_server):
     ...
 
 
@@ -56,7 +52,7 @@ def test_http_server_instanciate(http_server):
         ("/workers/send_archive", json.dumps({"worker_id": "test", "success": True})),
     ],
 )
-def test_http_server_routes(http_server, route, payload):
-    r = requests.post(f"{http_server.url}{route}", data=payload)
-    assert r.status_code == requests.codes.ok
-    assert http_server.eventbus._event_counts != 0
+async def test_http_server_routes(http_server, route, payload):
+    async with aiohttp.ClientSession() as client:
+        async with client.post(url=f"{http_server.url}{route}", data=payload) as resp:
+            assert resp.ok

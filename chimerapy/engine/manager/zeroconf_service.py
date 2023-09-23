@@ -28,6 +28,8 @@ class ZeroconfService(Service):
         self.zeroconf: Optional[Zeroconf] = None
         self.enabled: bool = False
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "after_server_startup": TypedObserver(
@@ -38,7 +40,7 @@ class ZeroconfService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def start(self):
 

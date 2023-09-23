@@ -7,8 +7,7 @@ import zeroconf
 import pytest
 
 from chimerapy.engine.manager.zeroconf_service import ZeroconfService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-from chimerapy.engine.eventbus import EventBus, configure
+from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.states import ManagerState
 
 logger = logging.getLogger("chimerapy-engine")
@@ -44,16 +43,13 @@ class MockZeroconfListener(ServiceListener):
 
 
 @pytest.fixture
-def zeroconf_service():
+async def zeroconf_service():
 
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
-    configure(eventbus)
-
+    eventbus = EventBus()
     state = ManagerState()
 
     zeroconf_service = ZeroconfService("zeroconf", eventbus, state)
+    await zeroconf_service.async_init()
     zeroconf_service.start()
     return zeroconf_service
 

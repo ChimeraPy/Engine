@@ -1,19 +1,22 @@
 # Test Import
-from .mock import DockeredWorker
 
 # Built-in Imports
 import subprocess
 import time
 
 # Third-party Imports
-import pytest
 import chimerapy.engine as cpe
+
+from .conftest import TEST_DATA_DIR
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 
-def test_worker_entrypoint_connect_wport(manager):
+def test_worker_entrypoint_connect_wport():
+
+    manager = cpe.Manager(name="test", port=0, logdir=TEST_DATA_DIR)
+    manager.serve()
 
     # Connect to manager from subprocess
     worker_process = subprocess.Popen(
@@ -44,7 +47,10 @@ def test_worker_entrypoint_connect_wport(manager):
     manager.shutdown()
 
 
-def test_worker_entrypoint_zeroconf_connect(manager):
+def test_worker_entrypoint_zeroconf_connect():
+
+    manager = cpe.Manager(name="test", port=0, logdir=TEST_DATA_DIR)
+    manager.serve()
 
     manager.zeroconf(enable=True)
 
@@ -70,24 +76,3 @@ def test_worker_entrypoint_zeroconf_connect(manager):
 
     logger.info("Disable Zeroconf")
     manager.zeroconf(enable=False)
-
-
-@pytest.mark.skip
-def test_multiple_workers_connect(manager, docker_client):
-
-    workers = []
-    for i in range(3):
-        worker = DockeredWorker(docker_client, name=f"test-{i}")
-        worker.connect(manager.host, manager.port)
-        workers.append(worker)
-
-    for worker in workers:
-        assert worker.id in manager.workers
-
-    logger.info("Manager shutting down")
-    manager.shutdown()
-
-    time.sleep(1)
-
-    for worker in workers:
-        worker.shutdown()

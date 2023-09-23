@@ -1,6 +1,7 @@
 import time
 import os
 import pathlib
+import asyncio
 
 import pytest
 
@@ -40,36 +41,38 @@ def packaged_node_graph():
     return graph
 
 
-@pytest.fixture(scope="module")
-def manager_with_worker():
-    # Create the actors
+@pytest.fixture
+async def manager_with_worker():
     manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
     worker = cpe.Worker(name="local", port=0)
-
-    worker.connect(host=manager.host, port=manager.port)
-
-    return (manager, worker)
+    await manager.aserve()
+    await worker.aserve()
+    await worker.async_connect(host=manager.host, port=manager.port)
+    yield manager, worker
+    await worker.async_shutdown()
+    await manager.async_shutdown()
 
 
 class TestLifeCycle:
-    @pytest.mark.skip(reason="Frozen test")
-    def test_sending_package(self, manager, _worker, config_graph):
-        _worker.connect(host=manager.host, port=manager.port)
 
-        assert manager.commit_graph(
-            graph=config_graph,
-            mapping={_worker.id: list(config_graph.G.nodes())},
-            send_packages=[
-                {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
-            ],
-        ).result(timeout=30)
+    # @pytest.mark.skip(reason="Frozen test")
+    # def test_sending_package(self, manager, _worker, config_graph):
+    #     _worker.connect(host=manager.host, port=manager.port)
 
-        for node_id in config_graph.G.nodes():
-            assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
+    #     assert manager.commit_graph(
+    #         graph=config_graph,
+    #         mapping={_worker.id: list(config_graph.G.nodes())},
+    #         send_packages=[
+    #             {"name": "test_package", "path": TEST_PACKAGE_DIR / "test_package"}
+    #         ],
+    #     ).result(timeout=30)
+
+    #     for node_id in config_graph.G.nodes():
+    #         assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
 
     @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
     # @pytest.mark.parametrize("context", ["multiprocessing"])
-    def test_manager_lifecycle(self, manager_with_worker, context):
+    async def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
 
         # Define graph
@@ -81,19 +84,19 @@ class TestLifeCycle:
 
         # Configure the worker and obtain the mapping
         mapping = {worker.id: [gen_node.id, con_node.id]}
-        manager.commit_graph(graph, mapping, context=context).result(timeout=30)
+        await manager.async_commit(graph, mapping, context=context)
 
-        assert manager.start().result()
-        assert manager.record().result()
+        assert await manager.async_start()
+        assert await manager.async_record()
 
-        time.sleep(5)
+        await asyncio.sleep(3)
 
-        assert manager.stop().result()
-        assert manager.collect().result()
+        assert await manager.async_stop()
+        assert await manager.async_collect()
 
-        manager.reset()
+        await manager.async_reset()
 
-    def test_manager_reset(self, manager_with_worker):
+    async def test_manager_reset(self, manager_with_worker):
         manager, worker = manager_with_worker
 
         # Define graph
@@ -106,21 +109,21 @@ class TestLifeCycle:
         # Configure the worker and obtain the mapping
         mapping = {worker.id: [gen_node.id, con_node.id]}
 
-        manager.reset()
+        await manager.async_reset()
 
-        manager.commit_graph(graph=simple_graph, mapping=mapping).result(timeout=30)
-        assert manager.start().result()
-        assert manager.record().result()
+        await manager.async_commit(graph=simple_graph, mapping=mapping)
+        assert await manager.async_start()
+        assert await manager.async_record()
 
-        time.sleep(3)
+        await asyncio.sleep(3)
 
-        assert manager.stop().result()
-        assert manager.collect().result()
+        assert await manager.async_stop()
+        assert await manager.async_collect()
 
-        manager.reset()
+        await manager.async_reset()
 
     # @pytest.mark.skip(reason="Flaky")
-    def test_manager_recommit_graph(self, manager_with_worker):
+    async def test_manager_recommit_graph(self, manager_with_worker):
         manager, worker = manager_with_worker
 
         # Define graph
@@ -137,22 +140,22 @@ class TestLifeCycle:
 
         logger.debug("STARTING COMMIT 1st ROUND")
         tic = time.time()
-        assert manager.commit_graph(**graph_info).result(timeout=30)
+        assert await manager.async_commit(**graph_info)
         toc = time.time()
         delta = toc - tic
         logger.debug("FINISHED COMMIT 1st ROUND")
 
         logger.debug("STARTING RESET")
-        assert manager.reset()
+        assert await manager.async_reset()
         logger.debug("FINISHED RESET")
 
         logger.debug("STARTING COMMIT 2st ROUND")
         tic2 = time.time()
-        assert manager.commit_graph(**graph_info).result(timeout=30)
+        assert await manager.async_commit(**graph_info)
         toc2 = time.time()
         delta2 = toc2 - tic2
         logger.debug("FINISHED COMMIT 2st ROUND")
 
         assert ((delta2 - delta) / (delta)) < 1
 
-        manager.reset()
+        await manager.async_reset()

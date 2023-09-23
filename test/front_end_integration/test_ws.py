@@ -1,6 +1,4 @@
-from ..conftest import GenNode
-
-import time
+import asyncio
 from typing import Dict
 
 import pytest
@@ -9,6 +7,7 @@ from chimerapy.engine.networking import Client
 from chimerapy.engine.networking.enums import MANAGER_MESSAGE
 from chimerapy.engine.states import ManagerState
 
+from ..conftest import GenNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -18,11 +17,12 @@ class Record:
         self.network_state = None
 
     async def node_update_counter(self, msg: Dict):
+        # logger.debug("Received node update message")
         self.network_state = ManagerState.from_dict(msg["data"])
 
 
 @pytest.fixture
-def test_ws_client(manager):
+async def test_ws_client(manager):
 
     # Create a record
     record = Record()
@@ -37,42 +37,47 @@ def test_ws_client(manager):
             MANAGER_MESSAGE.NETWORK_STATUS_UPDATE: record.node_update_counter,
         },
     )
-    client.connect()
+    await client.async_connect()
 
     yield client, record
-    client.shutdown()
+    await client.async_shutdown()
 
 
-def test_node_updates(test_ws_client, manager, worker):
+async def test_node_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Create original containers
     simple_graph = cpe.Graph()
     new_node = GenNode(name="Gen1")
     simple_graph.add_nodes_from([new_node])
-    mapping = {worker.id: [new_node.id]}
 
     # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-    manager.commit_graph(simple_graph, mapping).result(timeout=30)
-    time.sleep(3)
+    await worker.async_connect(host=manager.host, port=manager.port)
+    # await manager.async_commit(simple_graph, mapping)
+    await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()
 
 
-def test_worker_network_updates(test_ws_client, manager, worker):
+async def test_worker_network_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-    time.sleep(3)
+    await worker.async_connect(host=manager.host, port=manager.port)
+    await asyncio.sleep(3)
+    assert record.network_state.to_json() == manager.state.to_json()
+    # logger.debug(record.network_state)
+    # logger.debug(manager.state)
+
+    await worker.async_deregister()
+    await asyncio.sleep(3)
+    # logger.debug(record.network_state)
+    # logger.debug(manager.state)
     assert record.network_state.to_json() == manager.state.to_json()
 
-    worker.deregister()
-    time.sleep(3)
-    assert record.network_state.to_json() == manager.state.to_json()
 
-
-def test_node_creation_and_destruction_network_updates(test_ws_client, manager, worker):
+async def test_node_creation_and_destruction_network_updates(
+    test_ws_client, manager, worker
+):
     client, record = test_ws_client
 
     # Create original containers
@@ -81,25 +86,21 @@ def test_node_creation_and_destruction_network_updates(test_ws_client, manager, 
     simple_graph.add_nodes_from([new_node])
 
     # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
+    await worker.async_connect(host=manager.host, port=manager.port)
     manager._register_graph(simple_graph)
 
     # Test construction
-    manager._request_node_creation(worker_id=worker.id, node_id="Gen1").result(
-        timeout=30
-    )
-    time.sleep(2)
+    await manager._async_request_node_creation(worker_id=worker.id, node_id="Gen1")
+    await asyncio.sleep(2)
     # assert record.network_state.to_json() == manager.state.to_json()
 
     # Test destruction
-    manager._request_node_destruction(worker_id=worker.id, node_id="Gen1").result(
-        timeout=10
-    )
-    time.sleep(2)
+    await manager._async_request_node_destruction(worker_id=worker.id, node_id="Gen1")
+    await asyncio.sleep(2)
     assert record.network_state.workers[worker.id].nodes == {}
 
 
-def test_reset_network_updates(test_ws_client, manager, worker):
+async def test_reset_network_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
     # Create original containers
@@ -109,17 +110,17 @@ def test_reset_network_updates(test_ws_client, manager, worker):
     mapping = {worker.id: [new_node.id]}
 
     # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-    manager.commit_graph(simple_graph, mapping).result(timeout=30)
-    time.sleep(3)
+    await worker.async_connect(host=manager.host, port=manager.port)
+    await manager.async_commit(simple_graph, mapping)
+    await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()
 
     # Reset
-    assert manager.reset()
-    time.sleep(3)
+    assert await manager.async_reset()
+    await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()
 
     # Recommit graph
-    manager.commit_graph(simple_graph, mapping).result(timeout=30)
-    time.sleep(3)
+    await manager.async_commit(simple_graph, mapping)
+    await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()

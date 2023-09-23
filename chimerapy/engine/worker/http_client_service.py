@@ -48,6 +48,8 @@ class HttpClientService(Service):
         self.manager_port = -1
         self.manager_url = ""
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
@@ -66,7 +68,7 @@ class HttpClientService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port

@@ -1,7 +1,7 @@
 import pathlib
-import atexit
 import os
 import uuid
+import asyncio_atexit
 from datetime import datetime
 from concurrent.futures import Future
 from typing import Dict, Optional, List, Union, Any, Literal, Coroutine
@@ -15,8 +15,6 @@ from chimerapy.engine.graph import Graph
 
 # Eventbus
 from ..eventbus import EventBus, Event, make_evented
-
-# from .events import StartEvent
 
 # Services
 from .http_server_service import HttpServerService
@@ -64,16 +62,12 @@ class Manager:
         """
         # Saving input parameters
         self.has_shutdown = False
+        self.publish_logs_via_zmq = publish_logs_via_zmq
+        self.enable_api = enable_api
+        # self.kwargs = kwargs
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
-
-        # Create with thread
-        self._thread = AsyncLoopThread()
-        self._thread.start()
-
-        # Create eventbus
-        self.eventbus = EventBus(thread=self._thread)
 
         # Create log directory to store data
         self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -82,17 +76,19 @@ class Manager:
         os.makedirs(logdir, exist_ok=True)
 
         # Create state information container
-        self.state = make_evented(
-            ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir),
-            event_bus=self.eventbus,
-        )
+        self.state = ManagerState(id=id, ip="127.0.0.1", port=port, logdir=logdir)
+
+    async def aserve(self) -> bool:
+
+        # Create eventbus
+        self.eventbus = EventBus()
+        self.state = make_evented(self.state, event_bus=self.eventbus)
 
         # Create the services
         self.http_server = HttpServerService(
             name="http_server",
-            port=port,
-            enable_api=enable_api,
-            thread=self._thread,
+            port=self.state.port,
+            enable_api=self.enable_api,
             eventbus=self.eventbus,
             state=self.state,
         )
@@ -109,20 +105,37 @@ class Manager:
         )
         self.distributed_logging = DistributedLoggingService(
             name="distributed_logging",
-            publish_logs_via_zmq=publish_logs_via_zmq,
+            publish_logs_via_zmq=self.publish_logs_via_zmq,
             eventbus=self.eventbus,
             state=self.state,
-            **kwargs,
+            # **self.kwargs,
         )
 
+        # Initialize services
+        await self.http_server.async_init()
+        await self.worker_handler.async_init()
+        await self.zeroconf_service.async_init()
+        await self.session_record.async_init()
+        await self.distributed_logging.async_init()
+
         # Start all services
-        self.eventbus.send(Event("start")).result(timeout=10)
+        await self.eventbus.asend(Event("start"))
 
         # Logging
         logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
 
         # Register atexit
-        atexit.register(self.shutdown)
+        asyncio_atexit.register(self.async_shutdown)
+
+        return True
+
+    def serve(self) -> bool:
+        # Create with thread
+        self._thread = AsyncLoopThread()
+        self._thread.start()
+
+        # Have to run setup before letting the system continue
+        return self._exec_coro(self.aserve()).result()
 
     def __repr__(self):
         return f"<Manager @{self.host}:{self.port}>"

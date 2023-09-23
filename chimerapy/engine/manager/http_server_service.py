@@ -10,7 +10,6 @@ from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
 from ..utils import update_dataclass
 from ..states import WorkerState, ManagerState
-from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
 from .events import (
@@ -29,7 +28,6 @@ class HttpServerService(Service):
         name: str,
         port: int,
         enable_api: bool,
-        thread: AsyncLoopThread,
         eventbus: EventBus,
         state: ManagerState,
     ):
@@ -40,7 +38,6 @@ class HttpServerService(Service):
         self._ip = "172.0.0.1"
         self._port = port
         self._enable_api = enable_api
-        self._thread = thread
         self.eventbus = eventbus
         self.state = state
 
@@ -59,8 +56,9 @@ class HttpServerService(Service):
                 web.post("/workers/node_status", self._update_nodes_status),
                 web.post("/workers/send_archive", self._update_send_archive),
             ],
-            thread=self._thread,
         )
+
+    async def async_init(self):
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
@@ -81,7 +79,7 @@ class HttpServerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     @property
     def ip(self) -> str:

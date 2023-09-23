@@ -8,7 +8,6 @@ from typing import Dict
 import chimerapy.engine as cpe
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.manager.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import ManagerState
 
@@ -42,13 +41,12 @@ class ConsumeNode(cpe.Node):
         return output
 
 
-def testbed_setup():
+async def testbed_setup():
     # Creating worker to communicate
     worker = cpe.Worker(name="local", id="local", port=0)
+    await worker.aserve()
 
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     state = make_evented(
         ManagerState(logdir=pathlib.Path(tempfile.mkdtemp())), event_bus=eventbus
@@ -65,24 +63,25 @@ def testbed_setup():
         name="http_server",
         port=0,
         enable_api=True,
-        thread=thread,
         eventbus=eventbus,
         state=state,
     )
     worker_handler = WorkerHandlerService(
         name="worker_handler", eventbus=eventbus, state=state
     )
+    await http_server.async_init()
+    await worker_handler.async_init()
 
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
 
     # Register worker
-    worker.connect(host=http_server.ip, port=http_server.port)
+    await worker.async_connect(host=http_server.ip, port=http_server.port)
 
     return (worker_handler, worker, simple_graph, eventbus)
 
 
 async def main():
-    worker_handler, worker, simple_graph, eventbus = testbed_setup()
+    worker_handler, worker, simple_graph, eventbus = await testbed_setup()
 
     # Register graph
     worker_handler._register_graph(simple_graph)
@@ -108,12 +107,12 @@ async def main():
     print(f"Create time: {sum(c_times)/len(c_times)}")
     print(f"Destroy time: {sum(d_times)/len(d_times)}")
 
-    eventbus.send(Event("shutdown")).result()
-    worker.shutdown()
+    await eventbus.asend(Event("shutdown"))
+    await worker.async_shutdown()
 
 
 async def main_multiple_creation():
-    worker_handler, worker, simple_graph, eventbus = testbed_setup()
+    worker_handler, worker, simple_graph, eventbus = await testbed_setup()
 
     # Register graph
     worker_handler._register_graph(simple_graph)
@@ -131,7 +130,10 @@ async def main_multiple_creation():
             )
             for i in range(M)
         ]
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            print(e)
         toc = time.perf_counter()
         c_times.append(toc - tic)
 
@@ -144,15 +146,18 @@ async def main_multiple_creation():
             )
             for i in range(M)
         ]
-        await asyncio.gather(*tasks)
+        try:
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            print(e)
         toc = time.perf_counter()
         d_times.append(toc - tic)
 
     print(f"Create time: {sum(c_times)/len(c_times)}")
     print(f"Destroy time: {sum(d_times)/len(d_times)}")
 
-    eventbus.send(Event("shutdown")).result()
-    worker.shutdown()
+    await eventbus.asend(Event("shutdown"))
+    await worker.async_shutdown()
 
 
 if __name__ == "__main__":

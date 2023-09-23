@@ -53,6 +53,8 @@ class WorkerHandlerService(Service):
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
@@ -78,7 +80,7 @@ class WorkerHandlerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     async def shutdown(self) -> bool:
 

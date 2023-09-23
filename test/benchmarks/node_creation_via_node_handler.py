@@ -5,7 +5,6 @@ import tqdm
 import chimerapy.engine as cpe
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import WorkerState
 
@@ -25,12 +24,10 @@ class GenNode(cpe.Node):
         return self.value
 
 
-def setup_node_handler():
+async def setup_node_handler():
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Requirements
     state = make_evented(WorkerState(), event_bus=eventbus)
@@ -46,19 +43,22 @@ def setup_node_handler():
         logger=logger,
         logreceiver=log_receiver,
     )
+    await node_handler.async_init()
 
     # Necessary dependency
     http_server = HttpServerService(
-        name="http_server", state=state, thread=thread, eventbus=eventbus, logger=logger
+        name="http_server", state=state, eventbus=eventbus, logger=logger
     )
-    thread.exec(http_server.start()).result(timeout=10)
+    await http_server.async_init()
+
+    await eventbus.asend(Event("start"))
 
     return (node_handler, http_server, eventbus)
 
 
 async def main():
 
-    node_handler_setup = setup_node_handler()
+    node_handler_setup = await setup_node_handler()
     node_handler, _, eventbus = node_handler_setup
 
     gen_node = GenNode(name="Gen1")
@@ -86,7 +86,7 @@ async def main():
 
 async def main_multiple_creation():
 
-    node_handler_setup = setup_node_handler()
+    node_handler_setup = await setup_node_handler()
     node_handler, _, eventbus = node_handler_setup
 
     gen_nodes = [GenNode(name=f"Gen{i}") for i in range(M)]

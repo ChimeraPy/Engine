@@ -231,6 +231,7 @@ class NodeHandlerService(Service):
             )
 
             if not success:
+                self.logger.error(f"{self}: Node {id} failed to initialized")
                 await controller.shutdown()
                 continue
 
@@ -241,6 +242,7 @@ class NodeHandlerService(Service):
             )
 
             if not success:
+                self.logger.error(f"{self}: Node {id} failed to ready-up")
                 await controller.shutdown()
                 continue
 

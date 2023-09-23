@@ -33,6 +33,8 @@ class DistributedLoggingService(Service):
             handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
             _logger.add_zmq_handler(logger, handler_config)
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
@@ -53,7 +55,7 @@ class DistributedLoggingService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def start(self):
 

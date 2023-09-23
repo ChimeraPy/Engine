@@ -67,17 +67,19 @@ def slow_interval_between_tests():
 
 
 @pytest.fixture
-def manager():
+async def manager():
     manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
+    await manager.aserve()
     yield manager
-    manager.shutdown()
+    await manager.async_shutdown()
 
 
 @pytest.fixture
-def worker():
+async def worker():
     worker = cpe.Worker(name="local", id="local", port=0)
+    await worker.aserve()
     yield worker
-    worker.shutdown()
+    await worker.async_shutdown()
 
 
 @pytest.fixture
