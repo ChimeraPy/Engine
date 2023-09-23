@@ -5,6 +5,7 @@ from .image_record import ImageRecord
 from .tabular_record import TabularRecord
 from .video_record import VideoRecord
 from .json_record import JSONRecord
+from .text_record import TextRecord
 
 __all__ = [
     "Record",
@@ -13,4 +14,5 @@ __all__ = [
     "TabularRecord",
     "VideoRecord",
     "JSONRecord",
+    "TextRecord",
 ]

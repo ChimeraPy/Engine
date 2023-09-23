@@ -314,7 +314,7 @@ class Server:
 
             # Remove client id
             target_client_id: Optional[str] = None
-            for client_id, client_ws in self.ws_clients.values():
+            for client_id, client_ws in self.ws_clients.items():
                 if client_ws == ws:
                     target_client_id = client_id
 
@@ -429,14 +429,18 @@ class Server:
             self.logger.debug(f"{self}: Tried to shutdown while not running.")
             return True
 
-        for ws in self.ws_clients.values():
-            try:
-                await asyncio.wait_for(
-                    ws.close(),
-                    timeout=2,
-                )
-            except (asyncio.exceptions.TimeoutError, RuntimeError):
-                pass
+        for client_id in list(
+            self.ws_clients
+        ):  # Copying the list to avoid changing the dict
+            ws = self.ws_clients.get(client_id, None)
+            if ws is not None:
+                try:
+                    await asyncio.wait_for(
+                        ws.close(),
+                        timeout=2,
+                    )
+                except (asyncio.exceptions.TimeoutError, RuntimeError):
+                    pass
 
         # Cleanup and signal complete
         await asyncio.wait_for(self._runner.shutdown(), timeout=10)

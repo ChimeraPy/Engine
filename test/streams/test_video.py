@@ -3,6 +3,7 @@ import os
 import asyncio
 import pathlib
 import uuid
+from datetime import timedelta
 
 # Third-party
 import cv2
@@ -47,6 +48,7 @@ def test_video_record():
 
     # Write to video file
     fps = 30
+    start_time = vr.start_time
     for i in range(fps):
         data = np.random.rand(200, 300, 3) * 255
         video_chunk = {
@@ -55,8 +57,7 @@ def test_video_record():
             "data": data,
             "dtype": "video",
             "fps": fps,
-            "timestamp": i / fps,
-            "elapsed": i / fps,
+            "timestamp": start_time + timedelta(seconds=i / fps),
         }
         vr.write(video_chunk)
 
@@ -88,10 +89,11 @@ def test_video_record_with_unstable_frames():
     fps = 30
     actual_fps = 10
     rec_time = 5
+    start_time = vr.start_time
     for i in range(rec_time * actual_fps):
 
         # But actually, we are getting frames at 20 fps
-        timestamp = i / actual_fps
+        timestamp = start_time + timedelta(seconds=i / actual_fps)
         data = np.random.rand(200, 300, 3) * 255
         video_chunk = {
             "uuid": uuid.uuid4(),

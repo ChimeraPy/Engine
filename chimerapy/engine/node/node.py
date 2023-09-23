@@ -82,7 +82,6 @@ class Node:
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
         self.logging_level: int = logging.DEBUG
-        self.start_time = datetime.datetime.now()
 
         # Default values
         self.node_config = NodeConfig()
@@ -204,7 +203,6 @@ class Node:
                 "data": data,
                 "dtype": "video",
                 "fps": fps,
-                "elapsed": (timestamp - self.start_time).total_seconds(),
                 "timestamp": timestamp,
             }
             self.recorder.submit(video_entry)
@@ -372,6 +370,43 @@ class Node:
                 "timestamp": datetime.datetime.now(),
             }
             self.recorder.submit(json_entry)
+
+    def save_text(self, name: str, data: str, suffix="txt"):
+        """Record text data from the node to a text file.
+
+        Parameters
+        ----------
+        name : str
+            Name of the text file (.suffix extension will be suffixed).
+
+        data : str
+            The data to be recorded.
+
+        suffix : str
+            The suffix of the text file.
+
+        Notes
+        -----
+        It should be noted that new lines addition should be taken by the callee.
+        """
+
+        if not self.recorder:
+            self.logger.warning(
+                f"{self}: cannot perform recording operation without RecorderService "
+                "initialization"
+            )
+            return False
+
+        if self.recorder.enabled:
+            text_entry = {
+                "uuid": uuid.uuid4(),
+                "name": name,
+                "data": data,
+                "suffix": suffix,
+                "dtype": "text",
+                "timestamp": datetime.datetime.now(),
+            }
+            self.recorder.submit(text_entry)
 
     ####################################################################
     ## Back-End Lifecycle API

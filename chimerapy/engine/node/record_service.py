@@ -14,6 +14,7 @@ from ..records import (
     TabularRecord,
     ImageRecord,
     JSONRecord,
+    TextRecord,
 )
 from ..service import Service
 
@@ -49,6 +50,7 @@ class RecordService(Service):
             "tabular": TabularRecord,
             "image": ImageRecord,
             "json": JSONRecord,
+            "text": TextRecord,
         }
 
         # Making sure the attribute exists
@@ -130,6 +132,8 @@ class RecordService(Service):
             if data_entry["name"] not in self.records:
                 entry_cls = self.record_map[data_entry["dtype"]]
                 entry = entry_cls(dir=self.state.logdir, name=data_entry["name"])
+
+                # FixMe: Potential overwrite of existing entry?
                 self.records[data_entry["name"]] = entry
 
             # Case 2
