@@ -35,7 +35,10 @@ config:
       client-shutdown: 10
       server-shutdown: 15
       pub-delay: 1
+      file-send: 1800 # 30 minutes
   diagnostics:
     deque-length: 10000
     interval: 10
     logging-enabled: false
+  streaming-responses:
+    chunk-size: 1024 # KB

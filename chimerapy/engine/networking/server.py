@@ -228,7 +228,7 @@ class Server:
                 # file=tqdm_out,
             ) as pbar:
                 while True:
-                    chunk = await field.read_chunk(8192 * 10)  # 8192 bytes by default.
+                    chunk = await field.read_chunk(config.get("streaming-responses.chunk-size") * 1024)
                     if not chunk:
                         break
                     await f.write(chunk)
@@ -387,7 +387,6 @@ class Server:
 
         # Make sure to shutdown correctly
         asyncio_atexit.register(self.async_shutdown)
-
         return True
 
     async def async_send(

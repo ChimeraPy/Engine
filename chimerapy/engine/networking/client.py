@@ -232,7 +232,7 @@ class Client:
 
         # Create a new session for the moment
         async with aiohttp.ClientSession() as session:
-            await session.post(url, data=data)
+            await session.post(url, data=data, timeout=config.get("comms.timeout.file-send"))
 
         return True
 
