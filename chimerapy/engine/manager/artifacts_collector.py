@@ -12,7 +12,7 @@ from aiohttp import ClientSession
 from typing import Dict, Any
 
 from chimerapy.engine._logger import fork, getLogger
-from chimerapy.engine.states import ManagerState
+from chimerapy.engine.states import ManagerState, NodeState
 from ..config import get
 from chimerapy.engine.utils import async_waiting_for
 
@@ -23,8 +23,6 @@ class ArtifactsCollector:
     def __init__(
         self, state: ManagerState, worker_id: str, parent_logger: logging.Logger = None
     ):
-        self._payload = None
-
         if parent_logger:
             worker_state = state.workers[worker_id]
             self.logger = fork(
@@ -42,9 +40,7 @@ class ArtifactsCollector:
             f"{self.state.workers[self.worker_id].port}"
         )
 
-    async def _request_artifacts_gather(
-        self, session: ClientSession, timeout: int
-    ) -> None:
+    async def _request_artifacts_gather(self, session: ClientSession) -> None:
         """Request the nodes to gather recorded artifacts."""
         self.logger.debug("Requesting nodes to gather recorded artifacts")
         async with session.post(
@@ -52,6 +48,7 @@ class ArtifactsCollector:
         ) as _:
             ...
 
+    async def _wait_till_artifacts_ready(self, timeout: int) -> None:
         self.logger.debug("Waiting for nodes to gather recorded artifacts")
         success = await async_waiting_for(self._have_nodes_saved, timeout=timeout)
 
@@ -106,11 +103,13 @@ class ArtifactsCollector:
         return all(results)
 
     def _is_remote_worker_collector(self) -> bool:
+        """Check if the worker collector is remote."""
         return self.state.workers[self.worker_id].ip != self.state.ip
 
     async def _download_local_artifact(
         self, parent_dir: pathlib.Path, artifact: Dict[str, Any]
     ) -> bool:
+        """Download a single artifact recorded by a node."""
         file_path = parent_dir / pathlib.Path(artifact["path"]).name
         src_path = pathlib.Path(artifact["path"])
 
@@ -132,7 +131,8 @@ class ArtifactsCollector:
         file_path = parent_dir / pathlib.Path(artifact["path"]).name
         # Stream and Save
         async with session.get(
-            f"/nodes/artifacts/{node_id}/{artifact['name']}"
+            f"/nodes/artifacts/{node_id}/{artifact['name']}",
+            timeout=get("streaming-responses.timeout"),
         ) as resp:
 
             if resp.status != 200:
@@ -167,14 +167,16 @@ class ArtifactsCollector:
 
         return True
 
-    def _create_worker_dir(self):
+    def _create_worker_dir(self) -> pathlib.Path:
+        """Create the worker's directory."""
         worker_dir = (
             self.state.logdir / self.state.workers[self.worker_id].name
         )  # TODO: Match current format
         worker_dir.mkdir(exist_ok=True, parents=True)
         return worker_dir
 
-    def _find_node_state_by_id(self, node_id):
+    def _find_node_state_by_id(self, node_id) -> NodeState:
+        """Find the node's state by its id."""
         worker_state = self.state.workers[self.worker_id]
         node_state = worker_state.nodes[node_id]
         return node_state
@@ -182,6 +184,7 @@ class ArtifactsCollector:
     async def collect(self, timeout=get("comms.timeout.artifacts-ready")) -> bool:
         """Collect the recorded artifacts from the nodes."""
         async with aiohttp.ClientSession(base_url=self.base_url) as session:
-            await self._request_artifacts_gather(session, timeout=timeout)
+            await self._request_artifacts_gather(session)
+            await self._wait_till_artifacts_ready(timeout)
             artifacts = await self._request_artifacts_info(session)
             return await self._download_artifacts(session, artifacts)

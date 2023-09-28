@@ -41,4 +41,5 @@ config:
     interval: 10
     logging-enabled: false
   streaming-responses:
-    chunk-size: 1024 # KB
+    chunk-size: 512 # KB
+    timeout: 1800 # 30 minutes
