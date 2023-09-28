@@ -43,3 +43,12 @@ class JSONRecord(Record):
         if self.file_handler is not None:
             self.file_handler.close()
             self.file_handler = None
+
+    def get_meta(self):
+        """Get metadata."""
+        return {
+            "name": self.name,
+            "path": self.jsonl_path,
+            "glob": None,
+            "mime_type": "text/plain",  # text
+        }

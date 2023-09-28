@@ -1,5 +1,6 @@
+import pathlib
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
@@ -7,7 +8,7 @@ from ..data_protocols import NodePubTable, NodeDiagnostics
 
 
 @dataclass
-class EnableDiagnosticsEvent: # enable_diagnostics
+class EnableDiagnosticsEvent:  # enable_diagnostics
     enable: bool
 
 
@@ -41,3 +42,12 @@ class GatherEvent:
 @dataclass
 class DiagnosticsReportEvent:  # diagnostics_report
     diagnostics: NodeDiagnostics
+
+
+@dataclass
+class ArtifactEvent:
+    name: str
+    path: pathlib.Path
+    mime_type: str
+    size: Optional[int]
+    glob: Optional[str] = None

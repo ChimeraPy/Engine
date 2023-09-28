@@ -321,7 +321,10 @@ class Manager:
         return await self.worker_handler.stop()
 
     async def async_collect(self) -> bool:
-        return await self.worker_handler.collect()
+        return await self.worker_handler.collect_v2()
+
+    async def async_collect_v2(self) -> bool:
+        return await self.worker_handler.collect_v2()
 
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)
@@ -465,6 +468,9 @@ class Manager:
 
         """
         return self._exec_coro(self.async_collect())
+
+    def collect_v2(self) -> Future[bool]:
+        return self._exec_coro(self.async_collect_v2())
 
     def reset(
         self, keep_workers: bool = True, blocking: bool = True

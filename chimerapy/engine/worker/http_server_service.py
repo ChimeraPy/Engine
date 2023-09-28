@@ -3,7 +3,7 @@ import asyncio
 import enum
 import logging
 import pathlib
-from typing import Dict, List
+from typing import Dict, List, Any, Union
 
 from aiohttp import web
 
@@ -14,6 +14,7 @@ from ..data_protocols import (
     NodePubEntry,
     NodeDiagnostics,
 )
+from chimerapy.engine import config
 from ..networking import Server
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
@@ -52,6 +53,7 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
+        self.artifacts: Dict[str, Any] = {}
 
         # Create server
         self.server = Server(
@@ -70,6 +72,12 @@ class HttpServerService(Service):
                 web.post("/nodes/registered_methods", self._async_request_method_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/nodes/diagnostics", self._async_diagnostics_route),
+                web.post("/nodes/gather_artifacts", self._async_gather_artifacts_route),
+                web.get("/nodes/artifacts", self._async_get_artifacts_route),
+                web.get(
+                    "/nodes/artifacts/{node_id}/{artifact_id}",
+                    self._async_get_artifact_route,
+                ),
                 # web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -78,6 +86,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
                 NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
+                NODE_MESSAGE.ARTIFACT: self._async_node_artifact,
             },
             parent_logger=self.logger,
             thread=self.thread,
@@ -300,6 +309,53 @@ class HttpServerService(Service):
         await self.eventbus.asend(Event("diagnostics", event_data))
         return web.HTTPOk()
 
+    async def _async_gather_artifacts_route(self, request: web.Request) -> web.Response:
+        await self.eventbus.asend(Event("collect"))
+        return web.HTTPOk()
+
+    async def _async_get_artifacts_route(self, request: web.Request) -> web.Response:
+        return web.json_response(self.artifacts)
+
+    async def _async_get_artifact_route(
+        self, request: web.Request
+    ) -> Union[web.FileResponse, web.Response]:
+        node_id = request.match_info["node_id"]
+        artifact_id = request.match_info["artifact_id"]
+        try:
+            artifacts = self.artifacts[node_id]
+            target_artifact = list(
+                filter(lambda a: a["name"] == artifact_id, artifacts)
+            )
+            if len(target_artifact) == 0:
+                return web.Response(
+                    status=404,
+                    text=f"Artifact {artifact_id} not found for node {node_id}",
+                )
+
+            artifact = target_artifact[0]
+            filepath = pathlib.Path(artifact["path"])
+            filename = filepath.name
+            headers = {
+                "Content-Disposition": f"attachment; filename={filename}",
+            }
+
+            if (not filepath.exists()) or (not filepath.is_file()):
+                return web.Response(
+                    status=404,
+                    text=f"Artifact {artifact_id} not found for node {node_id}",
+                )
+
+            return web.FileResponse(
+                path=filepath,
+                headers=headers,
+                chunk_size=config.get("streaming-responses.chunk-size") * 1024,
+            )
+        except KeyError:
+            return web.Response(
+                status=404,
+                text=f"Artifact {artifact_id} not found for node {node_id}",
+            )
+
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
         self.tasks.append(asyncio.create_task(self.eventbus.asend(Event("shutdown"))))
@@ -351,3 +407,14 @@ class HttpServerService(Service):
         diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
         if node_id in self.state.nodes:
             self.state.nodes[node_id].diagnostics = diag
+
+    async def _async_node_artifact(self, msg: Dict, ws: web.WebSocketResponse):
+        node_id: str = msg["data"]["node_id"]
+        artifact = msg["data"]["artifact"]
+
+        if node_id in self.state.nodes:
+
+            if self.artifacts.get(node_id) is None:
+                self.artifacts[node_id] = []
+
+            self.artifacts[node_id].append(artifact)

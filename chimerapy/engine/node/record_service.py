@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 from chimerapy.engine import _logger
 from ..states import NodeState
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import EventBus, TypedObserver, Event
 from ..records import (
     Record,
     VideoRecord,
@@ -17,6 +17,7 @@ from ..records import (
     TextRecord,
 )
 from ..service import Service
+from .events import ArtifactEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -151,7 +152,21 @@ class RecordService(Service):
 
         # Signal to stop and save
         self.is_running.clear()
+        artifacts = {}
+        for name, entry in self.records.items():
+            artifacts[name] = entry.get_meta()
+
         if self._record_thread:
             self._record_thread.join()
+
+        for name, artifact in artifacts.items():
+            event_data = ArtifactEvent(
+                name=artifact["name"],
+                mime_type=artifact["mime_type"],
+                path=artifact["path"],
+                glob=artifact["glob"],
+                size=artifact["path"].stat().st_size,
+            )
+            assert self.eventbus.send(Event("artifact", event_data)).result(timeout=5)
 
         # self.logger.debug(f"{self}: Finish saving records")

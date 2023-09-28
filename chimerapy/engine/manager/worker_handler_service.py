@@ -19,6 +19,7 @@ from ..node import NodeConfig
 from ..networking import Client, DataChunk
 from ..service import Service
 from ..graph import Graph
+from .artifacts_collector import ArtifactsCollector
 from ..exceptions import CommitGraphError
 from ..states import WorkerState, ManagerState
 from ..eventbus import EventBus, TypedObserver, Event, make_evented
@@ -849,4 +850,20 @@ class WorkerHandlerService(Service):
         self.node_pub_table = NodePubTable()
         self._deregister_graph()
 
+        return all(results)
+
+    async def collect_v2(self) -> bool:
+        client_session = aiohttp.ClientSession()
+        futures = []
+        for worker_id in self.state.workers:
+            collector = ArtifactsCollector(
+                state=self.state,
+                worker_id=worker_id,
+                parent_logger=logger,
+            )
+            future = asyncio.create_task(collector.collect())
+            futures.append(future)
+
+        results = await asyncio.gather(*futures)
+        await client_session.close()
         return all(results)

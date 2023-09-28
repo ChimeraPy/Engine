@@ -28,12 +28,14 @@ class TextRecord(Record):
         self.name = name
         self.first_frame = False
         self.file_handler: Optional[IO[str]] = None
+        self.save_path: Optional[pathlib.Path] = None
 
     def write(self, data_chunk: Dict[str, Any]):
         if not self.first_frame:
             self.file_handler = (self.dir / f"{self.name}.{data_chunk['suffix']}").open(
                 "w"
             )
+            self.save_path = self.dir / f"{self.name}.{data_chunk['suffix']}"
             self.first_frame = True
 
         text_data = data_chunk["data"]
@@ -44,3 +46,11 @@ class TextRecord(Record):
         if self.file_handler is not None:
             self.file_handler.close()
             self.file_handler = None
+
+    def get_meta(self):
+        return {
+            "name": self.name,
+            "path": self.save_path,
+            "glob": None,
+            "mime_type": "text/plain",  # text
+        }

@@ -16,6 +16,7 @@ from .events import (
     RegisteredMethodEvent,
     GatherEvent,
     DiagnosticsReportEvent,
+    ArtifactEvent,
 )
 
 
@@ -97,6 +98,12 @@ class WorkerCommsService(Service):
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
+            "artifact": TypedObserver(
+                "artifact",
+                ArtifactEvent,
+                on_asend=self.send_artifact_info,
+                handle_event="unpack",
+            ),
         }
         for ob in observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
@@ -174,6 +181,23 @@ class WorkerCommsService(Service):
         if self.client:
             data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
             await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
+
+    async def send_artifact_info(
+        self, name: str, path: pathlib.Path, mime_type: str, size: int, glob: bool
+    ):
+        assert self.state and self.eventbus and self.logger
+        if self.client:
+            data = {
+                "node_id": self.state.id,
+                "artifact": {
+                    "name": name,
+                    "path": str(path),
+                    "mime_type": mime_type,
+                    "glob": glob,
+                    "size": size,
+                },
+            }
+            await self.client.async_send(signal=NODE_MESSAGE.ARTIFACT, data=data)
 
     ####################################################################
     ## Message Responds

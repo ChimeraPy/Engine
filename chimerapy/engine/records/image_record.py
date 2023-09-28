@@ -38,3 +38,12 @@ class ImageRecord(Record):
 
     def close(self):
         ...
+
+    def get_meta(self):
+        """Get metadata."""
+        return {
+            "name": self.name,
+            "path": self.save_loc,
+            "glob": "*.png",
+            "mime_type": "image/png",
+        }
