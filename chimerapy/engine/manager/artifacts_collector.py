@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import pathlib
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import aiofiles
 import aiohttp
@@ -20,10 +20,13 @@ class ArtifactsCollector:
     """A utility class to collect artifacts recorded by the nodes."""
 
     def __init__(
-        self, state: ManagerState, worker_id: str, parent_logger: logging.Logger = None
+        self,
+        state: ManagerState,
+        worker_id: str,
+        parent_logger: Optional[logging.Logger] = None,
     ):
         worker_state = state.workers[worker_id]
-        if parent_logger:
+        if parent_logger is None:
             parent_logger = getLogger("chimerapy-engine")
 
         self.logger = fork(
