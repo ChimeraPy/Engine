@@ -1,19 +1,18 @@
+import asyncio
 import json
 import logging
-import asyncio
 import pathlib
-
-import aioshutil
-from tqdm import tqdm
+from typing import Any, Dict
 
 import aiofiles
 import aiohttp
+import aioshutil
 from aiohttp import ClientSession
-from typing import Dict, Any
+from tqdm import tqdm
 
+from chimerapy.engine import config
 from chimerapy.engine._logger import fork, getLogger
 from chimerapy.engine.states import ManagerState, NodeState
-from ..config import get
 from chimerapy.engine.utils import async_waiting_for
 
 
@@ -27,7 +26,7 @@ class ArtifactsCollector:
             worker_state = state.workers[worker_id]
             self.logger = fork(
                 parent_logger,
-                f"ArtifactsCollector[Worker{worker_state.name}-{worker_state.id[:8]}]",
+                f"ArtifactsCollector-[Worker({worker_state.name})]",
             )
         else:
             logger = getLogger("chimerapy-engine")
@@ -110,14 +109,14 @@ class ArtifactsCollector:
         self, parent_dir: pathlib.Path, artifact: Dict[str, Any]
     ) -> bool:
         """Download a single artifact recorded by a node."""
-        file_path = parent_dir / pathlib.Path(artifact["path"]).name
+        dst_path = parent_dir / artifact["filename"]
         src_path = pathlib.Path(artifact["path"])
 
         if not src_path.exists():
             return False
 
-        self.logger.debug(f"Copying {src_path} to {file_path}")
-        await aioshutil.copyfile(src_path, file_path)
+        self.logger.debug(f"Copying {src_path.name} to {dst_path}")
+        await aioshutil.copyfile(src_path, dst_path)
         return True
 
     async def _download_remote_artifact(
@@ -128,13 +127,12 @@ class ArtifactsCollector:
         artifact: Dict[str, Any],
     ) -> bool:
         """Download a single artifact from a node."""
-        file_path = parent_dir / pathlib.Path(artifact["path"]).name
+        dst_path = parent_dir / artifact["filename"]
         # Stream and Save
         async with session.get(
             f"/nodes/artifacts/{node_id}/{artifact['name']}",
-            timeout=get("streaming-responses.timeout"),
+            timeout=config.get("streaming-responses.timeout"),
         ) as resp:
-
             if resp.status != 200:
                 print(await resp.text())
                 e_msg = (
@@ -146,15 +144,15 @@ class ArtifactsCollector:
 
             total_size = artifact["size"]
             try:
-                async with aiofiles.open(file_path, mode="wb") as f:
+                async with aiofiles.open(dst_path, mode="wb") as f:
                     with tqdm(
                         total=1,
-                        desc=f"Downloading {file_path.name}",
+                        desc=f"Downloading {dst_path.name}",
                         unit="B",
                         unit_scale=True,
                     ) as pbar:
                         async for chunk in resp.content.iter_chunked(
-                            get("streaming-responses.chunk-size") * 1024
+                            config.get("streaming-responses.chunk-size") * 1024
                         ):
                             await f.write(chunk)
                             pbar.update(len(chunk) / total_size)
@@ -181,7 +179,9 @@ class ArtifactsCollector:
         node_state = worker_state.nodes[node_id]
         return node_state
 
-    async def collect(self, timeout=get("comms.timeout.artifacts-ready")) -> bool:
+    async def collect(
+        self, timeout=config.get("comms.timeout.artifacts-ready")
+    ) -> bool:
         """Collect the recorded artifacts from the nodes."""
         async with aiohttp.ClientSession(base_url=self.base_url) as session:
             await self._request_artifacts_gather(session)

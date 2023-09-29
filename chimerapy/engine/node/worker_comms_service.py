@@ -192,6 +192,7 @@ class WorkerCommsService(Service):
                 "artifact": {
                     "name": name,
                     "path": str(path),
+                    "filename": path.name,
                     "mime_type": mime_type,
                     "glob": glob,
                     "size": size,
