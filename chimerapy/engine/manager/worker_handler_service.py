@@ -853,7 +853,6 @@ class WorkerHandlerService(Service):
         return all(results)
 
     async def collect_v2(self) -> bool:
-        client_session = aiohttp.ClientSession()
         futures = []
         for worker_id in self.state.workers:
             collector = ArtifactsCollector(
@@ -865,5 +864,4 @@ class WorkerHandlerService(Service):
             futures.append(future)
 
         results = await asyncio.gather(*futures)
-        await client_session.close()
         return all(results)
