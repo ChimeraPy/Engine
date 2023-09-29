@@ -22,15 +22,14 @@ class ArtifactsCollector:
     def __init__(
         self, state: ManagerState, worker_id: str, parent_logger: logging.Logger = None
     ):
+        worker_state = state.workers[worker_id]
         if parent_logger:
-            worker_state = state.workers[worker_id]
-            self.logger = fork(
-                parent_logger,
-                f"ArtifactsCollector-[Worker({worker_state.name})]",
-            )
-        else:
-            logger = getLogger("chimerapy-engine")
-            self.logger = fork(logger, "collector")
+            parent_logger = getLogger("chimerapy-engine")
+
+        self.logger = fork(
+            parent_logger,
+            f"ArtifactsCollector-[Worker({worker_state.name})]",
+        )
 
         self.state = state
         self.worker_id = worker_id
