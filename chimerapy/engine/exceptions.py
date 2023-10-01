@@ -1,2 +1,6 @@
 class CommitGraphError(Exception):
     ...
+
+
+class TagError(Exception):
+    ...
