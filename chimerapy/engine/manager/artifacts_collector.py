@@ -72,7 +72,6 @@ class ArtifactsCollector:
                 artifacts = {}
             else:
                 artifacts = await resp.json()
-
             return artifacts
 
     def _have_nodes_saved(self) -> bool:
@@ -91,7 +90,7 @@ class ArtifactsCollector:
             node_dir = parent_path / node_state.name
             node_dir.mkdir(exist_ok=True, parents=True)
             for artifact in node_artifacts:
-                if self._is_remote_worker_collector():
+                if not self._is_remote_worker_collector():
                     coros.append(
                         self._download_remote_artifact(
                             session, node_id, node_dir, artifact
@@ -136,7 +135,6 @@ class ArtifactsCollector:
             timeout=config.get("streaming-responses.timeout"),
         ) as resp:
             if resp.status != 200:
-                print(await resp.text())
                 e_msg = (
                     f"Could not download artifact "
                     f"{artifact['name']} from node {node_id}"

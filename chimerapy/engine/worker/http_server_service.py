@@ -53,7 +53,7 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
-        self.artifacts: Dict[str, Any] = {}
+        self.artifacts_data: Dict[str, Any] = {}
 
         # Create server
         self.server = Server(
@@ -86,7 +86,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
                 NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
-                NODE_MESSAGE.ARTIFACT: self._async_node_artifact,
+                NODE_MESSAGE.ARTIFACTS: self._async_node_artifact,
             },
             parent_logger=self.logger,
             thread=self.thread,
@@ -314,7 +314,7 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_get_artifacts_route(self, request: web.Request) -> web.Response:
-        return web.json_response(self.artifacts)
+        return web.json_response(self.artifacts_data)
 
     async def _async_get_artifact_route(
         self, request: web.Request
@@ -322,7 +322,7 @@ class HttpServerService(Service):
         node_id = request.match_info["node_id"]
         artifact_id = request.match_info["artifact_id"]
         try:
-            artifacts = self.artifacts[node_id]
+            artifacts = self.artifacts_data[node_id]
             target_artifact = list(
                 filter(lambda a: a["name"] == artifact_id, artifacts)
             )
@@ -409,12 +409,5 @@ class HttpServerService(Service):
             self.state.nodes[node_id].diagnostics = diag
 
     async def _async_node_artifact(self, msg: Dict, ws: web.WebSocketResponse):
-        node_id: str = msg["data"]["node_id"]
-        artifact = msg["data"]["artifact"]
-
-        if node_id in self.state.nodes:
-
-            if self.artifacts.get(node_id) is None:
-                self.artifacts[node_id] = []
-
-            self.artifacts[node_id].append(artifact)
+        data = msg["data"]
+        self.artifacts_data[data["node_id"]] = data["artifacts"]

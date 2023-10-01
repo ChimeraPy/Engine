@@ -45,7 +45,7 @@ class DiagnosticsReportEvent:  # diagnostics_report
 
 
 @dataclass
-class ArtifactEvent:
+class Artifact:
     name: str
     path: pathlib.Path
     mime_type: str

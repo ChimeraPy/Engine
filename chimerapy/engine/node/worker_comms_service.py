@@ -1,7 +1,7 @@
 import pathlib
 import logging
 import tempfile
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from ..networking import Client
 from ..states import NodeState
@@ -16,7 +16,7 @@ from .events import (
     RegisteredMethodEvent,
     GatherEvent,
     DiagnosticsReportEvent,
-    ArtifactEvent,
+    Artifact,
 )
 
 
@@ -98,11 +98,10 @@ class WorkerCommsService(Service):
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
-            "artifact": TypedObserver(
-                "artifact",
-                ArtifactEvent,
+            "artifacts": TypedObserver(
+                "artifacts",
                 on_asend=self.send_artifact_info,
-                handle_event="unpack",
+                handle_event="pass",
             ),
         }
         for ob in observers.values():
@@ -182,23 +181,25 @@ class WorkerCommsService(Service):
             data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
             await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
 
-    async def send_artifact_info(
-        self, name: str, path: pathlib.Path, mime_type: str, size: int, glob: bool
-    ):
+    async def send_artifact_info(self, artifacts_event: Event):
+        artifacts: List[Artifact] = artifacts_event.data  # type: ignore
         assert self.state and self.eventbus and self.logger
         if self.client:
             data = {
                 "node_id": self.state.id,
-                "artifact": {
-                    "name": name,
-                    "path": str(path),
-                    "filename": path.name,
-                    "mime_type": mime_type,
-                    "glob": glob,
-                    "size": size,
-                },
+                "artifacts": [
+                    {
+                        "name": artifact.name,
+                        "path": str(artifact.path),
+                        "filename": str(artifact.path.name),
+                        "mime_type": artifact.mime_type,
+                        "glob": artifact.glob,
+                        "size": artifact.size,
+                    }
+                    for artifact in artifacts
+                ],
             }
-            await self.client.async_send(signal=NODE_MESSAGE.ARTIFACT, data=data)
+            await self.client.async_send(signal=NODE_MESSAGE.ARTIFACTS, data=data)
 
     ####################################################################
     ## Message Responds

@@ -17,7 +17,7 @@ from ..records import (
     TextRecord,
 )
 from ..service import Service
-from .events import ArtifactEvent
+from .events import Artifact
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -126,12 +126,10 @@ class RecordService(Service):
                 data_entry = self.save_queue.get(timeout=1)
             except queue.Empty:
                 continue
-
             # Case 1: new entry
             if data_entry["name"] not in self.records:
                 entry_cls = self.record_map[data_entry["dtype"]]
                 entry = entry_cls(dir=self.state.logdir, name=data_entry["name"])
-
                 # FixMe: Potential overwrite of existing entry?
                 self.records[data_entry["name"]] = entry
 
@@ -153,20 +151,24 @@ class RecordService(Service):
         # Signal to stop and save
         self.is_running.clear()
         artifacts = {}
-        for name, entry in self.records.items():
-            artifacts[name] = entry.get_meta()
 
         if self._record_thread:
             self._record_thread.join()
 
+        for name, entry in self.records.items():
+            artifacts[name] = entry.get_meta()
+
+        all_artifacts = []
         for name, artifact in artifacts.items():
-            event_data = ArtifactEvent(
+            event_data = Artifact(
                 name=artifact["name"],
                 mime_type=artifact["mime_type"],
                 path=artifact["path"],
                 glob=artifact["glob"],
                 size=artifact["path"].stat().st_size,
             )
-            assert self.eventbus.send(Event("artifact", event_data)).result(timeout=5)
+            all_artifacts.append(event_data)
+
+        assert self.eventbus.send(Event("artifacts", all_artifacts)).result(timeout=10)
 
         # self.logger.debug(f"{self}: Finish saving records")
