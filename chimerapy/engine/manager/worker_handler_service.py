@@ -859,7 +859,7 @@ class WorkerHandlerService(Service):
         await self.eventbus.asend(Event("create_tag", tag_event))
         return tag_event.uuid
 
-    async def update_tag_description(self, uuid, name, description):
+    async def update_tag_description(self, uuid, name, description) -> bool:
         tag_event = TagEvent(uuid=uuid, name=name, description=description)
 
         await self.eventbus.asend(Event("update_tag", tag_event))

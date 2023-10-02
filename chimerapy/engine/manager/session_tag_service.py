@@ -1,6 +1,6 @@
 import datetime
 import json
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 
 from ..states import ManagerState
 from ..eventbus import EventBus, TypedObserver
@@ -49,7 +49,8 @@ class SessionTagService(Service):
         for ob in self.observers.values():
             self.eventbus.subscribe(ob).result(timeout=1)
 
-    def can_create_tag(self):
+    def can_create_tag(self) -> Tuple[bool, Optional[str]]:
+        """Check if a tag can be created"""
         all_node_states = list(
             node_state.fsm
             for worker in self.state.workers.values()
@@ -67,15 +68,16 @@ class SessionTagService(Service):
         )
         return can_create, reason
 
-    def _record_start_time(self):
+    def _record_start_time(self) -> None:
         self.start_time = datetime.datetime.now()
 
-    def get_elapsed_time(self):
+    def _get_elapsed_time(self) -> float:
+        assert self.start_time is not None
         delta = datetime.datetime.now() - self.start_time
         return delta.total_seconds()
 
-    def _create_tag(self, uuid, name, description=None):
-        e_time = self.get_elapsed_time()
+    def _create_tag(self, uuid: str, name: str, description: Optional[str] = None):
+        e_time = self._get_elapsed_time()
         self.tags[uuid] = {
             "uuid": uuid,
             "name": name,
@@ -91,12 +93,12 @@ class SessionTagService(Service):
             self.tags[uuid]["name"] = name
             self.tags[uuid]["description"] = description
 
-    def get_tag_name(self, uuid):
+    def get_tag_name(self, uuid: str) -> Optional[str]:
         if uuid in self.tags:
             return self.tags[uuid]["name"]
         else:
             return None
 
-    def _consolidate_tags(self):
+    def _consolidate_tags(self) -> None:
         with (self.state.logdir / "session_tags.json").open("w") as f:
             json.dump(self.tags, f, indent=2)

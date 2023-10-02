@@ -504,7 +504,7 @@ class Manager:
 
         return future
 
-    def create_tag(self, name: str, description: Optional[str] = None):
+    def create_tag(self, name: str, description: Optional[str] = None) -> Future[str]:
         return self._exec_coro(self.async_create_tag(name, description))
 
     def update_tag_descr(self, tag_id, description) -> Future[bool]:
