@@ -50,11 +50,15 @@ class SessionTagService(Service):
             self.eventbus.subscribe(ob).result(timeout=1)
 
     def can_create_tag(self):
-        all_node_states = (
+        all_node_states = list(
             node_state.fsm
             for worker in self.state.workers.values()
             for node_state in worker.nodes.values()
         )
+
+        if len(all_node_states) == 0:
+            return False, "No nodes to tag"
+
         can_create = all(node_state == "RECORDING" for node_state in all_node_states)
         reason = (
             "All nodes must be in RECORDING state to add a tag"
