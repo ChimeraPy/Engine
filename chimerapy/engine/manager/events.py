@@ -1,3 +1,4 @@
+from typing import Optional
 from dataclasses import dataclass
 
 from ..states import WorkerState
@@ -38,3 +39,10 @@ class DeregisterEntityEvent:  # entity_deregister
 @dataclass
 class MoveTransferredFilesEvent:  # move_transferred_files
     worker_state: WorkerState
+
+
+@dataclass
+class TagEvent:
+    uuid: str
+    name: str
+    description: Optional[str] = None

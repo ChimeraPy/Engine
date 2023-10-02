@@ -12,6 +12,7 @@ from chimerapy.engine import _logger
 from ..networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.states import ManagerState, WorkerState
 from chimerapy.engine.graph import Graph
+from chimerapy.engine.exceptions import TagError
 
 # Eventbus
 from ..eventbus import EventBus, Event, make_evented
@@ -24,6 +25,7 @@ from .worker_handler_service import WorkerHandlerService
 from .zeroconf_service import ZeroconfService
 from .session_record_service import SessionRecordService
 from .distributed_logging_service import DistributedLoggingService
+from .session_tag_service import SessionTagService
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -104,6 +106,11 @@ class Manager:
         )
         self.session_record = SessionRecordService(
             name="session_record",
+            eventbus=self.eventbus,
+            state=self.state,
+        )
+        self.session_tags = SessionTagService(
+            name="session_tag",
             eventbus=self.eventbus,
             state=self.state,
         )
@@ -338,6 +345,27 @@ class Manager:
 
         return True
 
+    async def async_create_tag(
+        self, name: str, description: Optional[str] = None
+    ) -> str:
+        can, reason = self.session_tags.can_create_tag()
+        if can:
+            return await self.worker_handler.create_tag(
+                name=name, description=description
+            )
+        else:
+            raise TagError(reason)
+
+    async def async_update_tag_descr(self, tag_id, description) -> bool:
+        tag_name = self.session_tags.get_tag_name(tag_id)
+
+        if tag_name is None:
+            raise TagError(f"Tag with id {tag_id} not found")
+
+        return await self.worker_handler.update_tag_description(
+            tag_id, tag_name, description
+        )
+
     ####################################################################
     ## Front-facing Sync API
     ####################################################################
@@ -475,6 +503,12 @@ class Manager:
             return future.result(timeout=config.get("manager.timeout.reset"))
 
         return future
+
+    def create_tag(self, name: str, description: Optional[str] = None) -> Future[str]:
+        return self._exec_coro(self.async_create_tag(name, description))
+
+    def update_tag_descr(self, tag_id, description) -> Future[bool]:
+        return self._exec_coro(self.async_update_tag_descr(tag_id, description))
 
     def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
         """Proper shutting down ChimeraPy-Engine cluster.

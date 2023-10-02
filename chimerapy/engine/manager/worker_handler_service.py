@@ -11,6 +11,7 @@ from typing import Dict, Optional, List, Any, Coroutine, Literal, Union
 import aiohttp
 import networkx as nx
 
+from uuid import uuid4
 from chimerapy.engine import config
 from chimerapy.engine import _logger
 from ..utils import async_waiting_for
@@ -29,6 +30,7 @@ from .events import (
     DeregisterEntityEvent,
     MoveTransferredFilesEvent,
     UpdateSendArchiveEvent,
+    TagEvent,
 )
 
 logger = _logger.getLogger("chimerapy-engine")
@@ -850,3 +852,15 @@ class WorkerHandlerService(Service):
         self._deregister_graph()
 
         return all(results)
+
+    async def create_tag(self, name, description=None) -> str:
+        # TODO: Ping Nodes
+        tag_event = TagEvent(uuid=str(uuid4()), name=name, description=description)
+        await self.eventbus.asend(Event("create_tag", tag_event))
+        return tag_event.uuid
+
+    async def update_tag_description(self, uuid, name, description) -> bool:
+        tag_event = TagEvent(uuid=uuid, name=name, description=description)
+
+        await self.eventbus.asend(Event("update_tag", tag_event))
+        return True
