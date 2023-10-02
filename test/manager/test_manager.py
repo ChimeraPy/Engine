@@ -1,6 +1,7 @@
 import time
 import os
 import pathlib
+import json
 
 import pytest
 
@@ -156,3 +157,38 @@ class TestLifeCycle:
         assert ((delta2 - delta) / (delta)) < 1
 
         manager.reset()
+
+    def test_manager_session_tags(self, manager_with_worker):
+        manager, worker = manager_with_worker
+
+        # Define graph
+        gen_node = GenNode(name="Gen1")
+        con_node = ConsumeNode(name="Con1")
+        simple_graph = cpe.Graph()
+        simple_graph.add_nodes_from([gen_node, con_node])
+        simple_graph.add_edge(src=gen_node, dst=con_node)
+
+        mapping = {worker.id: [gen_node.id, con_node.id]}
+
+        graph_info = {"graph": simple_graph, "mapping": mapping}
+
+        assert manager.commit_graph(**graph_info).result(timeout=30)
+
+        assert manager.start().result(timeout=30)
+        assert manager.record().result(timeout=30)
+        time.sleep(2)  # Wait for the FSMs to change
+        tag_uuid = manager.create_tag("test_tag").result(timeout=30)
+
+        manager.update_tag_descr(tag_uuid, "test_tag_descr").result(timeout=30)
+
+        assert manager.stop().result(timeout=30)
+        assert manager.collect().result(timeout=30)
+
+        assert (manager.logdir / "session_tags.json").exists()
+
+        with open(manager.logdir / "session_tags.json", "r") as f:
+            session_tags = json.load(f)
+            assert len(session_tags) == 1
+            tag_details = session_tags[tag_uuid]
+            assert tag_details["name"] == "test_tag"
+            assert tag_details["description"] == "test_tag_descr"
