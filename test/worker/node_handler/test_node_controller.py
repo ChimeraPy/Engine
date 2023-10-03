@@ -1,5 +1,5 @@
 import asyncio
-
+import multiprocess as mp
 
 import chimerapy.engine as cpe
 from chimerapy.engine.worker.node_handler_service.context_session import (
@@ -19,10 +19,12 @@ OUTPUT = 1
 
 
 async def test_mp_node_controller():
+    mp_manager = mp.Manager()
     session = MPSession()
     node = GenNode(name="Gen1")
 
     node_controller = MPNodeController(node, logger)  # type: ignore
+    node_controller.set_mp_manager(mp_manager)
     node_controller.run(session)
     await asyncio.sleep(0.25)
 

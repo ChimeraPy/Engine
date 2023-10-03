@@ -5,6 +5,7 @@ from typing import Dict, Any, Union, Type
 
 # Third-party Imports
 import dill
+import multiprocess as mp
 
 from chimerapy.engine import config
 from ...logger.zmq_handlers import NodeIDZMQPullListener
@@ -51,6 +52,7 @@ class NodeHandlerService(Service):
 
         # State information
         self.node_controllers: Dict[str, NodeController] = {}
+        self.mp_manager = mp.Manager()
 
         # Map cls to context
         self.context_class_map: Dict[str, Type[NodeController]] = {
@@ -148,6 +150,10 @@ class NodeHandlerService(Service):
         ]
         await asyncio.gather(*tasks)
 
+        # Close all the sessions
+        self.mp_session.shutdown()
+        self.thread_session.shutdown()
+
         # Clear node_controllers afterwards
         self.node_controllers = {}
 
@@ -221,6 +227,8 @@ class NodeHandlerService(Service):
             controller = self.context_class_map[node_config.context](
                 node_object, self.logger
             )
+            if isinstance(controller, MPNodeController):
+                controller.set_mp_manager(self.mp_manager)
             controller.run(self.context_session_map[node_config.context])
             self.logger.debug(f"{self}: started {node_object}")
 

@@ -12,8 +12,6 @@ from .context_session import ContextSession
 if typing.TYPE_CHECKING:
     from ...node.node import Node
 
-manager = mp.Manager()
-
 
 class NodeController(abc.ABC):
 
@@ -61,13 +59,20 @@ class ThreadNodeController(NodeController):
 
 class MPNodeController(NodeController):
 
-    running: mp.Value  # type: ignore
+    running: Optional[mp.Value]  # type: ignore
 
     def __init__(self, node_object: "Node", logger: logging.Logger):
         super().__init__(node_object, logger)
-        self.running = manager.Value("i", 1)  # type: ignore
+        self.running = None
+
+    def set_mp_manager(self, mp_manager: mp.Manager):
+        self.mp_manager = mp_manager
+        self.running = self.mp_manager.Value("i", 1)  # type: ignore
 
     def run(self, context: ContextSession):
+        assert (
+            self.running is not None
+        ), "MPNodeController must be initialized with an mp.Manager"
         self.future = context.add(
             self.node_object.run,
             None,
@@ -75,4 +80,5 @@ class MPNodeController(NodeController):
         )
 
     def stop(self):
-        self.running.value = False
+        if self.running is not None:
+            self.running.value = False

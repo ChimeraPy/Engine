@@ -12,7 +12,6 @@ from chimerapy.engine.worker.node_handler_service.context_session import (
 OUTPUT = 1
 
 logger = cpe._logger.getLogger("chimerapy-engine")
-manager = mp.Manager()
 
 
 def target():
@@ -34,6 +33,7 @@ async def test_mp_context():
     await session.wait_for_all()
     assert future.result() == OUTPUT
     logger.debug(future.result())
+    session.shutdown()
 
 
 async def test_thread_context():
@@ -42,10 +42,11 @@ async def test_thread_context():
     await session.wait_for_all()
     assert future.result() == OUTPUT
     logger.debug(future.result())
+    session.shutdown()
 
 
 async def test_mp_shared_variable():
-
+    manager = mp.Manager()
     running = manager.Value("i", 1)
 
     session = MPSession()
@@ -60,3 +61,4 @@ async def test_mp_shared_variable():
     # await session.wait_for_all()
     output = await future
     assert output == OUTPUT
+    session.shutdown()
