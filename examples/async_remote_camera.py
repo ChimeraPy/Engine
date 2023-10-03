@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict
 import time
 import pathlib
@@ -18,7 +19,7 @@ class WebcamNode(cpe.Node):
     def step(self) -> cpe.DataChunk:
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
-        self.logger.debug(f"{self}: got frame {frame.shape}")
+        # self.logger.debug(f"{self}: got frame {frame.shape}")
         self.save_video(name="test", data=frame, fps=15)
         data_chunk = cpe.DataChunk()
         data_chunk.add("frame", frame, "image")
@@ -32,7 +33,7 @@ class ShowWindow(cpe.Node):
     def step(self, data_chunks: Dict[str, cpe.DataChunk]):
 
         for name, data_chunk in data_chunks.items():
-            self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
+            # self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
 
             cv2.imshow(name, data_chunk.get("frame")["value"])
             cv2.waitKey(1)
@@ -49,17 +50,17 @@ class RemoteCameraGraph(cpe.Graph):
         self.node_ids = [self.web.id, self.show.id]
 
 
-if __name__ == "__main__":
+async def main():
 
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs")
-    manager.serve()
-    manager.zeroconf()
+    await manager.aserve()
+    await manager.async_zeroconf()
     worker = cpe.Worker(name="local", id="local")
-    worker.serve()
+    await worker.aserve()
 
     # Then register graph to Manager
-    worker.connect(host=manager.host, port=manager.port)
+    await worker.async_connect(host=manager.host, port=manager.port)
 
     # Wait until workers connect
     while True:
@@ -92,8 +93,8 @@ if __name__ == "__main__":
 
     # Commit the graph
     try:
-        assert manager.commit_graph(graph=graph, mapping=mapping).result(timeout=60)
-        assert manager.start().result(timeout=5)
+        await manager.async_commit(graph=graph, mapping=mapping)
+        await manager.async_start()
 
         # Wail until user stops
         # while True:
@@ -101,7 +102,7 @@ if __name__ == "__main__":
         #     if q.lower() == "y":
         #         break
 
-        assert manager.record().result(timeout=5)
+        await manager.async_record()
 
         # Wail until user stops
         while True:
@@ -109,9 +110,14 @@ if __name__ == "__main__":
             if q.lower() == "y":
                 break
 
-        assert manager.stop().result(timeout=5)
-        assert manager.collect().result()
+        await manager.async_stop()
+        await manager.async_collect()
     except Exception:
         print("System failed")
     finally:
-        manager.shutdown()
+        await manager.async_shutdown()
+        await worker.async_shutdown()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

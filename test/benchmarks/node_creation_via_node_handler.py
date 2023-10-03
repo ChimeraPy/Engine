@@ -121,7 +121,7 @@ async def main_multiple_creation():
     print(f"Create time: {sum(c_times)/len(c_times)}")
     print(f"Destroy time: {sum(d_times)/len(d_times)}")
 
-    eventbus.send(Event("shutdown"))
+    await eventbus.asend(Event("shutdown"))
 
 
 if __name__ == "__main__":

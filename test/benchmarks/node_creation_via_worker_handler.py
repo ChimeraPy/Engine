@@ -11,7 +11,7 @@ from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import ManagerState
 
-N = 100
+N = 10
 M = 10
 
 

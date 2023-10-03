@@ -93,8 +93,10 @@ if __name__ == "__main__":
 
     # Create default manager and desired graph
     manager = cpe.Manager(logdir=CWD / "runs", port=9000)
+    manager.serve()
     manager.zeroconf()
     worker = cpe.Worker(name="local", id="local", port=0)
+    worker.serve()
 
     # Then register graph to Manager
     worker.connect(host=manager.host, port=manager.port)
