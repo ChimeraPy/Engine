@@ -90,7 +90,7 @@ class ArtifactsCollector:
             node_dir = parent_path / node_state.name
             node_dir.mkdir(exist_ok=True, parents=True)
             for artifact in node_artifacts:
-                if not self._is_remote_worker_collector():
+                if self._is_remote_worker_collector():
                     coros.append(
                         self._download_remote_artifact(
                             session, node_id, node_dir, artifact
