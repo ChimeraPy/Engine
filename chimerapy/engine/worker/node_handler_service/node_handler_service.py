@@ -17,7 +17,7 @@ from ...states import NodeState, WorkerState
 from ...networking import DataChunk
 from ...networking.enums import WORKER_MESSAGE
 from ...utils import async_waiting_for
-from ...eventbus import EventBus, TypedObserver, Event, make_evented
+from ...eventbus import EventBus, TypedObserver, Event
 from ..events import (
     EnableDiagnosticsEvent,
     BroadcastEvent,
@@ -195,9 +195,7 @@ class NodeHandlerService(Service):
         # )
 
         # Saving the node data
-        self.state.nodes[id] = make_evented(
-            NodeState(id=id), event_bus=self.eventbus, event_name="WorkerState.changed"
-        )
+        self.state.nodes[id] = NodeState(id=id)
 
         # Keep trying to start a process until success
         success = False

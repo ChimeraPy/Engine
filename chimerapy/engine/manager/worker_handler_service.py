@@ -49,6 +49,7 @@ class WorkerHandlerService(Service):
         self.commitable_graph: bool = False
         self.node_pub_table = NodePubTable()
         self.collected_workers: Dict[str, bool] = {}
+        self.http_client = aiohttp.ClientSession()
 
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
@@ -103,6 +104,9 @@ class WorkerHandlerService(Service):
 
             if not success:
                 logger.warning(f"{self}: All workers shutdown: FAILED - forced")
+
+        # Close the HTTP client
+        await self.http_client.close()
 
         return success
 
@@ -286,15 +290,14 @@ class WorkerHandlerService(Service):
                 url = f"{self._get_worker_ip(worker_id)}/packages/load"
                 data = json.dumps({"packages": [x["name"] for x in packages_meta]})
 
-                async with aiohttp.ClientSession() as client:
-                    async with client.post(  # type: ignore[attr-defined]
-                        url=url,
-                        data=data,
-                        timeout=config.get("manager.timeout.package-delivery"),
-                    ) as resp:
-                        if resp.ok:
-                            success = True
-                            break
+                async with self.http_client.post(  # type: ignore[attr-defined]
+                    url=url,
+                    data=data,
+                    timeout=config.get("manager.timeout.package-delivery"),
+                ) as resp:
+                    if resp.ok:
+                        success = True
+                        break
 
             if not success:
                 logger.error(f"{self}: Worker {worker_id} loaded package: FAILED")
@@ -354,18 +357,15 @@ class WorkerHandlerService(Service):
         url = f"{self._get_worker_ip(worker_id)}/nodes/create"
 
         # Send for the creation of the node
-        async with aiohttp.ClientSession() as client:
-            async with client.post(url=url, data=data) as resp:
-                if resp.ok:
-                    # logger.debug(
-                    #     f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
-                    # )
-                    return True
-                else:
-                    logger.error(
-                        f"{self}: Node creation ({worker_id}, {node_id}): FAILED"
-                    )
-                    return False
+        async with self.http_client.post(url=url, data=data) as resp:
+            if resp.ok:
+                # logger.debug(
+                #     f"{self}: Node creation ({worker_id}, {node_id}): SUCCESS"
+                # )
+                return True
+            else:
+                logger.error(f"{self}: Node creation ({worker_id}, {node_id}): FAILED")
+                return False
 
     async def _request_node_destruction(self, worker_id: str, node_id: str) -> bool:
         """Request destroying a Node from the Graph.
@@ -398,19 +398,16 @@ class WorkerHandlerService(Service):
         }
 
         # Send for the creation of the node
-        async with aiohttp.ClientSession() as client:
-            async with client.post(url=url, data=json.dumps(data)) as resp:
-                if resp.ok:
-                    # logger.debug(
-                    #     f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
-                    # )
-                    return True
-                else:
+        async with self.http_client.post(url=url, data=json.dumps(data)) as resp:
+            if resp.ok:
+                # logger.debug(
+                #     f"{self}: Node destroy ({worker_id}, {node_id}): SUCCESS"
+                # )
+                return True
+            else:
 
-                    logger.error(
-                        f"{self}: Node destroy ({worker_id}, {node_id}): FAILED"
-                    )
-                    return False
+                logger.error(f"{self}: Node destroy ({worker_id}, {node_id}): FAILED")
+                return False
 
     async def _request_node_pub_table(self, worker_id: str) -> bool:
         """Request Workers to provide information about Node's PUBs
@@ -420,28 +417,27 @@ class WorkerHandlerService(Service):
 
         """
         for i in range(config.get("manager.allowed-failures")):
-            async with aiohttp.ClientSession() as client:
-                async with client.get(
-                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table"
-                ) as resp:
-                    if resp.ok:
-                        # Get JSON
-                        data = await resp.json()
+            async with self.http_client.get(
+                f"{self._get_worker_ip(worker_id)}/nodes/pub_table"
+            ) as resp:
+                if resp.ok:
+                    # Get JSON
+                    data = await resp.json()
 
-                        # And then updating the node server data
-                        worker_node_pub_table = NodePubTable.from_json(data)
-                        self.node_pub_table.table.update(worker_node_pub_table.table)
+                    # And then updating the node server data
+                    worker_node_pub_table = NodePubTable.from_json(data)
+                    self.node_pub_table.table.update(worker_node_pub_table.table)
 
-                        # logger.debug(
-                        #     f"{self}: Requesting Worker's node pub table: SUCCESS"
-                        # )
-                        return True
+                    # logger.debug(
+                    #     f"{self}: Requesting Worker's node pub table: SUCCESS"
+                    # )
+                    return True
 
-                    else:
-                        logger.error(
-                            f"{self}: Requesting Worker's node pub table: NO \
-                            RESPONSE"
-                        )
+                else:
+                    logger.error(
+                        f"{self}: Requesting Worker's node pub table: NO \
+                        RESPONSE"
+                    )
 
         return False
 
@@ -459,19 +455,18 @@ class WorkerHandlerService(Service):
         for i in range(config.get("manager.allowed-failures")):
 
             # Send the request to each worker
-            async with aiohttp.ClientSession() as client:
-                async with client.post(
-                    f"{self._get_worker_ip(worker_id)}/nodes/pub_table",
-                    data=self.node_pub_table.to_json(),
-                ) as resp:
-                    if resp.ok:
+            async with self.http_client.post(
+                f"{self._get_worker_ip(worker_id)}/nodes/pub_table",
+                data=self.node_pub_table.to_json(),
+            ) as resp:
+                if resp.ok:
 
-                        # logger.debug(
-                        #     f"{self}: receiving Worker's node pub table:" "SUCCESS"
-                        # )
-                        return True
+                    # logger.debug(
+                    #     f"{self}: receiving Worker's node pub table:" "SUCCESS"
+                    # )
+                    return True
 
-                    return False
+                return False
 
         return False
 
@@ -491,21 +486,20 @@ class WorkerHandlerService(Service):
 
         # Create a new session for the moment
         tasks: List[asyncio.Task] = []
-        sessions: List[aiohttp.ClientSession] = []
         for worker_data in self.state.workers.values():
-            session = aiohttp.ClientSession()
             url = f"http://{worker_data.ip}:{worker_data.port}" + route
             if htype == "get":
                 tasks.append(
-                    asyncio.create_task(session.get(url, data=json.dumps(data)))
+                    asyncio.create_task(
+                        self.http_client.get(url, data=json.dumps(data))
+                    )
                 )
             elif htype == "post":
                 tasks.append(
-                    asyncio.create_task(session.post(url, data=json.dumps(data)))
+                    asyncio.create_task(
+                        self.http_client.post(url, data=json.dumps(data))
+                    )
                 )
-
-            # Storing sessions to later close
-            sessions.append(session)
 
         # Wait with a timeout
         try:
@@ -531,10 +525,6 @@ class WorkerHandlerService(Service):
                 else:
                     results.append(True)
 
-        # Closing sessions
-        for session in sessions:
-            await session.close()
-
         # Return if all outputs were successful
         return all(results)
 
@@ -550,6 +540,7 @@ class WorkerHandlerService(Service):
             bool: Success in creating the P2P Nodes
 
         """
+        logger.debug("Creating P2P network")
         # Send the message to each worker
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
@@ -576,6 +567,7 @@ class WorkerHandlerService(Service):
 
         """
         # Broadcast request for node server data
+        logger.debug("Creating P2P network connections")
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
             coros.append(self._request_node_pub_table(worker_id))
@@ -586,6 +578,8 @@ class WorkerHandlerService(Service):
         except Exception:
             logger.error(traceback.format_exc())
             return False
+
+        logger.debug("Obtained NodePubTable")
 
         if not all(results):
             return False
@@ -602,24 +596,25 @@ class WorkerHandlerService(Service):
             logger.error(traceback.format_exc())
             return False
 
+        logger.debug("Requested connection creation")
+
         return all(results)
 
     async def _single_worker_collect(self, worker_id: str) -> bool:
 
         # Just requesting for the collection to start
         data = {"path": str(self.state.logdir)}
-        async with aiohttp.ClientSession() as client:
-            async with client.post(
-                f"{self._get_worker_ip(worker_id)}/nodes/collect",
-                data=json.dumps(data),
-            ) as resp:
+        async with self.http_client.post(
+            f"{self._get_worker_ip(worker_id)}/nodes/collect",
+            data=json.dumps(data),
+        ) as resp:
 
-                if not resp.ok:
-                    logger.error(
-                        f"{self}: Collection failed, <Worker {worker_id}> "
-                        "responded {resp.ok} to collect request"
-                    )
-                    return False
+            if not resp.ok:
+                logger.error(
+                    f"{self}: Collection failed, <Worker {worker_id}> "
+                    "responded {resp.ok} to collect request"
+                )
+                return False
 
         # Now we have to wait until worker says they finished transferring
         await async_waiting_for(condition=lambda: worker_id in self.collected_workers)
@@ -708,11 +703,13 @@ class WorkerHandlerService(Service):
 
         # If package are sent correctly, try to create network
         # Start with the nodes and then the connections
+        logger.debug("Committing graph")
         if (
             success
             and await self._create_p2p_network(context=context)
             and await self._setup_p2p_connections()
         ):
+            logger.debug("Committing graph: SUCCESS")
             return True
 
         return False
@@ -722,25 +719,24 @@ class WorkerHandlerService(Service):
         gather_data = {}
         for worker_id in self.state.workers:
 
-            async with aiohttp.ClientSession() as client:
-                async with client.get(
-                    f"{self._get_worker_ip(worker_id)}/nodes/gather",
-                    timeout=config.get("manager.timeout.info-request"),
-                ) as resp:
-                    if resp.ok:
+            async with self.http_client.get(
+                f"{self._get_worker_ip(worker_id)}/nodes/gather",
+                timeout=config.get("manager.timeout.info-request"),
+            ) as resp:
+                if resp.ok:
 
-                        # Read the content
-                        content = await resp.content.read()
+                    # Read the content
+                    content = await resp.content.read()
 
-                        # Saving the data
-                        data = pickle.loads(content)["node_data"]
-                        for node_id, node_data in data.items():
-                            data[node_id] = DataChunk.from_json(node_data)
+                    # Saving the data
+                    data = pickle.loads(content)["node_data"]
+                    for node_id, node_data in data.items():
+                        data[node_id] = DataChunk.from_json(node_data)
 
-                        gather_data.update(data)
+                    gather_data.update(data)
 
-                    else:
-                        logger.error(f"{self}: Gathering Worker {worker_id}: FAILED")
+                else:
+                    logger.error(f"{self}: Gathering Worker {worker_id}: FAILED")
 
         return gather_data
 
@@ -783,20 +779,19 @@ class WorkerHandlerService(Service):
             "params": dict(params),
         }
 
-        async with aiohttp.ClientSession() as client:
-            async with client.post(
-                f"{self._get_worker_ip(worker_id)}/nodes/registered_methods",
-                data=json.dumps(data),
-            ) as resp:
+        async with self.http_client.post(
+            f"{self._get_worker_ip(worker_id)}/nodes/registered_methods",
+            data=json.dumps(data),
+        ) as resp:
 
-                if resp.ok:
-                    resp_data = await resp.json()
-                    return resp_data
-                else:
-                    logger.debug(
-                        f"{self}: Registered Method for Worker {worker_id}: FAILED"
-                    )
-                    return {"success": False, "output": None}
+            if resp.ok:
+                resp_data = await resp.json()
+                return resp_data
+            else:
+                logger.debug(
+                    f"{self}: Registered Method for Worker {worker_id}: FAILED"
+                )
+                return {"success": False, "output": None}
 
     async def stop(self) -> bool:
 

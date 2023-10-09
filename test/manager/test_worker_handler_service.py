@@ -81,7 +81,6 @@ async def test_worker_handler_create_node(testbed_setup):
         worker_id=worker.id, node_id="Gen1"
     )
     await asyncio.sleep(1)
-
     assert "Gen1" not in worker.state.nodes
     assert "Gen1" not in worker_handler.state.workers[worker.id].nodes
 

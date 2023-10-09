@@ -310,13 +310,16 @@ class HttpServerService(Service):
 
     async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # self.logger.debug(f"{self}: note_status_update: ", msg)
+        # self.logger.debug(f"{self}: note_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        if node_id in self.state.nodes:
+        if node_id in self.state.nodes and node_state:
+
+            # Update the node state
             update_dataclass(self.state.nodes[node_id], node_state)
+            await self.eventbus.asend(Event("WorkerState.changed", self.state))
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 
