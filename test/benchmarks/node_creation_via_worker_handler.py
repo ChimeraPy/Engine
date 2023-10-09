@@ -2,8 +2,9 @@ import asyncio
 import time
 import pathlib
 import tempfile
-import tqdm
 from typing import Dict
+
+import tqdm
 
 import chimerapy.engine as cpe
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService

@@ -1,16 +1,18 @@
-from .mock import DockeredWorker
-
 import time
 import logging
 import pathlib
 import os
 import platform
+import asyncio
 from typing import Dict
 
+import uvloop
 import docker
 import pytest
 
 import chimerapy.engine as cpe
+
+from .mock import DockeredWorker
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -49,6 +51,18 @@ def pytest_configure():
         logger = logging.getLogger(logger_name)
         logger.disabled = True
         logger.propagate = False
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    uvloop.install()
+    try:
+        loop = asyncio.get_event_loop()
+    except Exception:
+        loop = asyncio.new_event_loop()
+    assert isinstance(loop, uvloop.Loop)
+    yield loop
+    loop.close()
 
 
 @pytest.fixture

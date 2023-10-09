@@ -1,13 +1,14 @@
 import asyncio
 import time
 import tempfile
-import tqdm
 from typing import Dict
+
+import tqdm
 
 import chimerapy.engine as cpe
 
 N = 10
-M = 3
+M = 10
 
 
 class GenNode(cpe.Node):

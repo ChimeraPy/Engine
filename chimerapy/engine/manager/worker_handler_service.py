@@ -1,6 +1,7 @@
 import pathlib
 import tempfile
 import asyncio
+import dill
 import traceback
 import json
 import pickle
@@ -45,6 +46,7 @@ class WorkerHandlerService(Service):
 
         # Containers
         self.graph: Graph = Graph()
+        self.graph_dumps: Dict[str, bytes] = {}
         self.worker_graph_map: Dict = {}
         self.commitable_graph: bool = False
         self.node_pub_table = NodePubTable()
@@ -182,8 +184,15 @@ class WorkerHandlerService(Service):
         # Else, let's save it
         self.graph = graph
 
+        # Iterate through the graph and dill.dumps the node objects
+        for node_id in self.graph.G.nodes:
+            self.graph_dumps[node_id] = dill.dumps(
+                self.graph.G.nodes[node_id]["object"]
+            )
+
     def _deregister_graph(self):
         self.graph: Graph = Graph()
+        self.graph_dumps: Dict[str, bytes] = {}
 
     def _map_graph(self, worker_graph_map: Dict[str, List[str]]):
         """Mapping ``Node`` from graph to ``Worker`` from cluster.
@@ -341,10 +350,13 @@ class WorkerHandlerService(Service):
         node_data = self.graph.G.nodes(data=True)
         in_bound_by_name = [node_data[x]["object"].name for x in in_bound]
 
+        # Extract the bytes
+        node_bytes = self.graph_dumps[node_id]
+
         # Create the data to be send
         data = pickle.dumps(
             NodeConfig(
-                node=self.graph.G.nodes[node_id]["object"],
+                node=(node_id, node_bytes),
                 in_bound=in_bound,
                 in_bound_by_name=in_bound_by_name,
                 out_bound=list(self.graph.G.successors(node_id)),
@@ -385,8 +397,6 @@ class WorkerHandlerService(Service):
             return False
         elif node_id not in self.graph.G:
             return False
-
-        logger.debug(f"{self}: Node requested to be destroyed: {worker_id} - {node_id}")
 
         # Construct the url
         url = f"{self._get_worker_ip(worker_id)}/nodes/destroy"
@@ -540,7 +550,6 @@ class WorkerHandlerService(Service):
             bool: Success in creating the P2P Nodes
 
         """
-        logger.debug("Creating P2P network")
         # Send the message to each worker
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
@@ -567,7 +576,6 @@ class WorkerHandlerService(Service):
 
         """
         # Broadcast request for node server data
-        logger.debug("Creating P2P network connections")
         coros: List[Coroutine] = []
         for worker_id in self.worker_graph_map:
             coros.append(self._request_node_pub_table(worker_id))
@@ -578,8 +586,6 @@ class WorkerHandlerService(Service):
         except Exception:
             logger.error(traceback.format_exc())
             return False
-
-        logger.debug("Obtained NodePubTable")
 
         if not all(results):
             return False
@@ -595,8 +601,6 @@ class WorkerHandlerService(Service):
         except Exception:
             logger.error(traceback.format_exc())
             return False
-
-        logger.debug("Requested connection creation")
 
         return all(results)
 
@@ -703,13 +707,11 @@ class WorkerHandlerService(Service):
 
         # If package are sent correctly, try to create network
         # Start with the nodes and then the connections
-        logger.debug("Committing graph")
         if (
             success
             and await self._create_p2p_network(context=context)
             and await self._setup_p2p_connections()
         ):
-            logger.debug("Committing graph: SUCCESS")
             return True
 
         return False

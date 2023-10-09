@@ -228,7 +228,7 @@ class NodeHandlerService(Service):
             if isinstance(controller, MPNodeController):
                 controller.set_mp_manager(self.mp_manager)
             controller.run(self.context_session_map[node_config.context])
-            self.logger.debug(f"{self}: started {node_object}")
+            # self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -256,7 +256,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            self.logger.debug(f"{self}: completed node creation: {id}")
+            # self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
@@ -267,13 +267,13 @@ class NodeHandlerService(Service):
 
     async def async_destroy_node(self, node_id: str) -> bool:
 
-        self.logger.debug(f"{self}: received request for Node {node_id} destruction")
+        # self.logger.debug(f"{self}: received request for Node {node_id} destruction")
         success = False
 
         if node_id in self.node_controllers:
-            self.logger.debug(f"{self}: destroying Node {node_id}")
+            # self.logger.debug(f"{self}: destroying Node {node_id}")
             await self.node_controllers[node_id].shutdown()
-            self.logger.debug(f"{self}: destroyed Node {node_id}")
+            # self.logger.debug(f"{self}: destroyed Node {node_id}")
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]

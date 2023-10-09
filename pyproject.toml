@@ -36,7 +36,8 @@ dependencies = [
     'aiofiles',
     'zeroconf',
     'aioreactive',
-    'psutil'
+    'psutil',
+    'uvloop'
 ]
 
 [project.optional-dependencies]
