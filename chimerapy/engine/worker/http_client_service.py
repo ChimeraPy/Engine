@@ -1,6 +1,5 @@
 import os
 import shutil
-import copy
 import json
 import uuid
 import traceback
@@ -48,7 +47,6 @@ class HttpClientService(Service):
         self.manager_host = "0.0.0.0"
         self.manager_port = -1
         self.manager_url = ""
-        self.prior_state = copy.copy(self.state)
 
         # Services
         self.http_client = aiohttp.ClientSession()

@@ -1,7 +1,6 @@
 import pathlib
 import logging
 import tempfile
-import copy
 from typing import Dict, Optional
 
 from ..networking import Client
@@ -94,9 +93,6 @@ class WorkerCommsService(Service):
         self.logger = logger
         self.eventbus = eventbus
 
-        # Save container informaiton
-        self.prior_state: Optional[NodeState] = copy.copy(self.state)
-
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
@@ -148,18 +144,7 @@ class WorkerCommsService(Service):
     async def send_state(self):
         assert self.state and self.eventbus and self.logger
 
-        if self.prior_state:
-            same = True
-            for k, v in self.state.to_dict().items():
-                if (
-                    k in self.prior_state.to_dict()
-                    and self.prior_state.to_dict()[k] != v
-                ):
-                    same = False
-                    break
-            if same:
-                return
-
+        # Save container informaiton
         jsonable_state = self.state.to_dict()
         jsonable_state["logdir"] = str(jsonable_state["logdir"])
         if self.client:
