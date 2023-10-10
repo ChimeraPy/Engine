@@ -78,7 +78,7 @@ def test_keyboard_interrupt_handling_noncoro(thread):
 
     assert queue.qsize() == 1
     thread.join()
-    assert thread._loop.is_closed()
+    assert not thread._loop.is_running()
 
 
 def test_keyboard_interrupt_handling_coro(thread):
@@ -96,7 +96,7 @@ def test_keyboard_interrupt_handling_coro(thread):
     assert queue.qsize() == 1
 
     thread.join()
-    assert thread._loop.is_closed()
+    assert not thread._loop.is_running()
 
 
 def test_exception_handling_noncoro(thread):
@@ -115,7 +115,7 @@ def test_exception_handling_noncoro(thread):
 
     assert queue.qsize() == 1
     thread.join()
-    assert thread._loop.is_closed()
+    assert not thread._loop.is_running()
 
     with raises(RuntimeError):
         future = thread.exec_noncoro(raise_keyboard_interrupt, args=[queue])
@@ -137,7 +137,7 @@ def test_exception_handling_coro(thread):
 
     assert queue.qsize() == 1
     thread.join()
-    assert thread._loop.is_closed()
+    assert not thread._loop.is_running()
 
     with raises(RuntimeError):
         future = thread.exec(raise_keyboard_interrupt(queue))
