@@ -3,10 +3,10 @@ import logging
 import pathlib
 import os
 import platform
+import sys
 import asyncio
 from typing import Dict
 
-import uvloop
 import docker
 import pytest
 
@@ -55,12 +55,19 @@ def pytest_configure():
 
 @pytest.fixture(scope="session")
 def event_loop():
-    uvloop.install()
+
+    if sys.platform in ["win32", "cygwin", "cli"]:
+        import winloop
+
+        winloop.install()
+    else:
+        import uvloop
+
+        uvloop.install()
     try:
         loop = asyncio.get_event_loop()
     except Exception:
         loop = asyncio.new_event_loop()
-    assert isinstance(loop, uvloop.Loop)
     yield loop
     loop.close()
 
