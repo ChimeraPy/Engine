@@ -1,6 +1,13 @@
 import asyncio
-import uvloop
+import sys
 
 
 def setup():
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+    if sys.platform in ["win32", "cygwin", "cli"]:
+        import winloop
+
+        asyncio.set_event_loop_policy(winloop.WinLoopPolicy())
+    else:  # linux or macos
+        import uvloop
+
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

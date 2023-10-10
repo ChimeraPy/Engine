@@ -37,7 +37,8 @@ dependencies = [
     'zeroconf',
     'aioreactive',
     'psutil',
-    'uvloop'
+    'winloop; sys_platform == "win32"',
+    'uvloop; sys_platform != "win32"',
 ]
 
 [project.optional-dependencies]
