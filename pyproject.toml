@@ -1,6 +1,6 @@
 [project]
 name = "chimerapy-engine"
-version = "0.1.0"
+version = "0.1.1"
 description = "ChimeraPy-Engine: The Cluster Networking Engine for the ChimeraPy Framework"
 authors = [
     {name = "Eduardo Davalos", email="eduardo.davalos.anaya@vanderbilt.edu"},
