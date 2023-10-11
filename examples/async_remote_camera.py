@@ -5,6 +5,7 @@ import pathlib
 import os
 
 import cv2
+import numpy as np
 
 import chimerapy.engine as cpe
 
@@ -19,7 +20,6 @@ class WebcamNode(cpe.Node):
     def step(self) -> cpe.DataChunk:
         time.sleep(1 / 30)
         ret, frame = self.vid.read()
-        # self.logger.debug(f"{self}: got frame {frame.shape}")
         self.save_video(name="test", data=frame, fps=15)
         data_chunk = cpe.DataChunk()
         data_chunk.add("frame", frame, "image")
@@ -34,8 +34,8 @@ class ShowWindow(cpe.Node):
 
         for name, data_chunk in data_chunks.items():
             # self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
-
-            cv2.imshow(name, data_chunk.get("frame")["value"])
+            frame = data_chunk.get("frame")["value"]
+            cv2.imshow(name, frame.astype(np.uint8))
             cv2.waitKey(1)
 
 

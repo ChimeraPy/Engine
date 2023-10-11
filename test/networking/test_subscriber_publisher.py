@@ -1,5 +1,6 @@
 # Built-in Imports
-import time
+import asyncio
+from typing import Dict
 
 # Third-party Imports
 import pytest
@@ -16,7 +17,7 @@ cpe.debug()
 
 
 @pytest.fixture
-def publisher():
+async def publisher():
     pub = Publisher()
     pub.start()
     yield pub
@@ -24,11 +25,11 @@ def publisher():
 
 
 @pytest.fixture
-def subscriber(publisher):
-    sub = Subscriber(host=publisher.host, port=publisher.port)
-    sub.start()
+async def subscriber(publisher):
+    sub = Subscriber()
+    sub.subscribe(host=publisher.host, port=publisher.port, id="test")
     yield sub
-    sub.shutdown()
+    await sub.shutdown()
 
 
 @pytest.fixture
@@ -48,11 +49,11 @@ def image_data_chunk():
     return data
 
 
-def test_pub_instance(publisher):
+async def test_pub_instance(publisher):
     ...
 
 
-def test_sub_instance(subscriber):
+async def test_sub_instance(subscriber):
     ...
 
 
@@ -60,12 +61,21 @@ def test_sub_instance(subscriber):
     "data_chunk",
     [(lazy_fixture("text_data_chunk")), (lazy_fixture("image_data_chunk"))],
 )
-def test_sending_data_chunk_between_pub_and_sub(publisher, subscriber, data_chunk):
+async def test_sending_data_chunk_between_pub_and_sub(
+    publisher, subscriber, data_chunk
+):
 
-    time.sleep(5)
-    publisher.publish(data_chunk)
-    logger.debug(f"{publisher}: published {data_chunk}")
+    flag = asyncio.Event()
+    expected_data_chunk = None
 
-    new_data = subscriber.receive(timeout=10)
-    logger.debug(f"{subscriber}: received {new_data}")
-    assert new_data == data_chunk
+    def update(datas: Dict[str, bytes]):
+        nonlocal expected_data_chunk
+        expected_data_chunk = cpe.DataChunk.from_bytes(datas["test"])
+        flag.set()
+
+    subscriber.on_receive(update)
+    await subscriber.start()
+    await publisher.publish(data_chunk.to_bytes())
+
+    await asyncio.wait_for(flag.wait(), timeout=5)
+    assert expected_data_chunk == data_chunk

@@ -53,9 +53,9 @@ class PublisherService(Service):
         self.publisher.start()
         self.state.port = self.publisher.port
 
-    def publish(self, data_chunk: DataChunk):
+    async def publish(self, data_chunk: DataChunk):
         # self.logger.debug(f"{self}: publishing {data_chunk}")
-        self.publisher.publish(data_chunk)
+        await self.publisher.publish(data_chunk.to_bytes())
 
     def teardown(self):
 

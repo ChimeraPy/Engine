@@ -41,7 +41,6 @@ async def poller_setup():
 
     await poller.teardown()
     pub.shutdown()
-    logger.debug("poller_setup fixture: shutdown complete")
 
 
 async def test_instanticate(poller_setup):
@@ -58,6 +57,7 @@ async def test_setting_connections(poller_setup):
     await poller.setup_connections(node_pub_table)
 
 
+@pytest.mark.repeat(10)
 async def test_poll_message(poller_setup):
 
     poller, pub = poller_setup
@@ -71,7 +71,7 @@ async def test_poll_message(poller_setup):
     # Send a message
     await asyncio.sleep(1)
     data_chunk = DataChunk()
-    pub.publish(data_chunk)
+    await pub.publish(data_chunk.to_bytes())
 
     # Sleep
     await asyncio.sleep(1)

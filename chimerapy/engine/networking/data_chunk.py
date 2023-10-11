@@ -41,7 +41,7 @@ class DataChunk:
             "value": {
                 "ownership": [],
                 "created": datetime.datetime.now(),
-                "delta": 0, # ms
+                "delta": 0,  # ms
                 "transmitted": None,
                 "received": None,
             },
@@ -159,6 +159,9 @@ class DataChunk:
                 "value": value,
                 "content-type": record["content-type"],
             }
+
+    def to_bytes(self) -> bytes:
+        return self._serialize()
 
     def to_json(self) -> List[int]:
         return list(self._serialize())
