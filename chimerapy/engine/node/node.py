@@ -510,6 +510,11 @@ class Node:
         # Initialize all services
         if self.worker_comms:
             await self.worker_comms.async_init()
+        if self.poller:
+            await self.poller.async_init()
+        if self.publisher:
+            await self.publisher.async_init()
+
         await self.processor.async_init()
         await self.recorder.async_init()
         await self.profiler.async_init()
