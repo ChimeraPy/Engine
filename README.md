@@ -4,13 +4,13 @@
 * [Docs](https://chimerapy.readthedocs.io/)
 
 <!-- Summary -->
-This repo houses the networking engine for [ChimeraPy](https://), the scientific distributed computing framework for multimodal data dollection, processing, and feedback.
-## Installation
+This repo houses the networking engine for [ChimeraPy](https://github.com/ChimeraPy), the scientific distributed computing framework for multimodal data collection, processing, and feedback.
 
+## Installation
 You can install the package with the following command.
 
 ```
-pip install chimerapy
+pip install chimerapy-engine
 ```
 
 Additionally, you can install the package through GitHub instead.
