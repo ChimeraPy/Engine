@@ -15,7 +15,6 @@ from ..data_protocols import (
     NodeDiagnostics,
 )
 from ..networking import Server
-from ..networking.async_loop_thread import AsyncLoopThread
 from ..networking.enums import NODE_MESSAGE
 from ..utils import update_dataclass
 from ..eventbus import EventBus, Event, TypedObserver
@@ -38,7 +37,6 @@ class HttpServerService(Service):
         self,
         name: str,
         state: WorkerState,
-        thread: AsyncLoopThread,
         eventbus: EventBus,
         logger: logging.Logger,
     ):
@@ -46,7 +44,6 @@ class HttpServerService(Service):
         # Save input parameters
         self.name = name
         self.state = state
-        self.thread = thread
         self.eventbus = eventbus
         self.logger = logger
 
@@ -80,8 +77,21 @@ class HttpServerService(Service):
                 NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
             },
             parent_logger=self.logger,
-            thread=self.thread,
         )
+
+    @property
+    def ip(self) -> str:
+        return self._ip
+
+    @property
+    def port(self) -> int:
+        return self._port
+
+    @property
+    def url(self) -> str:
+        return f"http://{self._ip}:{self._port}"
+
+    async def async_init(self):
 
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
@@ -103,19 +113,7 @@ class HttpServerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
-
-    @property
-    def ip(self) -> str:
-        return self._ip
-
-    @property
-    def port(self) -> int:
-        return self._port
-
-    @property
-    def url(self) -> str:
-        return f"http://{self._ip}:{self._port}"
+            await self.eventbus.asubscribe(ob)
 
     async def start(self):
 
@@ -312,13 +310,16 @@ class HttpServerService(Service):
 
     async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # self.logger.debug(f"{self}: note_status_update: ", msg)
+        # self.logger.debug(f"{self}: note_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        if node_id in self.state.nodes:
+        if node_id in self.state.nodes and node_state:
+
+            # Update the node state
             update_dataclass(self.state.nodes[node_id], node_state)
+            await self.eventbus.asend(Event("WorkerState.changed", self.state))
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
 

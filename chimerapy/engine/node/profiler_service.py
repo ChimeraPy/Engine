@@ -48,6 +48,8 @@ class ProfilerService(Service):
         else:
             raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
+    async def async_init(self):
+
         # Add observers to profile
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -62,7 +64,7 @@ class ProfilerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
         # self.logger.debug(f"{self}: log_file={self.log_file}")
 
@@ -71,9 +73,6 @@ class ProfilerService(Service):
         if enable != self._enable:
 
             if enable:
-                # self.logger.debug(f"{self}: enabled")
-                assert self.eventbus.thread
-
                 # Add a timer function
                 await self.async_timer.start()
 
@@ -98,7 +97,7 @@ class ProfilerService(Service):
             # Update
             self._enable = enable
 
-    def setup(self):
+    async def setup(self):
         self.process = Process(pid=os.getpid())
 
     async def diagnostics_report(self):

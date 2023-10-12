@@ -25,6 +25,8 @@ class SessionRecordService(Service):
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: float = 0
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "save_meta": TypedObserver(
@@ -38,7 +40,7 @@ class SessionRecordService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def _save_meta(self):
         # Get the times, handle Optional

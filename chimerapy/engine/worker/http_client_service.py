@@ -48,6 +48,11 @@ class HttpClientService(Service):
         self.manager_port = -1
         self.manager_url = ""
 
+        # Services
+        self.http_client = aiohttp.ClientSession()
+
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
@@ -66,12 +71,13 @@ class HttpClientService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port
 
     async def shutdown(self) -> bool:
+
         success = True
         if self.connected_to_manager:
             try:
@@ -79,6 +85,8 @@ class HttpClientService(Service):
             except Exception:
                 # self.logger.warning(f"{self}: Failed to properly deregister")
                 success = False
+
+        await self.http_client.close()
 
         return success
 
@@ -139,17 +147,16 @@ class HttpClientService(Service):
     async def async_deregister(self) -> bool:
 
         # Send the request to each worker
-        async with aiohttp.ClientSession() as client:
-            async with client.post(
-                self.manager_url + "/workers/deregister",
-                data=self.state.to_json(),
-                timeout=config.get("worker.timeout.deregister"),
-            ) as resp:
+        async with self.http_client.post(
+            self.manager_url + "/workers/deregister",
+            data=self.state.to_json(),
+            timeout=config.get("worker.timeout.deregister"),
+        ) as resp:
 
-                if resp.ok:
-                    self.connected_to_manager = False
+            if resp.ok:
+                self.connected_to_manager = False
 
-                return resp.ok
+            return resp.ok
 
         return False
 
@@ -161,47 +168,46 @@ class HttpClientService(Service):
     ) -> bool:
 
         # Send the request to each worker
-        async with aiohttp.ClientSession() as client:
-            async with client.post(
-                f"http://{host}:{port}/workers/register",
-                data=self.state.to_json(),
-                timeout=timeout,
-            ) as resp:
+        async with self.http_client.post(
+            f"http://{host}:{port}/workers/register",
+            data=self.state.to_json(),
+            timeout=timeout,
+        ) as resp:
 
-                if resp.ok:
+            if resp.ok:
 
-                    # Get JSON
-                    data = await resp.json()
+                # Get JSON
+                data = await resp.json()
 
-                    config.update_defaults(data.get("config", {}))
-                    logs_push_info = data.get("logs_push_info", {})
+                config.update_defaults(data.get("config", {}))
+                logs_push_info = data.get("logs_push_info", {})
 
-                    if logs_push_info["enabled"]:
-                        # self.logger.info(
-                        #     f"{self}: enabling logs push to Manager: {logs_push_info}"
-                        # )
-                        for logging_entity in [
-                            self.logger,
-                            self.logreceiver,
-                        ]:
-                            handler = _logger.add_zmq_push_handler(
-                                logging_entity,
-                                logs_push_info["host"],
-                                logs_push_info["port"],
-                            )
-                            if logging_entity is not self.logger:
-                                _logger.add_identifier_filter(handler, self.state.id)
+                if logs_push_info["enabled"]:
+                    # self.logger.info(
+                    #     f"{self}: enabling logs push to Manager: {logs_push_info}"
+                    # )
+                    for logging_entity in [
+                        self.logger,
+                        self.logreceiver,
+                    ]:
+                        handler = _logger.add_zmq_push_handler(
+                            logging_entity,
+                            logs_push_info["host"],
+                            logs_push_info["port"],
+                        )
+                        if logging_entity is not self.logger:
+                            _logger.add_identifier_filter(handler, self.state.id)
 
-                    # Tracking the state and location of the manager
-                    self.connected_to_manager = True
-                    self.manager_host = host
-                    self.manager_port = port
-                    self.manager_url = f"http://{host}:{port}"
+                # Tracking the state and location of the manager
+                self.connected_to_manager = True
+                self.manager_host = host
+                self.manager_port = port
+                self.manager_url = f"http://{host}:{port}"
 
-                    self.logger.info(
-                        f"{self}: connection successful to Manager @ {host}:{port}."
-                    )
-                    return True
+                self.logger.info(
+                    f"{self}: connection successful to Manager @ {host}:{port}."
+                )
+                return True
 
         return False
 
@@ -277,13 +283,12 @@ class HttpClientService(Service):
         # Send information to manager about success
         if self.connected_to_manager:
             data = {"worker_id": self.state.id, "success": success}
-            async with aiohttp.ClientSession(self.manager_url) as session:
-                async with session.post(
-                    "/workers/send_archive", data=json.dumps(data)
-                ) as _:
-                    ...
-                    # self.logger.debug(f"{self}: send "
-                    # "archive update confirmation: {resp.ok}")
+            async with self.http_client.post(
+                self.manager_url + "/workers/send_archive", data=json.dumps(data)
+            ) as _:
+                ...
+                # self.logger.debug(f"{self}: send "
+                # "archive update confirmation: {resp.ok}")
 
         return success
 
@@ -335,17 +340,14 @@ class HttpClientService(Service):
 
     async def _async_node_status_update(self) -> bool:
 
-        # self.logger.debug(f"{self}: WorkerState update: {self.state}")
-
         if not self.connected_to_manager:
             return False
 
         try:
-            async with aiohttp.ClientSession(self.manager_url) as session:
-                async with session.post(
-                    "/workers/node_status", data=self.state.to_json()
-                ) as resp:
-
-                    return resp.ok
+            async with self.http_client.post(
+                self.manager_url + "/workers/node_status", data=self.state.to_json()
+            ) as resp:
+                return resp.ok
         except aiohttp.client_exceptions.ClientOSError:
+            self.logger.error(traceback.format_exc())
             return False

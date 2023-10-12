@@ -31,6 +31,8 @@ class PublisherService(Service):
         else:
             self.logger = _logger.getLogger("chimerapy-engine")
 
+    async def async_init(self):
+
         # Add observer
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -42,7 +44,7 @@ class PublisherService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     def setup(self):
 

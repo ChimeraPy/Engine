@@ -9,7 +9,6 @@ from chimerapy.engine.node.processor_service import ProcessorService
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus, Event, TypedObserver
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.node.events import NewInBoundDataEvent, NewOutBoundDataEvent
 from chimerapy.engine import _logger
 
@@ -19,16 +18,6 @@ logger = _logger.getLogger("chimerapy-engine")
 # Global
 CHANGE_FLAG = False
 RECEIVE_FLAG = False
-
-
-@pytest.fixture
-def eventbus():
-
-    # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
-    return eventbus
 
 
 async def main():
@@ -67,12 +56,10 @@ async def receive_data(data_chunk):
 
 
 @pytest.fixture
-def step_processor():
+async def step_processor():
 
     # Create eventbus
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -86,19 +73,18 @@ def step_processor():
         main_fn=step,
         operation_mode="step",
     )
+    await processor.async_init()
 
     yield (processor, eventbus)
 
-    thread.exec(processor.teardown()).result(timeout=10)
+    await processor.teardown()
 
 
 @pytest.fixture
-def source_processor():
+async def source_processor():
 
     # Create eventbus
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -112,19 +98,18 @@ def source_processor():
         main_fn=step,
         operation_mode="step",
     )
+    await processor.async_init()
 
     yield (processor, eventbus)
 
-    thread.exec(processor.teardown()).result(timeout=10)
+    await processor.teardown()
 
 
 @pytest.fixture
-def main_processor():
+async def main_processor():
 
     # Create eventbus
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -138,10 +123,11 @@ def main_processor():
         main_fn=main,
         operation_mode="main",
     )
+    await processor.async_init()
 
     yield (processor, eventbus)
 
-    eventbus.send(Event("teardown")).result(timeout=10)
+    await processor.teardown()
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,5 @@
-from .data_nodes import TabularNode
-
 # Built-in Imports
+import asyncio
 import os
 import pathlib
 import uuid
@@ -10,8 +9,9 @@ import time
 import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.records.tabular_record import TabularRecord
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
+
+from .data_nodes import TabularNode
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -56,12 +56,10 @@ def test_tabular_record():
     assert expected_tabular_path.exists()
 
 
-def test_node_save_tabular_stream(tabular_node):
+async def test_node_save_tabular_stream(tabular_node):
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Check that the tabular was created
     expected_tabular_path = pathlib.Path(tabular_node.state.logdir) / "test.csv"
@@ -71,18 +69,18 @@ def test_node_save_tabular_stream(tabular_node):
         ...
 
     # Stream
-    tabular_node.run(blocking=False, eventbus=eventbus)
+    await tabular_node.arun(eventbus=eventbus)
 
     # Wait to generate files
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(3)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(3)
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
 
-    tabular_node.shutdown()
+    await tabular_node.ashutdown()
 
     # Check that the tabular was created
     assert expected_tabular_path.exists()

@@ -4,7 +4,7 @@ import tempfile
 import pathlib
 import uuid
 import shutil
-import atexit
+import asyncio_atexit
 from concurrent.futures import Future
 from asyncio import Task
 
@@ -61,6 +61,7 @@ class Worker:
         # Create temporary data folder
         self.delete_temp = delete_temp
         tempfolder = pathlib.Path(tempfile.mkdtemp())
+        self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
@@ -69,21 +70,15 @@ class Worker:
         self._alive: bool = False
         self.shutdown_task: Optional[Task] = None
 
-        # Create with thread
-        self._thread = AsyncLoopThread()
-        self._thread.start()
+    async def aserve(self) -> bool:
 
         # Create the event bus for the Worker
-        self.eventbus = EventBus(thread=self._thread)
+        self.eventbus = EventBus()
+        self.state = make_evented(self.state, event_bus=self.eventbus)
 
-        # Creating state
-        self.state = make_evented(
-            WorkerState(id=id, name=name, port=port, tempfolder=tempfolder),
-            event_bus=self.eventbus,
-        )
         # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
-        self.logger = _logger.fork(parent_logger, name, id)
+        self.logger = _logger.fork(parent_logger, self.state.name, self.state.id)
 
         # Create a log listener to read Node's information
         self.logreceiver = self._start_log_receiver()
@@ -99,7 +94,6 @@ class Worker:
         self.http_server = HttpServerService(
             name="http_server",
             state=self.state,
-            thread=self._thread,
             eventbus=self.eventbus,
             logger=self.logger,
         )
@@ -111,12 +105,27 @@ class Worker:
             logreceiver=self.logreceiver,
         )
 
+        await self.http_client.async_init()
+        await self.http_server.async_init()
+        await self.node_handler.async_init()
+
         # Start all services
-        self.eventbus.send(Event("start")).result(timeout=10)
+        await self.eventbus.asend(Event("start"))
         self._alive = True
 
         # Register shutdown
-        atexit.register(self.shutdown)
+        asyncio_atexit.register(self.shutdown)
+
+        return True
+
+    def serve(self) -> bool:
+
+        # Create with thread
+        self._thread = AsyncLoopThread()
+        self._thread.start()
+
+        # Have to run setup before letting the system continue
+        return self._exec_coro(self.aserve()).result()
 
     def __repr__(self):
         return f"<Worker name={self.state.name} id={self.state.id}>"
@@ -358,7 +367,7 @@ class Worker:
         """
         if not self._alive:
             return True
-        
+
         self.logger.info(f"{self}: Shutting down")
 
         # Only execute if thread exists

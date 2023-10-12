@@ -1,6 +1,7 @@
 import threading
 import logging
 import datetime
+import asyncio
 from typing import Optional, Dict, Tuple, List
 
 import zmq
@@ -50,6 +51,8 @@ class PollerService(Service):
         self.poll_inputs_thread: Optional[threading.Thread] = None
         self.in_bound_data: Dict[str, DataChunk] = {}
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "teardown": TypedObserver(
@@ -63,7 +66,7 @@ class PollerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     ####################################################################
     ## Lifecycle Hooks
@@ -90,9 +93,9 @@ class PollerService(Service):
     ## Helper Methods
     ####################################################################
 
-    def setup_connections(self, node_pub_table: NodePubTable):
+    async def setup_connections(self, node_pub_table: NodePubTable):
 
-        # self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
+        self.logger.debug(f"{self}: setting up connections: {node_pub_table}")
 
         # We determine all the out bound nodes
         for i, in_bound_id in enumerate(self.in_bound):
@@ -112,19 +115,22 @@ class PollerService(Service):
                 in_bound_id,
             )
 
-            # self.logger.debug(
-            #     f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
-            # )
+            self.logger.debug(
+                f"{self}: Setting up clients: {self.state.id}: {node_pub_table}"
+            )
 
         # After creating all subscribers, use a poller to track them all
         for sub in self.p2p_subs.values():
             self.sub_poller.register(sub._zmq_socket, zmq.POLLIN)
 
         # Then start a thread to read the sub poller
-        self.poll_inputs_thread = threading.Thread(target=self.poll_inputs)
+        loop = asyncio.get_event_loop()
+        self.poll_inputs_thread = threading.Thread(
+            target=self.poll_inputs, args=(loop,)
+        )
         self.poll_inputs_thread.start()
 
-    def poll_inputs(self):
+    def poll_inputs(self, loop: asyncio.AbstractEventLoop):
 
         self.running = True
 
@@ -133,13 +139,13 @@ class PollerService(Service):
             # Wait until we get data from any of the subscribers
             events = dict(self.sub_poller.poll(timeout=1000))
 
-            # self.logger.debug(f"{self}: polling inputs: {events}")
+            self.logger.debug(f"{self}: polling inputs: {events}")
 
             # Empty if no events
             if len(events) == 0:
                 continue
 
-            # self.logger.debug(f"{self}: polling event processing {len(events)}")
+            self.logger.debug(f"{self}: polling event processing {len(events)}")
 
             # Default value
             follow_event = False
@@ -167,5 +173,5 @@ class PollerService(Service):
             if follow_event and len(self.in_bound_data) == len(self.in_bound):
                 # self.logger.debug(f"{self}: got inputs")
                 self.eventbus.send(
-                    Event("in_step", NewInBoundDataEvent(self.in_bound_data))
+                    Event("in_step", NewInBoundDataEvent(self.in_bound_data)), loop=loop
                 ).result()

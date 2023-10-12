@@ -13,7 +13,6 @@ from chimerapy.engine.utils import get_ip_address
 from chimerapy.engine.node.worker_comms_service import WorkerCommsService
 from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine.data_protocols import NodePubTable, NodePubEntry
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.networking.enums import WORKER_MESSAGE
 from chimerapy.engine.eventbus import EventBus, Event
 
@@ -86,18 +85,12 @@ class AsyncMainNode(cpe.Node):
 
 
 @pytest.fixture
-def eventbus():
-
-    # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
-
-    return eventbus
+async def eventbus():
+    return EventBus()
 
 
 @pytest.fixture
-def worker_comms_setup(mock_worker):
+async def worker_comms_setup(mock_worker):
 
     config.set("diagnostics.logging-enabled", True)
 
@@ -114,19 +107,18 @@ def worker_comms_setup(mock_worker):
 
 
 @pytest.mark.parametrize("node_cls", [StepNode, AsyncStepNode, MainNode, AsyncMainNode])
-def test_running_node_in_same_process(logreceiver, node_cls: Type[cpe.Node], eventbus):
-
-    # Create the node
+async def test_running_node_async_in_same_process(
+    logreceiver, node_cls: Type[cpe.Node], eventbus
+):
     node = node_cls(name="step", debug_port=logreceiver.port)
+    await node.arun(eventbus=eventbus)
+    await node.ashutdown()
 
-    # Running
-    logger.debug(f"Running Node: {node_cls}")
-    node.run(blocking=False, eventbus=eventbus)
 
-    # Wait
-    time.sleep(1)
-
-    logger.debug("Shutting down Node")
+@pytest.mark.parametrize("node_cls", [StepNode, AsyncStepNode, MainNode, AsyncMainNode])
+def test_running_node_in_same_process(logreceiver, node_cls: Type[cpe.Node], eventbus):
+    node = node_cls(name="step", debug_port=logreceiver.port)
+    node.run(eventbus=eventbus)
     node.shutdown()
 
 
@@ -139,31 +131,35 @@ def test_running_node_in_same_process(logreceiver, node_cls: Type[cpe.Node], eve
         AsyncMainNode,
     ],
 )
-def test_lifecycle_start_record_stop(logreceiver, node_cls: Type[cpe.Node], eventbus):
+async def test_lifecycle_start_record_stop(
+    logreceiver, node_cls: Type[cpe.Node], eventbus
+):
 
     # Create the node
     node = node_cls(name="step", debug_port=logreceiver.port)
 
     # Running
     logger.debug(f"Running Node: {node_cls}")
-    node.run(blocking=False, eventbus=eventbus)
+    await node.arun(eventbus=eventbus)
 
     # Wait
-    time.sleep(0.5)
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    time.sleep(0.5)
-    eventbus.send(Event("record")).result()
+    await asyncio.sleep(0.5)
+
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(0.5)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(0.5)
+
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
-    time.sleep(0.5)
-    eventbus.send(Event("collect")).result()
+    await asyncio.sleep(0.5)
+
+    await eventbus.asend(Event("collect"))
     logger.debug("Finish collect")
 
     logger.debug("Shutting down Node")
-    node.shutdown()
+    await node.ashutdown()
 
 
 @pytest.mark.parametrize(
@@ -175,7 +171,9 @@ def test_lifecycle_start_record_stop(logreceiver, node_cls: Type[cpe.Node], even
         AsyncMainNode,
     ],
 )
-def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_setup):
+async def test_node_in_process(
+    logreceiver, node_cls: Type[cpe.Node], worker_comms_setup
+):
     worker_comms, mock_worker = worker_comms_setup
 
     # Create the node
@@ -184,33 +182,40 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
 
     # Add worker_comms
     node.add_worker_comms(worker_comms)
-    node.running = mp.Value("i", True)
+    running = mp.Value("i", True)
 
     # Adding shared variable that would be typically added by the Worker
-    p = mp.Process(target=node.run)
+    p = mp.Process(
+        target=node.run,
+        args=(
+            None,
+            running,
+        ),
+    )
     p.start()
-    time.sleep(0.5)
+    logger.debug(f"Running Node: {node_cls}")
+    await asyncio.sleep(0.5)
 
     # Run method
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.START_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.RECORD_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.STOP_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}, ok=True
     )
-    time.sleep(1)
+    await asyncio.sleep(0.25)
 
     node.shutdown()
     logger.debug("Shutting down Node")
@@ -220,7 +225,9 @@ def test_node_in_process(logreceiver, node_cls: Type[cpe.Node], worker_comms_set
 
 @linux_run_only
 @pytest.mark.parametrize("context", ["fork", "spawn"])
-def test_node_in_process_different_context(logreceiver, worker_comms_setup, context):
+async def test_node_in_process_different_context(
+    logreceiver, worker_comms_setup, context
+):
     worker_comms, mock_worker = worker_comms_setup
 
     # Create the node
@@ -229,34 +236,39 @@ def test_node_in_process_different_context(logreceiver, worker_comms_setup, cont
 
     # Add worker_comms
     node.add_worker_comms(worker_comms)
-    node.running = mp.Value("i", True)
 
     # Adding shared variable that would be typically added by the Worker
     ctx = mp.get_context(context)
-    p = ctx.Process(target=node.run)
+    p = ctx.Process(
+        target=node.run,
+        args=(
+            None,
+            mp.Value("i", True),
+        ),
+    )
     p.start()
-    time.sleep(0.5)
+    await asyncio.sleep(0.5)
 
     # Run method
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.START_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.RECORD_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.STOP_NODES, data={}, ok=True
     )
-    time.sleep(0.5)
+    await asyncio.sleep(0.25)
 
-    mock_worker.server.send(
+    await mock_worker.server.async_send(
         client_id=id, signal=WORKER_MESSAGE.REQUEST_COLLECT, data={}, ok=True
     )
-    time.sleep(1)
+    await asyncio.sleep(0.25)
 
     node.shutdown()
     logger.debug("Shutting down Node")
@@ -264,18 +276,13 @@ def test_node_in_process_different_context(logreceiver, worker_comms_setup, cont
     p.join()
 
 
-def test_node_connection(logreceiver, mock_worker):
+async def test_node_connection(logreceiver, mock_worker):
 
     # Create evenbus for each node
-    g_loop = AsyncLoopThread()
-    g_loop.start()
-    g_eventbus = EventBus(thread=g_loop)
-    c_loop = AsyncLoopThread()
-    c_loop.start()
-    c_eventbus = EventBus(thread=c_loop)
+    g_eventbus = EventBus()
+    c_eventbus = EventBus()
 
     # Create the node
-    # node = node_cls(name="step", debug_port=logreceiver.port)
     gen_node = GenNode(name="Gen1", debug_port=logreceiver.port, id="Gen1")
     con_node = ConsumeNode(name="Con1", debug_port=logreceiver.port, id="Con1")
 
@@ -303,30 +310,30 @@ def test_node_connection(logreceiver, mock_worker):
 
     # Running
     logger.debug(f"Running Nodes: {gen_node.state}, {con_node.state}")
-    gen_node.run(blocking=False, eventbus=g_eventbus)
-    con_node.run(blocking=False, eventbus=c_eventbus)
+    await gen_node.arun(eventbus=g_eventbus)
+    await con_node.arun(eventbus=c_eventbus)
+    logger.debug("Finish run")
 
     # Create the connections
-    time.sleep(1)
     node_pub_table = NodePubTable()
     for id, node_state in mock_worker.node_states.items():
         ip = get_ip_address()  # necessary
         node_pub_table.table[id] = NodePubEntry(ip=ip, port=node_state.port)
-    mock_worker.server.broadcast(
+    logger.debug("Before broadcast")
+    await mock_worker.server.async_broadcast(
         signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER, data=node_pub_table.to_dict()
     )
-    time.sleep(1)
+    logger.debug("Finish broadcast")
 
     # Wait
-    g_eventbus.send(Event("start")).result()
-    c_eventbus.send(Event("start")).result()
+    await g_eventbus.asend(Event("start"))
+    await c_eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    time.sleep(5)
-    g_eventbus.send(Event("stop")).result()
-    c_eventbus.send(Event("stop")).result()
+    await asyncio.sleep(2)
+    await g_eventbus.asend(Event("stop"))
+    await c_eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
-    time.sleep(1)
 
     logger.debug("Shutting down Node")
-    gen_node.shutdown()
-    con_node.shutdown()
+    await gen_node.ashutdown()
+    await con_node.ashutdown()

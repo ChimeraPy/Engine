@@ -1,9 +1,7 @@
-from .data_nodes import VideoNode
-
 # Built-in Imports
 import os
+import asyncio
 import pathlib
-import time
 import uuid
 from datetime import timedelta
 
@@ -13,8 +11,9 @@ import numpy as np
 import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.records.video_record import VideoRecord
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, Event
+
+from .data_nodes import VideoNode
 
 # Internal Imports
 logger = cpe._logger.getLogger("chimerapy-engine")
@@ -33,15 +32,6 @@ def video_node(logreceiver):
     vn = VideoNode(name="vn", debug_port=logreceiver.port, logdir=TEST_DATA_DIR)
 
     return vn
-
-
-@pytest.fixture
-def eventbus():
-    # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
-    return eventbus
 
 
 def test_video_record():
@@ -129,7 +119,10 @@ def test_video_record_with_unstable_frames():
     assert (num_frames - expected_num_frames) / expected_num_frames <= 0.02
 
 
-def test_node_save_video_stream(video_node, eventbus):
+async def test_node_save_video_stream(video_node):
+
+    # Event Loop
+    eventbus = EventBus()
 
     # Check that the video was created
     expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
@@ -139,18 +132,18 @@ def test_node_save_video_stream(video_node, eventbus):
         ...
 
     # Stream
-    video_node.run(blocking=False, eventbus=eventbus)
+    await video_node.arun(eventbus=eventbus)
 
     # Wait to generate files
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(3)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(3)
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
 
-    video_node.shutdown()
+    await video_node.ashutdown()
 
     # Check that the video was created
     assert expected_video_path.exists()
@@ -158,7 +151,10 @@ def test_node_save_video_stream(video_node, eventbus):
     cap.release()
 
 
-def test_node_save_video_stream_with_unstable_fps(video_node, eventbus):
+async def test_node_save_video_stream_with_unstable_fps(video_node):
+
+    # Event Loop
+    eventbus = EventBus()
 
     # Check that the video was created
     expected_video_path = pathlib.Path(video_node.state.logdir) / "test.mp4"
@@ -169,21 +165,21 @@ def test_node_save_video_stream_with_unstable_fps(video_node, eventbus):
 
     # Video parameters (located within the VideoNode)
     fps = 30  # actual at 1/10
-    rec_time = 10
+    rec_time = 5
 
     # Stream
-    video_node.run(blocking=False, eventbus=eventbus)
+    await video_node.arun(eventbus=eventbus)
 
     # Wait to generate files
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
     logger.debug("Finish start")
-    eventbus.send(Event("record")).result()
+    await eventbus.asend(Event("record"))
     logger.debug("Finish record")
-    time.sleep(rec_time)
-    eventbus.send(Event("stop")).result()
+    await asyncio.sleep(rec_time)
+    await eventbus.asend(Event("stop"))
     logger.debug("Finish stop")
 
-    video_node.shutdown()
+    await video_node.ashutdown()
 
     # Check that the video was created
     assert expected_video_path.exists()

@@ -1,28 +1,24 @@
-import threading
-import typing
 import warnings
 import logging
-from typing import Dict, Any, Union, Type, Optional
-
-if typing.TYPE_CHECKING:
-    from ..node.node import Node
+import asyncio
+from typing import Dict, Any, Union, Type
 
 # Third-party Imports
 import dill
 import multiprocess as mp
 
 from chimerapy.engine import config
-from ..logger.zmq_handlers import NodeIDZMQPullListener
-from ..service import Service
-from ..node.node_config import NodeConfig
-from ..data_protocols import NodePubTable
-from ..node.worker_comms_service import WorkerCommsService
-from ..states import NodeState, WorkerState
-from ..networking import DataChunk
-from ..networking.enums import WORKER_MESSAGE
-from ..utils import async_waiting_for
-from ..eventbus import EventBus, TypedObserver, Event, make_evented
-from .events import (
+from ...logger.zmq_handlers import NodeIDZMQPullListener
+from ...service import Service
+from ...node.node_config import NodeConfig
+from ...data_protocols import NodePubTable
+from ...node.worker_comms_service import WorkerCommsService
+from ...states import NodeState, WorkerState
+from ...networking import DataChunk
+from ...networking.enums import WORKER_MESSAGE
+from ...utils import async_waiting_for
+from ...eventbus import EventBus, TypedObserver, Event
+from ..events import (
     EnableDiagnosticsEvent,
     BroadcastEvent,
     SendMessageEvent,
@@ -33,89 +29,8 @@ from .events import (
     UpdateResultsEvent,
     UpdateGatherEvent,
 )
-
-
-class NodeController:
-    node_object: "Node"
-
-    context: Union[threading.Thread, mp.Process]  # type: ignore
-
-    response: bool = False
-    gather: DataChunk = DataChunk()
-    registered_method_results: Any = None
-
-    def __init__(self, node_object: "Node", logger: logging.Logger):
-
-        # Save parameters
-        self.node_object = node_object
-        self.logger = logger
-
-    def start(self):
-        self.context.start()
-
-    def stop(self):
-        ...
-
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-        ...
-
-
-class ThreadNodeController(NodeController):
-
-    context: threading.Thread
-    running: bool
-
-    def __init__(self, node_object: "Node", logger: logging.Logger):
-        super().__init__(node_object, logger)
-
-        # Create a thread to run the Node
-        self.context = threading.Thread(target=self.node_object.run, args=(True,))
-
-    def stop(self):
-        self.node_object.running = False
-
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-
-        if type(timeout) == type(None):
-            timeout = config.get("worker.timeout.node-shutdown")
-
-        self.stop()
-        self.context.join(timeout=timeout)
-        if self.context.is_alive():
-            self.logger.error(
-                f"Failed to JOIN thread controller for Node={self.node_object.state}"
-            )
-
-
-class MPNodeController(NodeController):
-
-    context: mp.Process  # type: ignore
-    running: mp.Value  # type: ignore
-
-    def __init__(self, node_object: "Node", logger: logging.Logger):
-        super().__init__(node_object, logger)
-
-        # Create a process to run the Node
-        self.running = mp.Value("i", True)  # type: ignore
-        self.context = mp.Process(  # type: ignore
-            target=self.node_object.run,
-            args=(
-                True,
-                self.running,
-            ),
-        )
-
-    def stop(self):
-        self.running.value = False
-
-    def shutdown(self, timeout: Optional[Union[int, float]] = None):
-
-        if type(timeout) == type(None):
-            timeout = config.get("worker.timeout.node-shutdown")
-
-        self.stop()
-        self.context.join(timeout=timeout)
-        self.context.terminate()
+from .node_controller import NodeController, ThreadNodeController, MPNodeController
+from .context_session import MPSession, ThreadSession, ContextSession
 
 
 class NodeHandlerService(Service):
@@ -135,8 +50,9 @@ class NodeHandlerService(Service):
         self.logger = logger
         self.logreceiver = logreceiver
 
-        # Containers
+        # State information
         self.node_controllers: Dict[str, NodeController] = {}
+        self.mp_manager = mp.Manager()
 
         # Map cls to context
         self.context_class_map: Dict[str, Type[NodeController]] = {
@@ -144,8 +60,11 @@ class NodeHandlerService(Service):
             "threading": ThreadNodeController,
         }
 
+    async def async_init(self):
+
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
+            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
@@ -211,17 +130,29 @@ class NodeHandlerService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
+
+    async def start(self) -> bool:
+        # Containers
+        self.mp_session = MPSession()
+        self.thread_session = ThreadSession()
+        self.context_session_map: Dict[str, ContextSession] = {
+            "multiprocessing": self.mp_session,
+            "threading": self.thread_session,
+        }
+        return True
 
     async def shutdown(self) -> bool:
 
-        # Shutdown nodes from the client (start all shutdown)
-        for node_id in self.node_controllers:
-            self.node_controllers[node_id].stop()
-
-        # Then wait until close, or force
-        for node_id in self.node_controllers:
+        tasks = [
             self.node_controllers[node_id].shutdown()
+            for node_id in self.node_controllers
+        ]
+        await asyncio.gather(*tasks)
+
+        # Close all the sessions
+        self.mp_session.shutdown()
+        self.thread_session.shutdown()
 
         # Clear node_controllers afterwards
         self.node_controllers = {}
@@ -264,9 +195,7 @@ class NodeHandlerService(Service):
         # )
 
         # Saving the node data
-        self.state.nodes[id] = make_evented(
-            NodeState(id=id), event_bus=self.eventbus, event_name="WorkerState.changed"
-        )
+        self.state.nodes[id] = NodeState(id=id)
 
         # Keep trying to start a process until success
         success = False
@@ -296,9 +225,9 @@ class NodeHandlerService(Service):
             controller = self.context_class_map[node_config.context](
                 node_object, self.logger
             )
-
-            # Start the node
-            controller.start()
+            if isinstance(controller, MPNodeController):
+                controller.set_mp_manager(self.mp_manager)
+            controller.run(self.context_session_map[node_config.context])
             # self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
@@ -308,7 +237,8 @@ class NodeHandlerService(Service):
             )
 
             if not success:
-                controller.shutdown()
+                self.logger.error(f"{self}: Node {id} failed to initialized")
+                await controller.shutdown()
                 continue
 
             # Now we wait until the node has fully initialized and ready-up
@@ -318,7 +248,8 @@ class NodeHandlerService(Service):
             )
 
             if not success:
-                controller.shutdown()
+                self.logger.error(f"{self}: Node {id} failed to ready-up")
+                await controller.shutdown()
                 continue
 
             # Save all important external attributes of the node
@@ -336,11 +267,13 @@ class NodeHandlerService(Service):
 
     async def async_destroy_node(self, node_id: str) -> bool:
 
-        self.logger.debug(f"{self}: received request for Node {node_id} destruction")
+        # self.logger.debug(f"{self}: received request for Node {node_id} destruction")
         success = False
 
         if node_id in self.node_controllers:
-            self.node_controllers[node_id].shutdown()
+            # self.logger.debug(f"{self}: destroying Node {node_id}")
+            await self.node_controllers[node_id].shutdown()
+            # self.logger.debug(f"{self}: destroyed Node {node_id}")
 
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]

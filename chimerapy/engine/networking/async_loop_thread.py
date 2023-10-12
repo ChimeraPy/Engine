@@ -51,7 +51,7 @@ class AsyncLoopThread(threading.Thread):
         return future, wrapper
 
     def exec(self, coro: Coroutine) -> Future:
-        if self._loop.is_closed():
+        if not self._loop.is_running():
             raise RuntimeError(
                 "AsyncLoopThread: Event loop is closed, but a coroutine was sent to it."
             )
@@ -61,7 +61,7 @@ class AsyncLoopThread(threading.Thread):
         return finished
 
     def exec_noncoro(self, callback: Callable, args: List[Any]) -> Future:
-        if self._loop.is_closed():
+        if not self._loop.is_running():
             raise RuntimeError(
                 "AsyncLoopThread: Event loop is closed, but a coroutine was sent to it."
             )
@@ -78,7 +78,6 @@ class AsyncLoopThread(threading.Thread):
             ...
         finally:
             self.stop()
-            self._loop.close()
 
     def flush(self, timeout: Optional[Union[int, float]] = None):
         tasks = asyncio.all_tasks(self._loop)
@@ -90,7 +89,6 @@ class AsyncLoopThread(threading.Thread):
         # Cancel all tasks
         for task in asyncio.all_tasks(self._loop):
             task.cancel()
-        self._loop.stop()
 
-    def __del__(self):
-        self.stop()
+        if self._loop.is_running():
+            self._loop.stop()

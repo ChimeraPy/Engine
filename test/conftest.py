@@ -1,16 +1,18 @@
-from .mock import DockeredWorker
-
 import time
 import logging
 import pathlib
 import os
 import platform
+import sys
+import asyncio
 from typing import Dict
 
 import docker
 import pytest
 
 import chimerapy.engine as cpe
+
+from .mock import DockeredWorker
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -51,6 +53,25 @@ def pytest_configure():
         logger.propagate = False
 
 
+@pytest.fixture(scope="session")
+def event_loop():
+
+    if sys.platform in ["win32", "cygwin", "cli"]:
+        import winloop
+
+        winloop.install()
+    else:
+        import uvloop
+
+        uvloop.install()
+    try:
+        loop = asyncio.get_event_loop()
+    except Exception:
+        loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
 @pytest.fixture
 def logreceiver():
     listener = cpe._logger.get_node_id_zmq_listener()
@@ -67,17 +88,19 @@ def slow_interval_between_tests():
 
 
 @pytest.fixture
-def manager():
+async def manager():
     manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
+    await manager.aserve()
     yield manager
-    manager.shutdown()
+    await manager.async_shutdown()
 
 
 @pytest.fixture
-def worker():
+async def worker():
     worker = cpe.Worker(name="local", id="local", port=0)
+    await worker.aserve()
     yield worker
-    worker.shutdown()
+    await worker.async_shutdown()
 
 
 @pytest.fixture

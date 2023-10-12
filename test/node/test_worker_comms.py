@@ -10,7 +10,6 @@ from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine.states import NodeState
 from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.networking.server import Server
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
 
 
@@ -30,7 +29,9 @@ class MockWorker:
                 NODE_MESSAGE.DIAGNOSTICS: self.node_diagnostics,
             },
         )
-        self.server.serve()
+
+    async def setup(self):
+        await self.server.async_serve()
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
@@ -50,27 +51,23 @@ class MockWorker:
     async def node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
         ...
 
-    def shutdown(self):
-        self.server.shutdown()
+    async def async_shutdown(self):
+        await self.server.async_shutdown()
 
 
 @pytest.fixture
-def mock_worker():
+async def mock_worker():
     mock_worker = MockWorker()
+    await mock_worker.setup()
     yield mock_worker
-    mock_worker.shutdown()
+    await mock_worker.async_shutdown()
 
 
-@pytest.fixture(scope="module")
-def worker_comms_setup():
-
-    # Creating mock worker
-    mock_worker = MockWorker()
+@pytest.fixture
+async def worker_comms_setup(mock_worker):
 
     # Event Loop
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
+    eventbus = EventBus()
 
     # Create sample state
     state = NodeState(id="test_worker_comms")
@@ -88,21 +85,11 @@ def worker_comms_setup():
     )
 
     yield (worker_comms, mock_worker.server)
-    mock_worker.shutdown()
+    await mock_worker.async_shutdown()
 
 
 def test_instanticate(worker_comms_setup):
     ...
-
-
-# @
-# async def test_setup(worker_comms_setup):
-#     worker_comms, server = worker_comms_setup
-
-#     # Start the server
-#     await worker_comms.setup()
-#     assert "test_worker_comms" in server.ws_clients
-#     await worker_comms.teardown()
 
 
 @pytest.mark.parametrize(

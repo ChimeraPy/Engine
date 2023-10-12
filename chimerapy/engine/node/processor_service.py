@@ -63,6 +63,8 @@ class ProcessorService(Service):
         self.tasks: List[asyncio.Task] = []
         self.main_thread: Optional[threading.Thread] = None
 
+    async def async_init(self):
+
         # Put observers
         self.observers: Dict[str, TypedObserver] = {
             "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
@@ -82,7 +84,7 @@ class ProcessorService(Service):
             ),
         }
         for ob in self.observers.values():
-            self.eventbus.subscribe(ob).result(timeout=1)
+            await self.eventbus.asubscribe(ob)
 
     ####################################################################
     ## Lifecycle Hooks

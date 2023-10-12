@@ -1,10 +1,10 @@
 # Built-in Imports
 import argparse
-import time
 
 from chimerapy.engine import _logger
 
 logger = _logger.getLogger("chimerapy-engine")
+
 
 def routine(worker, d_args):
     if d_args["zeroconf"]:
@@ -12,10 +12,11 @@ def routine(worker, d_args):
     else:
         if d_args["ip"] == "" or d_args["port"] == -1:
             logger.info("IP or Port not provided. Worker not connected")
-        else:        
+        else:
             worker.connect(method="ip", host=d_args["ip"], port=d_args["port"])
     worker.idle()
-    
+
+
 def main():
 
     # Internal Imports
@@ -52,6 +53,7 @@ def main():
         id=d_args["id"],
         port=d_args["wport"],
     )
+    worker.serve()
 
     try:
         routine(worker, d_args)
@@ -59,6 +61,7 @@ def main():
         ...
     finally:
         worker.shutdown()
+
 
 if __name__ == "__main__":
     main()

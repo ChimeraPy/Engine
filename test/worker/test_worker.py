@@ -17,9 +17,15 @@ NAME_CLASS_MAP = {
 }
 
 
-def test_worker_instance(worker):
+async def test_worker_instance(worker):
     ...
 
 
-def test_worker_instance_shutdown_twice(worker):
-    worker.shutdown()
+async def test_worker_instance_shutdown_twice(worker):
+    await worker.async_shutdown()
+
+
+async def test_worker_instance_async():
+    worker = cpe.Worker(name="local", id="local", port=0)
+    await worker.aserve()
+    await worker.async_shutdown()

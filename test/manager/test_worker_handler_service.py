@@ -8,7 +8,6 @@ import chimerapy.engine as cpe
 from chimerapy.engine import config
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.manager.http_server_service import HttpServerService
-from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
 from chimerapy.engine.eventbus import EventBus, make_evented, Event
 from chimerapy.engine.states import ManagerState
 
@@ -18,16 +17,14 @@ logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 
-@pytest.fixture(scope="module")
-def testbed_setup():
+@pytest.fixture
+async def testbed_setup():
 
     # Creating worker to communicate
     worker = cpe.Worker(name="local", id="local", port=0)
+    await worker.aserve()
 
-    thread = AsyncLoopThread()
-    thread.start()
-    eventbus = EventBus(thread=thread)
-
+    eventbus = EventBus()
     state = make_evented(
         ManagerState(logdir=pathlib.Path(tempfile.mkdtemp())), event_bus=eventbus
     )
@@ -44,26 +41,27 @@ def testbed_setup():
         name="http_server",
         port=0,
         enable_api=True,
-        thread=thread,
         eventbus=eventbus,
         state=state,
     )
     worker_handler = WorkerHandlerService(
         name="worker_handler", eventbus=eventbus, state=state
     )
+    await http_server.async_init()
+    await worker_handler.async_init()
 
-    eventbus.send(Event("start")).result()
+    await eventbus.asend(Event("start"))
 
     # Register worker
-    worker.connect(host=http_server.ip, port=http_server.port)
+    await worker.async_connect(host=http_server.ip, port=http_server.port)
 
     yield (worker_handler, worker, simple_graph)
 
-    eventbus.send(Event("shutdown")).result()
-    worker.shutdown()
+    await eventbus.asend(Event("shutdown"))
+    await worker.async_shutdown()
 
 
-def test_instanticate(testbed_setup):
+async def test_instanticate(testbed_setup):
     ...
 
 
@@ -83,7 +81,6 @@ async def test_worker_handler_create_node(testbed_setup):
         worker_id=worker.id, node_id="Gen1"
     )
     await asyncio.sleep(1)
-
     assert "Gen1" not in worker.state.nodes
     assert "Gen1" not in worker_handler.state.workers[worker.id].nodes
 
@@ -124,7 +121,7 @@ async def test_worker_handler_lifecycle_graph(testbed_setup):
     )
     assert await worker_handler.start_workers()
 
-    await asyncio.sleep(2)
+    await asyncio.sleep(1)
 
     assert await worker_handler.stop()
     assert await worker_handler.collect()
