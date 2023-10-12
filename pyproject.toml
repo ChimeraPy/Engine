@@ -109,6 +109,16 @@ chimerapy = ['engine/*.yaml']
 files = "chimerapy"
 ignore_missing_imports = true
 
+[tool.ruff]
+ignore = ["E501"]
+select = ["E", "W", "F", "C", "B", "I"]
+ignore-init-module-imports = true
+fixable = ["I001"]  # isort fix only
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+"chimerapy/pipelines/__version__.py" = ["E402"]
+
 # Reference:
 # https://stackoverflow.com/questions/4673373/logging-within-pytest-tests
 
