@@ -1,13 +1,13 @@
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any, Dict
 
+from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..networking.client import Client
 from ..networking.data_chunk import DataChunk
-from ..data_protocols import NodePubTable, NodeDiagnostics
 
 
 @dataclass
-class EnableDiagnosticsEvent: # enable_diagnostics
+class EnableDiagnosticsEvent:  # enable_diagnostics
     enable: bool
 
 

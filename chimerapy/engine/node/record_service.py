@@ -1,22 +1,23 @@
 # Internal Imports
-import threading
-import queue
 import logging
+import queue
+import threading
 from typing import Dict, Optional
 
 from chimerapy.engine import _logger
-from ..states import NodeState
+
 from ..eventbus import EventBus, TypedObserver
 from ..records import (
-    Record,
-    VideoRecord,
     AudioRecord,
-    TabularRecord,
     ImageRecord,
     JSONRecord,
+    Record,
+    TabularRecord,
     TextRecord,
+    VideoRecord,
 )
 from ..service import Service
+from ..states import NodeState
 
 logger = _logger.getLogger("chimerapy-engine")
 

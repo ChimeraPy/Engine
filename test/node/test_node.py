@@ -1,22 +1,22 @@
-import time
+import asyncio
+import multiprocessing as mp
 import os
 import pathlib
-import asyncio
+import time
 from typing import Type
 
 import pytest
-import multiprocessing as mp
 
 import chimerapy.engine as cpe
 from chimerapy.engine import config
-from chimerapy.engine.utils import get_ip_address
-from chimerapy.engine.node.worker_comms_service import WorkerCommsService
-from chimerapy.engine.node.node_config import NodeConfig
-from chimerapy.engine.data_protocols import NodePubTable, NodePubEntry
+from chimerapy.engine.data_protocols import NodePubEntry, NodePubTable
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.networking.enums import WORKER_MESSAGE
-from chimerapy.engine.eventbus import EventBus, Event
+from chimerapy.engine.node.node_config import NodeConfig
+from chimerapy.engine.node.worker_comms_service import WorkerCommsService
+from chimerapy.engine.utils import get_ip_address
 
-from ..conftest import GenNode, ConsumeNode, linux_run_only
+from ..conftest import ConsumeNode, GenNode, linux_run_only
 from .test_worker_comms import mock_worker
 
 logger = cpe._logger.getLogger("chimerapy-engine")

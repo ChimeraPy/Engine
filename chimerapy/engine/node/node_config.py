@@ -1,5 +1,5 @@
 import typing
-from typing import List, Optional, Literal, Union, Tuple
+from typing import List, Literal, Optional, Tuple, Union
 
 if typing.TYPE_CHECKING:
     from .node import Node

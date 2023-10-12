@@ -1,10 +1,10 @@
 import pathlib
 from dataclasses import dataclass, field
-from typing import Dict, Any
 from enum import Enum
+from typing import Any, Dict
 
-from ..node.node_config import NodeConfig
 from ..data_protocols import NodePubTable
+from ..node.node_config import NodeConfig
 
 
 @dataclass

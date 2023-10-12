@@ -1,7 +1,7 @@
-import typing
-import logging
 import abc
-from typing import Any, Awaitable, Union, Optional
+import logging
+import typing
+from typing import Any, Awaitable, Optional, Union
 
 # Third-party Imports
 import multiprocess as mp

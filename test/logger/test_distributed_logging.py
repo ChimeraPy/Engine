@@ -1,9 +1,11 @@
+import glob
 import time
 
-import chimerapy.engine as cpe
-from ..conftest import TEST_DATA_DIR, GenNode, ConsumeNode
-import glob
 import pytest
+
+import chimerapy.engine as cpe
+
+from ..conftest import TEST_DATA_DIR, ConsumeNode, GenNode
 from ..utils import uuid
 
 logger = cpe._logger.getLogger("chimerapy-engine")

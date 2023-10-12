@@ -5,13 +5,12 @@ from typing import Dict
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-from chimerapy.engine.node.processor_service import ProcessorService
-from chimerapy.engine.networking.data_chunk import DataChunk
-from chimerapy.engine.states import NodeState
-from chimerapy.engine.eventbus import EventBus, Event, TypedObserver
-from chimerapy.engine.node.events import NewInBoundDataEvent, NewOutBoundDataEvent
 from chimerapy.engine import _logger
-
+from chimerapy.engine.eventbus import Event, EventBus, TypedObserver
+from chimerapy.engine.networking.data_chunk import DataChunk
+from chimerapy.engine.node.events import NewInBoundDataEvent, NewOutBoundDataEvent
+from chimerapy.engine.node.processor_service import ProcessorService
+from chimerapy.engine.states import NodeState
 
 logger = _logger.getLogger("chimerapy-engine")
 

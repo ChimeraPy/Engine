@@ -1,10 +1,10 @@
 import datetime
 import json
-from typing import Optional, Dict
+from typing import Dict, Optional
 
-from ..states import ManagerState
 from ..eventbus import EventBus, TypedObserver
 from ..service import Service
+from ..states import ManagerState
 
 
 class SessionRecordService(Service):

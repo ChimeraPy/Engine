@@ -10,8 +10,8 @@ import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.image_record import ImageRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import ImageNode
 

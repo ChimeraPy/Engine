@@ -1,7 +1,7 @@
 # Built-in Import
-from typing import List, Optional, Dict
 import logging
 import os
+from typing import Dict, List, Optional
 
 # Internal Imports
 from ._logger import LOGGING_CONFIG

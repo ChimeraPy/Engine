@@ -1,11 +1,12 @@
-from typing import Sequence
 import copy
+from typing import Sequence
 
-import numpy as np
 import networkx as nx
+import numpy as np
+
+from chimerapy.engine import _logger
 
 from .node import Node
-from chimerapy.engine import _logger
 
 logger = _logger.getLogger("chimerapy-engine")
 

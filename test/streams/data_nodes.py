@@ -1,11 +1,12 @@
 # Build-in Imports
-import time
 import random
+import time
+
+import numpy as np
+import pandas as pd
 
 # Third-party Imports
 import pyaudio
-import numpy as np
-import pandas as pd
 
 # Internal Imports
 import chimerapy.engine as cpe

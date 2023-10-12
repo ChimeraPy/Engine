@@ -1,9 +1,9 @@
 import json
 
+import numpy as np
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-import numpy as np
 import chimerapy.engine as cpe
 
 

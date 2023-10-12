@@ -4,7 +4,7 @@ import os
 import threading
 from logging import LogRecord, makeLogRecord
 from logging.handlers import QueueHandler
-from typing import Collection, Optional, Callable, Dict, Any
+from typing import Any, Callable, Collection, Dict, Optional
 
 import zmq
 

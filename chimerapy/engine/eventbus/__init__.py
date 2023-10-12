@@ -1,6 +1,6 @@
-from .eventbus import EventBus, Event, TypedObserver
-from .wrapper import make_evented, evented, configure
+from .eventbus import Event, EventBus, TypedObserver
 from .observables import ObservableDict
+from .wrapper import configure, evented, make_evented
 
 __all__ = [
     "EventBus",

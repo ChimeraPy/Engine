@@ -1,14 +1,14 @@
-import logging
-
-import pytest
 import glob
+import logging
 import random
 
-from chimerapy.engine.logger.common import HandlerFactory
-import chimerapy.engine as cpe
+import pytest
 
-from ..utils import cleanup_and_recreate_dir, uuid
+import chimerapy.engine as cpe
+from chimerapy.engine.logger.common import HandlerFactory
+
 from ..conftest import TEST_DATA_DIR
+from ..utils import cleanup_and_recreate_dir, uuid
 
 pytestmark = [pytest.mark.unit]
 

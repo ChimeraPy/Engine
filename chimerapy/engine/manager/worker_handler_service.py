@@ -1,35 +1,35 @@
-import pathlib
-import tempfile
 import asyncio
-import dill
-import traceback
 import json
+import pathlib
 import pickle
+import tempfile
+import traceback
 import zipfile
-from typing import Dict, Optional, List, Any, Coroutine, Literal, Union
+from typing import Any, Coroutine, Dict, List, Literal, Optional, Union
 
 # Third-party Imports
 import aiohttp
+import dill
 import networkx as nx
 
-from chimerapy.engine import config
-from chimerapy.engine import _logger
-from ..utils import async_waiting_for
+from chimerapy.engine import _logger, config
+
 from ..data_protocols import NodePubTable
-from ..node import NodeConfig
-from ..networking import Client, DataChunk
-from ..service import Service
-from ..graph import Graph
+from ..eventbus import Event, EventBus, TypedObserver, make_evented
 from ..exceptions import CommitGraphError
-from ..states import WorkerState, ManagerState
-from ..eventbus import EventBus, TypedObserver, Event, make_evented
+from ..graph import Graph
+from ..networking import Client, DataChunk
+from ..node import NodeConfig
+from ..service import Service
+from ..states import ManagerState, WorkerState
+from ..utils import async_waiting_for
 from .events import (
-    WorkerRegisterEvent,
-    WorkerDeregisterEvent,
-    RegisterEntityEvent,
     DeregisterEntityEvent,
     MoveTransferredFilesEvent,
+    RegisterEntityEvent,
     UpdateSendArchiveEvent,
+    WorkerDeregisterEvent,
+    WorkerRegisterEvent,
 )
 
 logger = _logger.getLogger("chimerapy-engine")

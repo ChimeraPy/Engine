@@ -10,11 +10,12 @@ from typing import Any, Dict, Optional, Union
 
 from zmq.log.handlers import TOPIC_DELIM, PUBHandler
 
-from .logger.common import HandlerFactory, IdentifierFilter
-from .logger.utils import get_unique_child_name
 from chimerapy.engine.logger.distributed_logs_sink import (
     DistributedLogsMultiplexedFileSink,
 )
+
+from .logger.common import HandlerFactory, IdentifierFilter
+from .logger.utils import get_unique_child_name
 from .logger.zmq_handlers import (
     NodeIDZMQPullListener,
     NodeIdZMQPushHandler,

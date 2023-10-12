@@ -3,15 +3,16 @@ import time
 from typing import Optional, Union
 
 import pytest
+
 import chimerapy.engine as cpe
-from chimerapy.engine.worker.node_handler_service import NodeHandlerService
-from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.eventbus import Event, EventBus, make_evented
 from chimerapy.engine.states import WorkerState
+from chimerapy.engine.worker.http_server_service import HttpServerService
+from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 
 from ...conftest import linux_run_only
-from ...streams.data_nodes import VideoNode, ImageNode, TabularNode
 from ...networking.test_client_server import server
+from ...streams.data_nodes import ImageNode, TabularNode, VideoNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

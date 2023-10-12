@@ -1,9 +1,9 @@
-import time
 import logging
+import time
 from datetime import datetime, timedelta
 
-from zeroconf import ServiceInfo, ServiceListener
 import zeroconf
+from zeroconf import ServiceInfo, ServiceListener
 
 
 class ZeroconfListener(ServiceListener):

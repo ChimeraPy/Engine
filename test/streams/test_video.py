@@ -1,6 +1,6 @@
 # Built-in Imports
-import os
 import asyncio
+import os
 import pathlib
 import uuid
 from datetime import timedelta
@@ -9,9 +9,10 @@ from datetime import timedelta
 import cv2
 import numpy as np
 import pytest
+
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.video_record import VideoRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import VideoNode
 

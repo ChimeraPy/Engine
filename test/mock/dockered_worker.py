@@ -1,10 +1,11 @@
 # Built-in Imports
-import threading
 import queue
+import threading
 import uuid
 
 # Third-party
 import docker
+
 import chimerapy.engine as cpe
 
 logger = cpe._logger.getLogger("chimerapy-engine-networking")

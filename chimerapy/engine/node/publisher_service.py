@@ -1,11 +1,12 @@
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 from chimerapy.engine import _logger
+
+from ..eventbus import EventBus, TypedObserver
+from ..networking import DataChunk, Publisher
 from ..service import Service
 from ..states import NodeState
-from ..eventbus import EventBus, TypedObserver
-from ..networking import Publisher, DataChunk
 
 
 class PublisherService(Service):

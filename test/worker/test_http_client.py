@@ -4,11 +4,11 @@ import shutil
 
 import pytest
 
-from chimerapy.engine.worker.http_client_service import HttpClientService
-from chimerapy.engine.networking.server import Server
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
-from chimerapy.engine.states import WorkerState, NodeState
 from chimerapy.engine import _logger
+from chimerapy.engine.eventbus import Event, EventBus, make_evented
+from chimerapy.engine.networking.server import Server
+from chimerapy.engine.states import NodeState, WorkerState
+from chimerapy.engine.worker.http_client_service import HttpClientService
 
 from ..conftest import TEST_DATA_DIR, TEST_SAMPLE_DATA_DIR
 

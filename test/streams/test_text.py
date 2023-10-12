@@ -1,16 +1,16 @@
 # Built-in Imports
+import asyncio
 import os
 import pathlib
 import uuid
-import asyncio
 
 # Third-party
 import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.text_record import TextRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import TextNode
 

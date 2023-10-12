@@ -1,9 +1,9 @@
-import time
 import os
 import pathlib
-
+import time
 
 import chimerapy.engine as cpe
+
 from ..conftest import TEST_DATA_DIR
 
 logger = cpe._logger.getLogger("chimerapy-engine")

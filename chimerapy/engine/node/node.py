@@ -1,13 +1,13 @@
-import pathlib
-import logging
-import uuid
-import datetime
-import os
-import tempfile
 import asyncio
+import datetime
+import logging
+import os
+import pathlib
+import tempfile
+import uuid
 from asyncio import Task
 from concurrent.futures import Future
-from typing import Dict, Any, Optional, Union, Literal, Coroutine, List, Tuple
+from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
 
 # Third-party Imports
 import multiprocess as mp
@@ -15,24 +15,24 @@ import numpy as np
 import pandas as pd
 
 # Internal Imports
-from chimerapy.engine import _logger
-from chimerapy.engine import config
-from ..states import NodeState
+from chimerapy.engine import _logger, config
+
+from ..eventbus import Event, EventBus, make_evented
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
-from ..eventbus import EventBus, Event, make_evented
+from ..states import NodeState
 from ..utils import future_wrapper
+from .fsm_service import FSMService
 
 # Service Imports
 from .node_config import NodeConfig
-from .registered_method import RegisteredMethod
-from .profiler_service import ProfilerService
-from .fsm_service import FSMService
-from .worker_comms_service import WorkerCommsService
-from .record_service import RecordService
-from .processor_service import ProcessorService
 from .poller_service import PollerService
+from .processor_service import ProcessorService
+from .profiler_service import ProfilerService
 from .publisher_service import PublisherService
+from .record_service import RecordService
+from .registered_method import RegisteredMethod
+from .worker_comms_service import WorkerCommsService
 
 
 class Node:

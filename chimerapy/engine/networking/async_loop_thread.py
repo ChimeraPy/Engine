@@ -1,9 +1,9 @@
 # Built-in
-from typing import Coroutine, Callable, Tuple, List, Optional, Any, Union
-import threading
 import asyncio
+import threading
 import traceback
 from concurrent.futures import Future
+from typing import Any, Callable, Coroutine, List, Optional, Tuple, Union
 
 # Internal Imports
 from chimerapy.engine import _logger

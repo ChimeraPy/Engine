@@ -1,7 +1,7 @@
-from typing import Dict
-import time
-import pathlib
 import os
+import pathlib
+import time
+from typing import Dict
 
 import chimerapy.engine as cpe
 

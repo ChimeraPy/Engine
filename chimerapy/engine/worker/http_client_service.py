@@ -1,25 +1,25 @@
-import os
-import shutil
-import json
-import uuid
-import traceback
-import socket
 import asyncio
-import pathlib
+import json
 import logging
-from typing import Optional, Literal, Union, Tuple, Dict
+import os
+import pathlib
+import shutil
+import socket
+import traceback
+import uuid
+from typing import Dict, Literal, Optional, Tuple, Union
 
 import aiohttp
 from zeroconf import ServiceBrowser, Zeroconf
 
-from chimerapy.engine import config
-from chimerapy.engine import _logger
-from ..logger.zmq_handlers import NodeIDZMQPullListener
-from ..states import WorkerState
-from ..networking import Client
-from ..utils import get_ip_address
-from ..service import Service
+from chimerapy.engine import _logger, config
+
 from ..eventbus import EventBus, TypedObserver
+from ..logger.zmq_handlers import NodeIDZMQPullListener
+from ..networking import Client
+from ..service import Service
+from ..states import WorkerState
+from ..utils import get_ip_address
 from .events import SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 

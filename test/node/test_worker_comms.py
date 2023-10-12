@@ -4,14 +4,13 @@ import pytest
 from aiohttp import web
 
 import chimerapy.engine as cpe
-from chimerapy.engine.node.worker_comms_service import WorkerCommsService
-from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
-from chimerapy.engine.node.node_config import NodeConfig
-from chimerapy.engine.states import NodeState
+from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
 from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from chimerapy.engine.networking.server import Server
-from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
-
+from chimerapy.engine.node.node_config import NodeConfig
+from chimerapy.engine.node.worker_comms_service import WorkerCommsService
+from chimerapy.engine.states import NodeState
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

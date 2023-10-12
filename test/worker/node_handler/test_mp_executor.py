@@ -1,8 +1,8 @@
-import time
+import asyncio
 
 # import multiprocess as mp
 import multiprocessing as mp
-import asyncio
+import time
 from concurrent.futures import Future
 
 import pytest

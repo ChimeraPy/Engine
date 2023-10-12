@@ -1,22 +1,22 @@
 # Built-in Imports
-import os
-import pathlib
 import asyncio
-import uuid
 import datetime
 import glob
-import wave
+import os
+import pathlib
 import tempfile
+import uuid
+import wave
 
 # Third-party
 import numpy as np
-import pytest
 import pyaudio
+import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.audio_record import AudioRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import AudioNode
 

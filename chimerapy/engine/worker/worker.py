@@ -1,22 +1,23 @@
-from typing import Union, Dict, Any, Coroutine, Optional, List, Literal, Tuple
-import time
-import tempfile
 import pathlib
-import uuid
 import shutil
-import asyncio_atexit
-from concurrent.futures import Future
+import tempfile
+import time
+import uuid
 from asyncio import Task
+from concurrent.futures import Future
+from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
 
-from chimerapy.engine import config
-from chimerapy.engine import _logger
-from ..networking.async_loop_thread import AsyncLoopThread
+import asyncio_atexit
+
+from chimerapy.engine import _logger, config
+
+from ..eventbus import Event, EventBus, make_evented
 from ..logger.zmq_handlers import NodeIDZMQPullListener
-from ..states import WorkerState, NodeState
+from ..networking.async_loop_thread import AsyncLoopThread
 from ..node import NodeConfig
-from ..eventbus import EventBus, Event, make_evented
-from .http_server_service import HttpServerService
+from ..states import NodeState, WorkerState
 from .http_client_service import HttpClientService
+from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
 
 

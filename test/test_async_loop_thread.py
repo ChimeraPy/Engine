@@ -1,14 +1,15 @@
 # Built-in Imports
-import time
 import asyncio
+import time
 
 # Third-party Imports
 import pytest
 from pytest import raises
 
+import chimerapy.engine as cpe
+
 # ChimeraPy Imports
 from chimerapy.engine.networking.async_loop_thread import AsyncLoopThread
-import chimerapy.engine as cpe
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

@@ -6,11 +6,11 @@ from typing import Optional
 import zmq
 import zmq.asyncio
 
-# Internal Imports
-from ..utils import get_ip_address
-
 # Logging
 from chimerapy.engine import _logger
+
+# Internal Imports
+from ..utils import get_ip_address
 
 logger = _logger.getLogger("chimerapy-engine-networking")
 

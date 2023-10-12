@@ -1,6 +1,6 @@
 import datetime
-from typing import Dict
 from dataclasses import dataclass, field
+from typing import Dict
 
 from dataclasses_json import DataClassJsonMixin
 

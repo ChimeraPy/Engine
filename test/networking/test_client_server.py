@@ -1,16 +1,16 @@
-from typing import Dict
-import tempfile
-import pathlib
 import asyncio
-import os
 import enum
+import os
+import pathlib
+import tempfile
+from typing import Dict
+
 import aiohttp
+import pytest
 from aiohttp import web
 
-import pytest
-
 import chimerapy.engine as cpe
-from chimerapy.engine.networking import Server, Client
+from chimerapy.engine.networking import Client, Server
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

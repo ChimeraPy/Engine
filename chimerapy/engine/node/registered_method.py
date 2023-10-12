@@ -1,6 +1,6 @@
-from typing import Dict, Callable, Literal
-
 from dataclasses import dataclass, field
+from typing import Callable, Dict, Literal
+
 from dataclasses_json import dataclass_json
 
 

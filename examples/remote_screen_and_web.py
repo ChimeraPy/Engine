@@ -1,12 +1,12 @@
-from typing import Dict
-import time
-import pathlib
 import os
+import pathlib
 import platform
+import time
+from typing import Dict
 
-import numpy as np
 import cv2
 import imutils
+import numpy as np
 from PIL import ImageGrab
 
 import chimerapy.engine as cpe

@@ -1,15 +1,15 @@
 import asyncio
-import time
 import pathlib
 import tempfile
+import time
 from typing import Dict
 
 import tqdm
 
 import chimerapy.engine as cpe
-from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
+from chimerapy.engine.eventbus import Event, EventBus, make_evented
 from chimerapy.engine.manager.http_server_service import HttpServerService
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.states import ManagerState
 
 N = 10
