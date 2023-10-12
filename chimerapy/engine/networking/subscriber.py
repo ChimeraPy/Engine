@@ -1,12 +1,14 @@
 # Built-in
-from typing import Optional, Union
-import threading
+from typing import Optional, Union, Dict, Callable, Coroutine
+import asyncio
+import uuid
+from dataclasses import dataclass
 
 # Third-party Imports
 import zmq
+import zmq.asyncio
 
 # Internal Imports
-from .data_chunk import DataChunk
 
 # Logging
 from chimerapy.engine import _logger
@@ -17,84 +19,120 @@ logger = _logger.getLogger("chimerapy-engine-networking")
 # https://pyzmq.readthedocs.io/en/latest/api/zmq.html?highlight=socket#polling
 
 
+@dataclass
+class Subscription:
+    id: str
+    host: str
+    port: int
+    topic: str
+    socket: zmq.Socket
+
+
 class Subscriber:
-    def __init__(self, port: int, host: str):
+    def __init__(self, ctx: Optional[zmq.asyncio.Context] = None):
 
-        self.port: int = port
-        self.host: str = host
-        self.running: bool = False
-        self._data_chunk: DataChunk = DataChunk()
+        # Parameters
+        if ctx:
+            self._zmq_context = ctx
+        else:
+            self._zmq_context = zmq.asyncio.Context()
 
-        # Create socket
-        self._zmq_context = zmq.Context()
-        self._zmq_socket = self._zmq_context.socket(zmq.SUB)
-        self._zmq_socket.setsockopt(zmq.CONFLATE, 1)
-        self._zmq_socket.connect(f"tcp://{self.host}:{self.port}")
-        self._zmq_socket.subscribe(b"")
+        # State variables
+        self._on_receive: Optional[Union[Callable, Coroutine]] = None
+        self._running: bool = False
+        self.subscriptions: Dict[str, Subscription] = {}
+        self.socket_to_sub_name_mapping: Dict[zmq.Socket, str] = {}
 
-    def __str__(self):
-        return f"<Subscriber@{self.host}:{self.port}>"
-
-    def receive_loop(self):
-
-        while self.running:
-
-            # Poll (list of tuples of (socket, event_mask))
-            events = self._zmq_poller.poll(timeout=1000)
-
-            # If there is incoming data, then we know that the SUB
-            # socket has content
-            if events:
-
-                # Recv
-                serial_data_chunk = self._zmq_socket.recv()
-                self._data_chunk = DataChunk.from_bytes(serial_data_chunk)
-                self._ready.set()
-
-    def receive(
-        self,
-        check_period: Union[int, float] = 0.1,
-        timeout: Optional[Union[int, float]] = None,
+    def subscribe(
+        self, host: str, port: int, topic: str = "", id: Optional[str] = None
     ):
 
-        counter = 0
-        while self.running:
+        if id is None:
+            id = str(uuid.uuid4())
 
-            flag = self._ready.wait(timeout=check_period)
-            if not flag:  # miss
-                counter += 1
+        # Create socket
+        _zmq_socket = self._zmq_context.socket(zmq.SUB)
+        _zmq_socket.setsockopt(zmq.CONFLATE, 1)
+        _zmq_socket.connect(f"tcp://{host}:{port}")
+        _zmq_socket.subscribe(topic.encode("utf-8"))
 
-                if timeout and timeout < counter * check_period:
-                    raise TimeoutError(f"{self}: receive timeout!")
+        # Create subscription
+        sub = Subscription(
+            id=id,
+            host=host,
+            port=port,
+            topic=topic,
+            socket=_zmq_socket,
+        )
+        self.subscriptions[id] = sub
+        self.socket_to_sub_name_mapping[_zmq_socket] = id
+
+    def unsubscribe(self, id: str):
+
+        # Close the socket
+        sub = self.subscriptions[id]
+        sub.socket.close()
+
+        # Remove from the list
+        del self.subscriptions[id]
+        del self.socket_to_sub_name_mapping[sub.socket]
+
+    def __str__(self):
+        return f"<Subscriber for {list(self.subscriptions.keys())}>"
+
+    @property
+    def running(self):
+        return self._running
+
+    async def poll_inputs(self):
+
+        while self._running:
+
+            # Wait until we get data from any of the subscribers
+            event_list = await self.poller.poll(timeout=10)
+            events = dict(event_list)
+
+            # Empty if no events
+            if len(events) == 0:
+                continue
+
+            datas: Dict[str, bytes] = {}
+            for s in events:
+                data = await s.recv()
+                datas[self.socket_to_sub_name_mapping[s]] = data
+
+            if self._on_receive:
+                if asyncio.iscoroutinefunction(self._on_receive):
+                    await self._on_receive(datas)
                 else:
-                    continue
+                    self._on_receive(datas)
 
-            else:  # Hit
-                return self._data_chunk
+    async def start(self):
 
-    def start(self):
-
-        # Mark that the Subscriber is running
-        self.running = True
+        # Warning if no "on" function is specified
+        if not self._on_receive:
+            logger.warning(f"{self}: no 'on' function specified")
 
         # Create poller to make smart non-blocking IO
-        self._zmq_poller = zmq.Poller()
-        self._zmq_poller.register(self._zmq_socket, zmq.POLLIN)
+        self.poller = zmq.asyncio.Poller()
+        for sub in self.subscriptions.values():
+            self.poller.register(sub.socket, zmq.POLLIN)
 
-        # Create thread
-        self._ready = threading.Event()
-        self._ready.clear()
-        self._receive_thread = threading.Thread(target=self.receive_loop)
-        self._receive_thread.start()
+        # Create a task to run the receive loop
+        self._running = True
+        self._poll_task = asyncio.create_task(self.poll_inputs())
 
-    def shutdown(self):
+    def on_receive(self, fn: Union[Callable, Coroutine]):
+        self._on_receive = fn
 
-        if self.running:
+    async def shutdown(self):
+
+        if self._running:
 
             # Stop the thread
-            self.running = False
-            self._receive_thread.join()
+            self._running = False
+            await self._poll_task
 
-        # And then close the socket
-        self._zmq_socket.close()
-        self._zmq_context.term()
+            subs = list(self.subscriptions.keys())
+            for sub in subs:
+                self.unsubscribe(sub)
