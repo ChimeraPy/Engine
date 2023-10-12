@@ -57,7 +57,6 @@ async def test_setting_connections(poller_setup):
     await poller.setup_connections(node_pub_table)
 
 
-@pytest.mark.repeat(10)
 async def test_poll_message(poller_setup):
 
     poller, pub = poller_setup

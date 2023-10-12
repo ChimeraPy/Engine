@@ -34,8 +34,7 @@ class ShowWindow(cpe.Node):
 
         for name, data_chunk in data_chunks.items():
             # self.logger.debug(f"{self}: got from {name}, data={data_chunk}")
-            frame = data_chunk.get("frame")["value"]
-            cv2.imshow(name, frame.astype(np.uint8))
+            cv2.imshow(name, data_chunk.get("frame")["value"])
             cv2.waitKey(1)
 
 
