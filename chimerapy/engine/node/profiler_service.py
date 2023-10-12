@@ -1,21 +1,22 @@
+import datetime
+import logging
 import os
 import pickle
-import logging
-import datetime
 from collections import deque
-from typing import Dict, Optional, Any, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from psutil import Process
 
 from chimerapy.engine import config
-from ..data_protocols import NodeDiagnostics
+
 from ..async_timer import AsyncTimer
+from ..data_protocols import NodeDiagnostics
+from ..eventbus import Event, EventBus, TypedObserver
 from ..networking.data_chunk import DataChunk
 from ..service import Service
-from ..eventbus import EventBus, TypedObserver, Event
 from ..states import NodeState
-from .events import NewOutBoundDataEvent, DiagnosticsReportEvent, EnableDiagnosticsEvent
+from .events import DiagnosticsReportEvent, EnableDiagnosticsEvent, NewOutBoundDataEvent
 
 
 class ProfilerService(Service):

@@ -1,16 +1,15 @@
 import datetime
-import uuid
 import pathlib
 import tempfile
+import uuid
 
-import pytest
 import numpy as np
+import pytest
 
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.node.record_service import RecordService
 from chimerapy.engine.states import NodeState
-from chimerapy.engine.eventbus import EventBus
-
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

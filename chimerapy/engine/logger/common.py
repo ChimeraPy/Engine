@@ -3,7 +3,7 @@ from datetime import datetime
 from logging import Filter, Formatter, Handler, StreamHandler
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Union, Dict
+from typing import Dict, Union
 
 MAX_BYTES_PER_FILE = 100 * 1024 * 1024  # 100MB
 

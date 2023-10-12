@@ -1,15 +1,15 @@
 # Built-in Imports
-from typing import Dict, Any
 import pathlib
+from datetime import datetime
+from typing import Any, Dict
+
+import cv2
 
 # Third-party Imports
 import numpy as np
-import cv2
 
 # Internal Imports
 from .record import Record
-
-from datetime import datetime
 
 
 class VideoRecord(Record):

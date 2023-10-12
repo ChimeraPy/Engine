@@ -1,22 +1,22 @@
-import pathlib
 import logging
+import pathlib
 import tempfile
 from typing import Dict, Optional
 
+from ..data_protocols import NodeDiagnostics, NodePubTable
+from ..eventbus import Event, EventBus, TypedObserver
 from ..networking import Client
-from ..states import NodeState
-from ..networking.enums import GENERAL_MESSAGE, WORKER_MESSAGE, NODE_MESSAGE
-from ..data_protocols import NodePubTable, NodeDiagnostics
+from ..networking.enums import GENERAL_MESSAGE, NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
-from ..eventbus import EventBus, Event, TypedObserver
-from .node_config import NodeConfig
+from ..states import NodeState
 from .events import (
+    DiagnosticsReportEvent,
     EnableDiagnosticsEvent,
+    GatherEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
-    GatherEvent,
-    DiagnosticsReportEvent,
 )
+from .node_config import NodeConfig
 
 
 class WorkerCommsService(Service):

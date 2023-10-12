@@ -1,15 +1,14 @@
 # Built-in
-from typing import Optional, Union, Dict, Callable, Coroutine
 import asyncio
 import uuid
 from dataclasses import dataclass
+from typing import Callable, Coroutine, Dict, Optional, Union
 
 # Third-party Imports
 import zmq
 import zmq.asyncio
 
 # Internal Imports
-
 # Logging
 from chimerapy.engine import _logger
 

@@ -6,12 +6,12 @@ import pytest
 
 import chimerapy.engine as cpe
 from chimerapy.engine import config
-from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
+from chimerapy.engine.eventbus import Event, EventBus, make_evented
 from chimerapy.engine.manager.http_server_service import HttpServerService
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.states import ManagerState
 
-from ..conftest import GenNode, ConsumeNode
+from ..conftest import ConsumeNode, GenNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

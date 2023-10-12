@@ -1,8 +1,8 @@
 import abc
 import asyncio
+from concurrent.futures import Future, ThreadPoolExecutor
 from functools import partial
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import List, Awaitable, Callable, Union, Optional
+from typing import Awaitable, Callable, List, Optional, Union
 
 import multiprocess as mp
 

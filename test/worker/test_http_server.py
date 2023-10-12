@@ -1,23 +1,21 @@
-import pickle
 import json
+import pickle
 
 import aiohttp
-
 import pytest
 from pytest_lazyfixture import lazy_fixture
 
-from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.networking.data_chunk import DataChunk
-from chimerapy.engine.networking.client import Client
-from chimerapy.engine.networking.enums import NODE_MESSAGE
-from chimerapy.engine.data_protocols import NodePubTable, NodeDiagnostics
-from chimerapy.engine.eventbus import EventBus
-from chimerapy.engine.states import WorkerState, NodeState
-from chimerapy.engine.node.node_config import NodeConfig
 from chimerapy.engine import _logger
+from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
+from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.networking.client import Client
+from chimerapy.engine.networking.data_chunk import DataChunk
+from chimerapy.engine.networking.enums import NODE_MESSAGE
+from chimerapy.engine.node.node_config import NodeConfig
+from chimerapy.engine.states import NodeState, WorkerState
+from chimerapy.engine.worker.http_server_service import HttpServerService
 
 from ..conftest import TEST_DATA_DIR
-
 
 logger = _logger.getLogger("chimerapy-engine-worker")
 

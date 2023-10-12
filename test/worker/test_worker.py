@@ -1,7 +1,7 @@
 import chimerapy.engine as cpe
 
-from ..streams.data_nodes import VideoNode, AudioNode, ImageNode, TabularNode
 from ..networking.test_client_server import server
+from ..streams.data_nodes import AudioNode, ImageNode, TabularNode, VideoNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()

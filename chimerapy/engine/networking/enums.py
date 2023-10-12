@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 # Server <--> Client
 class GENERAL_MESSAGE(Enum):  # Used only Client and Server
     SHUTDOWN = -1

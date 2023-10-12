@@ -1,14 +1,14 @@
-import logging
 import datetime
-from typing import Optional, Dict, List
-
+import logging
+from typing import Dict, List, Optional
 
 from chimerapy.engine import _logger
-from ..states import NodeState
-from ..networking import Subscriber, DataChunk
-from ..data_protocols import NodePubTable, NodePubEntry
+
+from ..data_protocols import NodePubEntry, NodePubTable
+from ..eventbus import Event, EventBus, TypedObserver
+from ..networking import DataChunk, Subscriber
 from ..service import Service
-from ..eventbus import EventBus, Event, TypedObserver
+from ..states import NodeState
 from .events import NewInBoundDataEvent, ProcessNodePubTableEvent
 
 

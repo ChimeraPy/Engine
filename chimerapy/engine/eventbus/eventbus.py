@@ -1,22 +1,22 @@
-import uuid
 import asyncio
-from datetime import datetime
+import uuid
 from collections import deque
 from concurrent.futures import Future
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import (
     Any,
-    Generic,
-    Type,
-    Callable,
     Awaitable,
-    Optional,
-    Literal,
-    TypeVar,
+    Callable,
     Dict,
+    Generic,
+    Literal,
+    Optional,
+    Type,
+    TypeVar,
 )
 
 from aioreactive import AsyncObservable, AsyncObserver, AsyncSubject
-from dataclasses import dataclass, field
 
 from .. import _logger
 from ..networking.async_loop_thread import AsyncLoopThread

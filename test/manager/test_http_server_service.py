@@ -3,8 +3,8 @@ import json
 import aiohttp
 import pytest
 
-from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.eventbus import EventBus, make_evented
+from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.states import ManagerState, WorkerState
 
 from ..conftest import TEST_DATA_DIR

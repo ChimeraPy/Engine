@@ -1,7 +1,8 @@
-from .conftest import linux_run_only
+import pytest
+
 import chimerapy.engine as cpe
 
-import pytest
+from .conftest import linux_run_only
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

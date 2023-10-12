@@ -1,9 +1,8 @@
 import logging
-from logging.handlers import BufferingHandler
-import uuid
-from multiprocessing import Process
 import time
-
+import uuid
+from logging.handlers import BufferingHandler
+from multiprocessing import Process
 
 from chimerapy.engine.logger.zmq_handlers import (
     NodeIDZMQPullListener,

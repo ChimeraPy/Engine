@@ -1,6 +1,6 @@
 import asyncio
-import time
 import tempfile
+import time
 from typing import Dict
 
 import tqdm

@@ -1,22 +1,22 @@
 import traceback
 from concurrent.futures import Future
-from typing import List, Dict
+from typing import Dict, List
 
 from aiohttp import web
 
-from chimerapy.engine import config
-from chimerapy.engine import _logger
-from ..eventbus import EventBus, Event, TypedObserver
-from ..service import Service
-from ..utils import update_dataclass
-from ..states import WorkerState, ManagerState
+from chimerapy.engine import _logger, config
+
+from ..eventbus import Event, EventBus, TypedObserver
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
+from ..service import Service
+from ..states import ManagerState, WorkerState
+from ..utils import update_dataclass
 from .events import (
     MoveTransferredFilesEvent,
-    WorkerRegisterEvent,
-    WorkerDeregisterEvent,
     UpdateSendArchiveEvent,
+    WorkerDeregisterEvent,
+    WorkerRegisterEvent,
 )
 
 logger = _logger.getLogger("chimerapy-engine")

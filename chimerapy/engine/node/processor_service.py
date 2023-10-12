@@ -1,25 +1,26 @@
-import threading
-import traceback
+import asyncio
 import datetime
 import logging
-import asyncio
+import threading
 import time
-from typing import Dict, List, Optional, Callable, Coroutine, Any, Literal
+import traceback
+from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional
 
 from chimerapy.engine import _logger
+
+from ..eventbus import Event, EventBus, TypedObserver
+from ..networking import DataChunk
 from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
-from ..networking import DataChunk
-from ..states import NodeState
-from ..eventbus import EventBus, Event, TypedObserver
 from ..service import Service
-from .registered_method import RegisteredMethod
+from ..states import NodeState
 from .events import (
+    GatherEvent,
     NewInBoundDataEvent,
     NewOutBoundDataEvent,
     RegisteredMethodEvent,
-    GatherEvent,
 )
+from .registered_method import RegisteredMethod
 
 
 class ProcessorService(Service):

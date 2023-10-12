@@ -1,13 +1,14 @@
 import socket
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 from zeroconf import ServiceInfo, Zeroconf
 
 from chimerapy.engine import _logger
-from ..states import ManagerState
+
 from ..eventbus import EventBus, TypedObserver
 from ..service import Service
+from ..states import ManagerState
 
 logger = _logger.getLogger("chimerapy-engine")
 

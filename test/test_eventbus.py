@@ -1,20 +1,20 @@
 import asyncio
 from dataclasses import dataclass
-from dataclasses_json import DataClassJsonMixin
-from typing import List, Any, Dict
+from typing import Any, Dict, List
 
 import pytest
+from dataclasses_json import DataClassJsonMixin
 
 import chimerapy.engine as cpe
 from chimerapy.engine.eventbus import (
+    Event,
     EventBus,
     TypedObserver,
-    Event,
-    evented,
     configure,
+    evented,
     make_evented,
 )
-from chimerapy.engine.states import ManagerState, WorkerState, NodeState
+from chimerapy.engine.states import ManagerState, NodeState, WorkerState
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

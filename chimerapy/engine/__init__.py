@@ -1,16 +1,12 @@
 # Class Imports
-from .node import Node, register, NodeConfig
-from .worker import Worker
-from .manager import Manager
-from .graph import Graph
-from . import _logger
-from . import _loop
-from .networking import DataChunk
-
 # Utils Imports
-from . import utils
+from . import _logger, _loop, config, utils
 from ._debug import debug
-from . import config
+from .graph import Graph
+from .manager import Manager
+from .networking import DataChunk
+from .node import Node, NodeConfig, register
+from .worker import Worker
 
 # Logger setup
 _loop.setup()

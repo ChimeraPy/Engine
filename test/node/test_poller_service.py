@@ -3,13 +3,12 @@ import asyncio
 import pytest
 
 import chimerapy.engine as cpe
-from chimerapy.engine.node.poller_service import PollerService
-from chimerapy.engine.states import NodeState
+from chimerapy.engine.data_protocols import NodePubEntry, NodePubTable
 from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.publisher import Publisher
-from chimerapy.engine.data_protocols import NodePubTable, NodePubEntry
-
+from chimerapy.engine.node.poller_service import PollerService
+from chimerapy.engine.states import NodeState
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

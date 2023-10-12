@@ -1,13 +1,13 @@
 from typing import Dict, Optional
 
-from chimerapy.engine import config
-from chimerapy.engine import _logger
-from ..utils import megabytes_to_bytes
+from chimerapy.engine import _logger, config
+
 from ..eventbus import EventBus, TypedObserver
+from ..logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
 from ..service import Service
 from ..states import ManagerState
-from ..logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
-from .events import RegisterEntityEvent, DeregisterEntityEvent
+from ..utils import megabytes_to_bytes
+from .events import DeregisterEntityEvent, RegisterEntityEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 

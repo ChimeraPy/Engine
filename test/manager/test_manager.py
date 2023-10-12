@@ -1,12 +1,13 @@
-import time
+import asyncio
 import os
 import pathlib
-import asyncio
+import time
 
 import pytest
 
 import chimerapy.engine as cpe
-from ..conftest import GenNode, ConsumeNode, TEST_DATA_DIR
+
+from ..conftest import TEST_DATA_DIR, ConsumeNode, GenNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

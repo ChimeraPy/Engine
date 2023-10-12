@@ -1,36 +1,37 @@
-import warnings
-import logging
 import asyncio
-from typing import Dict, Any, Union, Type
+import logging
+import warnings
+from typing import Any, Dict, Type, Union
 
 # Third-party Imports
 import dill
 import multiprocess as mp
 
 from chimerapy.engine import config
-from ...logger.zmq_handlers import NodeIDZMQPullListener
-from ...service import Service
-from ...node.node_config import NodeConfig
+
 from ...data_protocols import NodePubTable
-from ...node.worker_comms_service import WorkerCommsService
-from ...states import NodeState, WorkerState
+from ...eventbus import Event, EventBus, TypedObserver
+from ...logger.zmq_handlers import NodeIDZMQPullListener
 from ...networking import DataChunk
 from ...networking.enums import WORKER_MESSAGE
+from ...node.node_config import NodeConfig
+from ...node.worker_comms_service import WorkerCommsService
+from ...service import Service
+from ...states import NodeState, WorkerState
 from ...utils import async_waiting_for
-from ...eventbus import EventBus, TypedObserver, Event
 from ..events import (
-    EnableDiagnosticsEvent,
     BroadcastEvent,
-    SendMessageEvent,
     CreateNodeEvent,
     DestroyNodeEvent,
+    EnableDiagnosticsEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
-    UpdateResultsEvent,
+    SendMessageEvent,
     UpdateGatherEvent,
+    UpdateResultsEvent,
 )
-from .node_controller import NodeController, ThreadNodeController, MPNodeController
-from .context_session import MPSession, ThreadSession, ContextSession
+from .context_session import ContextSession, MPSession, ThreadSession
+from .node_controller import MPNodeController, NodeController, ThreadNodeController
 
 
 class NodeHandlerService(Service):

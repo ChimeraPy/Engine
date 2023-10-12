@@ -4,10 +4,10 @@ import time
 import tqdm
 
 import chimerapy.engine as cpe
-from chimerapy.engine.worker.node_handler_service import NodeHandlerService
-from chimerapy.engine.worker.http_server_service import HttpServerService
-from chimerapy.engine.eventbus import EventBus, make_evented, Event
+from chimerapy.engine.eventbus import Event, EventBus, make_evented
 from chimerapy.engine.states import WorkerState
+from chimerapy.engine.worker.http_server_service import HttpServerService
+from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 

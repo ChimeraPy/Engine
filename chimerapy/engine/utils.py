@@ -1,17 +1,16 @@
-import queue
-import json
-import time
-import enum
-import datetime
-import uuid
-import socket
 import asyncio
+import datetime
+import enum
 import errno
+import json
+import queue
+import socket
+import time
+import uuid
 from concurrent.futures import Future
-from typing import Callable, Union, Optional, Any, Dict, Coroutine, Tuple
+from typing import Any, Callable, Coroutine, Dict, Optional, Tuple, Union
 
 # Third-party
-
 # Internal
 from chimerapy.engine import _logger
 

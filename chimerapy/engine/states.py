@@ -1,12 +1,13 @@
 import pathlib
-import uuid
 import tempfile
-from typing import Dict, Optional, Literal
+import uuid
 from dataclasses import dataclass, field
+from typing import Dict, Literal, Optional
+
 from dataclasses_json import DataClassJsonMixin, cfg
 
-from .node.registered_method import RegisteredMethod
 from .data_protocols import NodeDiagnostics
+from .node.registered_method import RegisteredMethod
 
 # As https://github.com/lidatong/dataclasses-json/issues/202#issuecomment-1186373078
 cfg.global_config.encoders[pathlib.Path] = str

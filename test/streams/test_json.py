@@ -1,17 +1,17 @@
 # Built-in Imports
+import asyncio
+import json
 import os
 import pathlib
 import uuid
-import asyncio
-import json
 
 # Third-party
 import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.json_record import JSONRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import JSONNode
 

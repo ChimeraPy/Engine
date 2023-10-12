@@ -2,14 +2,15 @@
 import asyncio
 import os
 import pathlib
-import uuid
 import time
+import uuid
 
 # Third-party
 import pytest
+
 import chimerapy.engine as cpe
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.tabular_record import TabularRecord
-from chimerapy.engine.eventbus import EventBus, Event
 
 from .data_nodes import TabularNode
 

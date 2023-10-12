@@ -1,34 +1,34 @@
-import pickle
 import asyncio
 import enum
 import logging
 import pathlib
+import pickle
 from typing import Dict, List
 
 from aiohttp import web
 
-from ..service import Service
-from ..states import NodeState, WorkerState
 from ..data_protocols import (
-    NodePubTable,
-    NodePubEntry,
     NodeDiagnostics,
+    NodePubEntry,
+    NodePubTable,
 )
+from ..eventbus import Event, EventBus, TypedObserver
 from ..networking import Server
 from ..networking.enums import NODE_MESSAGE
+from ..service import Service
+from ..states import NodeState, WorkerState
 from ..utils import update_dataclass
-from ..eventbus import EventBus, Event, TypedObserver
 from .events import (
-    EnableDiagnosticsEvent,
+    BroadcastEvent,
     CreateNodeEvent,
     DestroyNodeEvent,
+    EnableDiagnosticsEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
+    SendArchiveEvent,
+    SendMessageEvent,
     UpdateGatherEvent,
     UpdateResultsEvent,
-    BroadcastEvent,
-    SendMessageEvent,
-    SendArchiveEvent,
 )
 
 

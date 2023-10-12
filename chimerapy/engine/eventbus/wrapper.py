@@ -1,8 +1,9 @@
-import dataclasses_json
 from dataclasses import dataclass, fields, is_dataclass
-from typing import Any, TypeVar, Optional
+from typing import Any, Optional, TypeVar
 
-from .eventbus import EventBus, Event
+import dataclasses_json
+
+from .eventbus import Event, EventBus
 from .observables import ObservableDict, ObservableList
 
 T = TypeVar("T")

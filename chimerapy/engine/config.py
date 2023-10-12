@@ -1,7 +1,7 @@
 # Built-in Imports
-from typing import Dict, Any
-import pathlib
 import os
+import pathlib
+from typing import Any, Dict
 
 # Third-party Imports
 import yaml

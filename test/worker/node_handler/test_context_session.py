@@ -1,5 +1,5 @@
-import time
 import asyncio
+import time
 
 import multiprocess as mp
 

@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict
 
 import pytest
+
 import chimerapy.engine as cpe
 from chimerapy.engine.networking import Client
 from chimerapy.engine.networking.enums import MANAGER_MESSAGE

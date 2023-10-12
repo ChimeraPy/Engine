@@ -1,9 +1,9 @@
 import logging
 from typing import Dict
 
-from ..states import NodeState
-from ..service import Service
 from ..eventbus import EventBus, TypedObserver
+from ..service import Service
+from ..states import NodeState
 
 
 class FSMService(Service):

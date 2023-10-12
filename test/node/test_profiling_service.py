@@ -1,17 +1,17 @@
 import pathlib
-import tempfile
 import random
+import tempfile
 
 import numpy as np
 import pytest
 
 import chimerapy.engine as cpe
 from chimerapy.engine import config
-from chimerapy.engine.node.profiler_service import ProfilerService
-from chimerapy.engine.node.events import NewOutBoundDataEvent
-from chimerapy.engine.states import NodeState
-from chimerapy.engine.eventbus import EventBus, Event
+from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.networking.data_chunk import DataChunk
+from chimerapy.engine.node.events import NewOutBoundDataEvent
+from chimerapy.engine.node.profiler_service import ProfilerService
+from chimerapy.engine.states import NodeState
 
 # from ..conftest import TEST_DATA_DIR
 

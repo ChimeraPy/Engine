@@ -1,10 +1,10 @@
-import time
+import asyncio
 import logging
-import pathlib
 import os
+import pathlib
 import platform
 import sys
-import asyncio
+import time
 from typing import Dict
 
 import docker

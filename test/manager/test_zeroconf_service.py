@@ -1,13 +1,12 @@
 import asyncio
 import logging
 
-from zeroconf import Zeroconf, ServiceInfo, ServiceListener, ServiceBrowser
-import zeroconf
-
 import pytest
+import zeroconf
+from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
-from chimerapy.engine.manager.zeroconf_service import ZeroconfService
 from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.manager.zeroconf_service import ZeroconfService
 from chimerapy.engine.states import ManagerState
 
 logger = logging.getLogger("chimerapy-engine")

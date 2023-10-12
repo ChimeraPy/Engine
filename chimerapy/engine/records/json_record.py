@@ -1,10 +1,9 @@
 # Built-in Imports
 import json
-from typing import Dict, Any, Optional, IO
 import pathlib
+from typing import IO, Any, Dict, Optional
 
 # Third-party Imports
-
 # Internal Import
 from .record import Record
 

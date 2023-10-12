@@ -1,4 +1,4 @@
-from .data_nodes import VideoNode, AudioNode, TabularNode, ImageNode
+from .data_nodes import AudioNode, ImageNode, TabularNode, VideoNode
 
 __all__ = [
     "VideoNode",
