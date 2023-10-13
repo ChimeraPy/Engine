@@ -87,10 +87,6 @@ homepath = "https://github.com/ChimeraPy"
 documentation = "https://chimerapy-engine.readthedocs.io/en/latest/index.html"
 repository = "https://github.com/ChimeraPy/Engine"
 
-# Entrypoint
-[project.scripts]
-cp-worker = "chimerapy.engine.entry.worker:main"
-
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
