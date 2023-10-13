@@ -53,9 +53,9 @@ class FileTransferServer:
 
             if not data:
                 await socket.send_multipart([identity, b"okay"])
-                break
-
-            await socket.send_multipart([identity, data])
+                continue
+            else:
+                await socket.send_multipart([identity, data])
 
 
 if __name__ == "__main__":
