@@ -47,7 +47,7 @@ class FileTransferClient:
             try:
                 chunk = await socket.recv()
                 if chunk == b"okay":
-                    break
+                    await file.close()
             except zmq.ZMQError as e:
                 if e.errno == zmq.ETERM:
                     break
@@ -59,12 +59,9 @@ class FileTransferClient:
             credit += 1
             size = len(chunk)
             total += size
-            if size < chunk_size:
-                break
-
             print(f"Received {total} bytes in {chunks} chunks.")
 
-        await file.close()
+
 
 
 if __name__ == "__main__":
