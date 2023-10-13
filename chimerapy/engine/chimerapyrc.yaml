@@ -35,6 +35,9 @@ config:
       client-shutdown: 10
       server-shutdown: 15
       pub-delay: 1
+    file-transfer:
+      chunk-size: 1000000 # bytes
+      max-chunks: 100
   diagnostics:
     deque-length: 10000
     interval: 10
