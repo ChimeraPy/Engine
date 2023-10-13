@@ -1,7 +1,6 @@
 import os
 from asyncio import Event
 from pathlib import Path
-
 import zmq
 import zmq.asyncio
 
@@ -14,13 +13,10 @@ def set_socket_hwm(socket: zmq.Socket, hwm: int):
 
 
 class FileTransferServer:
-    """A server for file transfer with ZeroMQ Router-Dealer pattern."""
-
     def __init__(self, port: int, context: zmq.asyncio.Context):
         self._port = port
         self._context = context
         self._fp = None
-        self._stop_event = Event()
 
     async def mount(self, filepath: Path):
         assert filepath.exists(), f"File {filepath} does not exist."
@@ -32,6 +28,7 @@ class FileTransferServer:
         set_socket_hwm(socket, cpe_config.get("comms.file-transfer.max-chunks"))
         socket.bind(f"tcp://*:{self._port}")
         print(f"File transfer server started on port {self._port}.")
+
         while True:
             try:
                 msg = await socket.recv_multipart()
@@ -52,7 +49,7 @@ class FileTransferServer:
             data = self._fp.read(chunksize)
 
             if not data:
-                await socket.send_multipart([identity, b"okay"])
+                await socket.send_multipart([identity, b"EOF"])
                 continue
             else:
                 await socket.send_multipart([identity, data])

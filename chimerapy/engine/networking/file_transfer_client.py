@@ -11,8 +11,6 @@ def set_socket_hwm(socket: zmq.Socket, hwm: int):
 
 
 class FileTransferClient:
-    """A client for file transfer with ZeroMQ Router-Dealer pattern."""
-
     def __init__(self, ip: str, port: int, ctx: Context, dest_name: str):
         self.url = f"tcp://{ip}:{port}"
         self.ctx = ctx
@@ -22,31 +20,24 @@ class FileTransferClient:
         socket = self.ctx.socket(zmq.DEALER)
         set_socket_hwm(socket, cpe_config.get("comms.file-transfer.max-chunks"))
         socket.connect(self.url)
-
-        credit = cpe_config.get("comms.file-transfer.max-chunks")
-        chunk_size = cpe_config.get("comms.file-transfer.chunk-size")
+        chunk_size = cpe_config.get("comms.file-transfer.chunk-size")  # Replace with your actual chunk size
+        credit = cpe_config.get("comms.file-transfer.max-chunks")  # Replace with your actual credit
 
         file = await aiofiles.open(self.filename, mode="wb")
 
-        total = 0  # Total bytes received
-        chunks = 0  # Total chunks received
-        offset = 0  # Offset of next chunk request
+        total = 0
+        chunks = 0
+        offset = 0
 
         while True:
             while credit:
-                await socket.send_multipart(
-                    [
-                        b"fetch",
-                        b"%i" % offset,
-                        b"%i" % chunk_size,
-                    ]
-                )
+                await socket.send_multipart([b"fetch", b"%i" % offset, b"%i" % chunk_size])
                 credit -= 1
                 offset += chunk_size
 
             try:
                 chunk = await socket.recv()
-                if chunk == b"okay":
+                if chunk == b"EOF":
                     await file.close()
                     break
             except zmq.ZMQError as e:
@@ -55,14 +46,13 @@ class FileTransferClient:
                 else:
                     raise e
 
+            await file.seek(offset - chunk_size)  # move file pointer back
             await file.write(chunk)
-            chunks += 1
+
             credit += 1
-            size = len(chunk)
-            total += size
+            chunks += 1
+            total += len(chunk)
             print(f"Received {total} bytes in {chunks} chunks.")
-
-
 
 
 if __name__ == "__main__":
