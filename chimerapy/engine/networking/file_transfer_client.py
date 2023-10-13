@@ -5,6 +5,11 @@ from zmq.asyncio import Context
 import chimerapy.engine.config as cpe_config
 
 
+def set_socket_hwm(socket: zmq.Socket, hwm: int):
+    socket.sndhwm = hwm
+    socket.rcvhwm = hwm
+
+
 class FileTransferClient:
     """A client for file transfer with ZeroMQ Router-Dealer pattern."""
 
@@ -15,6 +20,7 @@ class FileTransferClient:
 
     async def recv(self):
         socket = self.ctx.socket(zmq.DEALER)
+        set_socket_hwm(socket, cpe_config.get("comms.file-transfer.max-chunks"))
         socket.connect(self.url)
 
         credit = cpe_config.get("comms.file-transfer.max-chunks")
