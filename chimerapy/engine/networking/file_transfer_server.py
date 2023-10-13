@@ -52,6 +52,7 @@ class FileTransferServer:
             data = self._fp.read(chunksize)
 
             if not data:
+                await socket.send_multipart([identity, b"okay"])
                 break
 
             await socket.send_multipart([identity, data])

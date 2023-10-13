@@ -40,6 +40,8 @@ class FileTransferClient:
 
             try:
                 chunk = await socket.recv()
+                if chunk == b"okay":
+                    break
             except zmq.ZMQError as e:
                 if e.errno == zmq.ETERM:
                     break
