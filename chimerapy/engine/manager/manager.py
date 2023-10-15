@@ -339,14 +339,16 @@ class Manager:
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)
 
-    async def async_shutdown(self) -> bool:
+    async def async_shutdown(self, shutdown_workers=True) -> bool:
 
         # Only let shutdown happen once
         if self.has_shutdown:
             # logger.debug(f"{self}: requested to shutdown twice, skipping.")
             return True
 
-        await self.eventbus.asend(Event("shutdown"))
+        await self.eventbus.asend(
+            Event("shutdown", {"shutdown_workers": shutdown_workers})
+        )
         self.has_shutdown = True
 
         return True
@@ -489,14 +491,16 @@ class Manager:
 
         return future
 
-    def shutdown(self, blocking: bool = True) -> Union[bool, Future[bool]]:
+    def shutdown(
+        self, blocking: bool = True, shutdown_workers: bool = True
+    ) -> Union[bool, Future[bool]]:
         """Proper shutting down ChimeraPy-Engine cluster.
 
         Through this method, the ``Manager`` broadcast to all ``Workers``
         to shutdown, in which they will stop their processes and threads safely.
 
         """
-        future = self._exec_coro(self.async_shutdown())
+        future = self._exec_coro(self.async_shutdown(shutdown_workers=shutdown_workers))
         if blocking:
             return future.result(timeout=config.get("manager.timeout.worker-shutdown"))
         return future

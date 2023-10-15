@@ -69,6 +69,7 @@ class HttpServerService(Service):
                 web.post("/nodes/diagnostics", self._async_diagnostics_route),
                 # web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
+                web.post("/manager-shutdown", self._async_manager_shutdown_route),
             ],
             ws_handlers={
                 NODE_MESSAGE.STATUS: self._async_node_status_update,
@@ -302,6 +303,12 @@ class HttpServerService(Service):
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
         self.tasks.append(asyncio.create_task(self.eventbus.asend(Event("shutdown"))))
 
+        return web.HTTPOk()
+
+    async def _async_manager_shutdown_route(self, request: web.Request) -> web.Response:
+        self.tasks.append(
+            asyncio.create_task(self.eventbus.asend(Event("manager_shutdown")))
+        )
         return web.HTTPOk()
 
     ####################################################################

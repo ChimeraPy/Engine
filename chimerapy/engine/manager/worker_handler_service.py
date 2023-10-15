@@ -61,7 +61,7 @@ class WorkerHandlerService(Service):
         # Specify observers
         self.observers: Dict[str, TypedObserver] = {
             "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
+                "shutdown", on_asend=self.shutdown, handle_event="pass"
             ),
             "worker_register": TypedObserver(
                 "worker_register",
@@ -85,27 +85,42 @@ class WorkerHandlerService(Service):
         for ob in self.observers.values():
             await self.eventbus.asubscribe(ob)
 
-    async def shutdown(self) -> bool:
+    async def shutdown(self, shutdown_event: Event) -> bool:
 
         # If workers are connected, let's notify them that the cluster is
         # shutting down
         success = True
+        params = shutdown_event.data
 
         if len(self.state.workers) > 0:
+            if params["shutdown_workers"]:
+                # Send shutdown message
+                try:
+                    success = await self._broadcast_request(
+                        "post",
+                        "/shutdown",
+                        timeout=config.get("manager.timeout.worker-shutdown"),
+                        report_exceptions=False,
+                    )
+                except Exception:
+                    success = False
 
-            # Send shutdown message
-            try:
-                success = await self._broadcast_request(
-                    "post",
-                    "/shutdown",
-                    timeout=config.get("manager.timeout.worker-shutdown"),
-                    report_exceptions=False,
-                )
-            except Exception:
-                success = False
+                if not success:
+                    logger.warning(f"{self}: All workers shutdown: FAILED - forced")
+            else:
+                try:
+                    # Signal workers that manager is shutdown
+                    success = await self._broadcast_request(
+                        "post",
+                        "/manager-shutdown",
+                        timeout=config.get("manager.timeout.worker-shutdown"),
+                        report_exceptions=False,
+                    )
+                except Exception:
+                    success = False
 
-            if not success:
-                logger.warning(f"{self}: All workers shutdown: FAILED - forced")
+                if not success:
+                    logger.warning(f"{self}: Signaling workers shutdown failed.")
 
         # Close the HTTP client
         await self.http_client.close()

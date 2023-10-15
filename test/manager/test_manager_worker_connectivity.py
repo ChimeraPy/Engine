@@ -96,3 +96,19 @@ async def test_manager_shutting_down_ungracefully():
     # Only shutting Manager
     await manager.async_shutdown()
     await worker.async_shutdown()
+
+
+async def test_manager_shutting_down_no_worker_shutdown():
+    manager = cpe.Manager(logdir=TEST_DATA_DIR, port=0)
+    await manager.aserve()
+    worker = cpe.Worker(name="local", port=0)
+    await worker.aserve()
+
+    # Connect to the Manager
+    await worker.async_connect(method="ip", host=manager.host, port=manager.port)
+
+    # Only shutting Manager
+    await manager.async_shutdown(shutdown_workers=False)
+    assert not worker.http_client.connected_to_manager
+
+    await worker.async_shutdown()

@@ -14,7 +14,7 @@ from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import Event, EventBus, TypedObserver
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking import Client
 from ..service import Service
@@ -58,6 +58,9 @@ class HttpClientService(Service):
             "shutdown": TypedObserver(
                 "shutdown", on_asend=self.shutdown, handle_event="drop"
             ),
+            "manager_shutdown": TypedObserver(
+                "manager_shutdown", on_asend=self._manager_shutdown, handle_event="drop"
+            ),
             "WorkerState.changed": TypedObserver(
                 "WorkerState.changed",
                 on_asend=self._async_node_status_update,
@@ -88,6 +91,14 @@ class HttpClientService(Service):
 
         await self.http_client.close()
 
+        return success
+
+    async def _manager_shutdown(self) -> bool:
+        success = True
+        if self.connected_to_manager:
+            self.connected_to_manager = False
+        # May be broadcast events
+        await self.eventbus.asend(Event("WorkerState.changed"))
         return success
 
     ###################################################################################
