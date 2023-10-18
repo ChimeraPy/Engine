@@ -336,6 +336,9 @@ class Manager:
     async def async_collect(self) -> bool:
         return await self.worker_handler.collect()
 
+    async def async_collect_v2(self) -> bool:
+        return await self.worker_handler.collect_v2()
+
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)
 
@@ -478,6 +481,18 @@ class Manager:
 
         """
         return self._exec_coro(self.async_collect())
+
+    def collect_v2(self) -> Future[bool]:
+        """Collect data from the Workers
+
+        First, we wait until all the Nodes have finished save their data.\
+        Then, manager request that Nodes' from the Workers.
+
+        Returns:
+            Future[bool]: Future of success in collect data from Workers
+
+        """
+        return self._exec_coro(self.async_collect_v2())
 
     def reset(
         self, keep_workers: bool = True, blocking: bool = True

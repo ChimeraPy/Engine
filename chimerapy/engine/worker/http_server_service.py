@@ -3,9 +3,12 @@ import enum
 import logging
 import pathlib
 import pickle
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
+import zmq
+import zmq.asyncio
 from aiohttp import web
+import os
 
 from ..data_protocols import (
     NodeDiagnostics,
@@ -30,6 +33,47 @@ from .events import (
     UpdateGatherEvent,
     UpdateResultsEvent,
 )
+from chimerapy.engine import config
+
+
+class ZMQFileServer:
+    def __init__(self, ctx: zmq.asyncio.Context, host="*", port=6000):
+        self.host = host
+        self.port = port
+        self.ctx = ctx
+        self.socket = None
+
+    async def mount(self, file: pathlib.Path):
+        file = open(file, "rb")
+        router = self.ctx.socket(zmq.ROUTER)
+
+        router.sndhwm = router.rcvhwm = config.get("file-transfer.max-chunks")
+        router.bind("tcp://*:6000")
+
+        while True:
+            try:
+                msg = await router.recv_multipart()
+            except zmq.ZMQError as e:
+                if e.errno == zmq.ETERM:
+                    return
+                else:
+                    raise
+
+            identity, command, offset_str, chunksz_str, seq_nostr = msg
+
+            assert command == b"fetch"
+            offset = int(offset_str)
+            chunksz = int(chunksz_str)
+            seq_no = int(seq_nostr)
+            file.seek(offset, os.SEEK_SET)
+            data = file.read(chunksz)
+            print(f"sending {offset} {chunksz} {seq_no} {len(data)}")
+
+            if not data:
+                await asyncio.sleep(5)
+                break
+
+            await router.send_multipart([identity, data, b"%i" % seq_no])
 
 
 class HttpServerService(Service):
@@ -60,6 +104,7 @@ class HttpServerService(Service):
                 web.get("/nodes/pub_table", self._async_get_node_pub_table),
                 web.post("/nodes/pub_table", self._async_process_node_pub_table),
                 web.get("/nodes/gather", self._async_report_node_gather),
+                web.post("/nodes/request_collect", self._async_request_collect),
                 web.post("/nodes/collect", self._async_collect),
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/nodes/start", self._async_start_nodes_route),
@@ -289,6 +334,33 @@ class HttpServerService(Service):
         data = await request.json()
         asyncio.create_task(self._collect_and_send(pathlib.Path(data["path"])))
         return web.HTTPOk()
+
+    def _have_nodes_saved(self):
+        node_fsm = map(lambda node: node.fsm, self.state.nodes.values())
+        return all(map(lambda fsm: fsm == "SAVED", node_fsm))
+
+    async def _async_request_collect(self, request: web.Request) -> web.Response:
+        print("Collecting")
+        await self.eventbus.asend(Event("collect"))
+        from chimerapy.engine.utils import async_waiting_for
+        await async_waiting_for(self._have_nodes_saved, timeout=10)
+        print("Starting File Transfer Server")
+        path = pathlib.Path(self.state.tempfolder)
+        zip_path, port = await self._start_file_transfer_server(path)
+        return web.json_response({
+            "zip_path": zip_path,
+            "port": port,
+            "size": os.path.getsize(zip_path)
+        })
+
+    async def _start_file_transfer_server(self, path: pathlib.Path) -> Tuple[pathlib.Path, int]:
+        # Start file transfer server
+        context = zmq.asyncio.Context()
+        server = ZMQFileServer(context)
+        import aioshutil
+        zip_path = await aioshutil.make_archive(path, "zip", path.parent, path.name)
+        asyncio.create_task(server.mount(zip_path))
+        return zip_path, server.port
 
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
         data = await request.json()

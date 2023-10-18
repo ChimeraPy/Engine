@@ -39,3 +39,6 @@ config:
     deque-length: 10000
     interval: 10
     logging-enabled: false
+  file-transfer:
+    chunk-size: 250000 # bytes
+    max-chunks: 1 # Number of chunks to send at once

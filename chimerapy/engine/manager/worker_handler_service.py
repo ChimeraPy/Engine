@@ -824,6 +824,16 @@ class WorkerHandlerService(Service):
         await self.eventbus.asend(Event("save_meta"))
         return all(results)
 
+    async def collect_v2(self):
+        from .artifacts_collector_service import ArtifactsCollector
+        for worker_id in self.state.workers:
+            artifacts_collector = ArtifactsCollector(
+                worker_id=worker_id,
+                state=self.state,
+                parent_logger=logger,
+            )
+            await artifacts_collector.collect()
+
     async def reset(self, keep_workers: bool = True):
 
         # Destroy Nodes safely
