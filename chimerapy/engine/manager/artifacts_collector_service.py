@@ -158,7 +158,7 @@ class ArtifactsCollector:
                 self.logger.error(f"Failed to copy artifacts: {e}")
                 return False
 
-        if not self.unzip:
+        if self.unzip:
             self.logger.info(f"Unzipping {zip_save_path}")
             try:
                 await aioshutil.unpack_archive(
