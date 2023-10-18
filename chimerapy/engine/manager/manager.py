@@ -336,8 +336,8 @@ class Manager:
     async def async_collect(self) -> bool:
         return await self.worker_handler.collect()
 
-    async def async_collect_v2(self) -> bool:
-        return await self.worker_handler.collect_v2()
+    async def async_collect_v2(self, unzip=False) -> bool:
+        return await self.worker_handler.collect_v2(unzip)
 
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)

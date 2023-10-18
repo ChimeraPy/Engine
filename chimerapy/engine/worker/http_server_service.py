@@ -1,14 +1,17 @@
 import asyncio
 import enum
 import logging
+import os
 import pathlib
 import pickle
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import zmq
 import zmq.asyncio
 from aiohttp import web
-import os
+
+from chimerapy.engine import config
+from chimerapy.engine.utils import async_waiting_for
 
 from ..data_protocols import (
     NodeDiagnostics,
@@ -33,23 +36,25 @@ from .events import (
     UpdateGatherEvent,
     UpdateResultsEvent,
 )
-from chimerapy.engine import config
 
 
 class ZMQFileServer:
-    def __init__(self, ctx: zmq.asyncio.Context, host="*", port=6000):
+    def __init__(self, ctx: zmq.asyncio.Context, host="*"):
         self.host = host
-        self.port = port
         self.ctx = ctx
-        self.socket = None
+        self.router = None
 
-    async def mount(self, file: pathlib.Path):
-        file = open(file, "rb")
+    async def ainit(self):
         router = self.ctx.socket(zmq.ROUTER)
-
         router.sndhwm = router.rcvhwm = config.get("file-transfer.max-chunks")
-        router.bind("tcp://*:6000")
+        port = router.bind_to_random_port(f"tcp://{self.host}", max_tries=100)
+        self.router = router
+        return port
 
+    async def mount(self, file_path: pathlib.Path):
+        file = open(file_path, "rb")
+        assert self.router is not None
+        router = self.router
         while True:
             try:
                 msg = await router.recv_multipart()
@@ -67,7 +72,6 @@ class ZMQFileServer:
             seq_no = int(seq_nostr)
             file.seek(offset, os.SEEK_SET)
             data = file.read(chunksz)
-            print(f"sending {offset} {chunksz} {seq_no} {len(data)}")
 
             if not data:
                 await asyncio.sleep(5)
@@ -336,31 +340,41 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     def _have_nodes_saved(self):
-        node_fsm = map(lambda node: node.fsm, self.state.nodes.values())
-        return all(map(lambda fsm: fsm == "SAVED", node_fsm))
+        node_fsm = (node.fsm for node in self.state.nodes.values())
+        return all(fsm == "SAVED" for fsm in node_fsm)
 
     async def _async_request_collect(self, request: web.Request) -> web.Response:
-        print("Collecting")
+        data = await request.json()
         await self.eventbus.asend(Event("collect"))
-        from chimerapy.engine.utils import async_waiting_for
         await async_waiting_for(self._have_nodes_saved, timeout=10)
-        print("Starting File Transfer Server")
-        path = pathlib.Path(self.state.tempfolder)
-        zip_path, port = await self._start_file_transfer_server(path)
-        return web.json_response({
-            "zip_path": zip_path,
-            "port": port,
-            "size": os.path.getsize(zip_path)
-        })
 
-    async def _start_file_transfer_server(self, path: pathlib.Path) -> Tuple[pathlib.Path, int]:
+        initiate_remote_transfer = data.get("initiate_remote_transfer", True)
+        path = pathlib.Path(self.state.tempfolder)
+        zip_path = await self._zip_direcotry(path)
+        port = None
+
+        if initiate_remote_transfer:
+            self.logger.debug("Starting File Transfer Server")
+            port = await self._start_file_transfer_server(zip_path)
+            self.logger.info(f"File Transfer Server Started at {port}")
+
+        return web.json_response(
+            {"zip_path": str(zip_path), "port": port, "size": os.path.getsize(zip_path)}
+        )
+
+    async def _zip_direcotry(self, path: pathlib.Path) -> pathlib.Path:
+        import aioshutil
+
+        zip_path = await aioshutil.make_archive(path, "zip", path.parent, path.name)
+        return zip_path
+
+    async def _start_file_transfer_server(self, path: pathlib.Path) -> int:
         # Start file transfer server
         context = zmq.asyncio.Context()
         server = ZMQFileServer(context)
-        import aioshutil
-        zip_path = await aioshutil.make_archive(path, "zip", path.parent, path.name)
-        asyncio.create_task(server.mount(zip_path))
-        return zip_path, server.port
+        port = await server.ainit()
+        self.tasks.append(asyncio.create_task(server.mount(path)))
+        return port
 
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
         data = await request.json()

@@ -13,6 +13,7 @@ import dill
 import networkx as nx
 
 from chimerapy.engine import _logger, config
+from chimerapy.engine.utils import get_progress_bar
 
 from ..data_protocols import NodePubTable
 from ..eventbus import Event, EventBus, TypedObserver, make_evented
@@ -824,15 +825,28 @@ class WorkerHandlerService(Service):
         await self.eventbus.asend(Event("save_meta"))
         return all(results)
 
-    async def collect_v2(self):
+    async def collect_v2(self, unzip: bool = False) -> bool:
         from .artifacts_collector_service import ArtifactsCollector
+
+        futures = []
+        progress_bar = get_progress_bar()
+        progress_bar.start()
         for worker_id in self.state.workers:
             artifacts_collector = ArtifactsCollector(
                 worker_id=worker_id,
                 state=self.state,
                 parent_logger=logger,
+                unzip=unzip,
+                progressbar=progress_bar,
             )
-            await artifacts_collector.collect()
+            future = asyncio.ensure_future(artifacts_collector.collect())
+            futures.append(future)
+
+        logger.info("Collecting artifacts from workers...")
+        results = await asyncio.gather(*futures)
+        progress_bar.stop()
+
+        return all(results)
 
     async def reset(self, keep_workers: bool = True):
 

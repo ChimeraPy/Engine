@@ -10,6 +10,8 @@ import uuid
 from concurrent.futures import Future
 from typing import Any, Callable, Coroutine, Dict, Optional, Tuple, Union
 
+from rich.progress import BarColumn, Progress, TimeElapsedColumn
+
 # Third-party
 # Internal
 from chimerapy.engine import _logger
@@ -17,6 +19,19 @@ from chimerapy.engine import _logger
 logger = _logger.getLogger("chimerapy-engine")
 
 BYTES_PER_MB = 1024 * 1024
+
+
+def get_progress_bar() -> Progress:
+    """Get a progress bar."""
+    columns = [
+        "[progress.description]{task.description}",
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        BarColumn(bar_width=None),
+        TimeElapsedColumn(),
+    ]
+
+    progress = Progress(*columns)
+    return progress
 
 
 def clear_queue(input_queue: queue.Queue):
