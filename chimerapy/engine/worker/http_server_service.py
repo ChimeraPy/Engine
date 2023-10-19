@@ -6,12 +6,13 @@ import pathlib
 import pickle
 from typing import Dict, List
 
+import aiofiles
 import zmq
 import zmq.asyncio
 from aiohttp import web
 
 from chimerapy.engine import config
-from chimerapy.engine.utils import async_waiting_for
+from chimerapy.engine.utils import async_waiting_for, get_progress_bar
 
 from ..data_protocols import (
     NodeDiagnostics,
@@ -52,9 +53,17 @@ class ZMQFileServer:
         return port
 
     async def mount(self, file_path: pathlib.Path):
-        file = open(file_path, "rb")
+        file = await aiofiles.open(file_path, "rb")
+        progressbar = get_progress_bar()
+        size = os.path.getsize(file_path)
+        human_size = f"{size / 1024 / 1024:.2f} MB"
         assert self.router is not None
         router = self.router
+        task = None
+        if progressbar is not None:
+            task = progressbar.add_task(
+                f"Sending {file_path.name} {human_size}", total=100
+            )
         while True:
             try:
                 msg = await router.recv_multipart()
@@ -70,8 +79,11 @@ class ZMQFileServer:
             offset = int(offset_str)
             chunksz = int(chunksz_str)
             seq_no = int(seq_nostr)
-            file.seek(offset, os.SEEK_SET)
+            await file.seek(offset, os.SEEK_SET)
             data = file.read(chunksz)
+
+            if task is not None:
+                progressbar.update(task, completed=(offset / size) * 100)
 
             if not data:
                 await asyncio.sleep(5)
