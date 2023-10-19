@@ -19,6 +19,7 @@ from ..states import NodeState, WorkerState
 from .http_client_service import HttpClientService
 from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
+from .file_transfer_service import FileTransferService
 
 
 class Worker:
@@ -104,6 +105,12 @@ class Worker:
             eventbus=self.eventbus,
             logger=self.logger,
             logreceiver=self.logreceiver,
+        )
+
+        self.file_transfer = FileTransferService(
+            name="file_transfer",
+            event_bus=self.eventbus,
+            logger=self.logger,
         )
 
         await self.http_client.async_init()

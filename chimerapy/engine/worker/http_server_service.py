@@ -4,7 +4,7 @@ import logging
 import os
 import pathlib
 import pickle
-from typing import Dict, List
+from typing import Dict, List, Any
 
 import aiofiles
 import zmq
@@ -112,6 +112,7 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
+        self.artifacts_data: Dict[str, Any] = {}
 
         # Create server
         self.server = Server(
@@ -131,6 +132,7 @@ class HttpServerService(Service):
                 web.post("/nodes/registered_methods", self._async_request_method_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/nodes/diagnostics", self._async_diagnostics_route),
+                web.get("/nodes/artifacts", self._async_get_artifacts_route),
                 # web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -139,6 +141,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
                 NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
+                NODE_MESSAGE.ARTIFACTS: self._async_node_artifacts,
             },
             parent_logger=self.logger,
         )
@@ -401,6 +404,9 @@ class HttpServerService(Service):
         await self.eventbus.asend(Event("diagnostics", event_data))
         return web.HTTPOk()
 
+    async def _async_get_artifacts_route(self, request: web.Request) -> web.Response:
+        return web.json_response(self.artifacts_data)
+
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
         self.tasks.append(asyncio.create_task(self.eventbus.asend(Event("shutdown"))))
@@ -455,3 +461,10 @@ class HttpServerService(Service):
         diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
         if node_id in self.state.nodes:
             self.state.nodes[node_id].diagnostics = diag
+
+    async def _async_node_artifacts(self, msg: Dict, ws: web.WebSocketResponse):
+        data = msg["data"]
+        self.artifacts_data[data["node_id"]] = data["artifacts"]
+        await self.eventbus.asend(
+            Event("artifacts", self.artifacts_data)
+        )

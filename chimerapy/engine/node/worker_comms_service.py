@@ -1,7 +1,7 @@
 import logging
 import pathlib
 import tempfile
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..eventbus import Event, EventBus, TypedObserver
@@ -15,6 +15,7 @@ from .events import (
     GatherEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
+    Artifact
 )
 from .node_config import NodeConfig
 
@@ -76,6 +77,11 @@ class WorkerCommsService(Service):
             "teardown": TypedObserver(
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
+            "artifacts": TypedObserver(
+                "artifacts",
+                on_asend=self.send_artifacts_info,
+                handle_event="pass"
+            ),
         }
         for ob in observers.values():
             await self.eventbus.asubscribe(ob)
@@ -129,6 +135,29 @@ class WorkerCommsService(Service):
 
         # Send publisher port and host information
         await self.send_state()
+
+    async def send_artifacts_info(self, artifacts_event: Event):
+        artifacts: List[Artifact] = artifacts_event.data
+
+        assert self.state and self.eventbus and self.logger
+        if self.client:
+            pass
+        data = {
+            "node_id": self.state.id,
+            "artifacts": [
+                {
+                    "name": artifact.name,
+                    "path": str(artifact.path),
+                    "filename": artifact.path.name,
+                    "mime_type": artifact.mime_type,
+                    "glob": artifact.glob,
+                    "size": artifact.size
+                }
+                for artifact in artifacts
+            ]
+        }
+
+        await self.client.async_send(signal=NODE_MESSAGE.ARTIFACTS, data=data)
 
     async def teardown(self):
 

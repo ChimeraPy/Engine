@@ -52,3 +52,11 @@ class TabularRecord(Record):
 
     def close(self):
         ...
+
+    def get_meta(self):
+        return {
+            "name": self.name,
+            "path": self.tabular_file_path,
+            "glob": None,
+            "mime_type": "text/csv"
+        }

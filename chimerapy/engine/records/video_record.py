@@ -100,3 +100,11 @@ class VideoRecord(Record):
 
         # Close the video
         self.video_writer.release()
+
+    def get_meta(self):
+        return {
+            "name": self.name,
+            "path": self.video_file_path,
+            "glob": None,
+            "mime_type": "video/mp4"
+        }

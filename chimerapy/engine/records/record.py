@@ -32,3 +32,7 @@ class Record:
 
         """
         raise NotImplementedError("``close`` needs to be implemented.")
+
+    def get_meta(self):
+        """Get metadata."""
+        raise NotImplementedError("``get_meta`` needs to be implemented.")

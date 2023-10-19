@@ -65,3 +65,11 @@ class AudioRecord(Record):
 
         # Close the audio writer
         self.audio_writer.close()
+
+    def get_meta(self):
+        return {
+            "name": self.name,
+            "path": self.audio_file_path,
+            "glob": None,
+            "mime_type": "audio/wav"
+        }
