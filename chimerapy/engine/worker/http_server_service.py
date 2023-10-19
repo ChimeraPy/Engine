@@ -59,9 +59,9 @@ class ZMQFileServer:
         human_size = f"{size / 1024 / 1024:.2f} MB"
         assert self.router is not None
         router = self.router
-        task = None
+        upload_task = None
         if progressbar is not None:
-            task = progressbar.add_task(
+            upload_task = progressbar.add_task(
                 f"Sending {file_path.name} {human_size}", total=100
             )
         while True:
@@ -82,8 +82,11 @@ class ZMQFileServer:
             await file.seek(offset, os.SEEK_SET)
             data = file.read(chunksz)
 
-            if task is not None:
-                progressbar.update(task, completed=(offset / size) * 100)
+            if upload_task is not None:
+                print(
+                    f"Sending {file_path.name} {human_size} {offset / size * 100:.2f}"
+                )
+                progressbar.update(upload_task, completed=(offset / size) * 100)
 
             if not data:
                 await asyncio.sleep(5)
@@ -352,14 +355,15 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     def _have_nodes_saved(self):
-        node_fsm = (node.fsm for node in self.state.nodes.values())
+        node_fsm = list(node.fsm for node in self.state.nodes.values())
+        print(node_fsm)
         return all(fsm == "SAVED" for fsm in node_fsm)
 
     async def _async_request_collect(self, request: web.Request) -> web.Response:
         data = await request.json()
         await self.eventbus.asend(Event("collect"))
         await async_waiting_for(self._have_nodes_saved, timeout=10)
-
+        self.logger.info("All nodes saved")
         initiate_remote_transfer = data.get("initiate_remote_transfer", True)
         path = pathlib.Path(self.state.tempfolder)
         zip_path = await self._zip_direcotry(path)
@@ -385,6 +389,7 @@ class HttpServerService(Service):
         context = zmq.asyncio.Context()
         server = ZMQFileServer(context)
         port = await server.ainit()
+        print("Initiated File Server")
         self.tasks.append(asyncio.create_task(server.mount(path)))
         return port
 
