@@ -41,5 +41,5 @@ config:
     interval: 10
     logging-enabled: false
   file-transfer:
-    chunk-size: 250000 # bytes
-    max-chunks: 1 # Number of chunks to send at once
+    chunk-size: 500000 # bytes
+    max-chunks: 2 # Number of chunks to send at once
