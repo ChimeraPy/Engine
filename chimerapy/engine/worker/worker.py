@@ -16,10 +16,10 @@ from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..node import NodeConfig
 from ..states import NodeState, WorkerState
+from .artifacts_transfer_service import ArtifactsTransferService
 from .http_client_service import HttpClientService
 from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
-from .file_transfer_service import FileTransferService
 
 
 class Worker:
@@ -107,15 +107,17 @@ class Worker:
             logreceiver=self.logreceiver,
         )
 
-        self.file_transfer = FileTransferService(
-            name="file_transfer",
+        self.artifacts_transfer = ArtifactsTransferService(
+            name="artifacts_transfer",
             event_bus=self.eventbus,
-            logger=self.logger,
+            state=self.state,
+            parent_logger=self.logger,
         )
 
         await self.http_client.async_init()
         await self.http_server.async_init()
         await self.node_handler.async_init()
+        await self.artifacts_transfer.async_init()
 
         # Start all services
         await self.eventbus.asend(Event("start"))

@@ -1,71 +1,70 @@
 import asyncio
+import logging
 import os
 import pathlib
+from typing import Optional
+
 import aiofiles
-from chimerapy.engine.utils import get_progress_bar
 import zmq
-from typing import Optional, List, Dict, Any
 import zmq.asyncio
 
-
-class ZMQFileChunk:
-    def __init__(self, data: bytes):
-        self.data = data
-
-    def write_into(self, handle):
-        handle.write(self.data)
-
-    async def awrite_into(self, ahandle):
-        await ahandle.write(self.data)
-
-    @classmethod
-    def from_bytes(cls, data):
-        return ZMQFileChunk(data=data)
-
-    @classmethod
-    def read_from(cls, handle, offset, chunk_size):
-        handle.seek(offset, os.SEEK_SET)
-        data = handle.read(chunk_size)
-        return cls.from_bytes(data=data)
-
-    @classmethod
-    async def aread_from(cls, ahandle, offset, chunk_size):
-        await ahandle.seek(offset, os.SEEK_SET)
-        data = await ahandle.read(chunk_size)
-        return cls.from_bytes(data=data)
+from chimerapy.engine._logger import fork, getLogger
+from chimerapy.engine.networking.utils import ZMQFileChunk
+from chimerapy.engine.utils import get_progress_bar
 
 
 class ZMQFileServer:
-    def __init__(self, context: zmq.asyncio.Context, paths, host="*", port=0):
+    def __init__(
+        self,
+        context: zmq.asyncio.Context,
+        paths,
+        credit: int,
+        host: str = "*",
+        port: int = 0,
+        parent_logger: Optional[logging.Logger] = None,
+    ) -> None:
         self.context = context
         self.host = host
         self.port = port
         self.paths = paths
         self.handles = {}
+        self.credits = credit
         self.socket: Optional[zmq.Socket] = None
         self.send_task: Optional[asyncio.Task] = None
 
-    async def async_init(self):
+        if parent_logger is None:
+            parent_logger = getLogger("chimerapy-engine-networking")
+
+        self.logger = fork(parent_logger, "ZMQFileServer")
+
+    async def async_init(self) -> None:
+        """Initialize the server."""
         await self._initialize_file_handlers()
         self.socket = self.context.socket(zmq.ROUTER)
-        self.socket.sndhwm = self.socket.rcvhwm = 1
+        self.socket.sndhwm = self.socket.rcvhwm = self.credits
+
         if self.port != 0:
             self.socket.bind(f"tcp://{self.host}:{self.port}")
         else:
             self.port = self.socket.bind_to_random_port(f"tcp://{self.host}")
 
+        self.logger.info(f"Listening on tcp://{self.host}:{self.port}")
         self.send_task = asyncio.create_task(self._send())
+        self.progress_bar = None
 
-    async def _initialize_file_handlers(self):
+    async def _initialize_file_handlers(self) -> None:
+        """Initialize the file handlers."""
         for name, file in self.paths.items():
             assert file.exists()
             assert file.is_file()
             self.handles[name] = await aiofiles.open(file, mode="rb")
 
     async def _send(self):
+        """Send the file chunks."""
         assert self.socket is not None
         router = self.socket
-        progress_bar = get_progress_bar()
+        self.progress_bar = get_progress_bar()
+        progress_bar = self.progress_bar
         progress_bar.start()
         upload_tasks = {}
 
@@ -79,10 +78,11 @@ class ZMQFileServer:
                 if e.errno == zmq.ETERM:
                     return
                 else:
-                    raise
+                    raise e
 
             identity, command, fname, offset_str, chunksz_str, seq_nostr = msg
             fname_str = fname.decode()
+
             if fname_str in self.handles:
                 assert command == b"fetch"
                 offset = int(offset_str)
@@ -97,20 +97,24 @@ class ZMQFileServer:
                 if not data:
                     progress_bar.update(upload_tasks[fname_str], completed=100)
                     uploaded.add(fname_str)
-                    print(f"Uploaded {fname_str}. {uploaded}")
+
                     if uploaded == set(self.paths.keys()):
                         progress_bar.stop()
                         break
                     continue
                 else:
                     await router.send_multipart([identity, fname, data, b"%i" % seq_no])
-                    completed = (await handle.tell() / os.path.getsize(self.paths[fname_str])) * 100
+                    completed = (
+                        await handle.tell() / os.path.getsize(self.paths[fname_str])
+                    ) * 100
                     progress_bar.update(upload_tasks[fname_str], completed=completed)
 
-
     async def ashutdown(self):
+        """Shutdown the server."""
+        if self.progress_bar is not None:
+            self.progress_bar.stop()
+
         if self.send_task is not None:
-            self.send_task.cancel()
             await self.send_task
             self.send_task = None
 
@@ -129,13 +133,15 @@ async def main():
         "test1": pathlib.Path("src/test1.mp4"),
         "test2": pathlib.Path("src/test2.mp4"),
         "test3": pathlib.Path("src/test3.mp4"),
-        "test4": pathlib.Path("src/test4.mp4")
+        "test4": pathlib.Path("src/test4.mp4"),
+        "oele-11-webcam-video": pathlib.Path("src/oele-11-webcam-video.mp4"),
     }
-    server = ZMQFileServer(context=zmq.asyncio.Context(), paths=files, port=6000)
+    server = ZMQFileServer(
+        context=zmq.asyncio.Context(), paths=files, port=6000, credit=1
+    )
     await server.async_init()
     await server.send_task
 
+
 if __name__ == "__main__":
     asyncio.run(main())
-
-

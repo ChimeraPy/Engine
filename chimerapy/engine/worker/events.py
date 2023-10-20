@@ -62,3 +62,14 @@ class UpdateResultsEvent:
 @dataclass
 class SendArchiveEvent:
     path: pathlib.Path
+
+
+@dataclass
+class ConnectedEvent:
+    manager_host: str
+    manager_port: int
+
+
+@dataclass
+class DisconnectedEvent:
+    pass

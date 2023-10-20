@@ -14,13 +14,13 @@ from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import Event, EventBus, TypedObserver
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking import Client
 from ..service import Service
 from ..states import WorkerState
 from ..utils import get_ip_address
-from .events import SendArchiveEvent
+from .events import ConnectedEvent, DisconnectedEvent, SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -68,6 +68,11 @@ class HttpClientService(Service):
                 SendArchiveEvent,
                 on_asend=self._send_archive,
                 handle_event="unpack",
+            ),
+            "artifacts_transfer_ready": TypedObserver(
+                "artifacts_transfer_ready",
+                on_asend=self._signal_manager_artifacts_transfer_ready,
+                handle_event="pass",
             ),
         }
         for ob in self.observers.values():
@@ -155,6 +160,7 @@ class HttpClientService(Service):
 
             if resp.ok:
                 self.connected_to_manager = False
+                await self.eventbus.asend(Event("disconnected", DisconnectedEvent()))
 
             return resp.ok
 
@@ -206,6 +212,12 @@ class HttpClientService(Service):
 
                 self.logger.info(
                     f"{self}: connection successful to Manager @ {host}:{port}."
+                )
+                await self.eventbus.asend(
+                    Event(
+                        "connected",
+                        ConnectedEvent(manager_host=host, manager_port=port),
+                    )
                 )
                 return True
 
@@ -291,6 +303,21 @@ class HttpClientService(Service):
                 # "archive update confirmation: {resp.ok}")
 
         return success
+
+    async def _signal_manager_artifacts_transfer_ready(self, event: Event) -> bool:
+        manager_host, manager_port = self.get_address()
+        data = {
+            "ip": event.data["ip"],
+            "port": event.data["port"],
+            "worker_id": self.state.id,
+            "data": event.data["data"],
+            "method": event.data["method"],
+        }
+        async with self.http_client.post(
+            f"http://{manager_host}:{manager_port}/workers/artifacts_transfer_ready",
+            data=json.dumps(data),
+        ) as resp:
+            return resp.ok
 
     async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
         self.logger.debug(f"{self}: sending archive locally")

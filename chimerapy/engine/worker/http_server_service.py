@@ -4,7 +4,7 @@ import logging
 import os
 import pathlib
 import pickle
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import aiofiles
 import zmq
@@ -37,62 +37,6 @@ from .events import (
     UpdateGatherEvent,
     UpdateResultsEvent,
 )
-
-
-class ZMQFileServer:
-    def __init__(self, ctx: zmq.asyncio.Context, host="*"):
-        self.host = host
-        self.ctx = ctx
-        self.router = None
-
-    async def ainit(self):
-        router = self.ctx.socket(zmq.ROUTER)
-        router.sndhwm = router.rcvhwm = config.get("file-transfer.max-chunks")
-        port = router.bind_to_random_port(f"tcp://{self.host}", max_tries=100)
-        self.router = router
-        return port
-
-    async def mount(self, file_path: pathlib.Path):
-        file = await aiofiles.open(file_path, "rb")
-        progressbar = get_progress_bar()
-        size = os.path.getsize(file_path)
-        human_size = f"{size / 1024 / 1024:.2f} MB"
-        assert self.router is not None
-        router = self.router
-        upload_task = None
-        if progressbar is not None:
-            upload_task = progressbar.add_task(
-                f"Sending {file_path.name} {human_size}", total=100
-            )
-        while True:
-            try:
-                msg = await router.recv_multipart()
-            except zmq.ZMQError as e:
-                if e.errno == zmq.ETERM:
-                    return
-                else:
-                    raise
-
-            identity, command, offset_str, chunksz_str, seq_nostr = msg
-
-            assert command == b"fetch"
-            offset = int(offset_str)
-            chunksz = int(chunksz_str)
-            seq_no = int(seq_nostr)
-            await file.seek(offset, os.SEEK_SET)
-            data = file.read(chunksz)
-
-            if upload_task is not None:
-                print(
-                    f"Sending {file_path.name} {human_size} {offset / size * 100:.2f}"
-                )
-                progressbar.update(upload_task, completed=(offset / size) * 100)
-
-            if not data:
-                await asyncio.sleep(5)
-                break
-
-            await router.send_multipart([identity, data, b"%i" % seq_no])
 
 
 class HttpServerService(Service):
@@ -359,42 +303,20 @@ class HttpServerService(Service):
 
     def _have_nodes_saved(self):
         node_fsm = list(node.fsm for node in self.state.nodes.values())
-        print(node_fsm)
         return all(fsm == "SAVED" for fsm in node_fsm)
 
     async def _async_request_collect(self, request: web.Request) -> web.Response:
         data = await request.json()
         await self.eventbus.asend(Event("collect"))
-        await async_waiting_for(self._have_nodes_saved, timeout=10)
-        self.logger.info("All nodes saved")
-        initiate_remote_transfer = data.get("initiate_remote_transfer", True)
-        path = pathlib.Path(self.state.tempfolder)
-        zip_path = await self._zip_direcotry(path)
-        port = None
-
-        if initiate_remote_transfer:
-            self.logger.debug("Starting File Transfer Server")
-            port = await self._start_file_transfer_server(zip_path)
-            self.logger.info(f"File Transfer Server Started at {port}")
-
-        return web.json_response(
-            {"zip_path": str(zip_path), "port": port, "size": os.path.getsize(zip_path)}
-        )
+        await async_waiting_for(self._have_nodes_saved, timeout=100)
+        await self.eventbus.asend(Event("initiate_transfer", data=self.artifacts_data))
+        return web.HTTPOk()
 
     async def _zip_direcotry(self, path: pathlib.Path) -> pathlib.Path:
         import aioshutil
 
         zip_path = await aioshutil.make_archive(path, "zip", path.parent, path.name)
         return zip_path
-
-    async def _start_file_transfer_server(self, path: pathlib.Path) -> int:
-        # Start file transfer server
-        context = zmq.asyncio.Context()
-        server = ZMQFileServer(context)
-        port = await server.ainit()
-        print("Initiated File Server")
-        self.tasks.append(asyncio.create_task(server.mount(path)))
-        return port
 
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
         data = await request.json()
@@ -465,6 +387,4 @@ class HttpServerService(Service):
     async def _async_node_artifacts(self, msg: Dict, ws: web.WebSocketResponse):
         data = msg["data"]
         self.artifacts_data[data["node_id"]] = data["artifacts"]
-        await self.eventbus.asend(
-            Event("artifacts", self.artifacts_data)
-        )
+        await self.eventbus.asend(Event("artifacts", data=self.artifacts_data))
