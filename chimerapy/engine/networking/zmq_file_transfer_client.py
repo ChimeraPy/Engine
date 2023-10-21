@@ -79,23 +79,25 @@ class ZMQFileClient:
                 seq_no += 1
                 credit -= 1
             try:
-                filename, chunk, seq_no_recv_str = await self.socket.recv_multipart()
-                filename_str = filename.decode()
+                filekey, chunk, seq_no_recv_str = await self.socket.recv_multipart()
+                filekey_str = filekey.decode()
                 zmq_file_chunk = ZMQFileChunk.from_bytes(chunk)
 
-                if filename_str not in download_tasks and progressbar is not None:
-                    download_tasks[filename_str] = progressbar.add_task(
-                        f"Downloading({filename_str})", total=100
+                if filekey_str not in download_tasks and progressbar is not None:
+                    human_size = f"{round(self.files[filekey_str]['size'] / 1024 / 1024, 2)} MB"
+                    fname = self.files[filekey_str]["name"]
+                    download_tasks[filekey_str] = progressbar.add_task(
+                        f"Downloading({fname}|{human_size})", total=100
                     )
 
                 complete = (
-                    offsets[filename_str] / self.files[filename_str]["size"]
+                    offsets[filekey_str] / self.files[filekey_str]["size"]
                 ) * 100
 
                 if progressbar is not None:
-                    progressbar.update(download_tasks[filename_str], completed=complete)
+                    progressbar.update(download_tasks[filekey_str], completed=complete)
 
-                await zmq_file_chunk.awrite_into(ahandle=handles[filename_str])
+                await zmq_file_chunk.awrite_into(ahandle=handles[filekey_str])
 
             except zmq.ZMQError as e:
                 if e.errno == zmq.ETERM:
@@ -107,9 +109,9 @@ class ZMQFileClient:
             size = len(chunk)
             total += size
             if size < chunk_size:
-                completed.append(filename_str)
-                progressbar.update(download_tasks[filename_str], completed=100)
-                del offsets[filename_str]
+                completed.append(filekey_str)
+                progressbar.update(download_tasks[filekey_str], completed=100)
+                del offsets[filekey_str]
 
             if len(completed) == len(self.files):
                 for name, handle in handles.items():
@@ -127,15 +129,12 @@ async def main():
     port = 6000
 
     files = {
-        "test1": {"name": "test1.mp4", "size": 31376170, "outdir": pathlib.Path("dst")},
-        "test2": {"name": "test2.mp4", "size": 36633129, "outdir": pathlib.Path("dst")},
-        "test3": {"name": "test3.mp4", "size": 39156488, "outdir": pathlib.Path("dst")},
-        "test4": {"name": "test4.mp4", "size": 33941417, "outdir": pathlib.Path("dst")},
-        "oele-11-webcam-video": {
-            "name": "oele-11-webcam-video.mp4",
-            "size": 351384728,
+        "mac-capture": {
+            "name": "mac-capture.mp4",
             "outdir": pathlib.Path("dst"),
-        },
+            "size": 2415932486
+
+        }
     }
     from chimerapy.engine.utils import get_progress_bar
 

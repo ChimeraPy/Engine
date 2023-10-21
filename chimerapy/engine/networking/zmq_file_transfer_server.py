@@ -69,7 +69,10 @@ class ZMQFileServer:
         upload_tasks = {}
 
         for name, file in self.paths.items():
-            upload_tasks[name] = progress_bar.add_task(f"Uploading({name})", total=100)
+            file_name = file.name
+            # round to 2 decimal places
+            human_size = f"{round(os.path.getsize(file) / 1024 / 1024, 2)} MB"
+            upload_tasks[name] = progress_bar.add_task(f"Uploading({file_name}|{human_size})", total=100)
         uploaded = set()
         while True:
             try:
@@ -130,11 +133,7 @@ class ZMQFileServer:
 
 async def main():
     files = {
-        "test1": pathlib.Path("src/test1.mp4"),
-        "test2": pathlib.Path("src/test2.mp4"),
-        "test3": pathlib.Path("src/test3.mp4"),
-        "test4": pathlib.Path("src/test4.mp4"),
-        "oele-11-webcam-video": pathlib.Path("src/oele-11-webcam-video.mp4"),
+        "mac-capture": pathlib.Path("src/mac-capture.mp4"),
     }
     server = ZMQFileServer(
         context=zmq.asyncio.Context(), paths=files, port=6000, credit=1
