@@ -43,12 +43,12 @@ class ArtifactsCollectorService(Service):
             )
         }
 
-        for name, observer in self.observers.items():
+        for name, observer in self.observers.items():  # noqa: B007
             await self.eventbus.asubscribe(observer)
 
     async def collect(self, event: Event) -> None:
+        assert event.data is not None
         method = event.data["method"]
-        print(event.data)
         if method == "zmq":
             self.logger.debug("Collecting artifacts over ZMQ")
             await self._collect_zmq(
@@ -68,9 +68,9 @@ class ArtifactsCollectorService(Service):
     ):
         files = {}
         self.logger.debug("Preparing files to download")
-        for node_id, artifacts in artifacts.items():
+        for node_id, artifact_details in artifacts.items():
             out_dir = self._create_node_dir(worker_id, node_id)
-            for artifact in artifacts:
+            for artifact in artifact_details:
                 key = f"{node_id}-{artifact['name']}"
                 files[key] = {
                     "name": artifact["filename"],

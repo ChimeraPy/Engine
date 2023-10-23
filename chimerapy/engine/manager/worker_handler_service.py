@@ -831,11 +831,17 @@ class WorkerHandlerService(Service):
                 return False
         return True
 
-    async def collect_v2(self, unzip: bool = False) -> bool:
+    async def collect_v2(self) -> bool:
         await self._broadcast_request("post", "/nodes/request_collect")
         await async_waiting_for(
             self.workers_collected, timeout=cpe_config.get("manager.timeout.collect")
         )
+
+        for worker_id in self.collected_workers:
+            if not self.collected_workers[worker_id]:
+                return False
+
+        return True
 
     async def reset(self, keep_workers: bool = True):
 

@@ -52,7 +52,7 @@ class ArtifactsTransferService(Service):
             ),
         }
 
-        for name, observer in self.observers.items():
+        for name, observer in self.observers.items():  # noqa: B007
             await self.event_bus.asubscribe(observer)
 
     async def _on_connect(self, manager_host: str, manager_port: int) -> None:
@@ -66,7 +66,7 @@ class ArtifactsTransferService(Service):
 
     async def _initiate_artifacts_transfer(self, event: Event) -> None:
         artifacts_data = event.data
-
+        assert artifacts_data is not None
         if not self._is_remote_worker():
             self.logger.info("Initiating local artifacts transfer")
             await self.event_bus.asend(

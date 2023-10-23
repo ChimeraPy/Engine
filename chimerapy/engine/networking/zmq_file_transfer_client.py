@@ -1,6 +1,4 @@
-import asyncio
 import logging
-import pathlib
 import random
 from typing import Any, Dict, Optional
 
@@ -35,7 +33,6 @@ class ZMQFileClient:
         if parent_logger is None:
             parent_logger = getLogger("chimerapy-engine")
         self.logger = fork(parent_logger, "ZMQFileClient")
-        print(self.host, self.port)
 
     async def async_init(self):
         self.socket = self.context.socket(zmq.DEALER)
@@ -43,7 +40,7 @@ class ZMQFileClient:
         self.socket.connect(f"tcp://{self.host}:{self.port}")
         self.logger.info(f"Connected to tcp://{self.host}:{self.port}")
 
-    async def download_files(self):
+    async def download_files(self):  # noqa: C901
         handles = {}
         offsets = {}
         progressbar = self.progressbar
@@ -84,7 +81,9 @@ class ZMQFileClient:
                 zmq_file_chunk = ZMQFileChunk.from_bytes(chunk)
 
                 if filekey_str not in download_tasks and progressbar is not None:
-                    human_size = f"{round(self.files[filekey_str]['size'] / 1024 / 1024, 2)} MB"
+                    human_size = (
+                        f"{round(self.files[filekey_str]['size'] / 1024 / 1024, 2)} MB"
+                    )
                     fname = self.files[filekey_str]["name"]
                     download_tasks[filekey_str] = progressbar.add_task(
                         f"Downloading({fname}|{human_size})", total=100
@@ -114,42 +113,10 @@ class ZMQFileClient:
                 del offsets[filekey_str]
 
             if len(completed) == len(self.files):
-                for name, handle in handles.items():
+                for name, handle in handles.items():  # noqa: B007
                     await handle.close()
                 progressbar.stop()
                 break
 
     async def close(self):
         await self.socket.close()
-
-
-async def main():
-    context = zmq.asyncio.Context()
-    host = "localhost"
-    port = 6000
-
-    files = {
-        "mac-capture": {
-            "name": "mac-capture.mp4",
-            "outdir": pathlib.Path("dst"),
-            "size": 2415932486
-
-        }
-    }
-    from chimerapy.engine.utils import get_progress_bar
-
-    client = ZMQFileClient(
-        context,
-        host,
-        port,
-        credit=1,
-        chunk_size=250000,
-        files=files,
-        progressbar=get_progress_bar(),
-    )
-    await client.async_init()
-    await client.download_files()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

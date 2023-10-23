@@ -345,7 +345,7 @@ class Manager:
         return await self.worker_handler.collect()
 
     async def async_collect_v2(self) -> bool:
-        await self.worker_handler.collect_v2()
+        return await self.worker_handler.collect_v2()
 
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)

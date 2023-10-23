@@ -1,7 +1,7 @@
 import logging
 import pathlib
 import tempfile
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
 from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..eventbus import Event, EventBus, TypedObserver
@@ -10,12 +10,12 @@ from ..networking.enums import GENERAL_MESSAGE, NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
 from ..states import NodeState
 from .events import (
+    Artifact,
     DiagnosticsReportEvent,
     EnableDiagnosticsEvent,
     GatherEvent,
     ProcessNodePubTableEvent,
     RegisteredMethodEvent,
-    Artifact
 )
 from .node_config import NodeConfig
 
@@ -78,9 +78,7 @@ class WorkerCommsService(Service):
                 "teardown", on_asend=self.teardown, handle_event="drop"
             ),
             "artifacts": TypedObserver(
-                "artifacts",
-                on_asend=self.send_artifacts_info,
-                handle_event="pass"
+                "artifacts", on_asend=self.send_artifacts_info, handle_event="pass"
             ),
         }
         for ob in observers.values():
@@ -137,7 +135,8 @@ class WorkerCommsService(Service):
         await self.send_state()
 
     async def send_artifacts_info(self, artifacts_event: Event):
-        artifacts: List[Artifact] = artifacts_event.data
+        assert artifacts_event.data is not None
+        artifacts: List[Artifact] = artifacts_event.data  # type: ignore
 
         assert self.state and self.eventbus and self.logger
         if self.client:
@@ -151,12 +150,12 @@ class WorkerCommsService(Service):
                     "filename": artifact.path.name,
                     "mime_type": artifact.mime_type,
                     "glob": artifact.glob,
-                    "size": artifact.size
+                    "size": artifact.size,
                 }
                 for artifact in artifacts
-            ]
+            ],
         }
-
+        assert self.client is not None
         await self.client.async_send(signal=NODE_MESSAGE.ARTIFACTS, data=data)
 
     async def teardown(self):

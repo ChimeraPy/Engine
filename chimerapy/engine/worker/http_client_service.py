@@ -306,6 +306,8 @@ class HttpClientService(Service):
 
     async def _signal_manager_artifacts_transfer_ready(self, event: Event) -> bool:
         manager_host, manager_port = self.get_address()
+        assert event.data is not None
+
         data = {
             "ip": event.data["ip"],
             "port": event.data["port"],
@@ -313,6 +315,7 @@ class HttpClientService(Service):
             "data": event.data["data"],
             "method": event.data["method"],
         }
+
         async with self.http_client.post(
             f"http://{manager_host}:{manager_port}/workers/artifacts_transfer_ready",
             data=json.dumps(data),

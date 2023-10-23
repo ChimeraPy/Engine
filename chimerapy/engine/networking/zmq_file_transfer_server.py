@@ -1,12 +1,12 @@
 import asyncio
 import logging
 import os
-import pathlib
-from typing import Optional
+from typing import Dict, Optional
 
 import aiofiles
 import zmq
 import zmq.asyncio
+from aiofiles.threadpool.binary import AsyncBufferedReader
 
 from chimerapy.engine._logger import fork, getLogger
 from chimerapy.engine.networking.utils import ZMQFileChunk
@@ -27,7 +27,7 @@ class ZMQFileServer:
         self.host = host
         self.port = port
         self.paths = paths
-        self.handles = {}
+        self.handles: Dict[str, AsyncBufferedReader] = {}
         self.credits = credit
         self.socket: Optional[zmq.Socket] = None
         self.send_task: Optional[asyncio.Task] = None
@@ -72,7 +72,9 @@ class ZMQFileServer:
             file_name = file.name
             # round to 2 decimal places
             human_size = f"{round(os.path.getsize(file) / 1024 / 1024, 2)} MB"
-            upload_tasks[name] = progress_bar.add_task(f"Uploading({file_name}|{human_size})", total=100)
+            upload_tasks[name] = progress_bar.add_task(
+                f"Uploading({file_name}|{human_size})", total=100
+            )
         uploaded = set()
         while True:
             try:
@@ -129,18 +131,3 @@ class ZMQFileServer:
             await handle.close()
 
         self.handles = {}
-
-
-async def main():
-    files = {
-        "mac-capture": pathlib.Path("src/mac-capture.mp4"),
-    }
-    server = ZMQFileServer(
-        context=zmq.asyncio.Context(), paths=files, port=6000, credit=1
-    )
-    await server.async_init()
-    await server.send_task
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
