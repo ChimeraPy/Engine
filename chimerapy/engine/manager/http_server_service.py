@@ -55,6 +55,10 @@ class HttpServerService(Service):
                 web.post("/workers/deregister", self._deregister_worker_route),
                 web.post("/workers/node_status", self._update_nodes_status),
                 web.post("/workers/send_archive", self._update_send_archive),
+                web.post(
+                    "/workers/artifacts_transfer_ready",
+                    self._file_transfer_server_ready,
+                ),
             ],
         )
 
@@ -190,6 +194,12 @@ class HttpServerService(Service):
         msg = await request.json()
         event_data = UpdateSendArchiveEvent(**msg)
         await self.eventbus.asend(Event("update_send_archive", event_data))
+        return web.HTTPOk()
+
+    async def _file_transfer_server_ready(self, request: web.Request):
+        msg = await request.json()
+        event_data = msg
+        await self.eventbus.asend(Event("artifacts_transfer_ready", event_data))
         return web.HTTPOk()
 
     #####################################################################################

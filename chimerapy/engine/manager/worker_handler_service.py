@@ -12,6 +12,7 @@ import aiohttp
 import dill
 import networkx as nx
 
+import chimerapy.engine.config as cpe_config
 from chimerapy.engine import _logger, config
 
 from ..data_protocols import NodePubTable
@@ -823,6 +824,24 @@ class WorkerHandlerService(Service):
 
         await self.eventbus.asend(Event("save_meta"))
         return all(results)
+
+    def workers_collected(self):
+        for worker_id in self.state.workers:
+            if worker_id not in self.collected_workers:
+                return False
+        return True
+
+    async def collect_v2(self) -> bool:
+        await self._broadcast_request("post", "/nodes/request_collect")
+        await async_waiting_for(
+            self.workers_collected, timeout=cpe_config.get("manager.timeout.collect")
+        )
+
+        for worker_id in self.collected_workers:
+            if not self.collected_workers[worker_id]:
+                return False
+
+        return True
 
     async def reset(self, keep_workers: bool = True):
 

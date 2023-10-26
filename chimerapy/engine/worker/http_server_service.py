@@ -1,11 +1,18 @@
 import asyncio
 import enum
 import logging
+import os
 import pathlib
 import pickle
-from typing import Dict, List
+from typing import Any, Dict, List
 
+import aiofiles
+import zmq
+import zmq.asyncio
 from aiohttp import web
+
+from chimerapy.engine import config
+from chimerapy.engine.utils import async_waiting_for, get_progress_bar
 
 from ..data_protocols import (
     NodeDiagnostics,
@@ -49,6 +56,7 @@ class HttpServerService(Service):
 
         # Containers
         self.tasks: List[asyncio.Task] = []
+        self.artifacts_data: Dict[str, Any] = {}
 
         # Create server
         self.server = Server(
@@ -60,6 +68,7 @@ class HttpServerService(Service):
                 web.get("/nodes/pub_table", self._async_get_node_pub_table),
                 web.post("/nodes/pub_table", self._async_process_node_pub_table),
                 web.get("/nodes/gather", self._async_report_node_gather),
+                web.post("/nodes/request_collect", self._async_request_collect),
                 web.post("/nodes/collect", self._async_collect),
                 web.post("/nodes/step", self._async_step_route),
                 web.post("/nodes/start", self._async_start_nodes_route),
@@ -67,6 +76,7 @@ class HttpServerService(Service):
                 web.post("/nodes/registered_methods", self._async_request_method_route),
                 web.post("/nodes/stop", self._async_stop_nodes_route),
                 web.post("/nodes/diagnostics", self._async_diagnostics_route),
+                web.get("/nodes/artifacts", self._async_get_artifacts_route),
                 # web.post("/packages/load", self._async_load_sent_packages),
                 web.post("/shutdown", self._async_shutdown_route),
             ],
@@ -75,6 +85,7 @@ class HttpServerService(Service):
                 NODE_MESSAGE.REPORT_GATHER: self._async_node_report_gather,
                 NODE_MESSAGE.REPORT_RESULTS: self._async_node_report_results,
                 NODE_MESSAGE.DIAGNOSTICS: self._async_node_diagnostics,
+                NODE_MESSAGE.ARTIFACTS: self._async_node_artifacts,
             },
             parent_logger=self.logger,
         )
@@ -290,6 +301,23 @@ class HttpServerService(Service):
         asyncio.create_task(self._collect_and_send(pathlib.Path(data["path"])))
         return web.HTTPOk()
 
+    def _have_nodes_saved(self):
+        node_fsm = list(node.fsm for node in self.state.nodes.values())
+        return all(fsm == "SAVED" for fsm in node_fsm)
+
+    async def _async_request_collect(self, request: web.Request) -> web.Response:
+        data = await request.json()
+        await self.eventbus.asend(Event("collect"))
+        await async_waiting_for(self._have_nodes_saved, timeout=100)
+        await self.eventbus.asend(Event("initiate_transfer", data=self.artifacts_data))
+        return web.HTTPOk()
+
+    async def _zip_direcotry(self, path: pathlib.Path) -> pathlib.Path:
+        import aioshutil
+
+        zip_path = await aioshutil.make_archive(path, "zip", path.parent, path.name)
+        return zip_path
+
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
         data = await request.json()
 
@@ -297,6 +325,9 @@ class HttpServerService(Service):
         event_data = EnableDiagnosticsEvent(data["enable"])
         await self.eventbus.asend(Event("diagnostics", event_data))
         return web.HTTPOk()
+
+    async def _async_get_artifacts_route(self, request: web.Request) -> web.Response:
+        return web.json_response(self.artifacts_data)
 
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
@@ -352,3 +383,8 @@ class HttpServerService(Service):
         diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
         if node_id in self.state.nodes:
             self.state.nodes[node_id].diagnostics = diag
+
+    async def _async_node_artifacts(self, msg: Dict, ws: web.WebSocketResponse):
+        data = msg["data"]
+        self.artifacts_data[data["node_id"]] = data["artifacts"]
+        await self.eventbus.asend(Event("artifacts", data=self.artifacts_data))

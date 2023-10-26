@@ -1,5 +1,6 @@
+import pathlib
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..networking.client import Client
@@ -41,3 +42,12 @@ class GatherEvent:
 @dataclass
 class DiagnosticsReportEvent:  # diagnostics_report
     diagnostics: NodeDiagnostics
+
+
+@dataclass
+class Artifact:
+    name: str
+    path: pathlib.Path
+    mime_type: str
+    size: Optional[int] = None
+    glob: Optional[str] = None

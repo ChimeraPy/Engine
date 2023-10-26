@@ -18,6 +18,8 @@ from ..records import (
 )
 from ..service import Service
 from ..states import NodeState
+from .events import Artifact
+from ..eventbus import Event
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -149,12 +151,31 @@ class RecordService(Service):
 
         # self.logger.debug(f"{self}: Closed all entries")
 
-    def collect(self):
+    async def collect(self):
         # self.logger.debug(f"{self}: collecting recording")
 
         # Signal to stop and save
         self.is_running.clear()
+        artifacts = {}
         if self._record_thread:
             self._record_thread.join()
+
+        for name, entry in self.records.items():
+            artifacts[name] = entry.get_meta()
+
+        all_artifacts = []
+        self.logger.info("Sending artifacts event")
+        for name, artifact in artifacts.items():
+            event_data = Artifact(
+                name=artifact["name"],
+                mime_type=artifact["mime_type"],
+                path=artifact["path"],
+                glob=artifact["glob"],
+                size=artifact["path"].stat().st_size,
+            )
+            all_artifacts.append(event_data)
+
+        await self.eventbus.asend(Event("artifacts", data=all_artifacts))
+        self.logger.debug("Sent artifacts event")
 
         # self.logger.debug(f"{self}: Finish saving records")

@@ -14,13 +14,13 @@ from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import EventBus, TypedObserver
+from ..eventbus import Event, EventBus, TypedObserver
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking import Client
 from ..service import Service
 from ..states import WorkerState
 from ..utils import get_ip_address
-from .events import SendArchiveEvent
+from .events import ConnectedEvent, DisconnectedEvent, SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -50,6 +50,9 @@ class HttpClientService(Service):
 
         # Services
         self.http_client = aiohttp.ClientSession()
+        # Debounce
+        self._debounce_delay = 500  # ms
+        self._update_task: Optional[asyncio.Task] = None
 
     async def async_init(self):
 
@@ -60,7 +63,7 @@ class HttpClientService(Service):
             ),
             "WorkerState.changed": TypedObserver(
                 "WorkerState.changed",
-                on_asend=self._async_node_status_update,
+                on_asend=self._debounced_async_node_status_update,
                 handle_event="drop",
             ),
             "send_archive": TypedObserver(
@@ -68,6 +71,11 @@ class HttpClientService(Service):
                 SendArchiveEvent,
                 on_asend=self._send_archive,
                 handle_event="unpack",
+            ),
+            "artifacts_transfer_ready": TypedObserver(
+                "artifacts_transfer_ready",
+                on_asend=self._signal_manager_artifacts_transfer_ready,
+                handle_event="pass",
             ),
         }
         for ob in self.observers.values():
@@ -155,6 +163,7 @@ class HttpClientService(Service):
 
             if resp.ok:
                 self.connected_to_manager = False
+                await self.eventbus.asend(Event("disconnected", DisconnectedEvent()))
 
             return resp.ok
 
@@ -206,6 +215,12 @@ class HttpClientService(Service):
 
                 self.logger.info(
                     f"{self}: connection successful to Manager @ {host}:{port}."
+                )
+                await self.eventbus.asend(
+                    Event(
+                        "connected",
+                        ConnectedEvent(manager_host=host, manager_port=port),
+                    )
                 )
                 return True
 
@@ -292,6 +307,24 @@ class HttpClientService(Service):
 
         return success
 
+    async def _signal_manager_artifacts_transfer_ready(self, event: Event) -> bool:
+        manager_host, manager_port = self.get_address()
+        assert event.data is not None
+
+        data = {
+            "ip": event.data["ip"],
+            "port": event.data["port"],
+            "worker_id": self.state.id,
+            "data": event.data["data"],
+            "method": event.data["method"],
+        }
+
+        async with self.http_client.post(
+            f"http://{manager_host}:{manager_port}/workers/artifacts_transfer_ready",
+            data=json.dumps(data),
+        ) as resp:
+            return resp.ok
+
     async def _send_archive_locally(self, path: pathlib.Path) -> pathlib.Path:
         self.logger.debug(f"{self}: sending archive locally")
 
@@ -338,8 +371,23 @@ class HttpClientService(Service):
 
         return False
 
-    async def _async_node_status_update(self) -> bool:
+    async def _debounced_async_node_status_update(self) -> bool:
+        if not self.connected_to_manager:
+            return False
 
+        # Debounce
+        if self._update_task is not None:
+            self._update_task.cancel()
+
+        self._update_task = asyncio.ensure_future(self._delayed_node_status_update())
+
+        return True
+
+    async def _delayed_node_status_update(self) -> bool:
+        await asyncio.sleep(self._debounce_delay / 1000)
+        return await self._async_node_status_update()
+
+    async def _async_node_status_update(self) -> bool:
         if not self.connected_to_manager:
             return False
 
@@ -348,6 +396,6 @@ class HttpClientService(Service):
                 self.manager_url + "/workers/node_status", data=self.state.to_json()
             ) as resp:
                 return resp.ok
-        except aiohttp.client_exceptions.ClientOSError:
+        except Exception:
             self.logger.error(traceback.format_exc())
             return False

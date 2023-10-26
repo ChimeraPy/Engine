@@ -15,6 +15,7 @@ from chimerapy.engine.states import ManagerState, WorkerState
 # Eventbus
 from ..eventbus import Event, EventBus, make_evented
 from ..networking.async_loop_thread import AsyncLoopThread
+from .artifacts_collector_service import ArtifactsCollectorService
 from .distributed_logging_service import DistributedLoggingService
 
 # Services
@@ -110,6 +111,12 @@ class Manager:
             state=self.state,
             # **self.kwargs,
         )
+        self.artifacts_collector = ArtifactsCollectorService(
+            name="artifacts_collector",
+            eventbus=self.eventbus,
+            state=self.state,
+            parent_logger=logger,
+        )
 
         # Initialize services
         await self.http_server.async_init()
@@ -117,6 +124,7 @@ class Manager:
         await self.zeroconf_service.async_init()
         await self.session_record.async_init()
         await self.distributed_logging.async_init()
+        await self.artifacts_collector.async_init()
 
         # Start all services
         await self.eventbus.asend(Event("start"))
@@ -336,6 +344,9 @@ class Manager:
     async def async_collect(self) -> bool:
         return await self.worker_handler.collect()
 
+    async def async_collect_v2(self) -> bool:
+        return await self.worker_handler.collect_v2()
+
     async def async_reset(self, keep_workers: bool = True):
         return await self.worker_handler.reset(keep_workers)
 
@@ -478,6 +489,18 @@ class Manager:
 
         """
         return self._exec_coro(self.async_collect())
+
+    def collect_v2(self) -> Future[bool]:
+        """Collect data from the Workers
+
+        First, we wait until all the Nodes have finished save their data.\
+        Then, manager request that Nodes' from the Workers.
+
+        Returns:
+            Future[bool]: Future of success in collect data from Workers
+
+        """
+        return self._exec_coro(self.async_collect_v2())
 
     def reset(
         self, keep_workers: bool = True, blocking: bool = True

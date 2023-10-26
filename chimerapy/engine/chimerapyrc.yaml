@@ -11,6 +11,7 @@ config:
       worker-shutdown: 10 # seconds
       node-creation: 130 # seconds
       reset: 30
+      collect: 1800 # 30 minutes
     retry:
       data-collection: 30 # seconds
     logs-sink:
@@ -39,3 +40,6 @@ config:
     deque-length: 10000
     interval: 10
     logging-enabled: false
+  file-transfer:
+    chunk-size: 500000 # bytes
+    max-chunks: 2 # Number of chunks to send at once

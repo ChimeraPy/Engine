@@ -1,0 +1,73 @@
+{
+  "mode": "record",
+  "runtime": 100,
+  "workers": {
+    "manager_ip": "129.59.104.153",
+    "manager_port": 9001,
+    "instances": [
+      {
+        "name": "remote-mac",
+        "id": "remote-mac",
+        "remote": true,
+        "description": "local worker for the MMLA pipeline demo with a video node"
+      },
+      {
+        "name": "local",
+        "id": "local",
+        "remote": true,
+        "description": "local worker for the MMLA pipeline demo with a video node"
+      },
+      {
+        "name": "remote-win",
+        "id": "remote-win",
+        "remote": true,
+        "description": "local worker for the MMLA pipeline demo with a video node"
+      }
+    ]
+  },
+  "nodes": [
+    {
+      "registry_name": "FileCreator",
+      "name": "file-creator-win",
+      "kwargs": {
+        "filename": "random-win.bin",
+        "per_step_mb": 10
+      },
+      "package": "ft"
+    },
+    {
+      "registry_name": "FileCreator",
+      "name": "file-creator-mac",
+      "kwargs": {
+        "filename": "random-mac.bin",
+        "per_step_mb": 10
+      },
+      "package": "ft"
+    },
+    {
+      "registry_name": "FileCreator",
+      "name": "file-creator-local",
+      "kwargs": {
+        "filename": "random-local.bin",
+        "per_step_mb": 10
+      },
+      "package": "ft"
+    }
+  ],
+  "adj": [],
+  "manager_config": {
+    "logdir": "cp-logs",
+    "port": 9001
+  },
+  "mappings": {
+    "local": [
+      "file-creator-local"
+    ],
+    "remote-mac": [
+      "file-creator-mac"
+    ],
+    "remote-win": [
+      "file-creator-win"
+    ]
+  }
+}
