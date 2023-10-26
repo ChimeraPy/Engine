@@ -50,6 +50,9 @@ class HttpClientService(Service):
 
         # Services
         self.http_client = aiohttp.ClientSession()
+        # Debounce
+        self._debounce_delay = 500  # ms
+        self._update_task: Optional[asyncio.Task] = None
 
     async def async_init(self):
 
@@ -60,7 +63,7 @@ class HttpClientService(Service):
             ),
             "WorkerState.changed": TypedObserver(
                 "WorkerState.changed",
-                on_asend=self._async_node_status_update,
+                on_asend=self._debounced_async_node_status_update,
                 handle_event="drop",
             ),
             "send_archive": TypedObserver(
@@ -338,8 +341,23 @@ class HttpClientService(Service):
 
         return False
 
-    async def _async_node_status_update(self) -> bool:
+    async def _debounced_async_node_status_update(self) -> bool:
+        if not self.connected_to_manager:
+            return False
 
+        # Debounce
+        if self._update_task is not None:
+            self._update_task.cancel()
+
+        self._update_task = asyncio.ensure_future(self._delayed_node_status_update())
+
+        return True
+
+    async def _delayed_node_status_update(self) -> bool:
+        await asyncio.sleep(self._debounce_delay / 1000)
+        return await self._async_node_status_update()
+
+    async def _async_node_status_update(self) -> bool:
         if not self.connected_to_manager:
             return False
 
@@ -348,6 +366,6 @@ class HttpClientService(Service):
                 self.manager_url + "/workers/node_status", data=self.state.to_json()
             ) as resp:
                 return resp.ok
-        except aiohttp.client_exceptions.ClientOSError:
+        except Exception:
             self.logger.error(traceback.format_exc())
             return False
