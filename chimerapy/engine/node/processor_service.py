@@ -4,11 +4,13 @@ import logging
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional
+
+from aiodistbus import EntryPoint, EventBus, registry
 
 from chimerapy.engine import _logger
 
-from ..eventbus import Event, EventBus, TypedObserver
 from ..networking import DataChunk
 from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
@@ -28,7 +30,6 @@ class ProcessorService(Service):
         self,
         name: str,
         state: NodeState,
-        eventbus: EventBus,
         in_bound_data: bool,
         setup_fn: Optional[Callable] = None,
         main_fn: Optional[Callable] = None,
@@ -42,7 +43,6 @@ class ProcessorService(Service):
 
         # Saving input parameters
         self.state = state
-        self.eventbus = eventbus
         self.setup_fn = setup_fn
         self.main_fn = main_fn
         self.teardown_fn = teardown_fn
@@ -63,34 +63,13 @@ class ProcessorService(Service):
         self.running_task: Optional[asyncio.Task] = None
         self.tasks: List[asyncio.Task] = []
         self.main_thread: Optional[threading.Thread] = None
-
-    async def async_init(self):
-
-        # Put observers
-        self.observers: Dict[str, TypedObserver] = {
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "stop": TypedObserver("stop", on_asend=self.stop, handle_event="drop"),
-            "registered_method": TypedObserver(
-                "registered_method",
-                RegisteredMethodEvent,
-                on_asend=self.execute_registered_method,
-                handle_event="unpack",
-            ),
-            "gather": TypedObserver(
-                "gather", GatherEvent, on_asend=self.gather, handle_event="unpack"
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
+        self.executor: ThreadPoolExecutor = ThreadPoolExecutor()
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
+    @registry.on("setup", namespace=f"{__name__}.ProcessorService")
     async def setup(self):
 
         # Create threading information
@@ -100,11 +79,15 @@ class ProcessorService(Service):
         if self.setup_fn:
             await self.safe_exec(self.setup_fn)
 
+    @registry.on("start", namespace=f"{__name__}.ProcessorService")
     async def start(self):
         # Create a task
         self.running_task = asyncio.create_task(self.main())
 
     async def main(self):
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not attached to the bus.")
+            return
 
         # Set the flag
         self.running: bool = True
@@ -124,20 +107,12 @@ class ProcessorService(Service):
 
             elif self.operation_mode == "step":
 
-                # self.logger.debug(f"{self}: operational mode = step")
-
                 # If step or sink node, only run with inputs
                 if self.in_bound_data:
-                    observer = TypedObserver(
-                        "in_step",
-                        NewInBoundDataEvent,
-                        on_asend=self.safe_step,
-                        handle_event="unpack",
+                    self.logger.debug(f"{self}: step node: {self.state.id}")
+                    await self.entrypoint.on(
+                        "in_step", self.safe_step, Dict[str, DataChunk]
                     )
-                    await self.eventbus.asubscribe(observer)
-                    self.observers["in_step"] = observer
-
-                    # self.logger.debug(f"{self}: step or sink node: {self.state.id}")
 
                 # If source, run as fast as possible
                 else:
@@ -145,9 +120,11 @@ class ProcessorService(Service):
                     while self.running:
                         await self.safe_step()
 
+    @registry.on("stop", namespace=f"{__name__}.ProcessorService")
     async def stop(self):
         self.running = False
 
+    @registry.on("teardown", namespace=f"{__name__}.ProcessorService")
     async def teardown(self):
 
         # Stop things
@@ -168,6 +145,7 @@ class ProcessorService(Service):
     ## Debugging tools
     ####################################################################
 
+    @registry.on("gather", namespace=f"{__name__}.ProcessorService")
     async def gather(self, client: Client):
         await client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
@@ -181,6 +159,7 @@ class ProcessorService(Service):
     ## Async Registered Methods
     ####################################################################
 
+    @registry.on("registered_method", namespace=f"{__name__}.ProcessorService")
     async def execute_registered_method(
         self, method_name: str, params: Dict, client: Optional[Client]
     ) -> Dict[str, Any]:
@@ -219,7 +198,7 @@ class ProcessorService(Service):
         elif style == "reset":
             with self.step_lock:
                 output, _ = await self.safe_exec(function, kwargs=params)
-                await self.eventbus.asend(Event("reset"))
+                await self.entrypoint.emit("reset")
                 success = True
 
         else:
@@ -253,8 +232,9 @@ class ProcessorService(Service):
             if asyncio.iscoroutinefunction(func):
                 output = await func(*args, **kwargs)
             else:
-                await asyncio.sleep(1 / 1000)  # Allow other functions to run as well
-                output = func(*args, **kwargs)
+                output = await asyncio.get_running_loop().run_in_executor(
+                    self.executor, func, *args, **kwargs
+                )
         except Exception:
             traceback_info = traceback.format_exc()
             self.logger.error(traceback_info)
@@ -266,6 +246,8 @@ class ProcessorService(Service):
         return output, delta
 
     async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
+
+        self.logger.debug(f"{self}: safe_step")
 
         # Default value
         output = None
@@ -300,8 +282,8 @@ class ProcessorService(Service):
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler
-            event_data = NewOutBoundDataEvent(output_data_chunk)
-            await self.eventbus.asend(Event("out_step", event_data))
+            await self.entrypoint.emit("out_step", output_data_chunk)
+            self.logger.debug(f"{self}: output = {output_data_chunk}")
 
         # Update the counter
         self.step_id += 1

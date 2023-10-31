@@ -13,13 +13,14 @@ from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
 import multiprocess as mp
 import numpy as np
 import pandas as pd
+from aiodistbus import EventBus, make_evented
 
 # Internal Imports
 from chimerapy.engine import _logger, config
 
-from ..eventbus import Event, EventBus, make_evented
 from ..networking import DataChunk
 from ..networking.async_loop_thread import AsyncLoopThread
+from ..service import Service
 from ..states import NodeState
 from ..utils import future_wrapper
 from .fsm_service import FSMService
@@ -78,6 +79,7 @@ class Node:
         self.eventloop_future: Optional[Future] = None
         self.eventloop_task: Optional[Task] = None
         self.task_futures: List[Future] = []
+        self.services: Dict[str, Service] = {}
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
@@ -85,11 +87,6 @@ class Node:
 
         # Default values
         self.node_config = NodeConfig()
-        self.worker_comms: Optional[WorkerCommsService] = None
-        self.processor: Optional[ProcessorService] = None
-        self.recorder: Optional[RecordService] = None
-        self.poller: Optional[PollerService] = None
-        self.publisher: Optional[PublisherService] = None
 
     ####################################################################
     ## Properties
@@ -158,8 +155,7 @@ class Node:
     def add_worker_comms(self, worker_comms: WorkerCommsService):
 
         # Store service
-        self.worker_comms = worker_comms
-        self.worker_comms
+        self.services["WorkerCommsService"] = worker_comms
 
         # Add the context information
         self.node_config = worker_comms.node_config
@@ -188,14 +184,14 @@ class Node:
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             timestamp = datetime.datetime.now()
             video_entry = {
                 "uuid": uuid.uuid4(),
@@ -205,7 +201,7 @@ class Node:
                 "fps": fps,
                 "timestamp": timestamp,
             }
-            self.recorder.submit(video_entry)
+            self.services["RecorderService"].submit(video_entry)
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
@@ -230,14 +226,14 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -249,7 +245,7 @@ class Node:
                 "recorder_version": 1,
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(audio_entry)
+            self.services["RecorderService"].submit(audio_entry)
 
     def save_audio_v2(
         self,
@@ -277,14 +273,14 @@ class Node:
         nframes : int
             Number of frames.
         """
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -297,19 +293,19 @@ class Node:
                 "recorder_version": 2,
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(audio_entry)
+            self.services["RecorderService"].submit(audio_entry)
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             tabular_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -317,17 +313,18 @@ class Node:
                 "dtype": "tabular",
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(tabular_entry)
+            self.services["RecorderService"].submit(tabular_entry)
 
     def save_image(self, name: str, data: np.ndarray):
-        if not self.recorder:
+
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             image_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -335,7 +332,7 @@ class Node:
                 "dtype": "image",
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(image_entry)
+            self.services["RecorderService"].submit(image_entry)
 
     def save_json(self, name: str, data: Dict[Any, Any]):
         """Record json data from the node to a JSON Lines file.
@@ -354,14 +351,14 @@ class Node:
         The data dictionary provided must be JSON serializable.
         """
 
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             json_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -369,7 +366,7 @@ class Node:
                 "dtype": "json",
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(json_entry)
+            self.services["RecorderService"].submit(json_entry)
 
     def save_text(self, name: str, data: str, suffix="txt"):
         """Record text data from the node to a text file.
@@ -390,14 +387,14 @@ class Node:
         It should be noted that new lines addition should be taken by the callee.
         """
 
-        if not self.recorder:
+        if not "RecorderService" in self.services:
             self.logger.warning(
                 f"{self}: cannot perform recording operation without RecorderService "
                 "initialization"
             )
             return False
 
-        if self.recorder.enabled:
+        if self.services["RecorderService"].enabled:
             text_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -406,7 +403,7 @@ class Node:
                 "dtype": "text",
                 "timestamp": datetime.datetime.now(),
             }
-            self.recorder.submit(text_entry)
+            self.services["RecorderService"].submit(text_entry)
 
     ####################################################################
     ## Back-End Lifecycle API
@@ -415,12 +412,14 @@ class Node:
     async def _setup(self):
 
         # Adding state to the WorkerCommsService
-        if self.worker_comms:
-            self.worker_comms.in_node_config(
-                state=self.state, eventbus=self.eventbus, logger=self.logger
+        if "WorkerCommsService" in self.services:
+            self.services["WorkerCommsService"].in_node_config(
+                state=self.state, logger=self.logger
             )
-            if self.worker_comms.worker_config:
-                config.update_defaults(self.worker_comms.worker_config)
+            if self.services["WorkerCommsService"].worker_config:
+                config.update_defaults(
+                    self.services["WorkerCommsService"].worker_config
+                )
         elif not self.state.logdir:
             self.state.logdir = pathlib.Path(tempfile.mktemp())
 
@@ -434,7 +433,7 @@ class Node:
         self.state = make_evented(self.state, event_bus=self.eventbus)
 
         # Add the FSM service
-        self.fsm_service = FSMService("fsm", self.state, self.eventbus, self.logger)
+        self.services["FSMService"] = FSMService("fsm", self.state, self.logger)
 
         # Configure the processor's operational mode
         mode: Literal["main", "step"] = "step"  # default
@@ -460,7 +459,7 @@ class Node:
         in_bound_data = len(self.node_config.in_bound) != 0
 
         # Create services
-        self.processor = ProcessorService(
+        self.services["ProcessorService"] = ProcessorService(
             name="processor",
             setup_fn=self.setup,
             main_fn=main_fn,
@@ -469,56 +468,42 @@ class Node:
             registered_methods=self.registered_methods,
             registered_node_fns=registered_fns,
             state=self.state,
-            eventbus=self.eventbus,
             in_bound_data=in_bound_data,
             logger=self.logger,
         )
-        self.recorder = RecordService(
+        self.services["RecordService"] = RecordService(
             name="recorder",
             state=self.state,
-            eventbus=self.eventbus,
             logger=self.logger,
         )
-        self.profiler = ProfilerService(
+        self.services["ProfilerService"] = ProfilerService(
             name="profiler",
             state=self.state,
-            eventbus=self.eventbus,
             logger=self.logger,
         )
 
         # If in-bound, enable the poller service
         if self.node_config and self.node_config.in_bound:
-            self.poller = PollerService(
+            self.services["PollerService"] = PollerService(
                 name="poller",
                 in_bound=self.node_config.in_bound,
                 in_bound_by_name=self.node_config.in_bound_by_name,
                 follow=self.node_config.follow,
                 state=self.state,
-                eventbus=self.eventbus,
                 logger=self.logger,
             )
 
         # If out_bound, enable the publisher service
         if self.node_config and self.node_config.out_bound:
-            self.publisher = PublisherService(
+            self.services["PublisherService"] = PublisherService(
                 "publisher",
                 state=self.state,
-                eventbus=self.eventbus,
                 logger=self.logger,
             )
 
         # Initialize all services
-        if self.worker_comms:
-            await self.worker_comms.async_init()
-        if self.poller:
-            await self.poller.async_init()
-        if self.publisher:
-            await self.publisher.async_init()
-
-        await self.processor.async_init()
-        await self.recorder.async_init()
-        await self.profiler.async_init()
-        await self.fsm_service.async_init()
+        for service in self.services.values():
+            await service.attach(self.eventbus)
 
         # Start all services
         await self.eventbus.asend(Event("setup"))

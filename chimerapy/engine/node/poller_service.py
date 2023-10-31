@@ -2,10 +2,11 @@ import datetime
 import logging
 from typing import Dict, List, Optional
 
+from aiodistbus import EntryPoint, EventBus, registry
+
 from chimerapy.engine import _logger
 
 from ..data_protocols import NodePubEntry, NodePubTable
-from ..eventbus import Event, EventBus, TypedObserver
 from ..networking import DataChunk, Subscriber
 from ..service import Service
 from ..states import NodeState
@@ -19,7 +20,6 @@ class PollerService(Service):
         in_bound: List[str],
         in_bound_by_name: List[str],
         state: NodeState,
-        eventbus: EventBus,
         follow: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
     ):
@@ -30,7 +30,6 @@ class PollerService(Service):
         self.in_bound_by_name: List[str] = in_bound_by_name
         self.follow: Optional[str] = follow
         self.state = state
-        self.eventbus = eventbus
 
         # Logging
         if logger:
@@ -39,30 +38,16 @@ class PollerService(Service):
             self.logger = _logger.getLogger("chimerapy-engine")
 
         # Containers
+        self.emit_counter: int = 0
         self.sub: Optional[Subscriber] = None
         self.in_bound_data: Dict[str, DataChunk] = {}
-
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-            "setup_connections": TypedObserver(
-                "setup_connections",
-                ProcessNodePubTableEvent,
-                on_asend=self.setup_connections,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
+        self.entrypoint: Optional[EntryPoint] = None
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
+    @registry.on("teardown", namespace=f"{__name__}.PollerService")
     async def teardown(self):
 
         # Shutting down subscriber
@@ -73,6 +58,9 @@ class PollerService(Service):
     ## Helper Methods
     ####################################################################
 
+    @registry.on(
+        "setup_connections", NodePubTable, namespace=f"{__name__}.PollerService"
+    )
     async def setup_connections(self, node_pub_table: NodePubTable):
 
         # Create a subscriber
@@ -94,6 +82,9 @@ class PollerService(Service):
         await self.sub.start()
 
     async def update_data(self, datas: Dict[str, bytes]):
+        if not self.entrypoint:
+            self.logger.error(f"{self}: Service not attached to bus.")
+            return
 
         # Default value
         follow_event = False
@@ -118,6 +109,7 @@ class PollerService(Service):
 
         # If update on the follow and all inputs available, then use the inputs
         if follow_event and len(self.in_bound_data) == len(self.in_bound):
-            await self.eventbus.asend(
-                Event("in_step", NewInBoundDataEvent(self.in_bound_data))
+            await self.entrypoint.emit(
+                "in_step", NewInBoundDataEvent(self.in_bound_data)
             )
+            self.emit_counter += 1
