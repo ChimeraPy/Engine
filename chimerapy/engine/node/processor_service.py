@@ -16,12 +16,6 @@ from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .events import (
-    GatherEvent,
-    NewInBoundDataEvent,
-    NewOutBoundDataEvent,
-    RegisteredMethodEvent,
-)
 from .registered_method import RegisteredMethod
 
 
@@ -109,7 +103,7 @@ class ProcessorService(Service):
 
                 # If step or sink node, only run with inputs
                 if self.in_bound_data:
-                    self.logger.debug(f"{self}: step node: {self.state.id}")
+                    # self.logger.debug(f"{self}: step node: {self.state.id}")
                     await self.entrypoint.on(
                         "in_step", self.safe_step, Dict[str, DataChunk]
                     )
@@ -163,6 +157,9 @@ class ProcessorService(Service):
     async def execute_registered_method(
         self, method_name: str, params: Dict, client: Optional[Client]
     ) -> Dict[str, Any]:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not attached to the bus.")
+            return {"success": False, "output": None, "node_id": self.state.id}
 
         # First check if the request is valid
         if method_name not in self.registered_methods:
@@ -226,14 +223,14 @@ class ProcessorService(Service):
 
         # Default value
         output = None
+        tic = time.perf_counter()
 
         try:
-            tic = time.perf_counter()
             if asyncio.iscoroutinefunction(func):
                 output = await func(*args, **kwargs)
             else:
                 output = await asyncio.get_running_loop().run_in_executor(
-                    self.executor, func, *args, **kwargs
+                    self.executor, lambda: func(*args, **kwargs)
                 )
         except Exception:
             traceback_info = traceback.format_exc()
@@ -246,8 +243,9 @@ class ProcessorService(Service):
         return output, delta
 
     async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
-
-        self.logger.debug(f"{self}: safe_step")
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not attached to the bus.")
+            return
 
         # Default value
         output = None
@@ -283,7 +281,7 @@ class ProcessorService(Service):
 
             # Send out the output to the OutputsHandler
             await self.entrypoint.emit("out_step", output_data_chunk)
-            self.logger.debug(f"{self}: output = {output_data_chunk}")
+            # self.logger.debug(f"{self}: output = {output_data_chunk}")
 
         # Update the counter
         self.step_id += 1

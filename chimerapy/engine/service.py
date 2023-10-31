@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections import UserDict
 from typing import Any, Dict, List, Optional
 
@@ -26,10 +26,11 @@ class Service(ABC):
 
         """
         self.entrypoint = EntryPoint()
-        await self.entrypoint.use(
-            registry, f"{self.__class__.__module__}.{self.__class__.__name__}"
-        )
-        await self.entrypoint.connect(bus)
+        if self.entrypoint:
+            await self.entrypoint.use(
+                registry, f"{self.__class__.__module__}.{self.__class__.__name__}"
+            )
+            await self.entrypoint.connect(bus)
 
 
 class ServiceGroup(UserDict):

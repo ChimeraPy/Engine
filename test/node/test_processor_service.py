@@ -41,9 +41,9 @@ async def shutdown(processor):
 
 
 async def emit_data(entrypoint):
+    await asyncio.sleep(1)
     for _ in range(3):
         await entrypoint.emit("in_step", {"data": DataChunk()})
-        logger.debug("Emitting data")
         await asyncio.sleep(0.5)
 
 
@@ -55,9 +55,6 @@ async def receive_data(data_chunk: DataChunk):
 
 @pytest.fixture
 async def step_processor(bus):
-
-    # Create eventbus
-    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -71,17 +68,12 @@ async def step_processor(bus):
         operation_mode="step",
     )
     await processor.attach(bus)
-
-    yield (processor, eventbus)
-
+    yield processor
     await processor.teardown()
 
 
 @pytest.fixture
 async def source_processor(bus):
-
-    # Create eventbus
-    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -95,17 +87,12 @@ async def source_processor(bus):
         operation_mode="step",
     )
     await processor.attach(bus)
-
-    yield (processor, eventbus)
-
+    yield processor
     await processor.teardown()
 
 
 @pytest.fixture
 async def main_processor(bus):
-
-    # Create eventbus
-    eventbus = EventBus()
 
     # Create sample state
     state = NodeState()
@@ -119,9 +106,7 @@ async def main_processor(bus):
         operation_mode="main",
     )
     await processor.attach(bus)
-
-    yield (processor, eventbus)
-
+    yield processor
     await processor.teardown()
 
 
@@ -153,13 +138,13 @@ async def test_setup(processor_setup):
 @pytest.mark.parametrize(
     "ptype, processor_setup",
     [
-        # ("source", lazy_fixture("source_processor")),
-        # ("main", lazy_fixture("main_processor")),
+        ("source", lazy_fixture("source_processor")),
+        ("main", lazy_fixture("main_processor")),
         ("step", lazy_fixture("step_processor")),
     ],
 )
-async def test_main(ptype, processor_setup):
-    processor, bus = processor_setup
+async def test_main(ptype, processor_setup, bus):
+    processor = processor_setup
 
     # Reset
     global CHANGE_FLAG
