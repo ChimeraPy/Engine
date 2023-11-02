@@ -3,9 +3,9 @@ import os
 import shutil
 
 import pytest
+from aiodistbus import make_evented
 
 from chimerapy.engine import _logger
-from chimerapy.engine.eventbus import Event, EventBus, make_evented
 from chimerapy.engine.networking.server import Server
 from chimerapy.engine.states import NodeState, WorkerState
 from chimerapy.engine.worker.http_client_service import HttpClientService
@@ -27,13 +27,10 @@ async def server():
 
 
 @pytest.fixture
-async def http_client():
-
-    # Event Loop
-    eventbus = EventBus()
+async def http_client(bus, entrypoint):
 
     # Requirements
-    state = make_evented(WorkerState(), event_bus=eventbus)
+    state = make_evented(WorkerState(), bus=bus)
     logger = _logger.getLogger("chimerapy-engine-worker")
     log_receiver = _logger.get_node_id_zmq_listener()
     log_receiver.start(register_exit_handlers=True)
@@ -42,43 +39,38 @@ async def http_client():
     http_client = HttpClientService(
         name="http_client",
         state=state,
-        eventbus=eventbus,
         logger=logger,
         logreceiver=log_receiver,
     )
-    await http_client.async_init()
+    await http_client.attach(bus)
     yield http_client
-
-    await eventbus.asend(Event("shutdown"))
+    await entrypoint.emit("shutdown")
 
 
 async def test_http_client_instanciate(http_client):
     ...
 
 
-@pytest.mark.skip(reason="Manager not working")
 async def test_connect_via_ip(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
 
 
-@pytest.mark.skip(reason="Manager not working")
 async def test_connect_via_zeroconf(http_client, manager):
     await manager.async_zeroconf()
     assert await http_client._async_connect_via_zeroconf()
 
 
-@pytest.mark.skip(reason="Manager not working")
 async def test_node_status_update(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
     assert await http_client._async_node_status_update()
 
 
-@pytest.mark.skip(reason="Manager not working")
 async def test_worker_state_changed_updates(http_client, manager):
     assert await http_client._async_connect_via_ip(host=manager.host, port=manager.port)
 
     # Change the state
     http_client.state.nodes["test"] = NodeState(id="test", name="test")
+    await http_client._async_node_status_update()
 
     # Wait for the update
     logger.debug("Sleeping for 1")

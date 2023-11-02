@@ -26,20 +26,17 @@ def pickled_gen_node_config(gen_node):
 
 
 @pytest.fixture
-async def http_server():
-
-    # Event Loop
-    eventbus = EventBus()
+async def http_server(bus):
 
     # Requirements
     state = WorkerState()
 
     # Create the services
-    http_server = HttpServerService(
-        name="http_server", state=state, eventbus=eventbus, logger=logger
-    )
+    http_server = HttpServerService(name="http_server", state=state, logger=logger)
+    await http_server.attach(bus)
     await http_server.start()
-    return http_server
+    yield http_server
+    await http_server.shutdown()
 
 
 @pytest.fixture

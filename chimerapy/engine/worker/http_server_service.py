@@ -324,7 +324,7 @@ class HttpServerService(Service):
             self.logger.error(f"{self}: Service not connected to bus.")
             return web.HTTPError()
 
-        self.logger.debug(f"{self}: node_status_update: :{msg}")
+        # self.logger.debug(f"{self}: node_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
@@ -343,6 +343,7 @@ class HttpServerService(Service):
         # Saving gathering value
         node_id = msg["data"]["node_id"]
         gather_data = GatherData(node_id=node_id, gather=msg["data"]["latest_value"])
+        # self.logger.debug(f"{self}: gather_data: {gather_data}")
         await self.entrypoint.emit("update_gather", gather_data)
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):

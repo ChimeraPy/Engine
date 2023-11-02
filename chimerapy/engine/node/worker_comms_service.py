@@ -83,10 +83,10 @@ class WorkerCommsService(Service):
         if not self.check():
             return
 
-        self.logger.debug(
-            f"{self}: Prepping the networking component of the Node, connecting to "
-            f"Worker at {self.host}:{self.port}"
-        )
+        # self.logger.debug(
+        #     f"{self}: Prepping the networking component of the Node, connecting to "
+        #     f"Worker at {self.host}:{self.port}"
+        # )
 
         # Create client to the Worker
         self.client = Client(
@@ -128,7 +128,7 @@ class WorkerCommsService(Service):
         if not self.check():
             return
 
-        self.logger.debug(f"{self}: Sending NodeState: {self.state.to_dict()}")
+        # self.logger.debug(f"{self}: Sending NodeState: {self.state.to_dict()}")
 
         jsonable_state = self.state.to_dict()
         jsonable_state["logdir"] = str(jsonable_state["logdir"])
@@ -141,7 +141,10 @@ class WorkerCommsService(Service):
         if not self.check():
             return
 
+        # self.logger.debug(f"{self}: Sending gather")
+
         if self.client:
+            # self.logger.debug(f"{self}: Sending gather with client")
             await self.entrypoint.emit("gather", self.client)
 
     @registry.on(
@@ -194,6 +197,7 @@ class WorkerCommsService(Service):
     async def execute_registered_method(self, msg: Dict):
         if not self.check():
             return
+
         # Check first that the method exists
         method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
 

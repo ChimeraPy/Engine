@@ -21,7 +21,7 @@ class ResultsData(DataClassJsonMixin):
 class RegisterMethodData(DataClassJsonMixin):
     node_id: str
     method_name: str
-    params: Any
+    params: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

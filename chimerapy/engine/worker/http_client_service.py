@@ -10,17 +10,16 @@ import uuid
 from typing import Dict, Literal, Optional, Tuple, Union
 
 import aiohttp
+from aiodistbus import registry
 from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import EventBus, TypedObserver
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking import Client
 from ..service import Service
 from ..states import WorkerState
 from ..utils import get_ip_address
-from .events import SendArchiveEvent
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -29,7 +28,6 @@ class HttpClientService(Service):
         self,
         name: str,
         state: WorkerState,
-        eventbus: EventBus,
         logger: logging.Logger,
         logreceiver: NodeIDZMQPullListener,
     ):
@@ -37,7 +35,6 @@ class HttpClientService(Service):
 
         # Input parameters
         self.state = state
-        self.eventbus = eventbus
         self.logger = logger
         self.logreceiver = logreceiver
 
@@ -51,31 +48,10 @@ class HttpClientService(Service):
         # Services
         self.http_client = aiohttp.ClientSession()
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-            "WorkerState.changed": TypedObserver(
-                "WorkerState.changed",
-                on_asend=self._async_node_status_update,
-                handle_event="drop",
-            ),
-            "send_archive": TypedObserver(
-                "send_archive",
-                SendArchiveEvent,
-                on_asend=self._send_archive,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port
 
+    @registry.on("shutdown", namespace=f"{__name__}.HttpClientService")
     async def shutdown(self) -> bool:
 
         success = True
@@ -255,6 +231,7 @@ class HttpClientService(Service):
 
         return success
 
+    @registry.on("send_archive", pathlib.Path, f"{__name__}.HttpClientService")
     async def _send_archive(self, path: pathlib.Path) -> bool:
 
         # Flag
@@ -338,6 +315,7 @@ class HttpClientService(Service):
 
         return False
 
+    @registry.on("WorkerState.changed", f"{__name__}.HttpClientService")
     async def _async_node_status_update(self) -> bool:
 
         if not self.connected_to_manager:

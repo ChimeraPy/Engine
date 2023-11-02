@@ -29,3 +29,9 @@ async def test_worker_instance_async():
     worker = cpe.Worker(name="local", id="local", port=0)
     await worker.aserve()
     await worker.async_shutdown()
+
+
+def test_worker_instance_sync():
+    worker = cpe.Worker(name="local", id="local", port=0)
+    worker.serve()
+    worker.shutdown()

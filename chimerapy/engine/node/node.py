@@ -502,14 +502,14 @@ class Node:
 
         # Start all services
         await self.entrypoint.emit("setup")
-        self.logger.debug(f"{self}: setup complete")
+        # self.logger.debug(f"{self}: setup complete")
 
     async def _eventloop(self):
-        self.logger.debug(f"{self}: within event loop")
+        # self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
-        self.logger.debug(f"{self}: after idle")
+        # self.logger.debug(f"{self}: after idle")
         await self._teardown()
-        self.logger.debug(f"{self}: exiting")
+        # self.logger.debug(f"{self}: exiting")
         return 1
 
     async def _idle(self):
@@ -521,9 +521,7 @@ class Node:
             self.logger.error(f"{self}: Node not connected to bus.")
             return
 
-        self.logger.debug(f"{self}: tearing down")
         await self.entrypoint.emit("teardown")
-        self.logger.debug(f"{self}: teardown complete")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -608,7 +606,6 @@ class Node:
         """
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
-        self.logger.debug(f"{self}: running")
 
         # Saving synchronized variable
         if type(running) != type(None):

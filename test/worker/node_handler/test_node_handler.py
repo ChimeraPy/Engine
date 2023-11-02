@@ -9,6 +9,7 @@ import chimerapy.engine as cpe
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
+from chimerapy.engine.worker.struct import RegisterMethodData
 
 from ...conftest import linux_run_only
 from ...networking.test_client_server import server
@@ -228,7 +229,6 @@ async def test_record_and_collect(node_handler_setup, context):
         assert (node_handler.state.tempfolder / node_name).exists()
 
 
-@pytest.mark.skip()
 async def test_registered_method_with_concurrent_style(
     node_handler_setup, node_with_reg_methods
 ):
@@ -238,9 +238,14 @@ async def test_registered_method_with_concurrent_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    results = await node_handler.async_request_registered_method(
-        node_id=node_with_reg_methods.id, method_name="printout"
+    logger.debug(f"Requesting registered method")
+    reg_method_data = RegisterMethodData(
+        node_id=node_with_reg_methods.id,
+        method_name="printout",
     )
+    logger.debug(f"Requesting registered method: {reg_method_data}")
+    results = await node_handler.async_request_registered_method(reg_method_data)
+    logger.debug(f"Results: {results}")
 
     assert await node_handler.async_destroy_node(node_with_reg_methods.id)
     assert (
@@ -250,7 +255,6 @@ async def test_registered_method_with_concurrent_style(
     )
 
 
-@pytest.mark.skip()
 async def test_registered_method_with_params_and_blocking_style(
     node_handler_setup, node_with_reg_methods
 ):
@@ -260,11 +264,12 @@ async def test_registered_method_with_params_and_blocking_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    results = await node_handler.async_request_registered_method(
+    reg_method_data = RegisterMethodData(
         node_id=node_with_reg_methods.id,
         method_name="set_value",
         params={"value": -100},
     )
+    results = await node_handler.async_request_registered_method(reg_method_data)
 
     assert await node_handler.async_destroy_node(node_with_reg_methods.id)
     assert (
@@ -274,7 +279,6 @@ async def test_registered_method_with_params_and_blocking_style(
     )
 
 
-@pytest.mark.skip()
 async def test_registered_method_with_reset_style(
     node_handler_setup, node_with_reg_methods
 ):
@@ -284,10 +288,11 @@ async def test_registered_method_with_reset_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    results = await node_handler.async_request_registered_method(
+    reg_method_data = RegisterMethodData(
         node_id=node_with_reg_methods.id,
         method_name="reset",
     )
+    results = await node_handler.async_request_registered_method(reg_method_data)
 
     assert await node_handler.async_destroy_node(node_with_reg_methods.id)
 
@@ -298,7 +303,6 @@ async def test_registered_method_with_reset_style(
     )
 
 
-@pytest.mark.skip()
 # @pytest.mark.parametrize("context", ["multiprocessing"])  # , "threading"])
 @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
 async def test_gather(node_handler_setup, gen_node, context):

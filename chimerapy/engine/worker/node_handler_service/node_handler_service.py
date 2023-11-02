@@ -84,14 +84,18 @@ class NodeHandlerService(Service):
     ## Helper Functions
     ###################################################################################
 
-    @registry.on("update_gather", str, namespace=f"{__name__}.NodeHandlerService")
+    @registry.on(
+        "update_gather", GatherData, namespace=f"{__name__}.NodeHandlerService"
+    )
     def update_gather(self, gather_data: GatherData):
         node_id = gather_data.node_id
-        gather_data = gather_data.gather_data
+        gather_data = gather_data.gather
         self.node_controllers[node_id].gather = gather_data
         self.node_controllers[node_id].response = True
 
-    @registry.on("update_results", str, namespace=f"{__name__}.NodeHandlerService")
+    @registry.on(
+        "update_results", ResultsData, namespace=f"{__name__}.NodeHandlerService"
+    )
     def update_results(self, results_data: ResultsData):
         node_id = results_data.node_id
         results = results_data.results
@@ -118,9 +122,9 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        self.logger.debug(
-            f"{self}: received request for Node {node_config.id} creation:"
-        )
+        # self.logger.debug(
+        #     f"{self}: received request for Node {node_config.id} creation:"
+        # )
 
         # Saving the node data
         self.state.nodes[id] = NodeState(id=id)
@@ -156,7 +160,7 @@ class NodeHandlerService(Service):
             if isinstance(controller, MPNodeController):
                 controller.set_mp_manager(self.mp_manager)
             controller.run(self.context_session_map[node_config.context])
-            self.logger.debug(f"{self}: started {node_object}")
+            # self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -184,7 +188,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            self.logger.debug(f"{self}: completed node creation: {id}")
+            # self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
@@ -241,7 +245,7 @@ class NodeHandlerService(Service):
                     success.append(True)
                     break
                 else:
-                    self.logger.debug(f"{self}: Node {node_id} has connected: FAILED")
+                    self.logger.error(f"{self}: Node {node_id} has connected: FAILED")
                     success.append(False)
 
         if not all(success):
@@ -332,15 +336,15 @@ class NodeHandlerService(Service):
 
         # Mark that the node hasn't responsed
         self.node_controllers[node_id].response = False
-        self.logger.debug(
-            f"{self}: Requesting registered method: {method_name}@{node_id}"
-        )
+        # self.logger.debug(
+        #     f"{self}: Requesting registered method: {method_name}@{node_id}"
+        # )
 
         await self.entrypoint.emit(
             "send",
             ServerMessage(
                 client_id=node_id,
-                signal=WORKER_MESSAGE.STOP_NODES,
+                signal=WORKER_MESSAGE.REQUEST_METHOD,
                 data={"method_name": method_name, "params": params},
             ),
         )
@@ -389,7 +393,7 @@ class NodeHandlerService(Service):
         # Wait until all Nodes have gather
         success = []
         for node_id in self.state.nodes:
-            for i in range(config.get("worker.allowed-failures")):
+            for _ in range(config.get("worker.allowed-failures")):
 
                 if await async_waiting_for(
                     condition=lambda: self.node_controllers[node_id].response is True,
@@ -401,7 +405,7 @@ class NodeHandlerService(Service):
                     success.append(True)
                     break
                 else:
-                    self.logger.debug(
+                    self.logger.error(
                         f"{self}: Node {node_id} responded to gather: FAILED"
                     )
                     success.append(False)
@@ -449,7 +453,7 @@ class NodeHandlerService(Service):
                     success.append(True)
                     break
                 else:
-                    self.logger.debug(
+                    self.logger.error(
                         f"{self}: Node {node_id} responded to saving request: FAILED"
                     )
                     success.append(False)
