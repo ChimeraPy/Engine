@@ -178,14 +178,14 @@ class Node:
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             timestamp = datetime.datetime.now()
             video_entry = {
                 "uuid": uuid.uuid4(),
@@ -195,7 +195,7 @@ class Node:
                 "fps": fps,
                 "timestamp": timestamp,
             }
-            self.services["RecorderService"].submit(video_entry)
+            self.services["RecordService"].submit(video_entry)
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
@@ -220,14 +220,14 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -239,7 +239,7 @@ class Node:
                 "recorder_version": 1,
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(audio_entry)
+            self.services["RecordService"].submit(audio_entry)
 
     def save_audio_v2(
         self,
@@ -267,14 +267,14 @@ class Node:
         nframes : int
             Number of frames.
         """
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             audio_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -287,19 +287,19 @@ class Node:
                 "recorder_version": 2,
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(audio_entry)
+            self.services["RecordService"].submit(audio_entry)
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             tabular_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -307,18 +307,18 @@ class Node:
                 "dtype": "tabular",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(tabular_entry)
+            self.services["RecordService"].submit(tabular_entry)
 
     def save_image(self, name: str, data: np.ndarray):
 
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             image_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -326,7 +326,7 @@ class Node:
                 "dtype": "image",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(image_entry)
+            self.services["RecordService"].submit(image_entry)
 
     def save_json(self, name: str, data: Dict[Any, Any]):
         """Record json data from the node to a JSON Lines file.
@@ -345,14 +345,14 @@ class Node:
         The data dictionary provided must be JSON serializable.
         """
 
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             json_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -360,7 +360,7 @@ class Node:
                 "dtype": "json",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(json_entry)
+            self.services["RecordService"].submit(json_entry)
 
     def save_text(self, name: str, data: str, suffix="txt"):
         """Record text data from the node to a text file.
@@ -381,14 +381,14 @@ class Node:
         It should be noted that new lines addition should be taken by the callee.
         """
 
-        if not "RecorderService" in self.services:
+        if not "RecordService" in self.services:
             self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
+                f"{self}: cannot perform recording operation without RecordService "
                 "initialization"
             )
             return False
 
-        if self.services["RecorderService"].enabled:
+        if self.services["RecordService"].enabled:
             text_entry = {
                 "uuid": uuid.uuid4(),
                 "name": name,
@@ -397,7 +397,7 @@ class Node:
                 "dtype": "text",
                 "timestamp": datetime.datetime.now(),
             }
-            self.services["RecorderService"].submit(text_entry)
+            self.services["RecordService"].submit(text_entry)
 
     ####################################################################
     ## Back-End Lifecycle API
@@ -507,8 +507,9 @@ class Node:
     async def _eventloop(self):
         self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
+        self.logger.debug(f"{self}: after idle")
         await self._teardown()
-        # self.logger.debug(f"{self}: exiting")
+        self.logger.debug(f"{self}: exiting")
         return 1
 
     async def _idle(self):
@@ -520,7 +521,9 @@ class Node:
             self.logger.error(f"{self}: Node not connected to bus.")
             return
 
+        self.logger.debug(f"{self}: tearing down")
         await self.entrypoint.emit("teardown")
+        self.logger.debug(f"{self}: teardown complete")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -605,6 +608,7 @@ class Node:
         """
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
+        self.logger.debug(f"{self}: running")
 
         # Saving synchronized variable
         if type(running) != type(None):
@@ -614,7 +618,7 @@ class Node:
         run_func = lambda x: run_coroutine_in_thread(self.arun(x))
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.eventloop_future = self.executor.submit(run_func, bus)
-        return 1
+        return self.eventloop_future.result()
 
     async def arun(self, bus: Optional[EventBus] = None):
         self.logger = self.get_logger()
@@ -627,11 +631,12 @@ class Node:
             self.bus = EventBus()
 
         # Create an entrypoint
-        self.entrypoint = EntryPoint(self.bus)
+        self.entrypoint = EntryPoint()
+        if self.entrypoint:
+            await self.entrypoint.connect(self.bus)
 
         await self._setup()
-        self.eventloop_task = asyncio.create_task(self._eventloop())
-        return 1
+        return await self._eventloop()
 
     def shutdown(self, timeout: Optional[Union[float, int]] = None):
         self.running = False

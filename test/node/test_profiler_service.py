@@ -51,7 +51,6 @@ async def test_single_data_chunk(profiler, entrypoint):
         meta["value"]["delta"] = random.randrange(500, 1500, 1)  # ms
         example_data_chunk.update("meta", meta)
 
-        # TODO
         await entrypoint.emit("out_step", example_data_chunk)
 
     await profiler.diagnostics_report()

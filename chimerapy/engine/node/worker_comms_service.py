@@ -83,10 +83,10 @@ class WorkerCommsService(Service):
         if not self.check():
             return
 
-        # self.logger.debug(
-        #     f"{self}: Prepping the networking component of the Node, connecting to "
-        #     f"Worker at {self.host}:{self.port}"
-        # )
+        self.logger.debug(
+            f"{self}: Prepping the networking component of the Node, connecting to "
+            f"Worker at {self.host}:{self.port}"
+        )
 
         # Create client to the Worker
         self.client = Client(
@@ -127,6 +127,8 @@ class WorkerCommsService(Service):
     async def send_state(self):
         if not self.check():
             return
+
+        self.logger.debug(f"{self}: Sending NodeState: {self.state.to_dict()}")
 
         jsonable_state = self.state.to_dict()
         jsonable_state["logdir"] = str(jsonable_state["logdir"])

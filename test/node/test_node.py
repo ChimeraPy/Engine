@@ -3,6 +3,7 @@ import multiprocessing as mp
 import os
 import pathlib
 import time
+from threading import Thread
 from typing import Type
 
 import pytest
@@ -106,15 +107,37 @@ async def test_running_node_async_in_same_process(
     logreceiver, node_cls: Type[cpe.Node], bus
 ):
     node = node_cls(name="step", debug_port=logreceiver.port)
-    await node.arun(bus=bus)
+    task = asyncio.create_task(node.arun(bus=bus))
+    await asyncio.sleep(0.1)
     await node.ashutdown()
+    await task
 
 
 @pytest.mark.parametrize("node_cls", [StepNode, AsyncStepNode, MainNode, AsyncMainNode])
 def test_running_node_in_same_process(logreceiver, node_cls: Type[cpe.Node], bus):
     node = node_cls(name="step", debug_port=logreceiver.port)
-    node.run(bus=bus)
+    thread = Thread(target=node.run, args=(bus,))
+    thread.start()
     node.shutdown()
+    thread.join()
+
+
+@pytest.mark.parametrize("node_cls", [StepNode, AsyncStepNode, MainNode, AsyncMainNode])
+def test_running_node_in_process(logreceiver, node_cls: Type[cpe.Node]):
+    node = node_cls(name="step", debug_port=logreceiver.port)
+
+    running = mp.Value("i", True)
+    p = mp.Process(
+        target=node.run,
+        args=(
+            None,
+            running,
+        ),
+    )
+    p.start()
+    node.shutdown()
+    running.value = False
+    p.join()
 
 
 @pytest.mark.parametrize(
@@ -135,7 +158,7 @@ async def test_lifecycle_start_record_stop(
 
     # Running
     logger.debug(f"Running Node: {node_cls}")
-    await node.arun(bus=bus)
+    task = asyncio.create_task(node.arun(bus=bus))
     logger.debug(f"Outside Node: {node_cls}")
 
     # Wait
@@ -156,6 +179,7 @@ async def test_lifecycle_start_record_stop(
 
     logger.debug("Shutting down Node")
     await node.ashutdown()
+    await task
 
 
 @pytest.mark.parametrize(
@@ -213,6 +237,7 @@ async def test_node_in_process(
     await asyncio.sleep(0.25)
 
     node.shutdown()
+    running.value = False
     logger.debug("Shutting down Node")
 
     p.join()
@@ -232,12 +257,13 @@ async def test_node_in_process_different_context(
     node.add_worker_comms(worker_comms2)
 
     # Adding shared variable that would be typically added by the Worker
+    running = mp.Value("i", True)
     ctx = mp.get_context(context)
     p = ctx.Process(
         target=node.run,
         args=(
             None,
-            mp.Value("i", True),
+            running,
         ),
     )
     p.start()
@@ -265,6 +291,7 @@ async def test_node_in_process_different_context(
     await asyncio.sleep(0.25)
 
     node.shutdown()
+    running.value = False
     logger.debug("Shutting down Node")
 
     p.join()
@@ -308,8 +335,8 @@ async def test_node_connection(logreceiver, mock_worker):
 
     # Running
     logger.debug(f"Running Nodes: {gen_node.state}, {con_node.state}")
-    await gen_node.arun(bus=g_eventbus)
-    await con_node.arun(bus=c_eventbus)
+    g_task = asyncio.create_task(gen_node.arun(bus=g_eventbus))
+    c_task = asyncio.create_task(con_node.arun(bus=c_eventbus))
     logger.debug("Finish run")
 
     # Create the connections
@@ -335,3 +362,5 @@ async def test_node_connection(logreceiver, mock_worker):
     logger.debug("Shutting down Node")
     await gen_node.ashutdown()
     await con_node.ashutdown()
+    await g_task
+    await c_task

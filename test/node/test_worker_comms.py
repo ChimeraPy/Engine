@@ -1,6 +1,8 @@
+import asyncio
 from typing import Dict
 
 import pytest
+from aiodistbus import make_evented
 from aiohttp import web
 
 import chimerapy.engine as cpe
@@ -33,7 +35,7 @@ class MockWorker:
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # self.logger.debug(f"{self}: note_status_update: ", msg)
+        # logger.debug(f"{self}: note_status_update: ", msg)
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
@@ -65,7 +67,7 @@ async def mock_worker():
 async def worker_comms(mock_worker, bus):
 
     # Create sample state
-    state = NodeState(id="test_worker_comms")
+    state = make_evented(NodeState(id="test_worker_comms"), bus=bus)
     node_config = NodeConfig()
 
     # Create the service
@@ -78,12 +80,22 @@ async def worker_comms(mock_worker, bus):
         logger=logger,
     )
     await worker_comms.attach(bus)
+    await worker_comms.setup()
     yield worker_comms
+    await worker_comms.teardown()
     await mock_worker.async_shutdown()
 
 
 def test_instanticate(worker_comms):
     ...
+
+
+async def test_node_state_change(worker_comms, mock_worker):
+
+    # Change the state
+    worker_comms.state.fsm = "RUNNING"
+    await asyncio.sleep(1)
+    assert mock_worker.node_states[worker_comms.state.id].fsm == "RUNNING"
 
 
 @pytest.mark.parametrize(
@@ -103,15 +115,9 @@ def test_instanticate(worker_comms):
 )
 async def test_methods(worker_comms, method_name, method_params):
 
-    # Start the server
-    await worker_comms.setup()
-
     # Run method
     method = getattr(worker_comms, method_name)
     await method(method_params)
-
-    # Shutdown
-    await worker_comms.teardown()
 
 
 @pytest.mark.parametrize(
@@ -130,13 +136,7 @@ async def test_methods(worker_comms, method_name, method_params):
 )
 async def test_ws_signals(worker_comms, mock_worker, signal, data):
 
-    # Start the server
-    await worker_comms.setup()
-
     # Run method
     await mock_worker.server.async_send(
         client_id=worker_comms.state.id, signal=signal, data=data, ok=True
     )
-
-    # Shutdown
-    await worker_comms.teardown()

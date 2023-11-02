@@ -6,11 +6,11 @@ from typing import Any, Dict, Type, Union
 # Third-party Imports
 import dill
 import multiprocess as mp
+from aiodistbus import EventBus, registry
 
 from chimerapy.engine import config
 
 from ...data_protocols import NodePubTable
-from ...eventbus import Event, EventBus, TypedObserver
 from ...logger.zmq_handlers import NodeIDZMQPullListener
 from ...networking import DataChunk
 from ...networking.enums import WORKER_MESSAGE
@@ -19,19 +19,11 @@ from ...node.worker_comms_service import WorkerCommsService
 from ...service import Service
 from ...states import NodeState, WorkerState
 from ...utils import async_waiting_for
-from ..events import (
-    BroadcastEvent,
-    CreateNodeEvent,
-    DestroyNodeEvent,
-    EnableDiagnosticsEvent,
-    ProcessNodePubTableEvent,
-    RegisteredMethodEvent,
-    SendMessageEvent,
-    UpdateGatherEvent,
-    UpdateResultsEvent,
-)
+from ..struct import GatherData, RegisterMethodData, ResultsData, ServerMessage
 from .context_session import ContextSession, MPSession, ThreadSession
 from .node_controller import MPNodeController, NodeController, ThreadNodeController
+
+# TODO
 
 
 class NodeHandlerService(Service):
@@ -39,7 +31,6 @@ class NodeHandlerService(Service):
         self,
         name: str,
         state: WorkerState,
-        eventbus: EventBus,
         logger: logging.Logger,
         logreceiver: NodeIDZMQPullListener,
     ):
@@ -47,7 +38,6 @@ class NodeHandlerService(Service):
 
         # Input parameters
         self.state = state
-        self.eventbus = eventbus
         self.logger = logger
         self.logreceiver = logreceiver
 
@@ -61,78 +51,7 @@ class NodeHandlerService(Service):
             "threading": ThreadNodeController,
         }
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-            "create_node": TypedObserver(
-                "create_node",
-                CreateNodeEvent,
-                on_asend=self.async_create_node,
-                handle_event="unpack",
-            ),
-            "destroy_node": TypedObserver(
-                "destroy_node",
-                DestroyNodeEvent,
-                on_asend=self.async_destroy_node,
-                handle_event="unpack",
-            ),
-            "process_node_pub_table": TypedObserver(
-                "process_node_pub_table",
-                ProcessNodePubTableEvent,
-                on_asend=self.async_process_node_pub_table,
-                handle_event="unpack",
-            ),
-            "step_nodes": TypedObserver(
-                "step_nodes", on_asend=self.async_step, handle_event="drop"
-            ),
-            "start_nodes": TypedObserver(
-                "start_nodes", on_asend=self.async_start_nodes, handle_event="drop"
-            ),
-            "stop_nodes": TypedObserver(
-                "stop_nodes", on_asend=self.async_stop_nodes, handle_event="drop"
-            ),
-            "record_nodes": TypedObserver(
-                "record_nodes", on_asend=self.async_record_nodes, handle_event="drop"
-            ),
-            "registered_method": TypedObserver(
-                "registered_method",
-                RegisteredMethodEvent,
-                on_asend=self.async_request_registered_method,
-                handle_event="unpack",
-            ),
-            "collect": TypedObserver(
-                "collect", on_asend=self.async_collect, handle_event="drop"
-            ),
-            "gather_nodes": TypedObserver(
-                "gather_nodes", on_asend=self.async_gather, handle_event="drop"
-            ),
-            "diagnostics": TypedObserver(
-                "diagnostics",
-                EnableDiagnosticsEvent,
-                on_asend=self.async_diagnostics,
-                handle_event="unpack",
-            ),
-            "update_gather": TypedObserver(
-                "update_gather",
-                UpdateGatherEvent,
-                on_asend=self.update_gather,
-                handle_event="unpack",
-            ),
-            "update_results": TypedObserver(
-                "update_results",
-                UpdateResultsEvent,
-                on_asend=self.update_results,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("start", namespace=f"{__name__}.NodeHandlerService")
     async def start(self) -> bool:
         # Containers
         self.mp_session = MPSession()
@@ -143,6 +62,7 @@ class NodeHandlerService(Service):
         }
         return True
 
+    @registry.on("shutdown", namespace=f"{__name__}.NodeHandlerService")
     async def shutdown(self) -> bool:
 
         tasks = [
@@ -164,11 +84,17 @@ class NodeHandlerService(Service):
     ## Helper Functions
     ###################################################################################
 
-    def update_gather(self, node_id: str, gather: Any):
-        self.node_controllers[node_id].gather = gather
+    @registry.on("update_gather", str, namespace=f"{__name__}.NodeHandlerService")
+    def update_gather(self, gather_data: GatherData):
+        node_id = gather_data.node_id
+        gather_data = gather_data.gather_data
+        self.node_controllers[node_id].gather = gather_data
         self.node_controllers[node_id].response = True
 
-    def update_results(self, node_id: str, results: Any):
+    @registry.on("update_results", str, namespace=f"{__name__}.NodeHandlerService")
+    def update_results(self, results_data: ResultsData):
+        node_id = results_data.node_id
+        results = results_data.results
         self.node_controllers[node_id].registered_method_results = results
         self.node_controllers[node_id].response = True
 
@@ -176,6 +102,7 @@ class NodeHandlerService(Service):
     ## Node Handling
     ###################################################################################
 
+    @registry.on("create_node", NodeConfig, namespace=f"{__name__}.NodeHandlerService")
     async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
 
         # Ensure to convert the node_config into a NodeConfig object
@@ -191,9 +118,9 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        # self.logger.debug(
-        #     f"{self}: received request for Node {node_config.id} creation:"
-        # )
+        self.logger.debug(
+            f"{self}: received request for Node {node_config.id} creation:"
+        )
 
         # Saving the node data
         self.state.nodes[id] = NodeState(id=id)
@@ -229,7 +156,7 @@ class NodeHandlerService(Service):
             if isinstance(controller, MPNodeController):
                 controller.set_mp_manager(self.mp_manager)
             controller.run(self.context_session_map[node_config.context])
-            # self.logger.debug(f"{self}: started {node_object}")
+            self.logger.debug(f"{self}: started {node_object}")
 
             # Wait until response from node
             success = await async_waiting_for(
@@ -257,7 +184,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_config.id] = controller
 
             # Mark success
-            # self.logger.debug(f"{self}: completed node creation: {id}")
+            self.logger.debug(f"{self}: completed node creation: {id}")
             break
 
         if not success:
@@ -266,6 +193,7 @@ class NodeHandlerService(Service):
 
         return success
 
+    @registry.on("destroy_node", str, namespace=f"{__name__}.NodeHandlerService")
     async def async_destroy_node(self, node_id: str) -> bool:
 
         # self.logger.debug(f"{self}: received request for Node {node_id} destruction")
@@ -283,16 +211,22 @@ class NodeHandlerService(Service):
 
         return success
 
+    @registry.on(
+        "process_node_pub_table",
+        NodePubTable,
+        namespace=f"{__name__}.NodeHandlerService",
+    )
     async def async_process_node_pub_table(self, node_pub_table: NodePubTable) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
 
-        await self.eventbus.asend(
-            Event(
-                "broadcast",
-                BroadcastEvent(
-                    signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
-                    data=node_pub_table.to_dict(),
-                ),
-            )
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
+                data=node_pub_table.to_dict(),
+            ),
         )
 
         # Now wait until all nodes have responded as CONNECTED
@@ -315,31 +249,63 @@ class NodeHandlerService(Service):
 
         return all(success)
 
+    @registry.on("start_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_start_nodes(self) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
+
         # Send message to nodes to start
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.START_NODES))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.START_NODES,
+            ),
         )
         return True
 
+    @registry.on("record_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_record_nodes(self) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
+
         # Send message to nodes to start
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.RECORD_NODES))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.RECORD_NODES,
+            ),
         )
         return True
 
+    @registry.on("step_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_step(self) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
+
         # Worker tell all nodes to take a step
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_STEP))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.REQUEST_STEP,
+            ),
         )
         return True
 
+    @registry.on("stop_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_stop_nodes(self) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
+
         # Send message to nodes to start
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.STOP_NODES))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.STOP_NODES,
+            ),
         )
         await async_waiting_for(
             lambda: all(
@@ -351,9 +317,18 @@ class NodeHandlerService(Service):
         )
         return True
 
+    @registry.on("registered_method", namespace=f"{__name__}.NodeHandlerService")
     async def async_request_registered_method(
-        self, node_id: str, method_name: str, params: Dict = {}
+        self, reg_method_data: RegisterMethodData
     ) -> Dict[str, Any]:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return {}
+
+        # Decompose
+        node_id = reg_method_data.node_id
+        method_name = reg_method_data.method_name
+        params = reg_method_data.params
 
         # Mark that the node hasn't responsed
         self.node_controllers[node_id].response = False
@@ -361,12 +336,14 @@ class NodeHandlerService(Service):
             f"{self}: Requesting registered method: {method_name}@{node_id}"
         )
 
-        event_data = SendMessageEvent(
-            client_id=node_id,
-            signal=WORKER_MESSAGE.REQUEST_METHOD,
-            data={"method_name": method_name, "params": params},
+        await self.entrypoint.emit(
+            "send",
+            ServerMessage(
+                client_id=node_id,
+                signal=WORKER_MESSAGE.STOP_NODES,
+                data={"method_name": method_name, "params": params},
+            ),
         )
-        await self.eventbus.asend(Event("send", event_data))
 
         # Then wait for the Node response
         success = await async_waiting_for(
@@ -378,18 +355,23 @@ class NodeHandlerService(Service):
             "output": self.node_controllers[node_id].registered_method_results,
         }
 
+    @registry.on("diagnostics", bool, namespace=f"{__name__}.NodeHandlerService")
     async def async_diagnostics(self, enable: bool) -> bool:
-        await self.eventbus.asend(
-            Event(
-                "broadcast",
-                BroadcastEvent(
-                    signal=WORKER_MESSAGE.DIAGNOSTICS, data={"enable": enable}
-                ),
-            )
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
+
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(signal=WORKER_MESSAGE.DIAGNOSTICS, data={"enable": enable}),
         )
         return True
 
+    @registry.on("gather_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_gather(self) -> Dict:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return {}
 
         # self.logger.debug(f"{self}: reporting to Manager gather request")
 
@@ -397,8 +379,11 @@ class NodeHandlerService(Service):
             self.node_controllers[node_id].response = False
 
         # Request gather from Worker to Nodes
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_GATHER))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.REQUEST_GATHER,
+            ),
         )
 
         # Wait until all Nodes have gather
@@ -435,11 +420,18 @@ class NodeHandlerService(Service):
 
         return gather_data
 
+    @registry.on("collect", namespace=f"{__name__}.NodeHandlerService")
     async def async_collect(self) -> bool:
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Service not connected to bus.")
+            return False
 
         # Request saving from Worker to Nodes
-        await self.eventbus.asend(
-            Event("broadcast", BroadcastEvent(signal=WORKER_MESSAGE.REQUEST_COLLECT))
+        await self.entrypoint.emit(
+            "broadcast",
+            ServerMessage(
+                signal=WORKER_MESSAGE.REQUEST_COLLECT,
+            ),
         )
 
         # Now wait until all nodes have responded as CONNECTED

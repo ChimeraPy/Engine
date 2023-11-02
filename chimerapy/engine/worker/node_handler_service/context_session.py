@@ -54,7 +54,7 @@ class ContextSession(abc.ABC):
 class MPSession(ContextSession):
     def __init__(self):
         self.loop = asyncio.get_running_loop()
-        self.pool = mp.Pool(processes=1)
+        self.pool = mp.Pool()
         self.executor = MultiprocessExecutor(self.pool)
         self.futures = []
 

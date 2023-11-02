@@ -1,4 +1,5 @@
 import asyncio
+from typing import List
 
 import multiprocess as mp
 
@@ -31,6 +32,26 @@ async def test_mp_node_controller():
 
     output = await node_controller.shutdown()
     assert output == OUTPUT
+
+
+async def test_mp_node_controller_multiple():
+    mp_manager = mp.Manager()
+    session = MPSession()
+
+    controllers: List[MPNodeController] = []
+    for i in range(10):
+        node = GenNode(name=f"Gen{i}")
+
+        node_controller = MPNodeController(node, logger)
+        controllers.append(node_controller)
+        node_controller.set_mp_manager(mp_manager)
+        node_controller.run(session)
+
+    await asyncio.sleep(0.25)
+
+    for c in controllers:
+        output = await c.shutdown()
+        assert output == OUTPUT
 
 
 async def test_thread_node_controller():
