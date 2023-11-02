@@ -9,9 +9,10 @@ from typing import Dict
 
 import docker
 import pytest
-from aiodistbus import EventBus
+from aiodistbus import EntryPoint, EventBus
 
 import chimerapy.engine as cpe
+from chimerapy.engine.networking.publisher import Publisher
 
 from .mock import DockeredWorker
 
@@ -78,6 +79,22 @@ async def bus():
     bus = EventBus()
     yield bus
     await bus.close()
+
+
+@pytest.fixture
+async def entrypoint(bus):
+    entrypoint = EntryPoint()
+    await entrypoint.connect(bus)
+    yield entrypoint
+    await entrypoint.close()
+
+
+@pytest.fixture
+def pub():
+    pub = Publisher()
+    pub.start()
+    yield pub
+    pub.shutdown()
 
 
 @pytest.fixture

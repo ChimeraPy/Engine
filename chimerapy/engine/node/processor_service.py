@@ -16,6 +16,7 @@ from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
 from ..service import Service
 from ..states import NodeState
+from .events import RegisteredMethodEvent
 from .registered_method import RegisteredMethod
 
 
@@ -139,7 +140,7 @@ class ProcessorService(Service):
     ## Debugging tools
     ####################################################################
 
-    @registry.on("gather", namespace=f"{__name__}.ProcessorService")
+    @registry.on("gather", Client, namespace=f"{__name__}.ProcessorService")
     async def gather(self, client: Client):
         await client.async_send(
             signal=NODE_MESSAGE.REPORT_GATHER,
@@ -153,16 +154,20 @@ class ProcessorService(Service):
     ## Async Registered Methods
     ####################################################################
 
-    @registry.on("registered_method", namespace=f"{__name__}.ProcessorService")
+    @registry.on(
+        "registered_method",
+        RegisteredMethodEvent,
+        namespace=f"{__name__}.ProcessorService",
+    )
     async def execute_registered_method(
-        self, method_name: str, params: Dict, client: Optional[Client]
+        self, reg_method_req: RegisteredMethodEvent
     ) -> Dict[str, Any]:
         if self.entrypoint is None:
             self.logger.error(f"{self}: Service not attached to the bus.")
             return {"success": False, "output": None, "node_id": self.state.id}
 
         # First check if the request is valid
-        if method_name not in self.registered_methods:
+        if reg_method_req.method_name not in self.registered_methods:
             results = {
                 "node_id": self.state.id,
                 "node_state": self.state.to_json(),
@@ -171,30 +176,32 @@ class ProcessorService(Service):
             }
             self.logger.warning(
                 f"{self}: Worker requested execution of registered method that doesn't "
-                f"exists: {method_name}"
+                f"exists: {reg_method_req.method_name}"
             )
             return {"success": False, "output": None, "node_id": self.state.id}
 
         # Extract the method
-        function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
-        style = self.registered_methods[method_name].style
+        function: Callable[[], Coroutine] = self.registered_node_fns[
+            reg_method_req.method_name
+        ]
+        style = self.registered_methods[reg_method_req.method_name].style
         # self.logger.debug(f"{self}: executing {function} with params: {params}")
 
         # Execute method based on its style
         success = False
         if style == "concurrent":
             # output = await function(**params)  # type: ignore[call-arg]
-            output, _ = await self.safe_exec(function, kwargs=params)
+            output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
             success = True
 
         elif style == "blocking":
             with self.step_lock:
-                output, _ = await self.safe_exec(function, kwargs=params)
+                output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
                 success = True
 
         elif style == "reset":
             with self.step_lock:
-                output, _ = await self.safe_exec(function, kwargs=params)
+                output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
                 await self.entrypoint.emit("reset")
                 success = True
 
@@ -203,13 +210,15 @@ class ProcessorService(Service):
             output = None
 
         # Sending the information if client
-        if client:
+        if reg_method_req.client:
             results = {
                 "success": success,
                 "output": output,
                 "node_id": self.state.id,
             }
-            await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
+            await reg_method_req.client.async_send(
+                signal=NODE_MESSAGE.REPORT_RESULTS, data=results
+            )
 
         return {"success": success, "output": output}
 

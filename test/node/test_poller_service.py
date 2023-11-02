@@ -6,7 +6,6 @@ from aiodistbus import EventBus
 import chimerapy.engine as cpe
 from chimerapy.engine.data_protocols import NodePubEntry, NodePubTable
 from chimerapy.engine.networking.data_chunk import DataChunk
-from chimerapy.engine.networking.publisher import Publisher
 from chimerapy.engine.node.poller_service import PollerService
 from chimerapy.engine.states import NodeState
 
@@ -14,7 +13,7 @@ logger = cpe._logger.getLogger("chimerapy-engine")
 
 
 @pytest.fixture
-async def poller_setup(bus):
+async def poller(bus):
 
     # Create sample state
     state = NodeState()
@@ -28,23 +27,15 @@ async def poller_setup(bus):
         state=state,
     )
     await poller.attach(bus)
-
-    pub = Publisher()
-    pub.start()
-
-    yield (poller, pub)
-
+    yield poller
     await poller.teardown()
-    pub.shutdown()
 
 
-async def test_instanticate(poller_setup):
+async def test_instanticate(poller):
     ...
 
 
-async def test_setting_connections(poller_setup):
-
-    poller, pub = poller_setup
+async def test_setting_connections(poller, pub):
 
     node_pub_table = NodePubTable(
         {"pub_mock": NodePubEntry(ip=pub.host, port=pub.port)}
@@ -52,9 +43,7 @@ async def test_setting_connections(poller_setup):
     await poller.setup_connections(node_pub_table)
 
 
-async def test_poll_message(poller_setup):
-
-    poller, pub = poller_setup
+async def test_poll_message(poller, pub):
 
     # Setup
     node_pub_table = NodePubTable(

@@ -6,23 +6,22 @@ import pathlib
 import tempfile
 import uuid
 from asyncio import Task
-from concurrent.futures import Future
-from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Type, Union
 
 # Third-party Imports
 import multiprocess as mp
 import numpy as np
 import pandas as pd
-from aiodistbus import EventBus, make_evented
+from aiodistbus import EntryPoint, EventBus, make_evented
 
 # Internal Imports
 from chimerapy.engine import _logger, config
 
 from ..networking import DataChunk
-from ..networking.async_loop_thread import AsyncLoopThread
 from ..service import Service
 from ..states import NodeState
-from ..utils import future_wrapper
+from ..utils import run_coroutine_in_thread
 from .fsm_service import FSMService
 
 # Service Imports
@@ -74,12 +73,14 @@ class Node:
         self.debug_port = debug_port
 
         # State variables
-        self._thread: Optional[AsyncLoopThread] = None
         self._running: Union[bool, mp.Value] = True  # type: ignore
+        self.executor: Optional[ThreadPoolExecutor] = None
         self.eventloop_future: Optional[Future] = None
         self.eventloop_task: Optional[Task] = None
         self.task_futures: List[Future] = []
         self.services: Dict[str, Service] = {}
+        self.bus: Optional[EventBus] = None
+        self.entrypoint: Optional[EntryPoint] = None
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
@@ -135,10 +136,17 @@ class Node:
             return logger
 
         # If worker, add zmq handler
-        if self.worker_comms or self.debug_port:
+        if "WorkerCommsService" in self.services and isinstance(
+            self.services["WorkerCommsService"], WorkerCommsService
+        ):
+            worker_comms = self.services["WorkerCommsService"]
+        else:
+            worker_comms = None
 
-            if self.worker_comms:
-                logging_port = self.worker_comms.worker_logging_port
+        if worker_comms or self.debug_port:
+
+            if worker_comms:
+                logging_port = worker_comms.worker_logging_port
             elif self.debug_port:
                 logging_port = self.debug_port
             else:
@@ -163,20 +171,6 @@ class Node:
         # Creating logdir after given the Node
         self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
-
-    def _exec_coro(self, coro: Coroutine) -> Tuple[Future, Optional[Task]]:
-        if isinstance(self._thread, AsyncLoopThread):
-            future = self._thread.exec(coro)
-            task = None
-        else:
-            loop = asyncio.get_event_loop()
-            wrapper, future = future_wrapper(coro)
-            task = loop.create_task(wrapper)
-
-        # Saving the future for later use
-        self.task_futures.append(future)
-
-        return future, task
 
     ####################################################################
     ## Saving Data Stream API
@@ -410,16 +404,17 @@ class Node:
     ####################################################################
 
     async def _setup(self):
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Node not connected to bus.")
+            return
 
         # Adding state to the WorkerCommsService
         if "WorkerCommsService" in self.services:
-            self.services["WorkerCommsService"].in_node_config(
-                state=self.state, logger=self.logger
-            )
-            if self.services["WorkerCommsService"].worker_config:
-                config.update_defaults(
-                    self.services["WorkerCommsService"].worker_config
-                )
+            worker_comms = self.services["WorkerCommsService"]
+            if isinstance(worker_comms, WorkerCommsService):
+                worker_comms.in_node_config(state=self.state, logger=self.logger)
+                if worker_comms.worker_config:
+                    config.update_defaults(worker_comms.worker_config)
         elif not self.state.logdir:
             self.state.logdir = pathlib.Path(tempfile.mktemp())
 
@@ -430,7 +425,7 @@ class Node:
             raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
 
         # Make the state evented
-        self.state = make_evented(self.state, event_bus=self.eventbus)
+        self.state = make_evented(self.state, bus=self.bus)
 
         # Add the FSM service
         self.services["FSMService"] = FSMService("fsm", self.state, self.logger)
@@ -503,13 +498,14 @@ class Node:
 
         # Initialize all services
         for service in self.services.values():
-            await service.attach(self.eventbus)
+            await service.attach(self.bus)
 
         # Start all services
-        await self.eventbus.asend(Event("setup"))
+        await self.entrypoint.emit("setup")
+        self.logger.debug(f"{self}: setup complete")
 
     async def _eventloop(self):
-        # self.logger.debug(f"{self}: within event loop")
+        self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
         await self._teardown()
         # self.logger.debug(f"{self}: exiting")
@@ -520,7 +516,11 @@ class Node:
             await asyncio.sleep(0.2)
 
     async def _teardown(self):
-        await self.eventbus.asend(Event("teardown"))
+        if self.entrypoint is None:
+            self.logger.error(f"{self}: Node not connected to bus.")
+            return
+
+        await self.entrypoint.emit("teardown")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -591,7 +591,7 @@ class Node:
 
     def run(
         self,
-        eventbus: Optional[EventBus] = None,
+        bus: Optional[EventBus] = None,
         running: Optional[mp.Value] = None,  # type: ignore
     ):
         """The actual method that is executed in the new process.
@@ -610,29 +610,24 @@ class Node:
         if type(running) != type(None):
             self._running = running
 
-        # Start an async loop
-        self._thread = AsyncLoopThread()
-        self._thread.start()
-
-        if not eventbus:
-            self.eventbus = EventBus(thread=self._thread)
-        else:
-            self.eventbus = eventbus
-            self.eventbus.set_thread(self._thread)
-
         # Have to run setup before letting the system continue
-        self.eventloop_future, _ = self._exec_coro(self.arun(self.eventbus))
+        run_func = lambda x: run_coroutine_in_thread(self.arun(x))
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.eventloop_future = self.executor.submit(run_func, bus)
         return 1
 
-    async def arun(self, eventbus: Optional[EventBus] = None):
+    async def arun(self, bus: Optional[EventBus] = None):
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
 
         # Save parameters
-        if eventbus:
-            self.eventbus = eventbus
+        if bus:
+            self.bus = bus
         else:
-            self.eventbus = EventBus()
+            self.bus = EventBus()
+
+        # Create an entrypoint
+        self.entrypoint = EntryPoint(self.bus)
 
         await self._setup()
         self.eventloop_task = asyncio.create_task(self._eventloop())
@@ -648,4 +643,5 @@ class Node:
 
     async def ashutdown(self):
         self.running = False
-        await self.eventloop_task
+        if self.eventloop_task:
+            await self.eventloop_task

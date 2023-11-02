@@ -111,50 +111,44 @@ async def main_processor(bus):
 
 
 @pytest.mark.parametrize(
-    "processor_setup",
+    "processor",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
         lazy_fixture("step_processor"),
     ],
 )
-def test_instanticate(processor_setup):
+def test_instanticate(processor):
     ...
 
 
 @pytest.mark.parametrize(
-    "processor_setup",
+    "processor",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
         lazy_fixture("step_processor"),
     ],
 )
-async def test_setup(processor_setup):
-    processor, _ = processor_setup
+async def test_setup(processor):
     await processor.setup()
 
 
 @pytest.mark.parametrize(
-    "ptype, processor_setup",
+    "ptype, processor",
     [
         ("source", lazy_fixture("source_processor")),
         ("main", lazy_fixture("main_processor")),
         ("step", lazy_fixture("step_processor")),
     ],
 )
-async def test_main(ptype, processor_setup, bus):
-    processor = processor_setup
+async def test_main(ptype, processor, entrypoint):
 
     # Reset
     global CHANGE_FLAG
     global RECEIVE_FLAG
     CHANGE_FLAG = False
     RECEIVE_FLAG = False
-
-    # Create test entrypoint
-    entrypoint = EntryPoint()
-    await entrypoint.connect(bus)
 
     # Adding observer for step
     if ptype == "step":

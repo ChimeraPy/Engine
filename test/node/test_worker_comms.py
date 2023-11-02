@@ -5,7 +5,6 @@ from aiohttp import web
 
 import chimerapy.engine as cpe
 from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
-from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from chimerapy.engine.networking.server import Server
 from chimerapy.engine.node.node_config import NodeConfig
@@ -63,10 +62,7 @@ async def mock_worker():
 
 
 @pytest.fixture
-async def worker_comms_setup(mock_worker):
-
-    # Event Loop
-    eventbus = EventBus()
+async def worker_comms(mock_worker, bus):
 
     # Create sample state
     state = NodeState(id="test_worker_comms")
@@ -79,15 +75,14 @@ async def worker_comms_setup(mock_worker):
         port=mock_worker.server.port,
         node_config=node_config,
         state=state,
-        eventbus=eventbus,
         logger=logger,
     )
-
-    yield (worker_comms, mock_worker.server)
+    await worker_comms.attach(bus)
+    yield worker_comms
     await mock_worker.async_shutdown()
 
 
-def test_instanticate(worker_comms_setup):
+def test_instanticate(worker_comms):
     ...
 
 
@@ -106,8 +101,7 @@ def test_instanticate(worker_comms_setup):
         ("enable_diagnostics", {"data": {"enable": True}}),
     ],
 )
-async def test_methods(worker_comms_setup, method_name, method_params):
-    worker_comms, _ = worker_comms_setup
+async def test_methods(worker_comms, method_name, method_params):
 
     # Start the server
     await worker_comms.setup()
@@ -134,14 +128,13 @@ async def test_methods(worker_comms_setup, method_name, method_params):
         (WORKER_MESSAGE.DIAGNOSTICS, {"enable": False}),
     ],
 )
-async def test_ws_signals(worker_comms_setup, signal, data):
-    worker_comms, server = worker_comms_setup
+async def test_ws_signals(worker_comms, mock_worker, signal, data):
 
     # Start the server
     await worker_comms.setup()
 
     # Run method
-    await server.async_send(
+    await mock_worker.server.async_send(
         client_id=worker_comms.state.id, signal=signal, data=data, ok=True
     )
 
