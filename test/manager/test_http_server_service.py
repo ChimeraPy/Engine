@@ -2,8 +2,8 @@ import json
 
 import aiohttp
 import pytest
+from aiodistbus import make_evented
 
-from chimerapy.engine.eventbus import EventBus, make_evented
 from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.states import ManagerState, WorkerState
 
@@ -11,21 +11,19 @@ from ..conftest import TEST_DATA_DIR
 
 
 @pytest.fixture
-async def http_server():
+async def http_server(bus):
 
     # Creating the configuration for the eventbus and dataclasses
-    event_bus = EventBus()
-    state = make_evented(ManagerState(), event_bus=event_bus)
+    state = make_evented(ManagerState(), bus=bus)
 
     # Create the services
     http_server = HttpServerService(
         name="http_server",
         port=0,
         enable_api=True,
-        eventbus=event_bus,
         state=state,
     )
-    await http_server.async_init()
+    await http_server.attach(bus)
     await http_server.start()
     return http_server
 

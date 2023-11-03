@@ -2,11 +2,11 @@ import socket
 from datetime import datetime
 from typing import Dict, Optional
 
+from aiodistbus import registry
 from zeroconf import ServiceInfo, Zeroconf
 
 from chimerapy.engine import _logger
 
-from ..eventbus import EventBus, TypedObserver
 from ..service import Service
 from ..states import ManagerState
 
@@ -17,32 +17,18 @@ class ZeroconfService(Service):
 
     enabled: bool
 
-    def __init__(self, name: str, eventbus: EventBus, state: ManagerState):
+    def __init__(self, name: str, state: ManagerState):
         super().__init__(name=name)
 
         # Save information
         self.name = name
-        self.eventbus = eventbus
         self.state = state
 
         # Creating zeroconf variables
         self.zeroconf: Optional[Zeroconf] = None
         self.enabled: bool = False
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "after_server_startup": TypedObserver(
-                "after_server_startup", on_asend=self.start, handle_event="drop"
-            ),
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("after_server_startup", namespace=f"{__name__}.ZeroconfService")
     def start(self):
 
         # Create the zeroconf service name
@@ -60,6 +46,7 @@ class ZeroconfService(Service):
             },
         )
 
+    @registry.on("shutdown", namespace=f"{__name__}.ZeroconfService")
     async def shutdown(self):
         await self.disable()
 

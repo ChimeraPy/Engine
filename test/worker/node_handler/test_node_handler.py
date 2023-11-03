@@ -6,6 +6,7 @@ import pytest
 from aiodistbus import EventBus, make_evented
 
 import chimerapy.engine as cpe
+from chimerapy.engine import config
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
@@ -173,7 +174,6 @@ async def test_processing_node_pub_table(
             context=context,
         )
     )
-    logger.debug(f"Finished constructing Nodes")
 
     # Serve node pub table
     node_pub_table = http_server._create_node_pub_table()
@@ -238,14 +238,14 @@ async def test_registered_method_with_concurrent_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    logger.debug(f"Requesting registered method")
+    # logger.debug(f"Requesting registered method")
     reg_method_data = RegisterMethodData(
         node_id=node_with_reg_methods.id,
         method_name="printout",
     )
-    logger.debug(f"Requesting registered method: {reg_method_data}")
+    # logger.debug(f"Requesting registered method: {reg_method_data}")
     results = await node_handler.async_request_registered_method(reg_method_data)
-    logger.debug(f"Results: {results}")
+    # logger.debug(f"Results: {results}")
 
     assert await node_handler.async_destroy_node(node_with_reg_methods.id)
     assert (
@@ -320,3 +320,25 @@ async def test_gather(node_handler_setup, gen_node, context):
     assert len(results) > 0
 
     assert await node_handler.async_destroy_node(gen_node.id)
+
+
+@pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+# @pytest.mark.parametrize("context", ["threading"])
+async def test_diagnostics(node_handler_setup, gen_node, context):
+
+    config.set("diagnostics.interval", 2)
+    config.set("diagnostics.logging-enabled", True)
+
+    node_handler, _ = node_handler_setup
+
+    assert await node_handler.async_create_node(
+        cpe.NodeConfig(gen_node, context=context)
+    )
+    assert await node_handler.async_start_nodes()
+    assert await node_handler.async_diagnostics(True)
+    await asyncio.sleep(1)
+    assert await node_handler.async_stop_nodes()
+
+    assert await node_handler.async_destroy_node(gen_node.id)
+
+    assert (node_handler.state.tempfolder / gen_node.name / "diagnostics.csv").exists()

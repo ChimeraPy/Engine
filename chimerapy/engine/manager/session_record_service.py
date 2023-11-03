@@ -2,7 +2,8 @@ import datetime
 import json
 from typing import Dict, Optional
 
-from ..eventbus import EventBus, TypedObserver
+from aiodistbus import registry
+
 from ..service import Service
 from ..states import ManagerState
 
@@ -11,13 +12,11 @@ class SessionRecordService(Service):
     def __init__(
         self,
         name: str,
-        eventbus: EventBus,
         state: ManagerState,
     ):
         super().__init__(name=name)
 
         # Input parameters
-        self.eventbus = eventbus
         self.state = state
 
         # State information
@@ -25,23 +24,7 @@ class SessionRecordService(Service):
         self.stop_time: Optional[datetime.datetime] = None
         self.duration: float = 0
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "save_meta": TypedObserver(
-                "save_meta", on_asend=self._save_meta, handle_event="drop"
-            ),
-            "start_recording": TypedObserver(
-                "start_recording", on_asend=self.start_recording, handle_event="drop"
-            ),
-            "stop_recording": TypedObserver(
-                "stop_recording", on_asend=self.stop_recording, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("save_meta", namespace=f"{__name__}.SessionRecordService")
     def _save_meta(self):
         # Get the times, handle Optional
         if self.start_time:
@@ -67,11 +50,13 @@ class SessionRecordService(Service):
         with open(self.state.logdir / "meta.json", "w") as f:
             json.dump(meta, f, indent=2)
 
+    @registry.on("start_recording", namespace=f"{__name__}.SessionRecordService")
     def start_recording(self):
 
         # Mark the start time
         self.start_time = datetime.datetime.now()
 
+    @registry.on("stop_recording", namespace=f"{__name__}.SessionRecordService")
     def stop_recording(self):
 
         # Mark the stop time

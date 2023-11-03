@@ -47,9 +47,7 @@ class ProfilerService(Service):
 
     @registry.on("enable_diagnostics", bool, namespace=f"{__name__}.ProfilerService")
     async def enable(self, enable: bool = True):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return
+        # self.logger.debug(f"Profiling enabled: {enable}")
 
         if enable != self._enable:
 
@@ -61,7 +59,7 @@ class ProfilerService(Service):
             else:
                 # Stop the timer and remove the observer
                 await self.async_timer.stop()
-                await self.entrypoint.off("enable_diagnostics")
+                await self.entrypoint.off("out_step")
 
             # Update
             self._enable = enable
@@ -71,9 +69,6 @@ class ProfilerService(Service):
         self.process = Process(pid=os.getpid())
 
     async def diagnostics_report(self):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return
 
         if not self.process or not self._enable:
             return None
@@ -114,8 +109,12 @@ class ProfilerService(Service):
         # Send the information to the Worker and ultimately the Manager
         await self.entrypoint.emit("diagnostics_report", diag)
 
+        # self.logger.debug(f"{self}: collected diagnostics")
+
         # Write to a csv, if diagnostics enabled
         if config.get("diagnostics.logging-enabled"):
+
+            # self.logger.debug(f"{self}: Saving data")
 
             # Create dictionary with units
             data = {

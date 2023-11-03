@@ -23,8 +23,6 @@ from ..struct import GatherData, RegisterMethodData, ResultsData, ServerMessage
 from .context_session import ContextSession, MPSession, ThreadSession
 from .node_controller import MPNodeController, NodeController, ThreadNodeController
 
-# TODO
-
 
 class NodeHandlerService(Service):
     def __init__(
@@ -221,9 +219,6 @@ class NodeHandlerService(Service):
         namespace=f"{__name__}.NodeHandlerService",
     )
     async def async_process_node_pub_table(self, node_pub_table: NodePubTable) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         await self.entrypoint.emit(
             "broadcast",
@@ -255,9 +250,6 @@ class NodeHandlerService(Service):
 
     @registry.on("start_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_start_nodes(self) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         # Send message to nodes to start
         await self.entrypoint.emit(
@@ -270,9 +262,6 @@ class NodeHandlerService(Service):
 
     @registry.on("record_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_record_nodes(self) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         # Send message to nodes to start
         await self.entrypoint.emit(
@@ -285,9 +274,6 @@ class NodeHandlerService(Service):
 
     @registry.on("step_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_step(self) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         # Worker tell all nodes to take a step
         await self.entrypoint.emit(
@@ -300,9 +286,6 @@ class NodeHandlerService(Service):
 
     @registry.on("stop_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_stop_nodes(self) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         # Send message to nodes to start
         await self.entrypoint.emit(
@@ -325,9 +308,6 @@ class NodeHandlerService(Service):
     async def async_request_registered_method(
         self, reg_method_data: RegisterMethodData
     ) -> Dict[str, Any]:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return {}
 
         # Decompose
         node_id = reg_method_data.node_id
@@ -361,9 +341,6 @@ class NodeHandlerService(Service):
 
     @registry.on("diagnostics", bool, namespace=f"{__name__}.NodeHandlerService")
     async def async_diagnostics(self, enable: bool) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         await self.entrypoint.emit(
             "broadcast",
@@ -373,9 +350,6 @@ class NodeHandlerService(Service):
 
     @registry.on("gather_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_gather(self) -> Dict:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return {}
 
         # self.logger.debug(f"{self}: reporting to Manager gather request")
 
@@ -426,9 +400,6 @@ class NodeHandlerService(Service):
 
     @registry.on("collect", namespace=f"{__name__}.NodeHandlerService")
     async def async_collect(self) -> bool:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
 
         # Request saving from Worker to Nodes
         await self.entrypoint.emit(

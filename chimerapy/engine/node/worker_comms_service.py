@@ -7,7 +7,7 @@ from aiodistbus import registry
 
 from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..networking import Client
-from ..networking.enums import GENERAL_MESSAGE, NODE_MESSAGE, WORKER_MESSAGE
+from ..networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
 from ..states import NodeState
 from .events import (
@@ -69,9 +69,6 @@ class WorkerCommsService(Service):
         if not self.state:
             self.logger.error(f"{self}: NodeState not set!")
             return False
-        if not self.entrypoint:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return False
         return True
 
     ####################################################################
@@ -123,13 +120,14 @@ class WorkerCommsService(Service):
     ## Message Requests
     ####################################################################
 
-    @registry.on("NodeState.changed", namespace=f"{__name__}.WorkerCommsService")
-    async def send_state(self):
+    @registry.on(
+        "NodeState.changed", NodeState, namespace=f"{__name__}.WorkerCommsService"
+    )
+    async def send_state(self, state: Optional[NodeState] = None):
         if not self.check():
             return
 
         # self.logger.debug(f"{self}: Sending NodeState: {self.state.to_dict()}")
-
         jsonable_state = self.state.to_dict()
         jsonable_state["logdir"] = str(jsonable_state["logdir"])
         if self.client:
@@ -214,4 +212,4 @@ class WorkerCommsService(Service):
         await self.entrypoint.emit("manual_step")
 
     async def enable_diagnostics(self, msg: Dict):
-        ...
+        await self.entrypoint.emit("enable_diagnostics", msg["data"]["enable"])

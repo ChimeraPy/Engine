@@ -76,7 +76,7 @@ def event_loop():
 
 @pytest.fixture
 async def bus():
-    bus = EventBus()
+    bus = EventBus(debug=True)
     yield bus
     await bus.close()
 

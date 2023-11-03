@@ -10,7 +10,6 @@ from ..data_protocols import NodePubEntry, NodePubTable
 from ..networking import DataChunk, Subscriber
 from ..service import Service
 from ..states import NodeState
-from .events import NewInBoundDataEvent, ProcessNodePubTableEvent
 
 
 class PollerService(Service):
@@ -41,7 +40,6 @@ class PollerService(Service):
         self.emit_counter: int = 0
         self.sub: Optional[Subscriber] = None
         self.in_bound_data: Dict[str, DataChunk] = {}
-        self.entrypoint: Optional[EntryPoint] = None
 
     ####################################################################
     ## Lifecycle Hooks
@@ -82,9 +80,6 @@ class PollerService(Service):
         await self.sub.start()
 
     async def update_data(self, datas: Dict[str, bytes]):
-        if not self.entrypoint:
-            self.logger.error(f"{self}: Service not attached to bus.")
-            return
 
         # Default value
         follow_event = False
@@ -109,7 +104,5 @@ class PollerService(Service):
 
         # If update on the follow and all inputs available, then use the inputs
         if follow_event and len(self.in_bound_data) == len(self.in_bound):
-            await self.entrypoint.emit(
-                "in_step", NewInBoundDataEvent(self.in_bound_data)
-            )
+            await self.entrypoint.emit("in_step", self.in_bound_data)
             self.emit_counter += 1

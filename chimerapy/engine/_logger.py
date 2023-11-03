@@ -76,7 +76,7 @@ class ZMQLogHandlerConfig:
 
 LOGGING_CONFIG: Dict[str, Any] = {
     "version": 1,
-    "disable_existing_loggers": True,
+    # "disable_existing_loggers": True,
     "formatters": {
         "standard": {
             "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",

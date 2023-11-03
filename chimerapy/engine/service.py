@@ -6,7 +6,7 @@ from aiodistbus import EntryPoint, EventBus, registry
 class Service:
     def __init__(self, name: str):
         self.name = name
-        self.entrypoint: Optional[EntryPoint] = None
+        self.entrypoint = EntryPoint()
 
     def __str__(self):
         return f"<{self.__class__.__name__}, name={self.name}>"
@@ -23,11 +23,9 @@ class Service:
             ValueError: If the registry is empty for service's Namespace.
 
         """
-        self.entrypoint = EntryPoint()
-        if self.entrypoint:
-            await self.entrypoint.connect(bus)
-            await self.entrypoint.use(
-                registry,
-                b_args=[self],
-                namespace=f"{self.__class__.__module__}.{self.__class__.__name__}",
-            )
+        await self.entrypoint.connect(bus)
+        await self.entrypoint.use(
+            registry,
+            b_args=[self],
+            namespace=f"{self.__class__.__module__}.{self.__class__.__name__}",
+        )

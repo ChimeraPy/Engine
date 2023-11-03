@@ -6,18 +6,18 @@ from datetime import datetime
 from typing import Any, Coroutine, Dict, List, Literal, Optional, Union
 
 import asyncio_atexit
+from aiodistbus import EntryPoint, EventBus, make_evented
 
 # Internal Imports
 from chimerapy.engine import _logger, config
 from chimerapy.engine.graph import Graph
 from chimerapy.engine.states import ManagerState, WorkerState
 
-# Eventbus
-from ..eventbus import Event, EventBus, make_evented
 from ..networking.async_loop_thread import AsyncLoopThread
-from .distributed_logging_service import DistributedLoggingService
+from ..service import Service
 
 # Services
+from .distributed_logging_service import DistributedLoggingService
 from .http_server_service import HttpServerService
 from .session_record_service import SessionRecordService
 from .worker_handler_service import WorkerHandlerService
@@ -27,13 +27,6 @@ logger = _logger.getLogger("chimerapy-engine")
 
 
 class Manager:
-
-    http_server: HttpServerService
-    worker_handler: WorkerHandlerService
-    zeroconf_service: ZeroconfService
-    session_record: SessionRecordService
-    distributed_logging: DistributedLoggingService
-
     def __init__(
         self,
         logdir: Union[pathlib.Path, str],
@@ -68,6 +61,7 @@ class Manager:
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
+        self.services: Dict[str, Service] = {}
 
         # Create log directory to store data
         self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -81,45 +75,48 @@ class Manager:
     async def aserve(self) -> bool:
 
         # Create eventbus
-        self.eventbus = EventBus()
-        self.state = make_evented(self.state, event_bus=self.eventbus)
+        self.bus = EventBus()
+        self.entrypoint = EntryPoint()
+        await self.entrypoint.connect(self.bus)
+        self.state = make_evented(self.state, bus=self.bus)
 
         # Create the services
         self.http_server = HttpServerService(
             name="http_server",
             port=self.state.port,
             enable_api=self.enable_api,
-            eventbus=self.eventbus,
             state=self.state,
         )
         self.worker_handler = WorkerHandlerService(
-            name="worker_handler", eventbus=self.eventbus, state=self.state
+            name="worker_handler", state=self.state
         )
-        self.zeroconf_service = ZeroconfService(
-            name="zeroconf", eventbus=self.eventbus, state=self.state
-        )
+        self.zeroconf_service = ZeroconfService(name="zeroconf", state=self.state)
         self.session_record = SessionRecordService(
             name="session_record",
-            eventbus=self.eventbus,
             state=self.state,
         )
         self.distributed_logging = DistributedLoggingService(
             name="distributed_logging",
             publish_logs_via_zmq=self.publish_logs_via_zmq,
-            eventbus=self.eventbus,
             state=self.state,
             # **self.kwargs,
         )
+        service_list = [
+            self.http_server,
+            self.worker_handler,
+            self.zeroconf_service,
+            self.session_record,
+            self.distributed_logging,
+        ]
+        for service in service_list:
+            self.services[service.name] = service
 
         # Initialize services
-        await self.http_server.async_init()
-        await self.worker_handler.async_init()
-        await self.zeroconf_service.async_init()
-        await self.session_record.async_init()
-        await self.distributed_logging.async_init()
+        for service in self.services.values():
+            await service.attach(self.bus)
 
         # Start all services
-        await self.eventbus.asend(Event("start"))
+        await self.entrypoint.emit("start")
 
         # Logging
         logger.info(f"ChimeraPy: Manager running at {self.host}:{self.port}")
@@ -180,40 +177,40 @@ class Manager:
     ## Async Networking
     ####################################################################
 
-    async def _async_request_node_creation(
-        self,
-        worker_id: str,
-        node_id: str,
-        context: Literal["multiprocessing", "threading"] = "multiprocessing",
-    ) -> bool:
-        return await self.worker_handler._request_node_creation(
-            worker_id, node_id, context=context
-        )
+    # async def _async_request_node_creation(
+    #     self,
+    #     worker_id: str,
+    #     node_id: str,
+    #     context: Literal["multiprocessing", "threading"] = "multiprocessing",
+    # ) -> bool:
+    #     return await self.worker_handler._request_node_creation(
+    #         worker_id, node_id, context=context
+    #     )
 
-    async def _async_request_node_destruction(
-        self, worker_id: str, node_id: str
-    ) -> bool:
-        return await self.worker_handler._request_node_destruction(worker_id, node_id)
+    # async def _async_request_node_destruction(
+    #     self, worker_id: str, node_id: str
+    # ) -> bool:
+    #     return await self.worker_handler._request_node_destruction(worker_id, node_id)
 
-    async def _async_request_node_pub_table(self, worker_id: str) -> bool:
-        return await self.worker_handler._request_node_pub_table(worker_id)
+    # async def _async_request_node_pub_table(self, worker_id: str) -> bool:
+    #     return await self.worker_handler._request_node_pub_table(worker_id)
 
-    async def _async_request_connection_creation(self, worker_id: str) -> bool:
-        return await self.worker_handler._request_connection_creation(worker_id)
+    # async def _async_request_connection_creation(self, worker_id: str) -> bool:
+    #     return await self.worker_handler._request_connection_creation(worker_id)
 
-    async def _async_broadcast_request(
-        self,
-        htype: Literal["get", "post"],
-        route: str,
-        data: Any = {},
-        timeout: Optional[Union[int, float]] = config.get(
-            "manager.timeout.info-request"
-        ),
-        report_exceptions: bool = True,
-    ) -> bool:
-        return await self.worker_handler._broadcast_request(
-            htype, route, data, timeout, report_exceptions
-        )
+    # async def _async_broadcast_request(
+    #     self,
+    #     htype: Literal["get", "post"],
+    #     route: str,
+    #     data: Any = {},
+    #     timeout: Optional[Union[int, float]] = config.get(
+    #         "manager.timeout.info-request"
+    #     ),
+    #     report_exceptions: bool = True,
+    # ) -> bool:
+    #     return await self.worker_handler._broadcast_request(
+    #         htype, route, data, timeout, report_exceptions
+    #     )
 
     ####################################################################
     ## Sync Networking
@@ -225,35 +222,35 @@ class Manager:
     def _deregister_graph(self):
         self.worker_handler._deregister_graph()
 
-    def _request_node_creation(
-        self,
-        worker_id: str,
-        node_id: str,
-        context: Literal["multiprocessing", "threading"] = "multiprocessing",
-    ) -> Future[bool]:
-        return self._exec_coro(
-            self._async_request_node_creation(worker_id, node_id, context=context)
-        )
+    # def _request_node_creation(
+    #     self,
+    #     worker_id: str,
+    #     node_id: str,
+    #     context: Literal["multiprocessing", "threading"] = "multiprocessing",
+    # ) -> Future[bool]:
+    #     return self._exec_coro(
+    #         self._async_request_node_creation(worker_id, node_id, context=context)
+    #     )
 
-    def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
+    # def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
+    #     return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
 
-    def _request_node_pub_table(self, worker_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_node_pub_table(worker_id))
+    # def _request_node_pub_table(self, worker_id: str) -> Future[bool]:
+    #     return self._exec_coro(self._async_request_node_pub_table(worker_id))
 
-    def _request_connection_creation(self, worker_id: str) -> Future[bool]:
-        return self._exec_coro(self._async_request_connection_creation(worker_id))
+    # def _request_connection_creation(self, worker_id: str) -> Future[bool]:
+    #     return self._exec_coro(self._async_request_connection_creation(worker_id))
 
-    def _broadcast_request(
-        self,
-        htype: Literal["get", "post"],
-        route: str,
-        data: Any = {},
-        timeout: Union[int, float] = config.get("manager.timeout.info-request"),
-    ) -> Future[bool]:
-        return self._exec_coro(
-            self._async_broadcast_request(htype, route, data, timeout)
-        )
+    # def _broadcast_request(
+    #     self,
+    #     htype: Literal["get", "post"],
+    #     route: str,
+    #     data: Any = {},
+    #     timeout: Union[int, float] = config.get("manager.timeout.info-request"),
+    # ) -> Future[bool]:
+    #     return self._exec_coro(
+    #         self._async_broadcast_request(htype, route, data, timeout)
+    # )
 
     ####################################################################
     ## Front-facing ASync API
@@ -346,7 +343,7 @@ class Manager:
             # logger.debug(f"{self}: requested to shutdown twice, skipping.")
             return True
 
-        await self.eventbus.asend(Event("shutdown"))
+        await self.entrypoint.emit("shutdown")
         self.has_shutdown = True
 
         return True
@@ -409,18 +406,18 @@ class Manager:
             )
         )
 
-    def step(self) -> Future[bool]:
-        """Cluster step execution for offline operation.
+    # def step(self) -> Future[bool]:
+    #     """Cluster step execution for offline operation.
 
-        The ``step`` function is for careful but slow operation of the
-        cluster. For online execution, ``start`` and ``stop`` are the
-        methods to be used.
+    #     The ``step`` function is for careful but slow operation of the
+    #     cluster. For online execution, ``start`` and ``stop`` are the
+    #     methods to be used.
 
-        Returns:
-            Future[bool]: Future of the success of step function broadcasting
+    #     Returns:
+    #         Future[bool]: Future of the success of step function broadcasting
 
-        """
-        return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
+    #     """
+    #     return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
 
     def gather(self) -> Future[Dict]:
         return self._exec_coro(self.async_gather())

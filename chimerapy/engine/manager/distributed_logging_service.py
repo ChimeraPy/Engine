@@ -1,13 +1,13 @@
 from typing import Dict, Optional
 
+from aiodistbus import registry
+
 from chimerapy.engine import _logger, config
 
-from ..eventbus import EventBus, TypedObserver
 from ..logger.distributed_logs_sink import DistributedLogsMultiplexedFileSink
 from ..service import Service
-from ..states import ManagerState
+from ..states import ManagerState, WorkerState
 from ..utils import megabytes_to_bytes
-from .events import DeregisterEntityEvent, RegisterEntityEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -17,7 +17,6 @@ class DistributedLoggingService(Service):
         self,
         name: str,
         publish_logs_via_zmq: bool,
-        eventbus: EventBus,
         state: ManagerState,
         **kwargs,
     ):
@@ -26,37 +25,13 @@ class DistributedLoggingService(Service):
         # Save parameters
         self.name = name
         self.logs_sink: Optional[DistributedLogsMultiplexedFileSink] = None
-        self.eventbus = eventbus
         self.state = state
 
         if publish_logs_via_zmq:
             handler_config = _logger.ZMQLogHandlerConfig.from_dict(kwargs)
             _logger.add_zmq_handler(logger, handler_config)
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "entity_register": TypedObserver(
-                "entity_register",
-                on_asend=self.register_entity,
-                event_data_cls=RegisterEntityEvent,
-                handle_event="unpack",
-            ),
-            "entity_deregister": TypedObserver(
-                "entity_deregister",
-                on_asend=self.deregister_entity,
-                event_data_cls=DeregisterEntityEvent,
-                handle_event="unpack",
-            ),
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("start", namespace=f"{__name__}.DistributedLoggingService")
     def start(self):
 
         if config.get("manager.logs-sink.enabled"):
@@ -65,6 +40,7 @@ class DistributedLoggingService(Service):
         else:
             self.logs_sink = None
 
+    @registry.on("shutdown", namespace=f"{__name__}.DistributedLoggingService")
     def shutdown(self):
 
         if self.logs_sink:
@@ -74,15 +50,22 @@ class DistributedLoggingService(Service):
     ## Helper Function
     #####################################################################################
 
-    def register_entity(self, worker_name: str, worker_id: str):
+    @registry.on(
+        "entity_register",
+        WorkerState,
+        namespace=f"{__name__}.DistributedLoggingService",
+    )
+    def register_entity(self, state: WorkerState):
 
         # logger.debug(f"{self}: registereing entity: {worker_name}, {worker_id}")
+        id, name = state.id, state.name
 
         if self.logs_sink is not None:
-            self._register_worker_to_logs_sink(
-                worker_name=worker_name, worker_id=worker_id
-            )
+            self._register_worker_to_logs_sink(worker_name=name, worker_id=id)
 
+    @registry.on(
+        "entity_deregister", str, namespace=f"{__name__}.DistributedLoggingService"
+    )
     def deregister_entity(self, worker_id: str):
 
         if self.logs_sink is not None:

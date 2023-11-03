@@ -7,7 +7,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional
 
-from aiodistbus import EntryPoint, EventBus, registry
+from aiodistbus import EventBus, registry
 
 from chimerapy.engine import _logger
 
@@ -80,9 +80,6 @@ class ProcessorService(Service):
         self.running_task = asyncio.create_task(self.main())
 
     async def main(self):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not attached to the bus.")
-            return
 
         # Set the flag
         self.running: bool = True
@@ -162,9 +159,6 @@ class ProcessorService(Service):
     async def execute_registered_method(
         self, reg_method_req: RegisteredMethodEvent
     ) -> Dict[str, Any]:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not attached to the bus.")
-            return {"success": False, "output": None, "node_id": self.state.id}
 
         # First check if the request is valid
         if reg_method_req.method_name not in self.registered_methods:
@@ -252,9 +246,6 @@ class ProcessorService(Service):
         return output, delta
 
     async def safe_step(self, data_chunks: Dict[str, DataChunk] = {}):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not attached to the bus.")
-            return
 
         # Default value
         output = None

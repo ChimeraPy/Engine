@@ -80,7 +80,7 @@ class Node:
         self.task_futures: List[Future] = []
         self.services: Dict[str, Service] = {}
         self.bus: Optional[EventBus] = None
-        self.entrypoint: Optional[EntryPoint] = None
+        self.entrypoint = EntryPoint()
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
@@ -404,9 +404,6 @@ class Node:
     ####################################################################
 
     async def _setup(self):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Node not connected to bus.")
-            return
 
         # Adding state to the WorkerCommsService
         if "WorkerCommsService" in self.services:
@@ -517,10 +514,6 @@ class Node:
             await asyncio.sleep(0.2)
 
     async def _teardown(self):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Node not connected to bus.")
-            return
-
         await self.entrypoint.emit("teardown")
 
     ####################################################################
@@ -628,9 +621,7 @@ class Node:
             self.bus = EventBus()
 
         # Create an entrypoint
-        self.entrypoint = EntryPoint()
-        if self.entrypoint:
-            await self.entrypoint.connect(self.bus)
+        await self.entrypoint.connect(self.bus)
 
         await self._setup()
         return await self._eventloop()

@@ -315,8 +315,12 @@ class HttpClientService(Service):
 
         return False
 
-    @registry.on("WorkerState.changed", f"{__name__}.HttpClientService")
-    async def _async_node_status_update(self) -> bool:
+    @registry.on("WorkerState.changed", WorkerState, f"{__name__}.HttpClientService")
+    async def _async_node_status_update(
+        self, state: Optional[WorkerState] = None
+    ) -> bool:
+
+        # self.logger.debug(f"{self}: sending node status update")
 
         if not self.connected_to_manager:
             return False

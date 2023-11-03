@@ -29,6 +29,7 @@ class HttpServerService(Service):
         state: WorkerState,
         logger: logging.Logger,
     ):
+        super().__init__(name=name)
 
         # Save input parameters
         self.name = name
@@ -81,9 +82,6 @@ class HttpServerService(Service):
 
     @registry.on("start", namespace=f"{__name__}.HttpServerService")
     async def start(self):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return
 
         # Runn the Server
         await self.server.async_serve()
@@ -106,6 +104,9 @@ class HttpServerService(Service):
 
     @registry.on("send", ServerMessage, namespace=f"{__name__}.HttpServerService")
     async def _async_send(self, msg: ServerMessage) -> bool:
+        if not isinstance(msg.client_id, str):
+            self.logger.error(f"{self}: Missing client_id")
+            return False
         return await self.server.async_send(
             client_id=msg.client_id, signal=msg.signal, data=msg.data
         )
@@ -125,9 +126,6 @@ class HttpServerService(Service):
         return node_pub_table
 
     async def _collect_and_send(self, path: pathlib.Path):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return
 
         # Collect data from the Nodes
         await self.entrypoint.emit("collect")
@@ -190,9 +188,6 @@ class HttpServerService(Service):
     #     return web.HTTPOk()
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         msg_bytes = await request.read()
 
@@ -203,9 +198,6 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_destroy_node_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         msg = await request.json()
 
@@ -220,9 +212,6 @@ class HttpServerService(Service):
         return web.json_response(node_pub_table.to_json())
 
     async def _async_process_node_pub_table(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         msg = await request.json()
         node_pub_table: NodePubTable = NodePubTable.from_dict(msg)
@@ -233,33 +222,21 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_step_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         await self.entrypoint.emit("step_nodes")
         return web.HTTPOk()
 
     async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         await self.entrypoint.emit("start_nodes")
         return web.HTTPOk()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         await self.entrypoint.emit("record_nodes")
         return web.HTTPOk()
 
     async def _async_request_method_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         msg = await request.json()
 
@@ -271,17 +248,11 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         await self.entrypoint.emit("stop_nodes")
         return web.HTTPOk()
 
     async def _async_report_node_gather(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         await self.entrypoint.emit("gather_nodes")
 
@@ -295,9 +266,6 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         data = await request.json()
 
@@ -307,9 +275,6 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
         self.tasks.append(asyncio.create_task(self.entrypoint.emit("shutdown")))
@@ -320,9 +285,6 @@ class HttpServerService(Service):
     ####################################################################
 
     async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         # self.logger.debug(f"{self}: node_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
@@ -336,9 +298,6 @@ class HttpServerService(Service):
             await self.entrypoint.emit("WorkerState.changed", self.state)
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         # Saving gathering value
         node_id = msg["data"]["node_id"]
@@ -347,9 +306,6 @@ class HttpServerService(Service):
         await self.entrypoint.emit("update_gather", gather_data)
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-        if self.entrypoint is None:
-            self.logger.error(f"{self}: Service not connected to bus.")
-            return web.HTTPError()
 
         node_id = msg["data"]["node_id"]
         results_data = ResultsData(node_id=node_id, results=msg["data"]["output"])

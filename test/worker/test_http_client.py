@@ -1,6 +1,8 @@
 import asyncio
+import logging
 import os
 import shutil
+from typing import Any
 
 import pytest
 from aiodistbus import make_evented
@@ -26,11 +28,17 @@ async def server():
     await server.async_shutdown()
 
 
+async def handler(*args, **kwargs):
+    logger.debug("Received data")
+    logger.debug(f"{args}, {kwargs}")
+
+
 @pytest.fixture
 async def http_client(bus, entrypoint):
 
     # Requirements
-    state = make_evented(WorkerState(), bus=bus)
+    state = WorkerState()
+    state = make_evented(state, bus=bus)
     logger = _logger.getLogger("chimerapy-engine-worker")
     log_receiver = _logger.get_node_id_zmq_listener()
     log_receiver.start(register_exit_handlers=True)
@@ -70,13 +78,13 @@ async def test_worker_state_changed_updates(http_client, manager):
 
     # Change the state
     http_client.state.nodes["test"] = NodeState(id="test", name="test")
-    await http_client._async_node_status_update()
 
     # Wait for the update
     logger.debug("Sleeping for 1")
     await asyncio.sleep(1)
 
     # Check
+    assert "test" in manager.state.workers[http_client.state.id].nodes
     assert "test" in manager.state.workers[http_client.state.id].nodes
 
 

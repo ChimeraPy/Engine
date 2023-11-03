@@ -96,23 +96,30 @@ class Worker:
         self.logreceiver = self._start_log_receiver()
 
         # Create the services
-        self.services["HttpClientService"] = HttpClientService(
+        self.http_client_service = HttpClientService(
             name="http_client",
             state=self.state,
             logger=self.logger,
             logreceiver=self.logreceiver,
         )
-        self.services["HttpServerService"] = HttpServerService(
+        self.http_server_service = HttpServerService(
             name="http_server",
             state=self.state,
             logger=self.logger,
         )
-        self.services["NodeHandlerService"] = NodeHandlerService(
+        self.node_handler_service = NodeHandlerService(
             name="node_handler",
             state=self.state,
             logger=self.logger,
             logreceiver=self.logreceiver,
         )
+        service_list = [
+            self.http_client_service,
+            self.http_server_service,
+            self.node_handler_service,
+        ]
+        for s in service_list:
+            self.services[s.name] = s
 
         for service in self.services.values():
             await service.attach(self.bus)
@@ -224,7 +231,7 @@ class Worker:
             bool: Success in connecting to the Manager
 
         """
-        return await self.services["HttpClientService"].async_connect(
+        return await self.http_client_service.async_connect(
             host=host, port=port, method=method, timeout=timeout
         )
 

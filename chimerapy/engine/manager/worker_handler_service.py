@@ -11,11 +11,11 @@ from typing import Any, Coroutine, Dict, List, Literal, Optional, Union
 import aiohttp
 import dill
 import networkx as nx
+from aiodistbus import make_evented, registry
 
 from chimerapy.engine import _logger, config
 
 from ..data_protocols import NodePubTable
-from ..eventbus import Event, EventBus, TypedObserver, make_evented
 from ..exceptions import CommitGraphError
 from ..graph import Graph
 from ..networking import Client, DataChunk
@@ -23,25 +23,17 @@ from ..node import NodeConfig
 from ..service import Service
 from ..states import ManagerState, WorkerState
 from ..utils import async_waiting_for
-from .events import (
-    DeregisterEntityEvent,
-    MoveTransferredFilesEvent,
-    RegisterEntityEvent,
-    UpdateSendArchiveEvent,
-    WorkerDeregisterEvent,
-    WorkerRegisterEvent,
-)
+from .events import UpdateSendArchiveEvent
 
 logger = _logger.getLogger("chimerapy-engine")
 
 
 class WorkerHandlerService(Service):
-    def __init__(self, name: str, eventbus: EventBus, state: ManagerState):
+    def __init__(self, name: str, state: ManagerState):
         super().__init__(name=name)
 
         # Parameters
         self.name = name
-        self.eventbus = eventbus
         self.state = state
 
         # Containers
@@ -56,35 +48,7 @@ class WorkerHandlerService(Service):
         # Also create a tempfolder to store any miscellaneous files and folders
         self.tempfolder = pathlib.Path(tempfile.mkdtemp())
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-            "worker_register": TypedObserver(
-                "worker_register",
-                on_asend=self._register_worker,
-                event_data_cls=WorkerRegisterEvent,
-                handle_event="unpack",
-            ),
-            "worker_deregister": TypedObserver(
-                "worker_deregister",
-                on_asend=self._deregister_worker,
-                event_data_cls=WorkerDeregisterEvent,
-                handle_event="unpack",
-            ),
-            "update_send_archive": TypedObserver(
-                "update_send_archive",
-                on_asend=self.update_send_archive,
-                event_data_cls=UpdateSendArchiveEvent,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("shutdown", namespace=f"{__name__}.WorkerHandlerService")
     async def shutdown(self) -> bool:
 
         # If workers are connected, let's notify them that the cluster is
@@ -120,10 +84,13 @@ class WorkerHandlerService(Service):
         worker_info = self.state.workers[worker_id]
         return f"http://{worker_info.ip}:{worker_info.port}"
 
+    @registry.on(
+        "worker_register", WorkerState, namespace=f"{__name__}.WorkerHandlerService"
+    )
     async def _register_worker(self, worker_state: WorkerState) -> bool:
 
         evented_worker_state = make_evented(
-            worker_state, event_bus=self.eventbus, event_name="ManagerState.changed"
+            worker_state, bus=self.entrypoint._bus, event_name="ManagerState.changed"
         )
         self.state.workers[worker_state.id] = evented_worker_state
         logger.debug(
@@ -132,23 +99,16 @@ class WorkerHandlerService(Service):
         )
 
         # Register entity from logging
-        await self.eventbus.asend(
-            Event(
-                "entity_register",
-                RegisterEntityEvent(
-                    worker_name=worker_state.name, worker_id=worker_state.id
-                ),
-            )
-        )
-
+        await self.entrypoint.emit("entity_register", worker_state)
         return True
 
+    @registry.on(
+        "worker_deregister", WorkerState, namespace=f"{__name__}.WorkerHandlerService"
+    )
     async def _deregister_worker(self, worker_state: WorkerState) -> bool:
 
         # Deregister entity from logging
-        await self.eventbus.asend(
-            Event("entity_deregister", DeregisterEntityEvent(worker_id=worker_state.id))
-        )
+        await self.entrypoint.emit("entity_deregister", worker_state.id)
 
         if worker_state.id in self.state.workers:
             state = self.state.workers[worker_state.id]
@@ -162,7 +122,13 @@ class WorkerHandlerService(Service):
 
         return False
 
-    async def update_send_archive(self, worker_id: str, success: bool):
+    @registry.on(
+        "update_send_archive",
+        UpdateSendArchiveEvent,
+        namespace=f"{__name__}.WorkerHandlerService",
+    )
+    async def update_send_archive(self, data: UpdateSendArchiveEvent):
+        worker_id, success = data.worker_id, data.success
         self.collected_workers[worker_id] = success
 
     def _register_graph(self, graph: Graph):
@@ -628,16 +594,13 @@ class WorkerHandlerService(Service):
                 f"{self}: Collection failed, <Worker {worker_id}> "
                 "never updated on archival completion"
             )
+        # else:
+        # logger.debug(f"{self}: Collection success, <Worker {worker_id}.")
 
         # Move files to their destination
         try:
-            await self.eventbus.asend(
-                Event(
-                    "move_transferred_files",
-                    MoveTransferredFilesEvent(
-                        worker_state=self.state.workers[worker_id]
-                    ),
-                )
+            await self.entrypoint.emit(
+                "move_tarnsferred_files", self.state.workers[worker_id]
             )
         except Exception:
             logger.error(traceback.format_exc())
@@ -698,7 +661,7 @@ class WorkerHandlerService(Service):
         # First, test that the graph and the mapping are valid
         self._register_graph(graph)
         self._map_graph(mapping)
-        await self.eventbus.asend(Event("save_meta"))
+        await self.entrypoint.emit("save_meta")
 
         # Then send requested packages
         success = True
@@ -748,20 +711,20 @@ class WorkerHandlerService(Service):
         success = await self._broadcast_request("post", "/nodes/start")
 
         # Updating meta just in case of failure
-        await self.eventbus.asend(Event("save_meta"))
+        await self.entrypoint.emit("save_meta")
 
         return success
 
     async def record(self) -> bool:
 
         # Mark the start time
-        await self.eventbus.asend(Event("start_recording"))
+        await self.entrypoint.emit("start_recording")
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/record")
 
         # Updating meta just in case of failure
-        await self.eventbus.asend(Event("save_meta"))
+        await self.entrypoint.emit("save_meta")
 
         return success
 
@@ -790,7 +753,7 @@ class WorkerHandlerService(Service):
                 resp_data = await resp.json()
                 return resp_data
             else:
-                logger.debug(
+                logger.error(
                     f"{self}: Registered Method for Worker {worker_id}: FAILED"
                 )
                 return {"success": False, "output": None}
@@ -798,7 +761,7 @@ class WorkerHandlerService(Service):
     async def stop(self) -> bool:
 
         # Mark the start time
-        await self.eventbus.asend(Event("stop_recording"))
+        await self.entrypoint.emit("stop_recording")
 
         # Tell the cluster to start
         success = await self._broadcast_request("post", "/nodes/stop")
@@ -821,7 +784,7 @@ class WorkerHandlerService(Service):
             logger.error(traceback.format_exc())
             return False
 
-        await self.eventbus.asend(Event("save_meta"))
+        await self.entrypoint.emit("save_meta")
         return all(results)
 
     async def reset(self, keep_workers: bool = True):
