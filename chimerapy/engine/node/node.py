@@ -7,7 +7,7 @@ import tempfile
 import uuid
 from asyncio import Task
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 # Third-party Imports
 import multiprocess as mp
@@ -16,7 +16,7 @@ import pandas as pd
 from aiodistbus import EntryPoint, EventBus, make_evented
 
 # Internal Imports
-from chimerapy.engine import _logger, config
+from chimerapy.engine import _logger
 
 from ..networking import DataChunk
 from ..service import Service
@@ -32,6 +32,7 @@ from .profiler_service import ProfilerService
 from .publisher_service import PublisherService
 from .record_service import RecordService
 from .registered_method import RegisteredMethod
+from .struct import PreSetupData
 from .worker_comms_service import WorkerCommsService
 
 
@@ -77,8 +78,9 @@ class Node:
         self.executor: Optional[ThreadPoolExecutor] = None
         self.eventloop_future: Optional[Future] = None
         self.eventloop_task: Optional[Task] = None
+        self._save_tasks: List[Task] = []
         self.task_futures: List[Future] = []
-        self.services: Dict[str, Service] = {}
+        self.services: List[Service] = []
         self.bus: Optional[EventBus] = None
         self.entrypoint = EntryPoint()
 
@@ -162,9 +164,6 @@ class Node:
 
     def add_worker_comms(self, worker_comms: WorkerCommsService):
 
-        # Store service
-        self.services["WorkerCommsService"] = worker_comms
-
         # Add the context information
         self.node_config = worker_comms.node_config
 
@@ -172,30 +171,27 @@ class Node:
         self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
 
+        # Store service
+        self.services.append(worker_comms)
+
     ####################################################################
     ## Saving Data Stream API
     ####################################################################
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            timestamp = datetime.datetime.now()
-            video_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "video",
-                "fps": fps,
-                "timestamp": timestamp,
-            }
-            self.services["RecordService"].submit(video_entry)
+        timestamp = datetime.datetime.now()
+        video_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "video",
+            "fps": fps,
+            "timestamp": timestamp,
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", video_entry))
+        )
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
@@ -220,26 +216,20 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            audio_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "audio",
-                "channels": channels,
-                "format": format,
-                "rate": rate,
-                "recorder_version": 1,
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(audio_entry)
+        audio_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "audio",
+            "channels": channels,
+            "format": format,
+            "rate": rate,
+            "recorder_version": 1,
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", audio_entry))
+        )
 
     def save_audio_v2(
         self,
@@ -267,66 +257,48 @@ class Node:
         nframes : int
             Number of frames.
         """
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return
 
-        if self.services["RecordService"].enabled:
-            audio_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "audio",
-                "channels": channels,
-                "sampwidth": sampwidth,
-                "framerate": framerate,
-                "nframes": nframes,
-                "recorder_version": 2,
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(audio_entry)
+        audio_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "audio",
+            "channels": channels,
+            "sampwidth": sampwidth,
+            "framerate": framerate,
+            "nframes": nframes,
+            "recorder_version": 2,
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", audio_entry))
+        )
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            tabular_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "tabular",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(tabular_entry)
+        tabular_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "tabular",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", tabular_entry))
+        )
 
     def save_image(self, name: str, data: np.ndarray):
-
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            image_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "image",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(image_entry)
+        image_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "image",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", image_entry))
+        )
 
     def save_json(self, name: str, data: Dict[Any, Any]):
         """Record json data from the node to a JSON Lines file.
@@ -344,23 +316,16 @@ class Node:
         The data is recorded in JSON Lines format, which is a sequence of JSON objects.
         The data dictionary provided must be JSON serializable.
         """
-
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            json_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "json",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(json_entry)
+        json_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "json",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", json_entry))
+        )
 
     def save_text(self, name: str, data: str, suffix="txt"):
         """Record text data from the node to a text file.
@@ -381,23 +346,17 @@ class Node:
         It should be noted that new lines addition should be taken by the callee.
         """
 
-        if not "RecordService" in self.services:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecordService "
-                "initialization"
-            )
-            return False
-
-        if self.services["RecordService"].enabled:
-            text_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "suffix": suffix,
-                "dtype": "text",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.services["RecordService"].submit(text_entry)
+        text_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "suffix": suffix,
+            "dtype": "text",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", text_entry))
+        )
 
     ####################################################################
     ## Back-End Lifecycle API
@@ -405,27 +364,11 @@ class Node:
 
     async def _setup(self):
 
-        # Adding state to the WorkerCommsService
-        if "WorkerCommsService" in self.services:
-            worker_comms = self.services["WorkerCommsService"]
-            if isinstance(worker_comms, WorkerCommsService):
-                worker_comms.in_node_config(state=self.state, logger=self.logger)
-                if worker_comms.worker_config:
-                    config.update_defaults(worker_comms.worker_config)
-        elif not self.state.logdir:
-            self.state.logdir = pathlib.Path(tempfile.mktemp())
-
-        # Create the directory
-        if self.state.logdir:
-            os.makedirs(self.state.logdir, exist_ok=True)
-        else:
-            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
-
         # Make the state evented
         self.state = make_evented(self.state, bus=self.bus)
 
         # Add the FSM service
-        self.services["FSMService"] = FSMService("fsm", self.state, self.logger)
+        self.services.append(FSMService("fsm", self.state, self.logger))
 
         # Configure the processor's operational mode
         mode: Literal["main", "step"] = "step"  # default
@@ -451,51 +394,70 @@ class Node:
         in_bound_data = len(self.node_config.in_bound) != 0
 
         # Create services
-        self.services["ProcessorService"] = ProcessorService(
-            name="processor",
-            setup_fn=self.setup,
-            main_fn=main_fn,
-            teardown_fn=self.teardown,
-            operation_mode=mode,
-            registered_methods=self.registered_methods,
-            registered_node_fns=registered_fns,
-            state=self.state,
-            in_bound_data=in_bound_data,
-            logger=self.logger,
+        self.services.append(
+            ProcessorService(
+                name="processor",
+                setup_fn=self.setup,
+                main_fn=main_fn,
+                teardown_fn=self.teardown,
+                operation_mode=mode,
+                registered_methods=self.registered_methods,
+                registered_node_fns=registered_fns,
+                state=self.state,
+                in_bound_data=in_bound_data,
+                logger=self.logger,
+            )
         )
-        self.services["RecordService"] = RecordService(
-            name="recorder",
-            state=self.state,
-            logger=self.logger,
+        self.services.append(
+            RecordService(
+                name="recorder",
+                state=self.state,
+                logger=self.logger,
+            )
         )
-        self.services["ProfilerService"] = ProfilerService(
-            name="profiler",
-            state=self.state,
-            logger=self.logger,
+        self.services.append(
+            ProfilerService(
+                name="profiler",
+                state=self.state,
+                logger=self.logger,
+            )
         )
 
         # If in-bound, enable the poller service
         if self.node_config and self.node_config.in_bound:
-            self.services["PollerService"] = PollerService(
-                name="poller",
-                in_bound=self.node_config.in_bound,
-                in_bound_by_name=self.node_config.in_bound_by_name,
-                follow=self.node_config.follow,
-                state=self.state,
-                logger=self.logger,
+            self.services.append(
+                PollerService(
+                    name="poller",
+                    in_bound=self.node_config.in_bound,
+                    in_bound_by_name=self.node_config.in_bound_by_name,
+                    follow=self.node_config.follow,
+                    state=self.state,
+                    logger=self.logger,
+                )
             )
 
         # If out_bound, enable the publisher service
         if self.node_config and self.node_config.out_bound:
-            self.services["PublisherService"] = PublisherService(
-                "publisher",
-                state=self.state,
-                logger=self.logger,
+            self.services.append(
+                PublisherService(
+                    "publisher",
+                    state=self.state,
+                    logger=self.logger,
+                )
             )
 
         # Initialize all services
-        for service in self.services.values():
-            await service.attach(self.bus)
+        for s in self.services:
+            await s.attach(self.bus)
+
+        # Presetup
+        data = PreSetupData(self.state, self.logger)
+        await self.entrypoint.emit("pre_setup", data)
+
+        # Create the directory
+        if not self.state.logdir:
+            self.state.logdir = pathlib.Path(tempfile.mktemp())
+        os.makedirs(self.state.logdir, exist_ok=True)
 
         # Start all services
         await self.entrypoint.emit("setup")
@@ -514,6 +476,7 @@ class Node:
             await asyncio.sleep(0.2)
 
     async def _teardown(self):
+        await asyncio.gather(*self._save_tasks)
         await self.entrypoint.emit("teardown")
 
     ####################################################################
@@ -613,6 +576,7 @@ class Node:
     async def arun(self, bus: Optional[EventBus] = None):
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
+        self.loop = asyncio.get_event_loop()
 
         # Save parameters
         if bus:

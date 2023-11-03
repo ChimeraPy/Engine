@@ -5,15 +5,15 @@ from typing import Dict, Optional
 
 from aiodistbus import registry
 
+from chimerapy.engine import config
+
 from ..data_protocols import NodeDiagnostics, NodePubTable
 from ..networking import Client
 from ..networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .events import (
-    RegisteredMethodEvent,
-)
 from .node_config import NodeConfig
+from .struct import PreSetupData, RegisteredMethodData
 
 
 class WorkerCommsService(Service):
@@ -57,11 +57,15 @@ class WorkerCommsService(Service):
     ## Helper Functions
     ####################################################################
 
-    def in_node_config(self, state: NodeState, logger: logging.Logger):
+    @registry.on("pre_setup", PreSetupData, namespace=f"{__name__}.WorkerCommsService")
+    def in_node_config(self, presetup_data: PreSetupData):
 
         # Save parameters
-        self.state = state
-        self.logger = logger
+        self.state = presetup_data.state
+        self.logger = presetup_data.logger
+
+        if self.worker_config:
+            config.update_defaults(self.worker_config)
 
     def check(self) -> bool:
         if not self.logger:
@@ -201,7 +205,7 @@ class WorkerCommsService(Service):
 
         # Send the event
         if self.client:
-            event_data = RegisteredMethodEvent(
+            event_data = RegisteredMethodData(
                 method_name=method_name, params=params, client=self.client
             )
             await self.entrypoint.emit("registered_method", event_data)

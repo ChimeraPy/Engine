@@ -18,7 +18,7 @@ async def recorder(bus):
 
     # Create sample state
     state = NodeState(logdir=pathlib.Path(tempfile.mkdtemp()))
-    state.fsm = "PREVIEWING"
+    state.fsm = "RECORDING"
 
     # Create the recorder
     recorder = RecordService(name="recorder", state=state)

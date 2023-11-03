@@ -108,7 +108,6 @@ async def test_running_node_async_in_same_process(
 ):
     node = node_cls(name="step", debug_port=logreceiver.port)
     task = asyncio.create_task(node.arun(bus=bus))
-    await asyncio.sleep(0.1)
     await node.ashutdown()
     await task
 
@@ -160,6 +159,7 @@ async def test_lifecycle_start_record_stop(
     logger.debug(f"Running Node: {node_cls}")
     task = asyncio.create_task(node.arun(bus=bus))
     logger.debug(f"Outside Node: {node_cls}")
+    await asyncio.sleep(1)  # Necessary to let the Node's services to startup
 
     # Wait
     await entrypoint.emit("start")
@@ -213,7 +213,7 @@ async def test_node_in_process(
     )
     p.start()
     logger.debug(f"Running Node: {node_cls}")
-    await asyncio.sleep(0.5)
+    await asyncio.sleep(1)
 
     # Run method
     await mock_worker.server.async_send(

@@ -148,7 +148,6 @@ class NodeHandlerService(Service):
                 logging_level=self.logger.level,
                 worker_logging_port=self.logreceiver.port,
             )
-            # worker_comms.inject(node_object)
             node_object.add_worker_comms(worker_comms)
 
             # Create controller

@@ -62,10 +62,6 @@ class RecordService(Service):
         else:
             self.logger = _logger.getLogger("chimerapy-engine")
 
-    @property
-    def enabled(self) -> bool:
-        return self.state.fsm == "RECORDING"
-
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
@@ -107,7 +103,14 @@ class RecordService(Service):
     ## Helper Methods & Attributes
     ####################################################################
 
+    @registry.on("record_entry", Dict, namespace=f"{__name__}.RecordService")
     def submit(self, entry: Dict):
+
+        # self.logger.debug(f"{self}: Received data: {entry}")
+
+        if self.state.fsm != "RECORDING":
+            return None
+
         self.save_queue.put(entry)
 
     def run(self):

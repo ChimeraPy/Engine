@@ -235,8 +235,8 @@ class Worker:
             host=host, port=port, method=method, timeout=timeout
         )
 
-    # async def async_deregister(self) -> bool:
-    #     return await self.http_client.async_deregister()
+    async def async_deregister(self) -> bool:
+        return await self.http_client_service.async_deregister()
 
     # async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
     #     return await self.node_handler.async_create_node(node_config)
@@ -324,8 +324,8 @@ class Worker:
             return future.result(timeout=timeout)
         return future
 
-    # def deregister(self) -> Future[bool]:
-    #     return self._exec_coro(self.async_deregister())
+    def deregister(self) -> Future[bool]:
+        return self._exec_coro(self.async_deregister())
 
     # def create_node(self, node_config: NodeConfig) -> Future[bool]:
     #     return self._exec_coro(self.async_create_node(node_config))

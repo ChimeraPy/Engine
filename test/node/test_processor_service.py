@@ -3,12 +3,10 @@ import time
 from typing import Dict
 
 import pytest
-from aiodistbus import EntryPoint, EventBus
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine import _logger
 from chimerapy.engine.networking.data_chunk import DataChunk
-from chimerapy.engine.node.events import NewInBoundDataEvent, NewOutBoundDataEvent
 from chimerapy.engine.node.processor_service import ProcessorService
 from chimerapy.engine.states import NodeState
 
@@ -41,6 +39,7 @@ async def shutdown(processor):
 
 
 async def emit_data(entrypoint):
+    await entrypoint.emit("start")
     await asyncio.sleep(1)
     for _ in range(3):
         await entrypoint.emit("in_step", {"data": DataChunk()})
@@ -157,7 +156,6 @@ async def test_main(ptype, processor, entrypoint):
     # Execute
     await processor.setup()
     await asyncio.gather(
-        processor.main(),
         shutdown(processor),
         emit_data(entrypoint),
     )

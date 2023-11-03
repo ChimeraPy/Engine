@@ -7,7 +7,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional
 
-from aiodistbus import EventBus, registry
+from aiodistbus import registry
 
 from chimerapy.engine import _logger
 
@@ -16,8 +16,8 @@ from ..networking.client import Client
 from ..networking.enums import NODE_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .events import RegisteredMethodEvent
 from .registered_method import RegisteredMethod
+from .struct import RegisteredMethodData
 
 
 class ProcessorService(Service):
@@ -153,11 +153,11 @@ class ProcessorService(Service):
 
     @registry.on(
         "registered_method",
-        RegisteredMethodEvent,
+        RegisteredMethodData,
         namespace=f"{__name__}.ProcessorService",
     )
     async def execute_registered_method(
-        self, reg_method_req: RegisteredMethodEvent
+        self, reg_method_req: RegisteredMethodData
     ) -> Dict[str, Any]:
 
         # First check if the request is valid

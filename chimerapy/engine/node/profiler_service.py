@@ -40,11 +40,6 @@ class ProfilerService(Service):
             self.diagnostics_report, config.get("diagnostics.interval")
         )
 
-        if self.state.logdir:
-            self.log_file = self.state.logdir / "diagnostics.csv"
-        else:
-            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
-
     @registry.on("enable_diagnostics", bool, namespace=f"{__name__}.ProfilerService")
     async def enable(self, enable: bool = True):
         # self.logger.debug(f"Profiling enabled: {enable}")
@@ -66,6 +61,13 @@ class ProfilerService(Service):
 
     @registry.on("setup", namespace=f"{__name__}.ProfilerService")
     async def setup(self):
+
+        # Construct the path
+        if self.state.logdir:
+            self.log_file = self.state.logdir / "diagnostics.csv"
+        else:
+            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
+
         self.process = Process(pid=os.getpid())
 
     async def diagnostics_report(self):

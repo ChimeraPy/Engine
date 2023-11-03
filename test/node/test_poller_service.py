@@ -1,7 +1,6 @@
 import asyncio
 
 import pytest
-from aiodistbus import EventBus
 
 import chimerapy.engine as cpe
 from chimerapy.engine.data_protocols import NodePubEntry, NodePubTable

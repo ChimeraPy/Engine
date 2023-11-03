@@ -7,7 +7,6 @@ from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine import _logger
 from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
-from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.networking.client import Client
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.enums import NODE_MESSAGE
