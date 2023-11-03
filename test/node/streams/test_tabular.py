@@ -11,6 +11,7 @@ import pytest
 import chimerapy.engine as cpe
 from chimerapy.engine.records.tabular_record import TabularRecord
 
+from ...conftest import TEST_DATA_DIR
 from .data_nodes import TabularNode
 
 # Internal Imports
@@ -18,7 +19,6 @@ logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
-TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
