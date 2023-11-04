@@ -100,6 +100,7 @@ class ProfilerService(Service):
 
         # Save information then
         diag = NodeDiagnostics(
+            node_id=self.state.id,
             timestamp=timestamp,
             latency=mean_latency,
             payload_size=total_payload,

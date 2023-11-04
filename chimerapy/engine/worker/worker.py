@@ -13,6 +13,7 @@ from aiodistbus import EntryPoint, EventBus, make_evented
 
 from chimerapy.engine import _logger, config
 
+from ..data_protocols import ConnectData
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..service import Service
@@ -22,7 +23,6 @@ from ..states import NodeState, WorkerState
 from .http_client_service import HttpClientService
 from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
-from .struct import ConnectData
 
 
 class Worker:

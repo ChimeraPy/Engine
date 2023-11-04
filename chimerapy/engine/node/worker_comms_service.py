@@ -7,13 +7,19 @@ from aiodistbus import registry
 
 from chimerapy.engine import config
 
-from ..data_protocols import NodeDiagnostics, NodePubTable
-from ..networking import Client
+from ..data_protocols import (
+    GatherData,
+    NodeDiagnostics,
+    NodePubTable,
+    PreSetupData,
+    RegisteredMethodData,
+    ResultsData,
+)
+from ..networking import Client, DataChunk
 from ..networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
 from ..states import NodeState
 from .node_config import NodeConfig
-from .struct import PreSetupData, RegisteredMethodData
 
 
 class WorkerCommsService(Service):
@@ -147,7 +153,25 @@ class WorkerCommsService(Service):
 
         if self.client:
             # self.logger.debug(f"{self}: Sending gather with client")
-            await self.entrypoint.emit("gather", self.client)
+            await self.entrypoint.emit("gather")
+
+    @registry.on(
+        "gather_results", GatherData, namespace=f"{__name__}.WorkerCommsService"
+    )
+    async def send_gather(self, gather_data: GatherData):
+        if not self.check():
+            return
+
+        # self.logger.debug(f"{self}: Sending gather results: {gather_data}")
+
+        # If gather data is DataChunk, serialize it
+        if isinstance(gather_data.output, DataChunk):
+            gather_data.output = gather_data.output.to_json()
+
+        if self.client:
+            await self.client.async_send(
+                signal=NODE_MESSAGE.REPORT_GATHER, data=gather_data.to_dict()
+            )
 
     @registry.on(
         "report_diagnostics",
@@ -161,8 +185,9 @@ class WorkerCommsService(Service):
         # self.logger.debug(f"{self}: Sending Diagnostics")
 
         if self.client:
-            data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
-            await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
+            await self.client.async_send(
+                signal=NODE_MESSAGE.DIAGNOSTICS, data=diagnostics.to_dict()
+            )
 
     ####################################################################
     ## Message Responds
@@ -201,14 +226,25 @@ class WorkerCommsService(Service):
             return
 
         # Check first that the method exists
-        method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
+        event_data = RegisteredMethodData.from_dict(msg["data"])
 
         # Send the event
+        await self.entrypoint.emit("registered_method", event_data)
+
+    @registry.on(
+        "registered_method_results",
+        ResultsData,
+        namespace=f"{__name__}.WorkerCommsService",
+    )
+    async def report_registered_method_results(self, results: ResultsData):
+        if not self.check():
+            return
+
+        # Send the results
         if self.client:
-            event_data = RegisteredMethodData(
-                method_name=method_name, params=params, client=self.client
+            await self.client.async_send(
+                signal=NODE_MESSAGE.REPORT_RESULTS, data=results.to_dict()
             )
-            await self.entrypoint.emit("registered_method", event_data)
 
     async def async_step(self, msg: Dict):
         if not self.check():

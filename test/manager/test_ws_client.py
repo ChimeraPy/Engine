@@ -92,7 +92,7 @@ async def test_reset_network_updates(test_ws_client, manager, worker):
     assert record.network_state.to_json() == manager.state.to_json()
 
     # Reset
-    assert await manager.async_reset()
+    await manager.async_reset()
     await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()
 

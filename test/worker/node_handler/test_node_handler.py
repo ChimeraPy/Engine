@@ -7,10 +7,10 @@ from aiodistbus import EventBus, make_evented
 
 import chimerapy.engine as cpe
 from chimerapy.engine import config
+from chimerapy.engine.data_protocols import RegisteredMethodData
 from chimerapy.engine.states import WorkerState
 from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
-from chimerapy.engine.worker.struct import RegisterMethodData
 
 from ...conftest import linux_run_only
 from ...core.networking.test_client_server import server
@@ -239,7 +239,7 @@ async def test_registered_method_with_concurrent_style(
 
     # Execute the registered method (with config)
     # logger.debug(f"Requesting registered method")
-    reg_method_data = RegisterMethodData(
+    reg_method_data = RegisteredMethodData(
         node_id=node_with_reg_methods.id,
         method_name="printout",
     )
@@ -264,7 +264,7 @@ async def test_registered_method_with_params_and_blocking_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    reg_method_data = RegisterMethodData(
+    reg_method_data = RegisteredMethodData(
         node_id=node_with_reg_methods.id,
         method_name="set_value",
         params={"value": -100},
@@ -288,7 +288,7 @@ async def test_registered_method_with_reset_style(
     assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
-    reg_method_data = RegisterMethodData(
+    reg_method_data = RegisteredMethodData(
         node_id=node_with_reg_methods.id,
         method_name="reset",
     )

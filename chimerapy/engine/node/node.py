@@ -18,6 +18,7 @@ from aiodistbus import EntryPoint, EventBus, make_evented
 # Internal Imports
 from chimerapy.engine import _logger
 
+from ..data_protocols import PreSetupData
 from ..networking import DataChunk
 from ..service import Service
 from ..states import NodeState
@@ -32,7 +33,6 @@ from .profiler_service import ProfilerService
 from .publisher_service import PublisherService
 from .record_service import RecordService
 from .registered_method import RegisteredMethod
-from .struct import PreSetupData
 from .worker_comms_service import WorkerCommsService
 
 

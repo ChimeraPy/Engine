@@ -15,12 +15,12 @@ from zeroconf import ServiceBrowser, Zeroconf
 
 from chimerapy.engine import _logger, config
 
+from ..data_protocols import ConnectData
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking import Client
 from ..service import Service
 from ..states import WorkerState
 from ..utils import get_ip_address
-from .struct import ConnectData
 from .zeroconf_listener import ZeroconfListener
 
 

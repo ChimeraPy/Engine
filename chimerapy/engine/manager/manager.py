@@ -6,15 +6,16 @@ from datetime import datetime
 from typing import Any, Coroutine, Dict, List, Literal, Optional, Union
 
 import asyncio_atexit
-from aiodistbus import EntryPoint, EventBus, make_evented
+from aiodistbus import EntryPoint, EventBus, make_evented, registry
 
 # Internal Imports
 from chimerapy.engine import _logger, config
-from chimerapy.engine.graph import Graph
-from chimerapy.engine.states import ManagerState, WorkerState
 
+from ..data_protocols import CommitData, RegisteredMethodData
+from ..graph import Graph
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..service import Service
+from ..states import ManagerState, WorkerState
 
 # Services
 from .distributed_logging_service import DistributedLoggingService
@@ -61,7 +62,7 @@ class Manager:
 
         # Creating a container for task futures
         self.task_futures: List[Future] = []
-        self.services: Dict[str, Service] = {}
+        self.services: List[Service] = []
 
         # Create log directory to store data
         self.timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
@@ -81,38 +82,34 @@ class Manager:
         self.state = make_evented(self.state, bus=self.bus)
 
         # Create the services
-        self.http_server = HttpServerService(
-            name="http_server",
-            port=self.state.port,
-            enable_api=self.enable_api,
-            state=self.state,
+        self.services.append(
+            HttpServerService(
+                name="http_server",
+                port=self.state.port,
+                enable_api=self.enable_api,
+                state=self.state,
+            )
         )
-        self.worker_handler = WorkerHandlerService(
-            name="worker_handler", state=self.state
+        self.services.append(
+            WorkerHandlerService(name="worker_handler", state=self.state)
         )
-        self.zeroconf_service = ZeroconfService(name="zeroconf", state=self.state)
-        self.session_record = SessionRecordService(
-            name="session_record",
-            state=self.state,
+        self.services.append(ZeroconfService(name="zeroconf", state=self.state))
+        self.services.append(
+            SessionRecordService(
+                name="session_record",
+                state=self.state,
+            )
         )
-        self.distributed_logging = DistributedLoggingService(
-            name="distributed_logging",
-            publish_logs_via_zmq=self.publish_logs_via_zmq,
-            state=self.state,
-            # **self.kwargs,
+        self.services.append(
+            DistributedLoggingService(
+                name="distributed_logging",
+                publish_logs_via_zmq=self.publish_logs_via_zmq,
+                state=self.state,
+                # **self.kwargs,
+            )
         )
-        service_list = [
-            self.http_server,
-            self.worker_handler,
-            self.zeroconf_service,
-            self.session_record,
-            self.distributed_logging,
-        ]
-        for service in service_list:
-            self.services[service.name] = service
-
         # Initialize services
-        for service in self.services.values():
+        for service in self.services:
             await service.attach(self.bus)
 
         # Start all services
@@ -173,24 +170,29 @@ class Manager:
 
         return future
 
-    def _register_graph(self, graph: Graph):
-        self.worker_handler._register_graph(graph)
+    async def _register_graph(self, graph: Graph):
+        await self.entrypoint.emit("register_graph", graph)
 
-    def _deregister_graph(self):
-        self.worker_handler._deregister_graph()
+    async def _deregister_graph(self):
+        await self.entrypoint.emit("deregister_graph")
+
+    ####################################################################
+    ## EventListeners
+    ####################################################################
+
+    @registry.on("registered_method_rep", namespace=f"{__name__}.Manager")
+    async def registered_method_rep(self):
+        ...
 
     ####################################################################
     ## Front-facing ASync API
     ####################################################################
 
-    async def async_zeroconf(self, enable: bool = True) -> bool:
-        if enable:
-            return await self.zeroconf_service.enable()
-        else:
-            return await self.zeroconf_service.disable()
+    async def async_zeroconf(self, enable: bool = True):
+        await self.entrypoint.emit("zeroconf", enable)
 
-    async def async_diagnostics(self, enable: bool = True) -> bool:
-        return await self.worker_handler.diagnostics(enable)
+    async def async_diagnostics(self, enable: bool = True):
+        await self.entrypoint.emit("diagnostics", enable)
 
     async def async_commit(
         self,
@@ -198,7 +200,7 @@ class Manager:
         mapping: Dict[str, List[str]],
         context: Literal["multiprocessing", "threading"] = "multiprocessing",
         send_packages: Optional[List[Dict[str, Any]]] = None,
-    ) -> bool:
+    ):
         """Committing ``Graph`` to the cluster.
 
         Committing refers to how the graph itself (with its nodes and edges)
@@ -230,38 +232,39 @@ class Manager:
                 via dictionary with the following key-value pairs: \
                 name:``str`` and path:``pathlit.Path``.
 
-        Returns:
-            bool: Success in cluster's setup
-
         """
-        return await self.worker_handler.commit(
-            graph, mapping, context=context, send_packages=send_packages
-        )
+        commit_data = CommitData(graph, mapping, context, send_packages)
+        await self.entrypoint.emit("commit", commit_data)
 
     async def async_gather(self) -> Dict:
-        return await self.worker_handler.gather()
+        # TODO
+        await self.entrypoint.emit("gather")
+        return {}
 
-    async def async_start(self) -> bool:
-        return await self.worker_handler.start_workers()
+    async def async_start(self):
+        await self.entrypoint.emit("start")
 
-    async def async_record(self) -> bool:
-        return await self.worker_handler.record()
+    async def async_record(self):
+        await self.entrypoint.emit("record")
 
     async def async_request_registered_method(
         self, node_id: str, method_name: str, params: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
-        return await self.worker_handler.request_registered_method(
-            node_id, method_name, params
+        reg_method_data = RegisteredMethodData(
+            node_id=node_id, method_name=method_name, params=params
         )
+        await self.entrypoint.emit("request_registered_method", reg_method_data)
+        # TODO
+        return {}
 
-    async def async_stop(self) -> bool:
-        return await self.worker_handler.stop()
+    async def async_stop(self):
+        await self.entrypoint.emit("stop")
 
-    async def async_collect(self) -> bool:
-        return await self.worker_handler.collect()
+    async def async_collect(self):
+        await self.entrypoint.emit("collect")
 
     async def async_reset(self, keep_workers: bool = True):
-        return await self.worker_handler.reset(keep_workers)
+        await self.entrypoint.emit("reset", keep_workers)
 
     async def async_shutdown(self) -> bool:
 
@@ -332,19 +335,6 @@ class Manager:
                 graph, mapping, context=context, send_packages=send_packages
             )
         )
-
-    # def step(self) -> Future[bool]:
-    #     """Cluster step execution for offline operation.
-
-    #     The ``step`` function is for careful but slow operation of the
-    #     cluster. For online execution, ``start`` and ``stop`` are the
-    #     methods to be used.
-
-    #     Returns:
-    #         Future[bool]: Future of the success of step function broadcasting
-
-    #     """
-    #     return self._exec_coro(self._async_broadcast_request("post", "/nodes/step"))
 
     def gather(self) -> Future[Dict]:
         return self._exec_coro(self.async_gather())

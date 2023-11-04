@@ -46,6 +46,13 @@ class ZeroconfService(Service):
             },
         )
 
+    @registry.on("zeroconf", bool, namespace=f"{__name__}.ZeroconfService")
+    async def zeroconf_update(self, enable: bool):
+        if enable:
+            await self.enable()
+        else:
+            await self.disable()
+
     @registry.on("shutdown", namespace=f"{__name__}.ZeroconfService")
     async def shutdown(self):
         await self.disable()

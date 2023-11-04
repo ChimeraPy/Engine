@@ -1,20 +1,18 @@
 import traceback
 from concurrent.futures import Future
-from typing import Dict, List
+from typing import List
 
 from aiodistbus import registry
 from aiohttp import web
 
 from chimerapy.engine import _logger, config
 
+from ..data_protocols import UpdateSendArchiveData
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
 from ..service import Service
 from ..states import ManagerState, WorkerState
 from ..utils import update_dataclass
-from .events import (
-    UpdateSendArchiveEvent,
-)
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -161,7 +159,7 @@ class HttpServerService(Service):
 
     async def _update_send_archive(self, request: web.Request):
         msg = await request.json()
-        event_data = UpdateSendArchiveEvent(**msg)
+        event_data = UpdateSendArchiveData(**msg)
         await self.entrypoint.emit("update_send_archive", event_data)
         return web.HTTPOk()
 

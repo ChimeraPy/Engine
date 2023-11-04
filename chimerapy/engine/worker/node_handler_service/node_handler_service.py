@@ -6,11 +6,17 @@ from typing import Any, Dict, Type, Union
 # Third-party Imports
 import dill
 import multiprocess as mp
-from aiodistbus import EventBus, registry
+from aiodistbus import registry
 
 from chimerapy.engine import config
 
-from ...data_protocols import NodePubTable
+from ...data_protocols import (
+    GatherData,
+    NodePubTable,
+    RegisteredMethodData,
+    ResultsData,
+    ServerMessage,
+)
 from ...logger.zmq_handlers import NodeIDZMQPullListener
 from ...networking import DataChunk
 from ...networking.enums import WORKER_MESSAGE
@@ -19,7 +25,6 @@ from ...node.worker_comms_service import WorkerCommsService
 from ...service import Service
 from ...states import NodeState, WorkerState
 from ...utils import async_waiting_for
-from ..struct import GatherData, RegisterMethodData, ResultsData, ServerMessage
 from .context_session import ContextSession, MPSession, ThreadSession
 from .node_controller import MPNodeController, NodeController, ThreadNodeController
 
@@ -87,8 +92,7 @@ class NodeHandlerService(Service):
     )
     def update_gather(self, gather_data: GatherData):
         node_id = gather_data.node_id
-        gather_data = gather_data.gather
-        self.node_controllers[node_id].gather = gather_data
+        self.node_controllers[node_id].gather = gather_data.output
         self.node_controllers[node_id].response = True
 
     @registry.on(
@@ -96,8 +100,7 @@ class NodeHandlerService(Service):
     )
     def update_results(self, results_data: ResultsData):
         node_id = results_data.node_id
-        results = results_data.results
-        self.node_controllers[node_id].registered_method_results = results
+        self.node_controllers[node_id].registered_method_results = results_data.output
         self.node_controllers[node_id].response = True
 
     ###################################################################################
@@ -305,37 +308,32 @@ class NodeHandlerService(Service):
 
     @registry.on("registered_method", namespace=f"{__name__}.NodeHandlerService")
     async def async_request_registered_method(
-        self, reg_method_data: RegisterMethodData
+        self, reg_method_data: RegisteredMethodData
     ) -> Dict[str, Any]:
 
-        # Decompose
-        node_id = reg_method_data.node_id
-        method_name = reg_method_data.method_name
-        params = reg_method_data.params
-
         # Mark that the node hasn't responsed
-        self.node_controllers[node_id].response = False
-        # self.logger.debug(
-        #     f"{self}: Requesting registered method: {method_name}@{node_id}"
-        # )
+        self.node_controllers[reg_method_data.node_id].response = False
 
         await self.entrypoint.emit(
             "send",
             ServerMessage(
-                client_id=node_id,
+                client_id=reg_method_data.node_id,
                 signal=WORKER_MESSAGE.REQUEST_METHOD,
-                data={"method_name": method_name, "params": params},
+                data=reg_method_data.to_dict(),
             ),
         )
 
         # Then wait for the Node response
         success = await async_waiting_for(
-            condition=lambda: self.node_controllers[node_id].response is True,
+            condition=lambda: self.node_controllers[reg_method_data.node_id].response
+            is True,
         )
 
         return {
             "success": success,
-            "output": self.node_controllers[node_id].registered_method_results,
+            "output": self.node_controllers[
+                reg_method_data.node_id
+            ].registered_method_results,
         }
 
     @registry.on("diagnostics", bool, namespace=f"{__name__}.NodeHandlerService")

@@ -11,13 +11,15 @@ from aiodistbus import registry
 
 from chimerapy.engine import _logger
 
+from ..data_protocols import (
+    GatherData,
+    RegisteredMethod,
+    RegisteredMethodData,
+    ResultsData,
+)
 from ..networking import DataChunk
-from ..networking.client import Client
-from ..networking.enums import NODE_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .registered_method import RegisteredMethod
-from .struct import RegisteredMethodData
 
 
 class ProcessorService(Service):
@@ -137,15 +139,10 @@ class ProcessorService(Service):
     ## Debugging tools
     ####################################################################
 
-    @registry.on("gather", Client, namespace=f"{__name__}.ProcessorService")
-    async def gather(self, client: Client):
-        await client.async_send(
-            signal=NODE_MESSAGE.REPORT_GATHER,
-            data={
-                "node_id": self.state.id,
-                "latest_value": self.latest_data_chunk.to_json(),
-            },
-        )
+    @registry.on("gather", namespace=f"{__name__}.ProcessorService")
+    async def gather(self):
+        data = GatherData(node_id=self.state.id, output=self.latest_data_chunk)
+        await self.entrypoint.emit("gather_results", data)
 
     ####################################################################
     ## Async Registered Methods
@@ -158,28 +155,25 @@ class ProcessorService(Service):
     )
     async def execute_registered_method(
         self, reg_method_req: RegisteredMethodData
-    ) -> Dict[str, Any]:
+    ) -> ResultsData:
 
         # First check if the request is valid
         if reg_method_req.method_name not in self.registered_methods:
-            results = {
-                "node_id": self.state.id,
-                "node_state": self.state.to_json(),
-                "success": False,
-                "output": None,
-            }
             self.logger.warning(
                 f"{self}: Worker requested execution of registered method that doesn't "
                 f"exists: {reg_method_req.method_name}"
             )
-            return {"success": False, "output": None, "node_id": self.state.id}
+            data = ResultsData(node_id=self.state.id, success=False, output=None)
+            return data
 
         # Extract the method
         function: Callable[[], Coroutine] = self.registered_node_fns[
             reg_method_req.method_name
         ]
         style = self.registered_methods[reg_method_req.method_name].style
-        # self.logger.debug(f"{self}: executing {function} with params: {params}")
+        self.logger.debug(
+            f"{self}: executing {function} with params: {reg_method_req.params}"
+        )
 
         # Execute method based on its style
         success = False
@@ -203,18 +197,9 @@ class ProcessorService(Service):
             self.logger.error(f"Invalid registered method request: style={style}")
             output = None
 
-        # Sending the information if client
-        if reg_method_req.client:
-            results = {
-                "success": success,
-                "output": output,
-                "node_id": self.state.id,
-            }
-            await reg_method_req.client.async_send(
-                signal=NODE_MESSAGE.REPORT_RESULTS, data=results
-            )
-
-        return {"success": success, "output": output}
+        data = ResultsData(node_id=self.state.id, success=success, output=output)
+        await self.entrypoint.emit("registered_method_results", data)
+        return data
 
     ####################################################################
     ## Helper Methods

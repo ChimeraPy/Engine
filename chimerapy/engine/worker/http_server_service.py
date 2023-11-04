@@ -1,5 +1,5 @@
 import asyncio
-import enum
+import json
 import logging
 import pathlib
 import pickle
@@ -9,17 +9,20 @@ from aiodistbus import EventBus, registry
 from aiohttp import web
 
 from ..data_protocols import (
+    GatherData,
     NodeDiagnostics,
     NodePubEntry,
     NodePubTable,
+    RegisteredMethodData,
+    ResultsData,
+    ServerMessage,
 )
-from ..networking import Server
+from ..networking import DataChunk, Server
 from ..networking.enums import NODE_MESSAGE
 from ..node import NodeConfig
 from ..service import Service
 from ..states import NodeState, WorkerState
 from ..utils import update_dataclass
-from .struct import GatherData, RegisterMethodData, ResultsData, ServerMessage
 
 
 class HttpServerService(Service):
@@ -241,7 +244,7 @@ class HttpServerService(Service):
         msg = await request.json()
 
         # Get event information
-        reg_method_data = RegisterMethodData.from_dict(msg)
+        reg_method_data = RegisteredMethodData.from_dict(msg)
 
         # Send it!
         await self.entrypoint.emit("registered_method", reg_method_data)
@@ -288,35 +291,28 @@ class HttpServerService(Service):
 
         # self.logger.debug(f"{self}: node_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
-        node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        if node_id in self.state.nodes and node_state:
+        if node_state.id in self.state.nodes and node_state:
 
             # Update the node state
-            update_dataclass(self.state.nodes[node_id], node_state)
+            update_dataclass(self.state.nodes[node_state.id], node_state)
             await self.entrypoint.emit("WorkerState.changed", self.state)
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
-
-        # Saving gathering value
-        node_id = msg["data"]["node_id"]
-        gather_data = GatherData(node_id=node_id, gather=msg["data"]["latest_value"])
-        # self.logger.debug(f"{self}: gather_data: {gather_data}")
+        gather_data = GatherData.from_dict(msg["data"])
+        gather_data.output = DataChunk.from_json(gather_data.output)
         await self.entrypoint.emit("update_gather", gather_data)
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-
-        node_id = msg["data"]["node_id"]
-        results_data = ResultsData(node_id=node_id, results=msg["data"]["output"])
-        await self.entrypoint.emit("update_results", results_data)
+        results = ResultsData.from_dict(msg["data"])
+        await self.entrypoint.emit("update_results", results)
 
     async def _async_node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
 
         # self.logger.debug(f"{self}: received diagnostics: {msg}")
 
         # Create the entry and update the table
-        node_id: str = msg["data"]["node_id"]
-        diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
-        if node_id in self.state.nodes:
-            self.state.nodes[node_id].diagnostics = diag
+        diag = NodeDiagnostics.from_dict(msg["data"])
+        if diag.node_id in self.state.nodes:
+            self.state.nodes[diag.node_id].diagnostics = diag

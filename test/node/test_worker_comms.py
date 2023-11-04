@@ -6,7 +6,11 @@ from aiodistbus import make_evented
 from aiohttp import web
 
 import chimerapy.engine as cpe
-from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
+from chimerapy.engine.data_protocols import (
+    NodeDiagnostics,
+    NodePubTable,
+    RegisteredMethodData,
+)
 from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from chimerapy.engine.networking.server import Server
 from chimerapy.engine.node.node_config import NodeConfig
@@ -105,7 +109,14 @@ async def test_node_state_change(worker_comms, mock_worker):
         ("record_node", {}),
         ("stop_node", {}),
         ("provide_collect", {}),
-        ("execute_registered_method", {"data": {"method_name": "", "params": {}}}),
+        (
+            "execute_registered_method",
+            {
+                "data": RegisteredMethodData(
+                    node_id="1", method_name="a", params={}
+                ).to_dict()
+            },
+        ),
         ("process_node_pub_table", {"data": NodePubTable().to_dict()}),
         ("async_step", {}),
         ("provide_gather", {}),

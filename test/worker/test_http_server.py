@@ -6,7 +6,12 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine import _logger
-from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
+from chimerapy.engine.data_protocols import (
+    GatherData,
+    NodeDiagnostics,
+    NodePubTable,
+    ResultsData,
+)
 from chimerapy.engine.networking.client import Client
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.enums import NODE_MESSAGE
@@ -99,18 +104,15 @@ async def test_http_server_routes(http_server, route_type, route, payload):
         (NODE_MESSAGE.STATUS, NodeState(logdir=None).to_dict()),
         (
             NODE_MESSAGE.REPORT_GATHER,
-            {
-                "node_id": "test",
-                "latest_value": DataChunk().to_json(),
-            },
+            GatherData(node_id="test", output=DataChunk().to_json()).to_dict(),
         ),
         (
             NODE_MESSAGE.REPORT_RESULTS,
-            {"success": True, "output": 1, "node_id": "test"},
+            ResultsData(node_id="test", success=True, output=None).to_dict(),
         ),
         (
             NODE_MESSAGE.DIAGNOSTICS,
-            {"node_id": "test", "diagnostics": NodeDiagnostics().to_dict()},
+            NodeDiagnostics().to_dict(),
         ),
     ],
 )
