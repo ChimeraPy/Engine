@@ -173,84 +173,11 @@ class Manager:
 
         return future
 
-    ####################################################################
-    ## Async Networking
-    ####################################################################
-
-    # async def _async_request_node_creation(
-    #     self,
-    #     worker_id: str,
-    #     node_id: str,
-    #     context: Literal["multiprocessing", "threading"] = "multiprocessing",
-    # ) -> bool:
-    #     return await self.worker_handler._request_node_creation(
-    #         worker_id, node_id, context=context
-    #     )
-
-    # async def _async_request_node_destruction(
-    #     self, worker_id: str, node_id: str
-    # ) -> bool:
-    #     return await self.worker_handler._request_node_destruction(worker_id, node_id)
-
-    # async def _async_request_node_pub_table(self, worker_id: str) -> bool:
-    #     return await self.worker_handler._request_node_pub_table(worker_id)
-
-    # async def _async_request_connection_creation(self, worker_id: str) -> bool:
-    #     return await self.worker_handler._request_connection_creation(worker_id)
-
-    # async def _async_broadcast_request(
-    #     self,
-    #     htype: Literal["get", "post"],
-    #     route: str,
-    #     data: Any = {},
-    #     timeout: Optional[Union[int, float]] = config.get(
-    #         "manager.timeout.info-request"
-    #     ),
-    #     report_exceptions: bool = True,
-    # ) -> bool:
-    #     return await self.worker_handler._broadcast_request(
-    #         htype, route, data, timeout, report_exceptions
-    #     )
-
-    ####################################################################
-    ## Sync Networking
-    ####################################################################
-
     def _register_graph(self, graph: Graph):
         self.worker_handler._register_graph(graph)
 
     def _deregister_graph(self):
         self.worker_handler._deregister_graph()
-
-    # def _request_node_creation(
-    #     self,
-    #     worker_id: str,
-    #     node_id: str,
-    #     context: Literal["multiprocessing", "threading"] = "multiprocessing",
-    # ) -> Future[bool]:
-    #     return self._exec_coro(
-    #         self._async_request_node_creation(worker_id, node_id, context=context)
-    #     )
-
-    # def _request_node_destruction(self, worker_id: str, node_id: str) -> Future[bool]:
-    #     return self._exec_coro(self._async_request_node_destruction(worker_id, node_id))
-
-    # def _request_node_pub_table(self, worker_id: str) -> Future[bool]:
-    #     return self._exec_coro(self._async_request_node_pub_table(worker_id))
-
-    # def _request_connection_creation(self, worker_id: str) -> Future[bool]:
-    #     return self._exec_coro(self._async_request_connection_creation(worker_id))
-
-    # def _broadcast_request(
-    #     self,
-    #     htype: Literal["get", "post"],
-    #     route: str,
-    #     data: Any = {},
-    #     timeout: Union[int, float] = config.get("manager.timeout.info-request"),
-    # ) -> Future[bool]:
-    #     return self._exec_coro(
-    #         self._async_broadcast_request(htype, route, data, timeout)
-    # )
 
     ####################################################################
     ## Front-facing ASync API
