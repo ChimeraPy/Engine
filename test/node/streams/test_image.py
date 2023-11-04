@@ -10,16 +10,15 @@ import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
-from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.image_record import ImageRecord
 
+from ...conftest import TEST_DATA_DIR
 from .data_nodes import ImageNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
-TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
@@ -58,10 +57,7 @@ def test_image_record():
     assert expected_image_path.exists()
 
 
-async def test_node_save_image_stream(image_node):
-
-    # Event Loop
-    eventbus = EventBus()
+async def test_node_save_image_stream(image_node, bus, entrypoint):
 
     # Check that the image was created
     expected_image_path = pathlib.Path(image_node.state.logdir) / "test" / "0.png"
@@ -71,18 +67,20 @@ async def test_node_save_image_stream(image_node):
         ...
 
     # Stream
-    await image_node.arun(eventbus=eventbus)
+    task = asyncio.create_task(image_node.arun(bus=bus))
+    await asyncio.sleep(1)
 
     # Wait to generate files
-    await eventbus.asend(Event("start"))
+    await entrypoint.emit("start")
     logger.debug("Finish start")
-    await eventbus.asend(Event("record"))
+    await entrypoint.emit("record")
     logger.debug("Finish record")
     await asyncio.sleep(3)
-    await eventbus.asend(Event("stop"))
+    await entrypoint.emit("stop")
     logger.debug("Finish stop")
 
     await image_node.ashutdown()
+    await task
 
     # Check that the image was created
     assert expected_image_path.exists()

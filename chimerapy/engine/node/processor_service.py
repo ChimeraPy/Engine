@@ -4,23 +4,22 @@ import logging
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional
+
+from aiodistbus import registry
 
 from chimerapy.engine import _logger
 
-from ..eventbus import Event, EventBus, TypedObserver
+from ..data_protocols import (
+    GatherData,
+    RegisteredMethod,
+    RegisteredMethodData,
+    ResultsData,
+)
 from ..networking import DataChunk
-from ..networking.client import Client
-from ..networking.enums import NODE_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .events import (
-    GatherEvent,
-    NewInBoundDataEvent,
-    NewOutBoundDataEvent,
-    RegisteredMethodEvent,
-)
-from .registered_method import RegisteredMethod
 
 
 class ProcessorService(Service):
@@ -28,7 +27,6 @@ class ProcessorService(Service):
         self,
         name: str,
         state: NodeState,
-        eventbus: EventBus,
         in_bound_data: bool,
         setup_fn: Optional[Callable] = None,
         main_fn: Optional[Callable] = None,
@@ -42,7 +40,6 @@ class ProcessorService(Service):
 
         # Saving input parameters
         self.state = state
-        self.eventbus = eventbus
         self.setup_fn = setup_fn
         self.main_fn = main_fn
         self.teardown_fn = teardown_fn
@@ -63,34 +60,13 @@ class ProcessorService(Service):
         self.running_task: Optional[asyncio.Task] = None
         self.tasks: List[asyncio.Task] = []
         self.main_thread: Optional[threading.Thread] = None
-
-    async def async_init(self):
-
-        # Put observers
-        self.observers: Dict[str, TypedObserver] = {
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "stop": TypedObserver("stop", on_asend=self.stop, handle_event="drop"),
-            "registered_method": TypedObserver(
-                "registered_method",
-                RegisteredMethodEvent,
-                on_asend=self.execute_registered_method,
-                handle_event="unpack",
-            ),
-            "gather": TypedObserver(
-                "gather", GatherEvent, on_asend=self.gather, handle_event="unpack"
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
+        self.executor: ThreadPoolExecutor = ThreadPoolExecutor()
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
+    @registry.on("setup", namespace=f"{__name__}.ProcessorService")
     async def setup(self):
 
         # Create threading information
@@ -100,6 +76,7 @@ class ProcessorService(Service):
         if self.setup_fn:
             await self.safe_exec(self.setup_fn)
 
+    @registry.on("start", namespace=f"{__name__}.ProcessorService")
     async def start(self):
         # Create a task
         self.running_task = asyncio.create_task(self.main())
@@ -124,20 +101,12 @@ class ProcessorService(Service):
 
             elif self.operation_mode == "step":
 
-                # self.logger.debug(f"{self}: operational mode = step")
-
                 # If step or sink node, only run with inputs
                 if self.in_bound_data:
-                    observer = TypedObserver(
-                        "in_step",
-                        NewInBoundDataEvent,
-                        on_asend=self.safe_step,
-                        handle_event="unpack",
+                    # self.logger.debug(f"{self}: step node: {self.state.id}")
+                    await self.entrypoint.on(
+                        "in_step", self.safe_step, Dict[str, DataChunk]
                     )
-                    await self.eventbus.asubscribe(observer)
-                    self.observers["in_step"] = observer
-
-                    # self.logger.debug(f"{self}: step or sink node: {self.state.id}")
 
                 # If source, run as fast as possible
                 else:
@@ -145,9 +114,11 @@ class ProcessorService(Service):
                     while self.running:
                         await self.safe_step()
 
+    @registry.on("stop", namespace=f"{__name__}.ProcessorService")
     async def stop(self):
         self.running = False
 
+    @registry.on("teardown", namespace=f"{__name__}.ProcessorService")
     async def teardown(self):
 
         # Stop things
@@ -168,74 +139,67 @@ class ProcessorService(Service):
     ## Debugging tools
     ####################################################################
 
-    async def gather(self, client: Client):
-        await client.async_send(
-            signal=NODE_MESSAGE.REPORT_GATHER,
-            data={
-                "node_id": self.state.id,
-                "latest_value": self.latest_data_chunk.to_json(),
-            },
-        )
+    @registry.on("gather", namespace=f"{__name__}.ProcessorService")
+    async def gather(self):
+        data = GatherData(node_id=self.state.id, output=self.latest_data_chunk)
+        await self.entrypoint.emit("gather_results", data)
 
     ####################################################################
     ## Async Registered Methods
     ####################################################################
 
+    @registry.on(
+        "registered_method",
+        RegisteredMethodData,
+        namespace=f"{__name__}.ProcessorService",
+    )
     async def execute_registered_method(
-        self, method_name: str, params: Dict, client: Optional[Client]
-    ) -> Dict[str, Any]:
+        self, reg_method_req: RegisteredMethodData
+    ) -> ResultsData:
 
         # First check if the request is valid
-        if method_name not in self.registered_methods:
-            results = {
-                "node_id": self.state.id,
-                "node_state": self.state.to_json(),
-                "success": False,
-                "output": None,
-            }
+        if reg_method_req.method_name not in self.registered_methods:
             self.logger.warning(
                 f"{self}: Worker requested execution of registered method that doesn't "
-                f"exists: {method_name}"
+                f"exists: {reg_method_req.method_name}"
             )
-            return {"success": False, "output": None, "node_id": self.state.id}
+            data = ResultsData(node_id=self.state.id, success=False, output=None)
+            return data
 
         # Extract the method
-        function: Callable[[], Coroutine] = self.registered_node_fns[method_name]
-        style = self.registered_methods[method_name].style
-        # self.logger.debug(f"{self}: executing {function} with params: {params}")
+        function: Callable[[], Coroutine] = self.registered_node_fns[
+            reg_method_req.method_name
+        ]
+        style = self.registered_methods[reg_method_req.method_name].style
+        self.logger.debug(
+            f"{self}: executing {function} with params: {reg_method_req.params}"
+        )
 
         # Execute method based on its style
         success = False
         if style == "concurrent":
             # output = await function(**params)  # type: ignore[call-arg]
-            output, _ = await self.safe_exec(function, kwargs=params)
+            output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
             success = True
 
         elif style == "blocking":
             with self.step_lock:
-                output, _ = await self.safe_exec(function, kwargs=params)
+                output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
                 success = True
 
         elif style == "reset":
             with self.step_lock:
-                output, _ = await self.safe_exec(function, kwargs=params)
-                await self.eventbus.asend(Event("reset"))
+                output, _ = await self.safe_exec(function, kwargs=reg_method_req.params)
+                await self.entrypoint.emit("reset")
                 success = True
 
         else:
             self.logger.error(f"Invalid registered method request: style={style}")
             output = None
 
-        # Sending the information if client
-        if client:
-            results = {
-                "success": success,
-                "output": output,
-                "node_id": self.state.id,
-            }
-            await client.async_send(signal=NODE_MESSAGE.REPORT_RESULTS, data=results)
-
-        return {"success": success, "output": output}
+        data = ResultsData(node_id=self.state.id, success=success, output=output)
+        await self.entrypoint.emit("registered_method_results", data)
+        return data
 
     ####################################################################
     ## Helper Methods
@@ -247,14 +211,15 @@ class ProcessorService(Service):
 
         # Default value
         output = None
+        tic = time.perf_counter()
 
         try:
-            tic = time.perf_counter()
             if asyncio.iscoroutinefunction(func):
                 output = await func(*args, **kwargs)
             else:
-                await asyncio.sleep(1 / 1000)  # Allow other functions to run as well
-                output = func(*args, **kwargs)
+                output = await asyncio.get_running_loop().run_in_executor(
+                    self.executor, lambda: func(*args, **kwargs)
+                )
         except Exception:
             traceback_info = traceback.format_exc()
             self.logger.error(traceback_info)
@@ -300,8 +265,8 @@ class ProcessorService(Service):
             output_data_chunk.update("meta", meta)
 
             # Send out the output to the OutputsHandler
-            event_data = NewOutBoundDataEvent(output_data_chunk)
-            await self.eventbus.asend(Event("out_step", event_data))
+            await self.entrypoint.emit("out_step", output_data_chunk)
+            # self.logger.debug(f"{self}: output = {output_data_chunk}")
 
         # Update the counter
         self.step_id += 1

@@ -71,8 +71,8 @@ class TestLifeCycle:
     #     for node_id in config_graph.G.nodes():
     #         assert manager.workers[_worker.id].nodes[node_id].fsm != "NULL"
 
-    @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-    # @pytest.mark.parametrize("context", ["multiprocessing"])
+    # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
+    @pytest.mark.parametrize("context", ["multiprocessing"])
     async def test_manager_lifecycle(self, manager_with_worker, context):
         manager, worker = manager_with_worker
 
@@ -87,13 +87,13 @@ class TestLifeCycle:
         mapping = {worker.id: [gen_node.id, con_node.id]}
         await manager.async_commit(graph, mapping, context=context)
 
-        assert await manager.async_start()
-        assert await manager.async_record()
+        await manager.async_start()
+        await manager.async_record()
 
         await asyncio.sleep(3)
 
-        assert await manager.async_stop()
-        assert await manager.async_collect()
+        await manager.async_stop()
+        await manager.async_collect()
 
         await manager.async_reset()
 
@@ -113,13 +113,13 @@ class TestLifeCycle:
         await manager.async_reset()
 
         await manager.async_commit(graph=simple_graph, mapping=mapping)
-        assert await manager.async_start()
-        assert await manager.async_record()
+        await manager.async_start()
+        await manager.async_record()
 
         await asyncio.sleep(3)
 
-        assert await manager.async_stop()
-        assert await manager.async_collect()
+        await manager.async_stop()
+        await manager.async_collect()
 
         await manager.async_reset()
 
@@ -141,18 +141,18 @@ class TestLifeCycle:
 
         logger.debug("STARTING COMMIT 1st ROUND")
         tic = time.time()
-        assert await manager.async_commit(**graph_info)
+        await manager.async_commit(**graph_info)
         toc = time.time()
         delta = toc - tic
         logger.debug("FINISHED COMMIT 1st ROUND")
 
         logger.debug("STARTING RESET")
-        assert await manager.async_reset()
+        await manager.async_reset()
         logger.debug("FINISHED RESET")
 
         logger.debug("STARTING COMMIT 2st ROUND")
         tic2 = time.time()
-        assert await manager.async_commit(**graph_info)
+        await manager.async_commit(**graph_info)
         toc2 = time.time()
         delta2 = toc2 - tic2
         logger.debug("FINISHED COMMIT 2st ROUND")

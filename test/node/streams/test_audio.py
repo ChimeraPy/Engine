@@ -15,16 +15,15 @@ import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
-from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.audio_record import AudioRecord
 
+from ...conftest import TEST_DATA_DIR
 from .data_nodes import AudioNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
-TEST_DATA_DIR = CWD / "data"
 CHUNK = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 2
@@ -33,9 +32,17 @@ RECORD_SECONDS = 2
 
 
 @pytest.fixture
-def audio_node():
+def audio_node(logreceiver):
     # Create a node
-    an = AudioNode("an", CHUNK, CHANNELS, FORMAT, RATE, logdir=TEST_DATA_DIR)
+    an = AudioNode(
+        "an",
+        CHUNK,
+        CHANNELS,
+        FORMAT,
+        RATE,
+        logdir=TEST_DATA_DIR,
+        debug_port=logreceiver.port,
+    )
     return an
 
 
@@ -111,31 +118,30 @@ def test_audio_record():
     assert expected_audio_path.exists()
 
 
-async def test_node_save_audio_stream(audio_node):
-
-    # Event Loop
-    eventbus = EventBus()
+async def test_node_save_audio_stream(audio_node, bus, entrypoint):
 
     # Check that the audio was created
     expected_audio_path = pathlib.Path(audio_node.state.logdir) / "test.wav"
-    # try:
-    #     os.remove(expected_audio_path)
-    # except FileNotFoundError:
-    #     ...
+    try:
+        os.remove(expected_audio_path)
+    except FileNotFoundError:
+        ...
 
     # Stream
-    await audio_node.arun(eventbus=eventbus)
+    task = asyncio.create_task(audio_node.arun(bus=bus))
+    await asyncio.sleep(1)
 
     # Wait to generate files
-    await eventbus.asend(Event("start"))
+    await entrypoint.emit("start")
     logger.debug("Finish start")
-    await eventbus.asend(Event("record"))
+    await entrypoint.emit("record")
     logger.debug("Finish record")
     await asyncio.sleep(3)
-    await eventbus.asend(Event("stop"))
+    await entrypoint.emit("stop")
     logger.debug("Finish stop")
 
     await audio_node.ashutdown()
+    await task
 
     # Check that the audio was created
     assert expected_audio_path.exists()

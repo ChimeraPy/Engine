@@ -12,11 +12,12 @@ from aiohttp import web
 import chimerapy.engine as cpe
 from chimerapy.engine.networking import Client, Server
 
+from ...conftest import TEST_DIR
+
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
 
 # Constants
-TEST_DIR = pathlib.Path(os.path.abspath(__file__)).parent.parent
 IMG_SIZE = 400
 NUMBER_OF_CLIENTS = 5
 

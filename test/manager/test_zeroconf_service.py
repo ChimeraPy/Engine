@@ -5,7 +5,6 @@ import pytest
 import zeroconf
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
-from chimerapy.engine.eventbus import EventBus
 from chimerapy.engine.manager.zeroconf_service import ZeroconfService
 from chimerapy.engine.states import ManagerState
 
@@ -42,13 +41,12 @@ class MockZeroconfListener(ServiceListener):
 
 
 @pytest.fixture
-async def zeroconf_service():
+async def zeroconf_service(bus):
 
-    eventbus = EventBus()
     state = ManagerState()
 
-    zeroconf_service = ZeroconfService("zeroconf", eventbus, state)
-    await zeroconf_service.async_init()
+    zeroconf_service = ZeroconfService("zeroconf", state)
+    await zeroconf_service.attach(bus)
     zeroconf_service.start()
     return zeroconf_service
 

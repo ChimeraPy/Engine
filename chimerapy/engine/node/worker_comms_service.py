@@ -3,19 +3,22 @@ import pathlib
 import tempfile
 from typing import Dict, Optional
 
-from ..data_protocols import NodeDiagnostics, NodePubTable
-from ..eventbus import Event, EventBus, TypedObserver
-from ..networking import Client
-from ..networking.enums import GENERAL_MESSAGE, NODE_MESSAGE, WORKER_MESSAGE
+from aiodistbus import registry
+
+from chimerapy.engine import config
+
+from ..data_protocols import (
+    GatherData,
+    NodeDiagnostics,
+    NodePubTable,
+    PreSetupData,
+    RegisteredMethodData,
+    ResultsData,
+)
+from ..networking import Client, DataChunk
+from ..networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from ..service import Service
 from ..states import NodeState
-from .events import (
-    DiagnosticsReportEvent,
-    EnableDiagnosticsEvent,
-    GatherEvent,
-    ProcessNodePubTableEvent,
-    RegisteredMethodEvent,
-)
 from .node_config import NodeConfig
 
 
@@ -32,7 +35,6 @@ class WorkerCommsService(Service):
         worker_logging_port: int = 5555,
         state: Optional[NodeState] = None,
         logger: Optional[logging.Logger] = None,
-        eventbus: Optional[EventBus] = None,
     ):
         super().__init__(name=name)
 
@@ -47,7 +49,6 @@ class WorkerCommsService(Service):
         # Optional
         self.state = state
         self.logger = logger
-        self.eventbus = eventbus
 
         if worker_logdir:
             self.worker_logdir = worker_logdir
@@ -58,47 +59,36 @@ class WorkerCommsService(Service):
         self.running: bool = False
         self.client: Optional[Client] = None
 
-    async def async_init(self):
-
-        assert self.state and self.eventbus and self.logger
-
-        observers: Dict[str, TypedObserver] = {
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "NodeState.changed": TypedObserver(
-                "NodeState.changed", on_asend=self.send_state, handle_event="drop"
-            ),
-            "diagnostics_report": TypedObserver(
-                "diagnostics_report",
-                DiagnosticsReportEvent,
-                on_asend=self.send_diagnostics,
-                handle_event="unpack",
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in observers.values():
-            await self.eventbus.asubscribe(ob)
-
     ####################################################################
     ## Helper Functions
     ####################################################################
 
-    def in_node_config(
-        self, state: NodeState, logger: logging.Logger, eventbus: EventBus
-    ):
+    @registry.on("pre_setup", PreSetupData, namespace=f"{__name__}.WorkerCommsService")
+    def in_node_config(self, presetup_data: PreSetupData):
 
         # Save parameters
-        self.state = state
-        self.logger = logger
-        self.eventbus = eventbus
+        self.state = presetup_data.state
+        self.logger = presetup_data.logger
+
+        if self.worker_config:
+            config.update_defaults(self.worker_config)
+
+    def check(self) -> bool:
+        if not self.logger:
+            raise RuntimeError(f"{self}: logger not set!")
+        if not self.state:
+            self.logger.error(f"{self}: NodeState not set!")
+            return False
+        return True
 
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
+    @registry.on("setup", namespace=f"{__name__}.WorkerCommsService")
     async def setup(self):
-        assert self.state and self.eventbus and self.logger
+        if not self.check():
+            return
 
         # self.logger.debug(
         #     f"{self}: Prepping the networking component of the Node, connecting to "
@@ -111,7 +101,6 @@ class WorkerCommsService(Service):
             port=self.port,
             id=self.state.id,
             ws_handlers={
-                GENERAL_MESSAGE.SHUTDOWN: self.shutdown,
                 WORKER_MESSAGE.BROADCAST_NODE_SERVER: self.process_node_pub_table,
                 WORKER_MESSAGE.REQUEST_STEP: self.async_step,
                 WORKER_MESSAGE.REQUEST_COLLECT: self.provide_collect,
@@ -123,13 +112,13 @@ class WorkerCommsService(Service):
                 WORKER_MESSAGE.DIAGNOSTICS: self.enable_diagnostics,
             },
             parent_logger=self.logger,
-            thread=self.eventbus.thread,
         )
         await self.client.async_connect()
 
         # Send publisher port and host information
         await self.send_state()
 
+    @registry.on("teardown", namespace=f"{__name__}.WorkerCommsService")
     async def teardown(self):
 
         # Shutdown the client
@@ -141,10 +130,14 @@ class WorkerCommsService(Service):
     ## Message Requests
     ####################################################################
 
-    async def send_state(self):
-        assert self.state and self.eventbus and self.logger
+    @registry.on(
+        "NodeState.changed", NodeState, namespace=f"{__name__}.WorkerCommsService"
+    )
+    async def send_state(self, state: Optional[NodeState] = None):
+        if not self.check():
+            return
 
-        # Save container informaiton
+        # self.logger.debug(f"{self}: Sending NodeState: {self.state.to_dict()}")
         jsonable_state = self.state.to_dict()
         jsonable_state["logdir"] = str(jsonable_state["logdir"])
         if self.client:
@@ -153,69 +146,110 @@ class WorkerCommsService(Service):
             )
 
     async def provide_gather(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
+        if not self.check():
+            return
+
+        # self.logger.debug(f"{self}: Sending gather")
 
         if self.client:
-            event_data = GatherEvent(self.client)
-            await self.eventbus.asend(Event("gather", event_data))
+            # self.logger.debug(f"{self}: Sending gather with client")
+            await self.entrypoint.emit("gather")
 
+    @registry.on(
+        "gather_results", GatherData, namespace=f"{__name__}.WorkerCommsService"
+    )
+    async def send_gather(self, gather_data: GatherData):
+        if not self.check():
+            return
+
+        # self.logger.debug(f"{self}: Sending gather results: {gather_data}")
+
+        # If gather data is DataChunk, serialize it
+        if isinstance(gather_data.output, DataChunk):
+            gather_data.output = gather_data.output.to_json()
+
+        if self.client:
+            await self.client.async_send(
+                signal=NODE_MESSAGE.REPORT_GATHER, data=gather_data.to_dict()
+            )
+
+    @registry.on(
+        "report_diagnostics",
+        NodeDiagnostics,
+        namespace=f"{__name__}.WorkerCommsService",
+    )
     async def send_diagnostics(self, diagnostics: NodeDiagnostics):
-        assert self.state and self.eventbus and self.logger
+        if not self.check():
+            return
 
         # self.logger.debug(f"{self}: Sending Diagnostics")
 
         if self.client:
-            data = {"node_id": self.state.id, "diagnostics": diagnostics.to_dict()}
-            await self.client.async_send(signal=NODE_MESSAGE.DIAGNOSTICS, data=data)
+            await self.client.async_send(
+                signal=NODE_MESSAGE.DIAGNOSTICS, data=diagnostics.to_dict()
+            )
 
     ####################################################################
     ## Message Responds
     ####################################################################
 
     async def process_node_pub_table(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-
-        node_pub_table = NodePubTable.from_dict(msg["data"])
+        if not self.check():
+            return
 
         # Pass the information to the Poller Service
-        event_data = ProcessNodePubTableEvent(node_pub_table)
-        await self.eventbus.asend(Event("setup_connections", event_data))
+        node_pub_table = NodePubTable.from_dict(msg["data"])
+        await self.entrypoint.emit("setup_connections", node_pub_table)
 
     async def start_node(self, msg: Dict = {}):
-        assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("start"))
+        if not self.check():
+            return
+        await self.entrypoint.emit("start")
 
     async def record_node(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("record"))
+        if not self.check():
+            return
+        await self.entrypoint.emit("record")
 
     async def stop_node(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("stop"))
+        if not self.check():
+            return
+        await self.entrypoint.emit("stop")
 
     async def provide_collect(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("collect"))
+        if not self.check():
+            return
+        await self.entrypoint.emit("collect")
 
     async def execute_registered_method(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
+        if not self.check():
+            return
+
         # Check first that the method exists
-        method_name, params = (msg["data"]["method_name"], msg["data"]["params"])
+        event_data = RegisteredMethodData.from_dict(msg["data"])
 
         # Send the event
+        await self.entrypoint.emit("registered_method", event_data)
+
+    @registry.on(
+        "registered_method_results",
+        ResultsData,
+        namespace=f"{__name__}.WorkerCommsService",
+    )
+    async def report_registered_method_results(self, results: ResultsData):
+        if not self.check():
+            return
+
+        # Send the results
         if self.client:
-            event_data = RegisteredMethodEvent(
-                method_name=method_name, params=params, client=self.client
+            await self.client.async_send(
+                signal=NODE_MESSAGE.REPORT_RESULTS, data=results.to_dict()
             )
-            await self.eventbus.asend(Event("registered_method", event_data))
 
     async def async_step(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-        await self.eventbus.asend(Event("manual_step"))
+        if not self.check():
+            return
+        await self.entrypoint.emit("manual_step")
 
     async def enable_diagnostics(self, msg: Dict):
-        assert self.state and self.eventbus and self.logger
-        enable = msg["data"]["enable"]
-
-        event_data = EnableDiagnosticsEvent(enable)
-        await self.eventbus.asend(Event("enable_diagnostics", event_data))
+        await self.entrypoint.emit("enable_diagnostics", msg["data"]["enable"])

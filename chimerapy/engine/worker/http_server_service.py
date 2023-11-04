@@ -1,35 +1,28 @@
 import asyncio
-import enum
+import json
 import logging
 import pathlib
 import pickle
 from typing import Dict, List
 
+from aiodistbus import EventBus, registry
 from aiohttp import web
 
 from ..data_protocols import (
+    GatherData,
     NodeDiagnostics,
     NodePubEntry,
     NodePubTable,
+    RegisteredMethodData,
+    ResultsData,
+    ServerMessage,
 )
-from ..eventbus import Event, EventBus, TypedObserver
-from ..networking import Server
+from ..networking import DataChunk, Server
 from ..networking.enums import NODE_MESSAGE
+from ..node import NodeConfig
 from ..service import Service
 from ..states import NodeState, WorkerState
 from ..utils import update_dataclass
-from .events import (
-    BroadcastEvent,
-    CreateNodeEvent,
-    DestroyNodeEvent,
-    EnableDiagnosticsEvent,
-    ProcessNodePubTableEvent,
-    RegisteredMethodEvent,
-    SendArchiveEvent,
-    SendMessageEvent,
-    UpdateGatherEvent,
-    UpdateResultsEvent,
-)
 
 
 class HttpServerService(Service):
@@ -37,14 +30,13 @@ class HttpServerService(Service):
         self,
         name: str,
         state: WorkerState,
-        eventbus: EventBus,
         logger: logging.Logger,
     ):
+        super().__init__(name=name)
 
         # Save input parameters
         self.name = name
         self.state = state
-        self.eventbus = eventbus
         self.logger = logger
 
         # Containers
@@ -91,30 +83,7 @@ class HttpServerService(Service):
     def url(self) -> str:
         return f"http://{self._ip}:{self._port}"
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-            "broadcast": TypedObserver(
-                "broadcast",
-                BroadcastEvent,
-                on_asend=self._async_broadcast,
-                handle_event="unpack",
-            ),
-            "send": TypedObserver(
-                "send",
-                SendMessageEvent,
-                on_asend=self._async_send,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("start", namespace=f"{__name__}.HttpServerService")
     async def start(self):
 
         # Runn the Server
@@ -126,8 +95,9 @@ class HttpServerService(Service):
         self.state.port = self.port
 
         # After updatign the information, then run it!
-        await self.eventbus.asend(Event("after_server_startup"))
+        await self.entrypoint.emit("after_server_startup")
 
+    @registry.on("shutdown", namespace=f"{__name__}.HttpServerService")
     async def shutdown(self) -> bool:
         return await self.server.async_shutdown()
 
@@ -135,13 +105,18 @@ class HttpServerService(Service):
     ## Helper Functions
     ####################################################################
 
-    async def _async_send(self, client_id: str, signal: enum.Enum, data: Dict) -> bool:
+    @registry.on("send", ServerMessage, namespace=f"{__name__}.HttpServerService")
+    async def _async_send(self, msg: ServerMessage) -> bool:
+        if not isinstance(msg.client_id, str):
+            self.logger.error(f"{self}: Missing client_id")
+            return False
         return await self.server.async_send(
-            client_id=client_id, signal=signal, data=data
+            client_id=msg.client_id, signal=msg.signal, data=msg.data
         )
 
-    async def _async_broadcast(self, signal: enum.Enum, data: Dict) -> bool:
-        return await self.server.async_broadcast(signal=signal, data=data)
+    @registry.on("broadcast", ServerMessage, namespace=f"{__name__}.HttpServerService")
+    async def _async_broadcast(self, msg: ServerMessage) -> bool:
+        return await self.server.async_broadcast(signal=msg.signal, data=msg.data)
 
     def _create_node_pub_table(self) -> NodePubTable:
 
@@ -154,12 +129,12 @@ class HttpServerService(Service):
         return node_pub_table
 
     async def _collect_and_send(self, path: pathlib.Path):
+
         # Collect data from the Nodes
-        await self.eventbus.asend(Event("collect"))
+        await self.entrypoint.emit("collect")
 
         # After collecting, request to send the archive
-        event_data = SendArchiveEvent(path)
-        await self.eventbus.asend(Event("send_archive", event_data))
+        await self.entrypoint.emit("send_archive", path)
 
     ####################################################################
     ## HTTP Routes
@@ -216,70 +191,73 @@ class HttpServerService(Service):
     #     return web.HTTPOk()
 
     async def _async_create_node_route(self, request: web.Request) -> web.Response:
+
         msg_bytes = await request.read()
 
         # Create node
-        node_config = pickle.loads(msg_bytes)
-        await self.eventbus.asend(Event("create_node", CreateNodeEvent(node_config)))
+        node_config: NodeConfig = pickle.loads(msg_bytes)
+        await self.entrypoint.emit("create_node", node_config)
 
         return web.HTTPOk()
 
     async def _async_destroy_node_route(self, request: web.Request) -> web.Response:
+
         msg = await request.json()
 
         # Destroy Node
-        node_id = msg["id"]
-        await self.eventbus.asend(Event("destroy_node", DestroyNodeEvent(node_id)))
+        node_id: str = msg["id"]
+        await self.entrypoint.emit("destroy_node", node_id)
 
         return web.HTTPOk()
 
     async def _async_get_node_pub_table(self, request: web.Request) -> web.Response:
-
         node_pub_table = self._create_node_pub_table()
         return web.json_response(node_pub_table.to_json())
 
     async def _async_process_node_pub_table(self, request: web.Request) -> web.Response:
+
         msg = await request.json()
         node_pub_table: NodePubTable = NodePubTable.from_dict(msg)
 
         # Broadcasting the node server data
-        await self.eventbus.asend(
-            Event("process_node_pub_table", ProcessNodePubTableEvent(node_pub_table))
-        )
+        await self.entrypoint.emit("process_node_pub_table", node_pub_table)
 
         return web.HTTPOk()
 
     async def _async_step_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("step_nodes"))
+
+        await self.entrypoint.emit("step_nodes")
         return web.HTTPOk()
 
     async def _async_start_nodes_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("start_nodes"))
+
+        await self.entrypoint.emit("start_nodes")
         return web.HTTPOk()
 
     async def _async_record_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("record_nodes"))
+
+        await self.entrypoint.emit("record_nodes")
         return web.HTTPOk()
 
     async def _async_request_method_route(self, request: web.Request) -> web.Response:
+
         msg = await request.json()
 
         # Get event information
-        event_data = RegisteredMethodEvent(
-            node_id=msg["node_id"], method_name=msg["method_name"], params=msg["params"]
-        )
+        reg_method_data = RegisteredMethodData.from_dict(msg)
 
         # Send it!
-        await self.eventbus.asend(Event("registered_method", event_data))
-
+        await self.entrypoint.emit("registered_method", reg_method_data)
         return web.HTTPOk()
 
     async def _async_stop_nodes_route(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("stop_nodes"))
+
+        await self.entrypoint.emit("stop_nodes")
         return web.HTTPOk()
 
     async def _async_report_node_gather(self, request: web.Request) -> web.Response:
-        await self.eventbus.asend(Event("gather_nodes"))
+
+        await self.entrypoint.emit("gather_nodes")
 
         self.logger.warning(f"{self}: gather doesn't work ATM.")
         gather_data = {"id": self.state.id, "node_data": {}}
@@ -291,17 +269,18 @@ class HttpServerService(Service):
         return web.HTTPOk()
 
     async def _async_diagnostics_route(self, request: web.Request) -> web.Response:
+
         data = await request.json()
 
         # Determine if enable/disable
-        event_data = EnableDiagnosticsEvent(data["enable"])
-        await self.eventbus.asend(Event("diagnostics", event_data))
+        enable: bool = data["enable"]
+        await self.entrypoint.emit("diagnostics", enable)
         return web.HTTPOk()
 
     async def _async_shutdown_route(self, request: web.Request) -> web.Response:
-        # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
-        self.tasks.append(asyncio.create_task(self.eventbus.asend(Event("shutdown"))))
 
+        # Execute shutdown after returning HTTPOk (prevent Manager stuck waiting)
+        self.tasks.append(asyncio.create_task(self.entrypoint.emit("shutdown")))
         return web.HTTPOk()
 
     ####################################################################
@@ -310,45 +289,30 @@ class HttpServerService(Service):
 
     async def _async_node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # self.logger.debug(f"{self}: note_status_update: :{msg}")
+        # self.logger.debug(f"{self}: node_status_update: :{msg}")
         node_state = NodeState.from_dict(msg["data"])
-        node_id = node_state.id
 
         # Update our records by grabbing all data from the msg
-        if node_id in self.state.nodes and node_state:
+        if node_state.id in self.state.nodes and node_state:
 
             # Update the node state
-            update_dataclass(self.state.nodes[node_id], node_state)
-            await self.eventbus.asend(Event("WorkerState.changed", self.state))
+            update_dataclass(self.state.nodes[node_state.id], node_state)
+            await self.entrypoint.emit("WorkerState.changed", self.state)
 
     async def _async_node_report_gather(self, msg: Dict, ws: web.WebSocketResponse):
-
-        # Saving gathering value
-        node_id = msg["data"]["node_id"]
-
-        await self.eventbus.asend(
-            Event(
-                "update_gather",
-                UpdateGatherEvent(node_id=node_id, gather=msg["data"]["latest_value"]),
-            )
-        )
+        gather_data = GatherData.from_dict(msg["data"])
+        gather_data.output = DataChunk.from_json(gather_data.output)
+        await self.entrypoint.emit("update_gather", gather_data)
 
     async def _async_node_report_results(self, msg: Dict, ws: web.WebSocketResponse):
-
-        node_id = msg["data"]["node_id"]
-        await self.eventbus.asend(
-            Event(
-                "update_results",
-                UpdateResultsEvent(node_id=node_id, results=msg["data"]["output"]),
-            )
-        )
+        results = ResultsData.from_dict(msg["data"])
+        await self.entrypoint.emit("update_results", results)
 
     async def _async_node_diagnostics(self, msg: Dict, ws: web.WebSocketResponse):
 
         # self.logger.debug(f"{self}: received diagnostics: {msg}")
 
         # Create the entry and update the table
-        node_id: str = msg["data"]["node_id"]
-        diag = NodeDiagnostics.from_dict(msg["data"]["diagnostics"])
-        if node_id in self.state.nodes:
-            self.state.nodes[node_id].diagnostics = diag
+        diag = NodeDiagnostics.from_dict(msg["data"])
+        if diag.node_id in self.state.nodes:
+            self.state.nodes[diag.node_id].diagnostics = diag

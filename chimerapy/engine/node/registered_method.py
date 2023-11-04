@@ -1,15 +1,6 @@
-from dataclasses import dataclass, field
 from typing import Callable, Dict, Literal
 
-from dataclasses_json import dataclass_json
-
-
-@dataclass_json
-@dataclass
-class RegisteredMethod:
-    name: str
-    style: str = "concurrent"  # Literal['concurrent', 'blocking', 'reset']
-    params: Dict[str, str] = field(default_factory=dict)
+from ..data_protocols import RegisteredMethod
 
 
 # Reference:

@@ -1,3 +1,4 @@
+import asyncio
 import pathlib
 import shutil
 import tempfile
@@ -5,17 +6,20 @@ import time
 import uuid
 from asyncio import Task
 from concurrent.futures import Future
-from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
+from typing import Coroutine, Dict, List, Literal, Optional, Union
 
 import asyncio_atexit
+from aiodistbus import EntryPoint, EventBus, make_evented
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import Event, EventBus, make_evented
+from ..data_protocols import ConnectData
 from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking.async_loop_thread import AsyncLoopThread
-from ..node import NodeConfig
+from ..service import Service
 from ..states import NodeState, WorkerState
+
+# Services
 from .http_client_service import HttpClientService
 from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
@@ -65,6 +69,7 @@ class Worker:
         self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
 
         # Creating a container for task futures
+        self.services: List[Service] = []
         self.task_futures: List[Future] = []
 
         # Instance variables
@@ -72,10 +77,20 @@ class Worker:
         self.shutdown_task: Optional[Task] = None
 
     async def aserve(self) -> bool:
+        """Start the Worker's services.
 
+        This method will start the Worker's services, such as the HTTP
+        server and client, and the Node handler. It will also create
+        the event bus and the logging artifacts.
+
+        """
         # Create the event bus for the Worker
-        self.eventbus = EventBus()
-        self.state = make_evented(self.state, event_bus=self.eventbus)
+        self.bus = EventBus()
+        self.entrypoint = EntryPoint()
+        await self.entrypoint.connect(self.bus)
+
+        # Make the state evented
+        self.state = make_evented(self.state, bus=self.bus)
 
         # Create logging artifacts
         parent_logger = _logger.getLogger("chimerapy-engine-worker")
@@ -85,33 +100,34 @@ class Worker:
         self.logreceiver = self._start_log_receiver()
 
         # Create the services
-        self.http_client = HttpClientService(
-            name="http_client",
-            state=self.state,
-            eventbus=self.eventbus,
-            logger=self.logger,
-            logreceiver=self.logreceiver,
+        self.services.append(
+            HttpClientService(
+                name="http_client",
+                state=self.state,
+                logger=self.logger,
+                logreceiver=self.logreceiver,
+            )
         )
-        self.http_server = HttpServerService(
-            name="http_server",
-            state=self.state,
-            eventbus=self.eventbus,
-            logger=self.logger,
+        self.services.append(
+            HttpServerService(
+                name="http_server",
+                state=self.state,
+                logger=self.logger,
+            )
         )
-        self.node_handler = NodeHandlerService(
-            name="node_handler",
-            state=self.state,
-            eventbus=self.eventbus,
-            logger=self.logger,
-            logreceiver=self.logreceiver,
+        self.services.append(
+            NodeHandlerService(
+                name="node_handler",
+                state=self.state,
+                logger=self.logger,
+                logreceiver=self.logreceiver,
+            )
         )
-
-        await self.http_client.async_init()
-        await self.http_server.async_init()
-        await self.node_handler.async_init()
+        for service in self.services:
+            await service.attach(self.bus)
 
         # Start all services
-        await self.eventbus.asend(Event("start"))
+        await self.entrypoint.emit("start")
         self._alive = True
 
         # Register shutdown
@@ -195,9 +211,9 @@ class Worker:
         self,
         host: Optional[str] = None,
         port: Optional[int] = None,
-        method: Optional[Literal["ip", "zeroconf"]] = "ip",
+        method: Literal["ip", "zeroconf"] = "ip",
         timeout: Union[int, float] = config.get("worker.timeout.info-request"),
-    ) -> bool:
+    ):
         """Connect ``Worker`` to ``Manager``.
 
         This establish server-client connections between ``Worker`` and
@@ -213,47 +229,15 @@ class Worker:
             port (int): The ``Manager``'s port number
             timeout (Union[int, float]): Set timeout for the connection.
 
-        Returns:
-            bool: Success in connecting to the Manager
+        Raises:
+            TimeoutError: If the connection is not established within the \
 
         """
-        return await self.http_client.async_connect(
-            host=host, port=port, method=method, timeout=timeout
-        )
+        connect_data = ConnectData(method=method, host=host, port=port)
+        await asyncio.wait_for(self.entrypoint.emit("connect", connect_data), timeout)
 
-    async def async_deregister(self) -> bool:
-        return await self.http_client.async_deregister()
-
-    async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
-        return await self.node_handler.async_create_node(node_config)
-
-    async def async_destroy_node(self, node_id: str) -> bool:
-        return await self.node_handler.async_destroy_node(node_id=node_id)
-
-    async def async_start_nodes(self) -> bool:
-        return await self.node_handler.async_start_nodes()
-
-    async def async_record_nodes(self) -> bool:
-        return await self.node_handler.async_record_nodes()
-
-    async def async_step(self) -> bool:
-        return await self.node_handler.async_step()
-
-    async def async_stop_nodes(self) -> bool:
-        return await self.node_handler.async_stop_nodes()
-
-    async def async_request_registered_method(
-        self, node_id: str, method_name: str, params: Dict = {}
-    ) -> Dict[str, Any]:
-        return await self.node_handler.async_request_registered_method(
-            node_id=node_id, method_name=method_name, params=params
-        )
-
-    async def async_gather(self) -> Dict:
-        return await self.node_handler.async_gather()
-
-    async def async_collect(self) -> bool:
-        return await self.node_handler.async_collect()
+    async def async_deregister(self):
+        await self.entrypoint.emit("deregister")
 
     async def async_shutdown(self) -> bool:
 
@@ -264,7 +248,7 @@ class Worker:
             self._alive = False
 
         # Shutdown all services and Wait until all complete
-        await self.eventbus.asend(Event("shutdown"))
+        await self.entrypoint.emit("shutdown")
 
         # Delete temp folder if requested
         if self.state.tempfolder.exists() and self.delete_temp:
@@ -282,10 +266,10 @@ class Worker:
         self,
         host: Optional[str] = None,
         port: Optional[int] = None,
-        method: Optional[Literal["ip", "zeroconf"]] = "ip",
+        method: Literal["ip", "zeroconf"] = "ip",
         timeout: Union[int, float] = 10.0,
         blocking: bool = True,
-    ) -> Union[bool, Future[bool]]:
+    ):
         """Connect ``Worker`` to ``Manager``.
 
         This establish server-client connections between ``Worker`` and
@@ -300,8 +284,9 @@ class Worker:
             timeout (Union[int, float]): Set timeout for the connection.
             blocking (bool): Make the connection call blocking.
 
-        Returns:
-            Future[bool]: Success in connecting to the Manager
+        Raises:
+            TimeoutError: If the connection is not established within the \
+                timeout period.
 
         """
         future = self._exec_coro(self.async_connect(host, port, method, timeout))
@@ -312,42 +297,6 @@ class Worker:
 
     def deregister(self) -> Future[bool]:
         return self._exec_coro(self.async_deregister())
-
-    def create_node(self, node_config: NodeConfig) -> Future[bool]:
-        return self._exec_coro(self.async_create_node(node_config))
-
-    def destroy_node(self, node_id: str) -> Future[bool]:
-        return self._exec_coro(self.async_destroy_node(node_id))
-
-    def step(self) -> Future[bool]:
-        return self._exec_coro(self.async_step())
-
-    def start_nodes(self) -> Future[bool]:
-        return self._exec_coro(self.async_start_nodes())
-
-    def record_nodes(self) -> Future[bool]:
-        return self._exec_coro(self.async_record_nodes())
-
-    def request_registered_method(
-        self,
-        node_id: str,
-        method_name: str,
-        params: Dict = {},
-    ) -> Future[Tuple[bool, Any]]:
-        return self._exec_coro(
-            self.async_request_registered_method(
-                node_id=node_id, method_name=method_name, params=params
-            )
-        )
-
-    def stop_nodes(self) -> Future[bool]:
-        return self._exec_coro(self.async_stop_nodes())
-
-    def gather(self) -> Future[Dict]:
-        return self._exec_coro(self.async_gather())
-
-    def collect(self) -> Future[bool]:
-        return self._exec_coro(self.async_collect())
 
     def idle(self):
 

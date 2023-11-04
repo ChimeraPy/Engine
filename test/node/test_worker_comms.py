@@ -1,11 +1,16 @@
+import asyncio
 from typing import Dict
 
 import pytest
+from aiodistbus import make_evented
 from aiohttp import web
 
 import chimerapy.engine as cpe
-from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
-from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.data_protocols import (
+    NodeDiagnostics,
+    NodePubTable,
+    RegisteredMethodData,
+)
 from chimerapy.engine.networking.enums import NODE_MESSAGE, WORKER_MESSAGE
 from chimerapy.engine.networking.server import Server
 from chimerapy.engine.node.node_config import NodeConfig
@@ -34,7 +39,7 @@ class MockWorker:
 
     async def node_status_update(self, msg: Dict, ws: web.WebSocketResponse):
 
-        # self.logger.debug(f"{self}: note_status_update: ", msg)
+        # logger.debug(f"{self}: note_status_update: ", msg)
         node_state = NodeState.from_dict(msg["data"])
         node_id = node_state.id
 
@@ -63,13 +68,10 @@ async def mock_worker():
 
 
 @pytest.fixture
-async def worker_comms_setup(mock_worker):
-
-    # Event Loop
-    eventbus = EventBus()
+async def worker_comms(mock_worker, bus):
 
     # Create sample state
-    state = NodeState(id="test_worker_comms")
+    state = make_evented(NodeState(id="test_worker_comms"), bus=bus)
     node_config = NodeConfig()
 
     # Create the service
@@ -79,16 +81,25 @@ async def worker_comms_setup(mock_worker):
         port=mock_worker.server.port,
         node_config=node_config,
         state=state,
-        eventbus=eventbus,
         logger=logger,
     )
-
-    yield (worker_comms, mock_worker.server)
+    await worker_comms.attach(bus)
+    await worker_comms.setup()
+    yield worker_comms
+    await worker_comms.teardown()
     await mock_worker.async_shutdown()
 
 
-def test_instanticate(worker_comms_setup):
+def test_instanticate(worker_comms):
     ...
+
+
+async def test_node_state_change(worker_comms, mock_worker):
+
+    # Change the state
+    worker_comms.state.fsm = "RUNNING"
+    await asyncio.sleep(1)
+    assert mock_worker.node_states[worker_comms.state.id].fsm == "RUNNING"
 
 
 @pytest.mark.parametrize(
@@ -98,7 +109,14 @@ def test_instanticate(worker_comms_setup):
         ("record_node", {}),
         ("stop_node", {}),
         ("provide_collect", {}),
-        ("execute_registered_method", {"data": {"method_name": "", "params": {}}}),
+        (
+            "execute_registered_method",
+            {
+                "data": RegisteredMethodData(
+                    node_id="1", method_name="a", params={}
+                ).to_dict()
+            },
+        ),
         ("process_node_pub_table", {"data": NodePubTable().to_dict()}),
         ("async_step", {}),
         ("provide_gather", {}),
@@ -106,18 +124,11 @@ def test_instanticate(worker_comms_setup):
         ("enable_diagnostics", {"data": {"enable": True}}),
     ],
 )
-async def test_methods(worker_comms_setup, method_name, method_params):
-    worker_comms, _ = worker_comms_setup
-
-    # Start the server
-    await worker_comms.setup()
+async def test_methods(worker_comms, method_name, method_params):
 
     # Run method
     method = getattr(worker_comms, method_name)
     await method(method_params)
-
-    # Shutdown
-    await worker_comms.teardown()
 
 
 @pytest.mark.parametrize(
@@ -134,16 +145,9 @@ async def test_methods(worker_comms_setup, method_name, method_params):
         (WORKER_MESSAGE.DIAGNOSTICS, {"enable": False}),
     ],
 )
-async def test_ws_signals(worker_comms_setup, signal, data):
-    worker_comms, server = worker_comms_setup
-
-    # Start the server
-    await worker_comms.setup()
+async def test_ws_signals(worker_comms, mock_worker, signal, data):
 
     # Run method
-    await server.async_send(
+    await mock_worker.server.async_send(
         client_id=worker_comms.state.id, signal=signal, data=data, ok=True
     )
-
-    # Shutdown
-    await worker_comms.teardown()

@@ -1,7 +1,7 @@
 import chimerapy.engine as cpe
 
-from ..networking.test_client_server import server
-from ..streams.data_nodes import AudioNode, ImageNode, TabularNode, VideoNode
+from ..core.networking.test_client_server import server
+from ..node.streams.data_nodes import AudioNode, ImageNode, TabularNode, VideoNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 cpe.debug()
@@ -29,3 +29,9 @@ async def test_worker_instance_async():
     worker = cpe.Worker(name="local", id="local", port=0)
     await worker.aserve()
     await worker.async_shutdown()
+
+
+def test_worker_instance_sync():
+    worker = cpe.Worker(name="local", id="local", port=0)
+    worker.serve()
+    worker.shutdown()

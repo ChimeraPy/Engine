@@ -1,49 +1,31 @@
-from collections import UserDict
-from typing import Any, Dict, List, Optional
+from typing import Optional
+
+from aiodistbus import EntryPoint, EventBus, registry
 
 
 class Service:
     def __init__(self, name: str):
         self.name = name
+        self.entrypoint = EntryPoint()
 
     def __str__(self):
         return f"<{self.__class__.__name__}, name={self.name}>"
 
-    def shutdown(self):
-        ...
+    async def attach(self, bus: EventBus):
+        """Attach the service to the bus.
 
+        This is where the service should register its entrypoint and connect to the bus.
 
-class ServiceGroup(UserDict):
+        Args:
+            bus (EventBus): The bus to attach to.
 
-    data: Dict[str, Service]
+        Raises:
+            ValueError: If the registry is empty for service's Namespace.
 
-    def apply(self, method_name: str, order: Optional[List[str]] = None):
-
-        if order:
-            for s_name in order:
-                if s_name in self.data:
-                    s = self.data[s_name]
-                    func = getattr(s, method_name)
-                    func()
-        else:
-            for s in self.data.values():
-                func = getattr(s, method_name)
-                func()
-
-    async def async_apply(
-        self, method_name: str, order: Optional[List[str]] = None
-    ) -> List[Any]:
-
-        outputs: List[Any] = []
-        if order:
-            for s_name in order:
-                if s_name in self.data:
-                    s = self.data[s_name]
-                    func = getattr(s, method_name)
-                    outputs.append(await func())
-        else:
-            for s in self.data.values():
-                func = getattr(s, method_name)
-                outputs.append(await func())
-
-        return outputs
+        """
+        await self.entrypoint.connect(bus)
+        await self.entrypoint.use(
+            registry,
+            b_args=[self],
+            namespace=f"{self.__class__.__module__}.{self.__class__.__name__}",
+        )

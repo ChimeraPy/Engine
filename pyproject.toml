@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     'networkx',
     'dill',
+    'aiodistbus',
     'matplotlib',
     'multiprocess',
     'opencv-python',
@@ -53,7 +54,6 @@ test = [
     'auto-changelog',
     'coveralls',
     'pre-commit',
-    'docker',
     'numpy',
     'imutils',
     'pillow',

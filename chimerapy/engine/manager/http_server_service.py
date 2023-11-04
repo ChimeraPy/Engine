@@ -1,23 +1,18 @@
 import traceback
 from concurrent.futures import Future
-from typing import Dict, List
+from typing import List
 
+from aiodistbus import registry
 from aiohttp import web
 
 from chimerapy.engine import _logger, config
 
-from ..eventbus import Event, EventBus, TypedObserver
+from ..data_protocols import UpdateSendArchiveData
 from ..networking import Server
 from ..networking.enums import MANAGER_MESSAGE
 from ..service import Service
 from ..states import ManagerState, WorkerState
 from ..utils import update_dataclass
-from .events import (
-    MoveTransferredFilesEvent,
-    UpdateSendArchiveEvent,
-    WorkerDeregisterEvent,
-    WorkerRegisterEvent,
-)
 
 logger = _logger.getLogger("chimerapy-engine")
 
@@ -28,7 +23,6 @@ class HttpServerService(Service):
         name: str,
         port: int,
         enable_api: bool,
-        eventbus: EventBus,
         state: ManagerState,
     ):
         super().__init__(name=name)
@@ -38,7 +32,6 @@ class HttpServerService(Service):
         self._ip = "172.0.0.1"
         self._port = port
         self._enable_api = enable_api
-        self.eventbus = eventbus
         self.state = state
 
         # Future Container
@@ -58,29 +51,6 @@ class HttpServerService(Service):
             ],
         )
 
-    async def async_init(self):
-
-        # Specify observers
-        self.observers: Dict[str, TypedObserver] = {
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "ManagerState.changed": TypedObserver(
-                "ManagerState.changed",
-                on_asend=self._broadcast_network_status_update,
-                handle_event="drop",
-            ),
-            "shutdown": TypedObserver(
-                "shutdown", on_asend=self.shutdown, handle_event="drop"
-            ),
-            "move_transferred_files": TypedObserver(
-                "move_transferred_files",
-                MoveTransferredFilesEvent,
-                on_asend=self.move_transferred_files,
-                handle_event="unpack",
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
     @property
     def ip(self) -> str:
         return self._ip
@@ -93,6 +63,7 @@ class HttpServerService(Service):
     def url(self) -> str:
         return f"http://{self._ip}:{self._port}"
 
+    @registry.on("start", namespace=f"{__name__}.HttpServerService")
     async def start(self):
 
         # Runn the Server
@@ -104,8 +75,9 @@ class HttpServerService(Service):
         self.state.port = self.port
 
         # After updatign the information, then run it!
-        await self.eventbus.asend(Event("after_server_startup"))
+        await self.entrypoint.emit("after_server_startup")
 
+    @registry.on("shutdown", namespace=f"{__name__}.HttpServerService")
     async def shutdown(self) -> bool:
 
         # Finish any other tasks
@@ -126,6 +98,9 @@ class HttpServerService(Service):
             except Exception:
                 logger.error(traceback.format_exc())
 
+    @registry.on(
+        "move_transferred_files", WorkerState, namespace=f"{__name__}.HttpServerService"
+    )
     async def move_transferred_files(self, worker_state: WorkerState) -> bool:
         return await self._server.move_transferred_files(
             self.state.logdir, owner=worker_state.name, owner_id=worker_state.id
@@ -147,9 +122,7 @@ class HttpServerService(Service):
         worker_state = WorkerState.from_dict(msg)
 
         # Register worker
-        await self.eventbus.asend(
-            Event("worker_register", WorkerRegisterEvent(worker_state))
-        )
+        await self.entrypoint.emit("worker_register", worker_state)
 
         response = {
             "logs_push_info": {
@@ -168,9 +141,7 @@ class HttpServerService(Service):
         worker_state = WorkerState.from_dict(msg)
 
         # Deregister worker
-        await self.eventbus.asend(
-            Event("worker_deregister", WorkerDeregisterEvent(worker_state))
-        )
+        await self.entrypoint.emit("worker_deregister", worker_state)
 
         return web.HTTPOk()
 
@@ -188,14 +159,15 @@ class HttpServerService(Service):
 
     async def _update_send_archive(self, request: web.Request):
         msg = await request.json()
-        event_data = UpdateSendArchiveEvent(**msg)
-        await self.eventbus.asend(Event("update_send_archive", event_data))
+        event_data = UpdateSendArchiveData(**msg)
+        await self.entrypoint.emit("update_send_archive", event_data)
         return web.HTTPOk()
 
     #####################################################################################
     ## Front-End API
     #####################################################################################
 
+    @registry.on("ManagerState.changed", namespace=f"{__name__}.HttpServerService")
     async def _broadcast_network_status_update(self):
 
         if not self._enable_api:

@@ -1,70 +1,47 @@
 import logging
-from typing import Dict
 
-from ..eventbus import EventBus, TypedObserver
+from aiodistbus import registry
+
 from ..service import Service
 from ..states import NodeState
 
 
 class FSMService(Service):
-    def __init__(
-        self, name: str, state: NodeState, eventbus: EventBus, logger: logging.Logger
-    ):
+    def __init__(self, name: str, state: NodeState, logger: logging.Logger):
         super().__init__(name=name)
 
         # Save params
         self.state = state
-        self.eventbus = eventbus
         self.logger = logger
 
-    async def async_init(self):
-
-        # Add observers
-        self.observers: Dict[str, TypedObserver] = {
-            "initialize": TypedObserver(
-                "initialize", on_asend=self.init, handle_event="drop"
-            ),
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "start": TypedObserver("start", on_asend=self.start, handle_event="drop"),
-            "setup_connections": TypedObserver(
-                "setup_connections",
-                on_asend=self.setup_connections,
-                handle_event="drop",
-            ),
-            "record": TypedObserver(
-                "record", on_asend=self.record, handle_event="drop"
-            ),
-            "stop": TypedObserver("stop", on_asend=self.stop, handle_event="drop"),
-            "collect": TypedObserver(
-                "collect", on_asend=self.collect, handle_event="drop"
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
+    @registry.on("initialize", namespace=f"{__name__}.FSMService")
     async def init(self):
         self.state.fsm = "INITIALIZED"
 
+    @registry.on("setup", namespace=f"{__name__}.FSMService")
     async def setup(self):
         self.state.fsm = "READY"
 
+    @registry.on("setup_connections", namespace=f"{__name__}.FSMService")
     async def setup_connections(self):
         self.state.fsm = "CONNECTED"
 
+    @registry.on("start", namespace=f"{__name__}.FSMService")
     async def start(self):
         self.state.fsm = "PREVIEWING"
 
+    @registry.on("record", namespace=f"{__name__}.FSMService")
     async def record(self):
         self.state.fsm = "RECORDING"
 
+    @registry.on("stop", namespace=f"{__name__}.FSMService")
     async def stop(self):
         self.state.fsm = "STOPPED"
 
+    @registry.on("collect", namespace=f"{__name__}.FSMService")
     async def collect(self):
         self.state.fsm = "SAVED"
 
+    @registry.on("teardown", namespace=f"{__name__}.FSMService")
     async def teardown(self):
         self.state.fsm = "SHUTDOWN"

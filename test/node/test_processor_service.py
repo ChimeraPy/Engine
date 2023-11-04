@@ -6,9 +6,7 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine import _logger
-from chimerapy.engine.eventbus import Event, EventBus, TypedObserver
 from chimerapy.engine.networking.data_chunk import DataChunk
-from chimerapy.engine.node.events import NewInBoundDataEvent, NewOutBoundDataEvent
 from chimerapy.engine.node.processor_service import ProcessorService
 from chimerapy.engine.states import NodeState
 
@@ -40,25 +38,22 @@ async def shutdown(processor):
     await processor.teardown()
 
 
-async def emit_data(eventbus):
-    for i in range(3):
-        await eventbus.asend(
-            Event("in_step", NewInBoundDataEvent({"data": DataChunk()}))
-        )
+async def emit_data(entrypoint):
+    await entrypoint.emit("start")
+    await asyncio.sleep(1)
+    for _ in range(3):
+        await entrypoint.emit("in_step", {"data": DataChunk()})
         await asyncio.sleep(0.5)
 
 
-async def receive_data(data_chunk):
+async def receive_data(data_chunk: DataChunk):
     global RECEIVE_FLAG
     RECEIVE_FLAG = True
     logger.debug(data_chunk)
 
 
 @pytest.fixture
-async def step_processor():
-
-    # Create eventbus
-    eventbus = EventBus()
+async def step_processor(bus):
 
     # Create sample state
     state = NodeState()
@@ -68,22 +63,16 @@ async def step_processor():
         "processor",
         in_bound_data=True,
         state=state,
-        eventbus=eventbus,
         main_fn=step,
         operation_mode="step",
     )
-    await processor.async_init()
-
-    yield (processor, eventbus)
-
+    await processor.attach(bus)
+    yield processor
     await processor.teardown()
 
 
 @pytest.fixture
-async def source_processor():
-
-    # Create eventbus
-    eventbus = EventBus()
+async def source_processor(bus):
 
     # Create sample state
     state = NodeState()
@@ -93,22 +82,16 @@ async def source_processor():
         "processor",
         in_bound_data=False,
         state=state,
-        eventbus=eventbus,
         main_fn=step,
         operation_mode="step",
     )
-    await processor.async_init()
-
-    yield (processor, eventbus)
-
+    await processor.attach(bus)
+    yield processor
     await processor.teardown()
 
 
 @pytest.fixture
-async def main_processor():
-
-    # Create eventbus
-    eventbus = EventBus()
+async def main_processor(bus):
 
     # Create sample state
     state = NodeState()
@@ -118,52 +101,47 @@ async def main_processor():
         "processor",
         in_bound_data=True,
         state=state,
-        eventbus=eventbus,
         main_fn=main,
         operation_mode="main",
     )
-    await processor.async_init()
-
-    yield (processor, eventbus)
-
+    await processor.attach(bus)
+    yield processor
     await processor.teardown()
 
 
 @pytest.mark.parametrize(
-    "processor_setup",
+    "processor",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
         lazy_fixture("step_processor"),
     ],
 )
-def test_instanticate(processor_setup):
+def test_instanticate(processor):
     ...
 
 
 @pytest.mark.parametrize(
-    "processor_setup",
+    "processor",
     [
         lazy_fixture("source_processor"),
         lazy_fixture("main_processor"),
         lazy_fixture("step_processor"),
     ],
 )
-async def test_setup(processor_setup):
-    processor, _ = processor_setup
+async def test_setup(processor):
     await processor.setup()
 
 
 @pytest.mark.parametrize(
-    "ptype, processor_setup",
+    "ptype, processor",
     [
         ("source", lazy_fixture("source_processor")),
         ("main", lazy_fixture("main_processor")),
         ("step", lazy_fixture("step_processor")),
     ],
 )
-async def test_main(ptype, processor_setup):
-    processor, eventbus = processor_setup
+async def test_main(ptype, processor, entrypoint):
 
     # Reset
     global CHANGE_FLAG
@@ -173,20 +151,13 @@ async def test_main(ptype, processor_setup):
 
     # Adding observer for step
     if ptype == "step":
-        observer = TypedObserver(
-            "out_step",
-            NewOutBoundDataEvent,
-            on_asend=receive_data,
-            handle_event="unpack",
-        )
-        await eventbus.asubscribe(observer)
+        await entrypoint.on("out_step", receive_data, DataChunk)
 
     # Execute
     await processor.setup()
     await asyncio.gather(
-        processor.main(),
         shutdown(processor),
-        emit_data(eventbus),
+        emit_data(entrypoint),
     )
 
     # Asserts

@@ -4,9 +4,10 @@ import queue
 import threading
 from typing import Dict, Optional
 
+from aiodistbus import registry
+
 from chimerapy.engine import _logger
 
-from ..eventbus import EventBus, TypedObserver
 from ..records import (
     AudioRecord,
     ImageRecord,
@@ -27,14 +28,12 @@ class RecordService(Service):
         self,
         name: str,
         state: NodeState,
-        eventbus: EventBus,
         logger: Optional[logging.Logger] = None,
     ):
         super().__init__(name)
 
         # Saving parameters
         self.state = state
-        self.eventbus = eventbus
 
         # State variables
         self.save_queue: queue.Queue = queue.Queue()
@@ -63,39 +62,35 @@ class RecordService(Service):
         else:
             self.logger = _logger.getLogger("chimerapy-engine")
 
-    async def async_init(self):
-
-        # Put observers
-        self.observers: Dict[str, TypedObserver] = {
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "record": TypedObserver(
-                "record", on_asend=self.record, handle_event="drop"
-            ),
-            "collect": TypedObserver(
-                "collect", on_asend=self.collect, handle_event="drop"
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
     ####################################################################
     ## Lifecycle Hooks
     ####################################################################
 
-    async def setup(self):
+    @registry.on("setup", namespace=f"{__name__}.RecordService")
+    def setup(self):
 
         # self.logger.debug(f"{self}: executing main")
         self._record_thread = threading.Thread(target=self.run)
         self._record_thread.start()
 
-    async def record(self):
+    @registry.on("record", namespace=f"{__name__}.RecordService")
+    def record(self):
         # self.logger.debug(f"{self}: Starting recording")
         ...
 
-    async def teardown(self):
+    @registry.on("collect", namespace=f"{__name__}.RecordService")
+    def collect(self):
+        # self.logger.debug(f"{self}: collecting recording")
+
+        # Signal to stop and save
+        self.is_running.clear()
+        if self._record_thread:
+            self._record_thread.join()
+
+        # self.logger.debug(f"{self}: Finish saving records")
+
+    @registry.on("teardown", namespace=f"{__name__}.RecordService")
+    def teardown(self):
 
         # First, indicate the end
         self.is_running.clear()
@@ -108,11 +103,14 @@ class RecordService(Service):
     ## Helper Methods & Attributes
     ####################################################################
 
-    @property
-    def enabled(self) -> bool:
-        return self.state.fsm == "RECORDING"
-
+    @registry.on("record_entry", Dict, namespace=f"{__name__}.RecordService")
     def submit(self, entry: Dict):
+
+        # self.logger.debug(f"{self}: Received data: {entry}")
+
+        if self.state.fsm != "RECORDING":
+            return None
+
         self.save_queue.put(entry)
 
     def run(self):
@@ -148,13 +146,3 @@ class RecordService(Service):
             entry.close()
 
         # self.logger.debug(f"{self}: Closed all entries")
-
-    def collect(self):
-        # self.logger.debug(f"{self}: collecting recording")
-
-        # Signal to stop and save
-        self.is_running.clear()
-        if self._record_thread:
-            self._record_thread.join()
-
-        # self.logger.debug(f"{self}: Finish saving records")
