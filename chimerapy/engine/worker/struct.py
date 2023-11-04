@@ -1,8 +1,15 @@
 import enum
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from dataclasses_json import DataClassJsonMixin
+
+
+@dataclass
+class ConnectData(DataClassJsonMixin):
+    method: Literal["ip", "zeroconf"]
+    host: Optional[str] = None
+    port: Optional[int] = None
 
 
 @dataclass

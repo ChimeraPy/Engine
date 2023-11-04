@@ -1,3 +1,4 @@
+import asyncio
 import pathlib
 import shutil
 import tempfile
@@ -5,7 +6,7 @@ import time
 import uuid
 from asyncio import Task
 from concurrent.futures import Future
-from typing import Any, Coroutine, Dict, List, Literal, Optional, Union
+from typing import Coroutine, Dict, List, Literal, Optional, Union
 
 import asyncio_atexit
 from aiodistbus import EntryPoint, EventBus, make_evented
@@ -16,9 +17,12 @@ from ..logger.zmq_handlers import NodeIDZMQPullListener
 from ..networking.async_loop_thread import AsyncLoopThread
 from ..service import Service
 from ..states import NodeState, WorkerState
+
+# Services
 from .http_client_service import HttpClientService
 from .http_server_service import HttpServerService
 from .node_handler_service import NodeHandlerService
+from .struct import ConnectData
 
 
 class Worker:
@@ -65,7 +69,7 @@ class Worker:
         self.state = WorkerState(id=id, name=name, port=port, tempfolder=tempfolder)
 
         # Creating a container for task futures
-        self.services: Dict[str, Service] = {}
+        self.services: List[Service] = []
         self.task_futures: List[Future] = []
 
         # Instance variables
@@ -96,32 +100,30 @@ class Worker:
         self.logreceiver = self._start_log_receiver()
 
         # Create the services
-        self.http_client_service = HttpClientService(
-            name="http_client",
-            state=self.state,
-            logger=self.logger,
-            logreceiver=self.logreceiver,
+        self.services.append(
+            HttpClientService(
+                name="http_client",
+                state=self.state,
+                logger=self.logger,
+                logreceiver=self.logreceiver,
+            )
         )
-        self.http_server_service = HttpServerService(
-            name="http_server",
-            state=self.state,
-            logger=self.logger,
+        self.services.append(
+            HttpServerService(
+                name="http_server",
+                state=self.state,
+                logger=self.logger,
+            )
         )
-        self.node_handler_service = NodeHandlerService(
-            name="node_handler",
-            state=self.state,
-            logger=self.logger,
-            logreceiver=self.logreceiver,
+        self.services.append(
+            NodeHandlerService(
+                name="node_handler",
+                state=self.state,
+                logger=self.logger,
+                logreceiver=self.logreceiver,
+            )
         )
-        service_list = [
-            self.http_client_service,
-            self.http_server_service,
-            self.node_handler_service,
-        ]
-        for s in service_list:
-            self.services[s.name] = s
-
-        for service in self.services.values():
+        for service in self.services:
             await service.attach(self.bus)
 
         # Start all services
@@ -209,9 +211,9 @@ class Worker:
         self,
         host: Optional[str] = None,
         port: Optional[int] = None,
-        method: Optional[Literal["ip", "zeroconf"]] = "ip",
+        method: Literal["ip", "zeroconf"] = "ip",
         timeout: Union[int, float] = config.get("worker.timeout.info-request"),
-    ) -> bool:
+    ):
         """Connect ``Worker`` to ``Manager``.
 
         This establish server-client connections between ``Worker`` and
@@ -227,16 +229,15 @@ class Worker:
             port (int): The ``Manager``'s port number
             timeout (Union[int, float]): Set timeout for the connection.
 
-        Returns:
-            bool: Success in connecting to the Manager
+        Raises:
+            TimeoutError: If the connection is not established within the \
 
         """
-        return await self.http_client_service.async_connect(
-            host=host, port=port, method=method, timeout=timeout
-        )
+        connect_data = ConnectData(method=method, host=host, port=port)
+        await asyncio.wait_for(self.entrypoint.emit("connect", connect_data), timeout)
 
-    async def async_deregister(self) -> bool:
-        return await self.http_client_service.async_deregister()
+    async def async_deregister(self):
+        await self.entrypoint.emit("deregister")
 
     async def async_shutdown(self) -> bool:
 
@@ -265,10 +266,10 @@ class Worker:
         self,
         host: Optional[str] = None,
         port: Optional[int] = None,
-        method: Optional[Literal["ip", "zeroconf"]] = "ip",
+        method: Literal["ip", "zeroconf"] = "ip",
         timeout: Union[int, float] = 10.0,
         blocking: bool = True,
-    ) -> Union[bool, Future[bool]]:
+    ):
         """Connect ``Worker`` to ``Manager``.
 
         This establish server-client connections between ``Worker`` and
@@ -283,8 +284,9 @@ class Worker:
             timeout (Union[int, float]): Set timeout for the connection.
             blocking (bool): Make the connection call blocking.
 
-        Returns:
-            Future[bool]: Success in connecting to the Manager
+        Raises:
+            TimeoutError: If the connection is not established within the \
+                timeout period.
 
         """
         future = self._exec_coro(self.async_connect(host, port, method, timeout))

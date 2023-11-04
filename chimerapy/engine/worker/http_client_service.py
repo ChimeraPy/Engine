@@ -7,7 +7,7 @@ import shutil
 import socket
 import traceback
 import uuid
-from typing import Dict, Literal, Optional, Tuple, Union
+from typing import Literal, Optional, Tuple, Union
 
 import aiohttp
 from aiodistbus import registry
@@ -20,6 +20,7 @@ from ..networking import Client
 from ..service import Service
 from ..states import WorkerState
 from ..utils import get_ip_address
+from .struct import ConnectData
 from .zeroconf_listener import ZeroconfListener
 
 
@@ -50,6 +51,14 @@ class HttpClientService(Service):
 
     def get_address(self) -> Tuple[str, int]:
         return self.manager_host, self.manager_port
+
+    @registry.on("connect", ConnectData, namespace=f"{__name__}.HttpClientService")
+    async def async_connect_handler(self, connect_data: ConnectData):
+        await self.async_connect(
+            host=connect_data.host,
+            port=connect_data.port,
+            method=connect_data.method,
+        )
 
     @registry.on("shutdown", namespace=f"{__name__}.HttpClientService")
     async def shutdown(self) -> bool:
