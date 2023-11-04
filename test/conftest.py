@@ -7,14 +7,11 @@ import sys
 import time
 from typing import Dict
 
-import docker
 import pytest
 from aiodistbus import EntryPoint, EventBus
 
 import chimerapy.engine as cpe
 from chimerapy.engine.networking.publisher import Publisher
-
-from .mock import DockeredWorker
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -76,7 +73,7 @@ def event_loop():
 
 @pytest.fixture
 async def bus():
-    bus = EventBus(debug=True)
+    bus = EventBus()
     yield bus
     await bus.close()
 
