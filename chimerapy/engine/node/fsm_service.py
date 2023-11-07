@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from aiodistbus import registry
 
@@ -22,7 +23,7 @@ class FSMService(Service):
     async def setup(self):
         self.state.fsm = "READY"
 
-    @registry.on("setup_connections", namespace=f"{__name__}.FSMService")
+    @registry.on("connected", namespace=f"{__name__}.FSMService")
     async def setup_connections(self):
         self.state.fsm = "CONNECTED"
 

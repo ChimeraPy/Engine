@@ -8,7 +8,7 @@ import time
 from typing import Dict
 
 import pytest
-from aiodistbus import EntryPoint, EventBus
+from aiodistbus import DEntryPoint, DEventBus, EntryPoint, EventBus
 
 import chimerapy.engine as cpe
 from chimerapy.engine.networking.publisher import Publisher
@@ -82,6 +82,21 @@ async def bus():
 async def entrypoint(bus):
     entrypoint = EntryPoint()
     await entrypoint.connect(bus)
+    yield entrypoint
+    await entrypoint.close()
+
+
+@pytest.fixture
+async def dbus():
+    bus = DEventBus()
+    yield bus
+    await bus.close()
+
+
+@pytest.fixture
+async def dentrypoint(dbus):
+    entrypoint = DEntryPoint()
+    await entrypoint.connect(dbus.ip, dbus.port)
     yield entrypoint
     await entrypoint.close()
 

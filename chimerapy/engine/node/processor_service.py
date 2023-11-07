@@ -139,17 +139,19 @@ class ProcessorService(Service):
     ## Debugging tools
     ####################################################################
 
-    @registry.on("gather", namespace=f"{__name__}.ProcessorService")
+    @registry.on("worker.gather", namespace=f"{__name__}.ProcessorService")
     async def gather(self):
-        data = GatherData(node_id=self.state.id, output=self.latest_data_chunk)
-        await self.entrypoint.emit("gather_results", data)
+        data = GatherData(
+            node_id=self.state.id, output=self.latest_data_chunk.to_json()
+        )
+        await self.entrypoint.emit("node.gather", data)
 
     ####################################################################
     ## Async Registered Methods
     ####################################################################
 
     @registry.on(
-        "registered_method",
+        "worker.registered_method",
         RegisteredMethodData,
         namespace=f"{__name__}.ProcessorService",
     )
@@ -198,7 +200,7 @@ class ProcessorService(Service):
             output = None
 
         data = ResultsData(node_id=self.state.id, success=success, output=output)
-        await self.entrypoint.emit("registered_method_results", data)
+        await self.entrypoint.emit("node.registered_method_results", data)
         return data
 
     ####################################################################

@@ -40,7 +40,7 @@ class ProfilerService(Service):
             self.diagnostics_report, config.get("diagnostics.interval")
         )
 
-    @registry.on("enable_diagnostics", bool, namespace=f"{__name__}.ProfilerService")
+    @registry.on("worker.diagnostics", bool, namespace=f"{__name__}.ProfilerService")
     async def enable(self, enable: bool = True):
         # self.logger.debug(f"Profiling enabled: {enable}")
 
@@ -74,6 +74,8 @@ class ProfilerService(Service):
 
         if not self.process or not self._enable:
             return None
+
+        # self.logger.debug(f"{self}: Collecting diagnostics...")
 
         # Get the timestamp
         timestamp = datetime.datetime.now().isoformat()
@@ -110,7 +112,8 @@ class ProfilerService(Service):
         )
 
         # Send the information to the Worker and ultimately the Manager
-        await self.entrypoint.emit("diagnostics_report", diag)
+        # await self.entrypoint.emit("node.diagnostics_report", diag)
+        self.state.diagnostics = diag
 
         # self.logger.debug(f"{self}: collected diagnostics")
 

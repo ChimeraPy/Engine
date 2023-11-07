@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Dict, List, Optional
 
-from aiodistbus import EntryPoint, EventBus, registry
+from aiodistbus import registry
 
 from chimerapy.engine import _logger
 
@@ -60,6 +60,8 @@ class PollerService(Service):
         "setup_connections", NodePubTable, namespace=f"{__name__}.PollerService"
     )
     async def setup_connections(self, node_pub_table: NodePubTable):
+
+        self.logger.debug(f"{self}: Setting up connections: {node_pub_table}")
 
         # Create a subscriber
         self.sub = Subscriber()

@@ -1,15 +1,16 @@
 import asyncio
 import time
+from dataclasses import dataclass
 from typing import Optional, Union
 
 import pytest
-from aiodistbus import EventBus, make_evented
+from aiodistbus import DEventBus, EntryPoint, EventBus, make_evented
+from dataclasses_json import DataClassJsonMixin
 
 import chimerapy.engine as cpe
 from chimerapy.engine import config
 from chimerapy.engine.data_protocols import RegisteredMethodData
 from chimerapy.engine.states import WorkerState
-from chimerapy.engine.worker.http_server_service import HttpServerService
 from chimerapy.engine.worker.node_handler_service import NodeHandlerService
 
 from ...conftest import linux_run_only
@@ -73,11 +74,57 @@ def node_with_reg_methods(logreceiver):
     return NodeWithRegisteredMethods(name="RegNode1", debug_port=logreceiver.port)
 
 
+@dataclass
+class ExampleEvent(DataClassJsonMixin):
+    msg: str
+
+
+async def func(event: ExampleEvent):
+    assert isinstance(event, ExampleEvent)
+    logger.info(f"Received event {event}")
+
+
+async def test_node_worker_link():
+
+    # Local buses
+    wb = EventBus()
+    wdbus = DEventBus()
+    nb = EventBus()
+
+    # Create entrypoint
+    ne = EntryPoint()
+    await ne.connect(nb)
+    await ne.on(f"worker.req", func, ExampleEvent)
+    we = EntryPoint()
+    await we.connect(wb)
+    await we.on(f"node.status", func, ExampleEvent)
+
+    # Link
+    await nb.link(wdbus.ip, wdbus.port, ["node.*"], ["worker.*"])
+    await wb.link(wdbus.ip, wdbus.port, ["worker.*"], ["node.*"])
+
+    # Send message
+    cevent = await ne.emit(f"node.status", ExampleEvent(msg="Hello"))
+    sevent = await we.emit(f"worker.req", ExampleEvent(msg="Hello"))
+
+    # Flush
+    await wdbus.flush()
+
+    # Assert
+    assert cevent and cevent.id in we._received
+    assert sevent and sevent.id in ne._received
+
+
+async def node_status_func(data):
+    logger.info(f"Received event {data}")
+
+
 @pytest.fixture
-async def node_handler_setup(bus, entrypoint):
+async def node_handler(bus, entrypoint, dbus):
 
     # Requirements
-    state = make_evented(WorkerState(), bus=bus)
+    state = WorkerState(ip=dbus.ip, port=dbus.port)
+    state = make_evented(state, bus=bus)
     logger = cpe._logger.getLogger("chimerapy-engine-worker")
     log_receiver = cpe._logger.get_node_id_zmq_listener()
     log_receiver.start(register_exit_handlers=True)
@@ -90,29 +137,28 @@ async def node_handler_setup(bus, entrypoint):
         logreceiver=log_receiver,
     )
     await node_handler.attach(bus)
+    await bus.link(dbus.ip, dbus.port, ["worker.*"], ["node.*"])
+    # await entrypoint.on('node.*', node_status_func)
 
     # Necessary dependency
-    http_server = HttpServerService(name="http_server", state=state, logger=logger)
-    await http_server.attach(bus)
+    # http_server = HttpServerService(name="http_server", state=state, logger=logger)
+    # await http_server.attach(bus)
 
     await entrypoint.emit("start")
-    yield (node_handler, http_server)
+    yield node_handler
     await entrypoint.emit("shutdown")
 
 
-async def test_create_service_instance(node_handler_setup):
+async def test_create_service_instance(node_handler):
     ...
 
 
 # @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["threading"])
 @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-async def test_create_node(gen_node, node_handler_setup, context):
-    node_handler, _ = node_handler_setup
-    assert await node_handler.async_create_node(
-        cpe.NodeConfig(gen_node, context=context)
-    )
-    assert await node_handler.async_destroy_node(gen_node.id)
+async def test_create_node(gen_node, node_handler, context):
+    await node_handler.async_create_node(cpe.NodeConfig(gen_node, context=context))
+    await node_handler.async_destroy_node(gen_node.id)
 
 
 # @pytest.mark.skip(reason="Flaky")
@@ -121,24 +167,20 @@ async def test_create_node(gen_node, node_handler_setup, context):
     [["multiprocessing", "threading"], ["threading", "multiprocessing"]],
 )
 async def test_create_node_along_with_different_context(
-    node_handler_setup, gen_node, con_node, context_order
+    node_handler, gen_node, con_node, context_order
 ):
-    node_handler, _ = node_handler_setup
-    assert await node_handler.async_create_node(
+    await node_handler.async_create_node(
         cpe.NodeConfig(gen_node, context=context_order[0])
     )
-    assert await node_handler.async_create_node(
+    await node_handler.async_create_node(
         cpe.NodeConfig(con_node, context=context_order[1])
     )
-    assert await node_handler.async_destroy_node(gen_node.id)
-    assert await node_handler.async_destroy_node(con_node.id)
+    await node_handler.async_destroy_node(gen_node.id)
+    await node_handler.async_destroy_node(con_node.id)
 
 
 @linux_run_only
-async def test_create_unknown_node(node_handler_setup):
-
-    node_handler, _ = node_handler_setup
-
+async def test_create_unknown_node(node_handler):
     class UnknownNode(cpe.Node):
         def step(self):
             return 2
@@ -150,23 +192,18 @@ async def test_create_unknown_node(node_handler_setup):
     node_config = cpe.NodeConfig(node)
     del UnknownNode
 
-    assert await node_handler.async_create_node(node_config)
-    assert await node_handler.async_destroy_node(node_id)
+    await node_handler.async_create_node(node_config)
+    await node_handler.async_destroy_node(node_id)
 
 
 # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
 @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["threading"])
-async def test_processing_node_pub_table(
-    node_handler_setup, gen_node, con_node, context
-):
-    node_handler, http_server = node_handler_setup
+async def test_processing_node_pub_table(node_handler, gen_node, con_node, context):
 
     # Create
-    assert await node_handler.async_create_node(
-        cpe.NodeConfig(gen_node, context=context)
-    )
-    assert await node_handler.async_create_node(
+    await node_handler.async_create_node(cpe.NodeConfig(gen_node, context=context))
+    await node_handler.async_create_node(
         cpe.NodeConfig(
             con_node,
             in_bound=[gen_node.id],
@@ -176,32 +213,28 @@ async def test_processing_node_pub_table(
     )
 
     # Serve node pub table
-    node_pub_table = http_server._create_node_pub_table()
-    assert await node_handler.async_process_node_pub_table(node_pub_table)
+    node_pub_table = node_handler._create_node_pub_table()
+    await node_handler.async_process_node_pub_table(node_pub_table)
 
     # Destroy
-    assert await node_handler.async_destroy_node(gen_node.id)
-    assert await node_handler.async_destroy_node(con_node.id)
+    await node_handler.async_destroy_node(gen_node.id)
+    await node_handler.async_destroy_node(con_node.id)
 
 
 @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-async def test_starting_node(node_handler_setup, gen_node, context):
-    node_handler, _ = node_handler_setup
+async def test_starting_node(node_handler, gen_node, context):
 
-    assert await node_handler.async_create_node(
-        cpe.NodeConfig(gen_node, context=context)
-    )
-    assert await node_handler.async_start_nodes()
+    await node_handler.async_create_node(cpe.NodeConfig(gen_node, context=context))
+    await node_handler.async_start_nodes()
     await asyncio.sleep(1)
-    assert await node_handler.async_stop_nodes()
-    assert await node_handler.async_destroy_node(gen_node.id)
+    await node_handler.async_stop_nodes()
+    await node_handler.async_destroy_node(gen_node.id)
 
 
 @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-async def test_record_and_collect(node_handler_setup, context):
-    node_handler, _ = node_handler_setup
+async def test_record_and_collect(node_handler, context):
 
     nodes = []
     for node_name, node_class in NAME_CLASS_MAP.items():
@@ -209,33 +242,30 @@ async def test_record_and_collect(node_handler_setup, context):
 
     # Simple single node without connection
     for node in nodes:
-        assert await node_handler.async_create_node(
-            cpe.NodeConfig(node, context=context)
-        )
+        await node_handler.async_create_node(cpe.NodeConfig(node, context=context))
 
-    assert await node_handler.async_start_nodes()
+    await node_handler.async_start_nodes()
     await asyncio.sleep(1)
 
-    assert await node_handler.async_record_nodes()
+    await node_handler.async_record_nodes()
     await asyncio.sleep(1)
 
-    assert await node_handler.async_stop_nodes()
-    assert await node_handler.async_collect()
+    await node_handler.async_stop_nodes()
+    await node_handler.async_collect()
 
     for node in nodes:
-        assert await node_handler.async_destroy_node(node.id)
+        await node_handler.async_destroy_node(node.id)
 
     for node_name in NAME_CLASS_MAP:
         assert (node_handler.state.tempfolder / node_name).exists()
 
 
 async def test_registered_method_with_concurrent_style(
-    node_handler_setup, node_with_reg_methods
+    node_handler, node_with_reg_methods
 ):
-    node_handler, _ = node_handler_setup
 
     # Create the node
-    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+    await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
     # logger.debug(f"Requesting registered method")
@@ -247,7 +277,7 @@ async def test_registered_method_with_concurrent_style(
     results = await node_handler.async_request_registered_method(reg_method_data)
     # logger.debug(f"Results: {results}")
 
-    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+    await node_handler.async_destroy_node(node_with_reg_methods.id)
     assert (
         results["success"]
         and isinstance(results["output"], int)
@@ -256,12 +286,11 @@ async def test_registered_method_with_concurrent_style(
 
 
 async def test_registered_method_with_params_and_blocking_style(
-    node_handler_setup, node_with_reg_methods
+    node_handler, node_with_reg_methods
 ):
-    node_handler, _ = node_handler_setup
 
     # Create the node
-    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+    await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
     reg_method_data = RegisteredMethodData(
@@ -271,7 +300,7 @@ async def test_registered_method_with_params_and_blocking_style(
     )
     results = await node_handler.async_request_registered_method(reg_method_data)
 
-    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+    await node_handler.async_destroy_node(node_with_reg_methods.id)
     assert (
         results["success"]
         and isinstance(results["output"], int)
@@ -279,13 +308,10 @@ async def test_registered_method_with_params_and_blocking_style(
     )
 
 
-async def test_registered_method_with_reset_style(
-    node_handler_setup, node_with_reg_methods
-):
-    node_handler, _ = node_handler_setup
+async def test_registered_method_with_reset_style(node_handler, node_with_reg_methods):
 
     # Create the node
-    assert await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
+    await node_handler.async_create_node(cpe.NodeConfig(node_with_reg_methods))
 
     # Execute the registered method (with config)
     reg_method_data = RegisteredMethodData(
@@ -294,7 +320,7 @@ async def test_registered_method_with_reset_style(
     )
     results = await node_handler.async_request_registered_method(reg_method_data)
 
-    assert await node_handler.async_destroy_node(node_with_reg_methods.id)
+    await node_handler.async_destroy_node(node_with_reg_methods.id)
 
     assert (
         results["success"]
@@ -305,41 +331,34 @@ async def test_registered_method_with_reset_style(
 
 @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
-async def test_gather(node_handler_setup, gen_node, context):
+async def test_gather(node_handler, gen_node, context):
 
-    node_handler, _ = node_handler_setup
-
-    assert await node_handler.async_create_node(
-        cpe.NodeConfig(gen_node, context=context)
-    )
-    assert await node_handler.async_start_nodes()
+    await node_handler.async_create_node(cpe.NodeConfig(gen_node, context=context))
+    await node_handler.async_start_nodes()
     await asyncio.sleep(1)
-    assert await node_handler.async_stop_nodes()
+    await node_handler.async_stop_nodes()
 
     results = await node_handler.async_gather()
     assert len(results) > 0
 
-    assert await node_handler.async_destroy_node(gen_node.id)
+    await node_handler.async_destroy_node(gen_node.id)
 
 
 @pytest.mark.parametrize("context", ["multiprocessing"])
 # @pytest.mark.parametrize("context", ["multiprocessing", "threading"])
 # @pytest.mark.parametrize("context", ["threading"])
-async def test_diagnostics(node_handler_setup, gen_node, context):
+async def test_diagnostics(node_handler, gen_node, context):
 
-    config.set("diagnostics.interval", 2)
+    config.set("diagnostics.interval", 0.5)
     config.set("diagnostics.logging-enabled", True)
 
-    node_handler, _ = node_handler_setup
+    await node_handler.async_create_node(cpe.NodeConfig(gen_node, context=context))
+    await node_handler.async_start_nodes()
+    await node_handler.async_diagnostics(True)
+    await asyncio.sleep(2)
+    await node_handler.async_stop_nodes()
 
-    assert await node_handler.async_create_node(
-        cpe.NodeConfig(gen_node, context=context)
-    )
-    assert await node_handler.async_start_nodes()
-    assert await node_handler.async_diagnostics(True)
-    await asyncio.sleep(1)
-    assert await node_handler.async_stop_nodes()
+    await node_handler.async_destroy_node(gen_node.id)
 
-    assert await node_handler.async_destroy_node(gen_node.id)
-
-    assert (node_handler.state.tempfolder / gen_node.name / "diagnostics.csv").exists()
+    path = node_handler.state.tempfolder / gen_node.name / "diagnostics.csv"
+    assert path.exists()

@@ -1,12 +1,14 @@
 import datetime
 import enum
 import logging
+import pathlib
 import typing
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Union
 
 if typing.TYPE_CHECKING:
     from .graph import Graph
+    from .node.node_config import NodeConfig
     from .states import NodeState
 
 from dataclasses_json import DataClassJsonMixin
@@ -78,7 +80,7 @@ class ConnectData(DataClassJsonMixin):
 @dataclass
 class GatherData(DataClassJsonMixin):
     node_id: str
-    output: Union[DataChunk, List[int]]
+    output: Union[DataChunk, List[int], str]
 
 
 @dataclass
@@ -93,6 +95,17 @@ class ServerMessage(DataClassJsonMixin):
     signal: enum.Enum
     data: Dict[str, Any] = field(default_factory=dict)
     client_id: Optional[str] = None
+
+
+@dataclass
+class WorkerInfo(DataClassJsonMixin):
+    host: str
+    port: int
+    logdir: pathlib.Path
+    node_config: "NodeConfig"
+    config: Dict[str, Any] = field(default_factory=dict)
+    logging_level: int = logging.INFO
+    worker_logging_port: Optional[int] = None
 
 
 ########################################################################

@@ -12,19 +12,19 @@ from chimerapy.engine import config
 
 from ...data_protocols import (
     GatherData,
+    NodePubEntry,
     NodePubTable,
     RegisteredMethodData,
     ResultsData,
-    ServerMessage,
+    WorkerInfo,
 )
+from ...exceptions import NodeError
 from ...logger.zmq_handlers import NodeIDZMQPullListener
 from ...networking import DataChunk
-from ...networking.enums import WORKER_MESSAGE
 from ...node.node_config import NodeConfig
-from ...node.worker_comms_service import WorkerCommsService
 from ...service import Service
 from ...states import NodeState, WorkerState
-from ...utils import async_waiting_for
+from ...utils import async_waiting_for, update_dataclass
 from .context_session import ContextSession, MPSession, ThreadSession
 from .node_controller import MPNodeController, NodeController, ThreadNodeController
 
@@ -87,16 +87,26 @@ class NodeHandlerService(Service):
     ## Helper Functions
     ###################################################################################
 
-    @registry.on(
-        "update_gather", GatherData, namespace=f"{__name__}.NodeHandlerService"
-    )
+    def _create_node_pub_table(self) -> NodePubTable:
+
+        # Construct simple data structure for Node to address information
+        node_pub_table = NodePubTable()
+        for node_id, node_state in self.state.nodes.items():
+            node_entry = NodePubEntry(ip=self.state.ip, port=node_state.port)
+            node_pub_table.table[node_id] = node_entry
+
+        return node_pub_table
+
+    @registry.on("node.gather", GatherData, namespace=f"{__name__}.NodeHandlerService")
     def update_gather(self, gather_data: GatherData):
         node_id = gather_data.node_id
         self.node_controllers[node_id].gather = gather_data.output
         self.node_controllers[node_id].response = True
 
     @registry.on(
-        "update_results", ResultsData, namespace=f"{__name__}.NodeHandlerService"
+        "node.registered_method_results",
+        ResultsData,
+        namespace=f"{__name__}.NodeHandlerService",
     )
     def update_results(self, results_data: ResultsData):
         node_id = results_data.node_id
@@ -107,8 +117,20 @@ class NodeHandlerService(Service):
     ## Node Handling
     ###################################################################################
 
+    @registry.on("node.status", NodeState, namespace=f"{__name__}.NodeHandlerService")
+    async def node_status_update(self, node_state: NodeState):
+
+        # self.logger.debug(f"{self}: received NodeState: {node_state}")
+
+        # Update our records by grabbing all data from the msg
+        if node_state.id in self.state.nodes and node_state:
+
+            # Update the node state
+            update_dataclass(self.state.nodes[node_state.id], node_state)
+            await self.entrypoint.emit("WorkerState.changed", self.state)
+
     @registry.on("create_node", NodeConfig, namespace=f"{__name__}.NodeHandlerService")
-    async def async_create_node(self, node_config: Union[NodeConfig, Dict]) -> bool:
+    async def async_create_node(self, node_config: Union[NodeConfig, Dict]):
 
         # Ensure to convert the node_config into a NodeConfig object
         if isinstance(node_config, dict):
@@ -123,85 +145,70 @@ class NodeHandlerService(Service):
         id = node_config.id
 
         # Saving name to track it for now
-        # self.logger.debug(
-        #     f"{self}: received request for Node {node_config.id} creation:"
-        # )
+        self.logger.debug(
+            f"{self}: received request for Node {node_config.id} creation:"
+        )
 
         # Saving the node data
         self.state.nodes[id] = NodeState(id=id)
 
-        # Keep trying to start a process until success
-        success = False
-        for i in range(config.get("worker.allowed-failures")):
+        # Decode the node object
+        node_object = dill.loads(node_config.pickled)
 
-            # Decode the node object
-            node_object = dill.loads(node_config.pickled)
+        # Record the node name
+        self.state.nodes[id].name = node_object.name
 
-            # Record the node name
-            self.state.nodes[id].name = node_object.name
+        # Create worker info and set it
+        worker_info = WorkerInfo(
+            host=self.state.ip,
+            port=self.state.port,
+            logdir=self.state.tempfolder,
+            node_config=node_config,
+            config=config.config,
+            logging_level=self.logger.level,
+            worker_logging_port=self.logreceiver.port,
+        )
+        node_object.set_worker_info(worker_info)
 
-            # Create worker service and inject to the Node
-            worker_comms = WorkerCommsService(
-                name="worker",
-                host=self.state.ip,
-                port=self.state.port,
-                worker_logdir=self.state.tempfolder,
-                worker_config=config.config,
-                node_config=node_config,
-                logging_level=self.logger.level,
-                worker_logging_port=self.logreceiver.port,
-            )
-            node_object.add_worker_comms(worker_comms)
+        # Create controller
+        controller = self.context_class_map[node_config.context](
+            node_object, self.logger
+        )
+        if isinstance(controller, MPNodeController):
+            controller.set_mp_manager(self.mp_manager)
+        controller.run(self.context_session_map[node_config.context])
+        self.logger.debug(f"{self}: started {node_object}")
 
-            # Create controller
-            controller = self.context_class_map[node_config.context](
-                node_object, self.logger
-            )
-            if isinstance(controller, MPNodeController):
-                controller.set_mp_manager(self.mp_manager)
-            controller.run(self.context_session_map[node_config.context])
-            # self.logger.debug(f"{self}: started {node_object}")
-
-            # Wait until response from node
-            success = await async_waiting_for(
-                condition=lambda: self.state.nodes[id].fsm in ["INITIALIZED", "READY"],
-                timeout=config.get("worker.timeout.node-creation"),
-            )
-
-            if not success:
-                self.logger.error(f"{self}: Node {id} failed to initialized")
-                await controller.shutdown()
-                continue
-
-            # Now we wait until the node has fully initialized and ready-up
-            success = await async_waiting_for(
-                condition=lambda: self.state.nodes[id].fsm == "READY",
-                timeout=config.get("worker.timeout.info-request"),
-            )
-
-            if not success:
-                self.logger.error(f"{self}: Node {id} failed to ready-up")
-                await controller.shutdown()
-                continue
-
-            # Save all important external attributes of the node
-            self.node_controllers[node_config.id] = controller
-
-            # Mark success
-            # self.logger.debug(f"{self}: completed node creation: {id}")
-            break
+        # Wait until response from node
+        success = await async_waiting_for(
+            condition=lambda: self.state.nodes[id].fsm in ["INITIALIZED", "READY"],
+            timeout=config.get("worker.timeout.node-creation"),
+        )
 
         if not success:
-            self.logger.error(f"{self}: Node {id} failed to create")
-            return False
+            self.logger.error(f"{self}: Node {id} failed to initialized")
+            await controller.shutdown()
+            raise NodeError("Node {id} failed to initialized")
 
-        return success
+        # Now we wait until the node has fully initialized and ready-up
+        success = await async_waiting_for(
+            condition=lambda: self.state.nodes[id].fsm == "READY",
+            timeout=config.get("worker.timeout.info-request"),
+        )
+
+        if not success:
+            self.logger.error(f"{self}: Node {id} failed to ready-up")
+            await controller.shutdown()
+            raise NodeError("Node {id} failed to ready-up")
+
+        # Save all important external attributes of the node
+        self.node_controllers[node_config.id] = controller
+
+        # Mark success
+        # self.logger.debug(f"{self}: completed node creation: {id}")
 
     @registry.on("destroy_node", str, namespace=f"{__name__}.NodeHandlerService")
-    async def async_destroy_node(self, node_id: str) -> bool:
-
-        # self.logger.debug(f"{self}: received request for Node {node_id} destruction")
-        success = False
+    async def async_destroy_node(self, node_id: str):
 
         if node_id in self.node_controllers:
             # self.logger.debug(f"{self}: destroying Node {node_id}")
@@ -211,24 +218,17 @@ class NodeHandlerService(Service):
             if node_id in self.state.nodes:
                 del self.state.nodes[node_id]
 
-            success = True
-
-        return success
+        else:
+            self.logger.warning(f"{self}: Node {node_id} does not exist")
 
     @registry.on(
         "process_node_pub_table",
         NodePubTable,
         namespace=f"{__name__}.NodeHandlerService",
     )
-    async def async_process_node_pub_table(self, node_pub_table: NodePubTable) -> bool:
+    async def async_process_node_pub_table(self, node_pub_table: NodePubTable):
 
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.BROADCAST_NODE_SERVER,
-                data=node_pub_table.to_dict(),
-            ),
-        )
+        await self.entrypoint.emit("worker.node_pub_table", node_pub_table)
 
         # Now wait until all nodes have responded as CONNECTED
         success = []
@@ -246,56 +246,37 @@ class NodeHandlerService(Service):
                     success.append(False)
 
         if not all(success):
-            self.logger.error(f"{self}: Nodes failed to establish P2P connections")
-
-        return all(success)
+            # self.logger.error(f"{self}: Nodes failed to establish P2P connections")
+            raise NodeError("Nodes failed to establish P2P connections")
 
     @registry.on("start_nodes", namespace=f"{__name__}.NodeHandlerService")
-    async def async_start_nodes(self) -> bool:
+    async def async_start_nodes(self):
 
         # Send message to nodes to start
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.START_NODES,
-            ),
+        await self.entrypoint.emit("worker.start")
+        await async_waiting_for(
+            lambda: all(
+                [
+                    x.fsm in ["PREVIEWING", "RECORDING"]
+                    for x in self.state.nodes.values()
+                ]
+            )
         )
-        return True
 
     @registry.on("record_nodes", namespace=f"{__name__}.NodeHandlerService")
-    async def async_record_nodes(self) -> bool:
+    async def async_record_nodes(self):
 
-        # Send message to nodes to start
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.RECORD_NODES,
-            ),
+        # Send message to nodes to record
+        await self.entrypoint.emit("worker.record")
+        await async_waiting_for(
+            lambda: all([x.fsm in ["RECORDING"] for x in self.state.nodes.values()])
         )
-        return True
-
-    @registry.on("step_nodes", namespace=f"{__name__}.NodeHandlerService")
-    async def async_step(self) -> bool:
-
-        # Worker tell all nodes to take a step
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.REQUEST_STEP,
-            ),
-        )
-        return True
 
     @registry.on("stop_nodes", namespace=f"{__name__}.NodeHandlerService")
-    async def async_stop_nodes(self) -> bool:
+    async def async_stop_nodes(self):
 
         # Send message to nodes to start
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.STOP_NODES,
-            ),
-        )
+        await self.entrypoint.emit("worker.stop")
         await async_waiting_for(
             lambda: all(
                 [
@@ -304,9 +285,12 @@ class NodeHandlerService(Service):
                 ]
             )
         )
-        return True
 
-    @registry.on("registered_method", namespace=f"{__name__}.NodeHandlerService")
+    @registry.on(
+        "registered_method",
+        RegisteredMethodData,
+        namespace=f"{__name__}.NodeHandlerService",
+    )
     async def async_request_registered_method(
         self, reg_method_data: RegisteredMethodData
     ) -> Dict[str, Any]:
@@ -314,14 +298,7 @@ class NodeHandlerService(Service):
         # Mark that the node hasn't responsed
         self.node_controllers[reg_method_data.node_id].response = False
 
-        await self.entrypoint.emit(
-            "send",
-            ServerMessage(
-                client_id=reg_method_data.node_id,
-                signal=WORKER_MESSAGE.REQUEST_METHOD,
-                data=reg_method_data.to_dict(),
-            ),
-        )
+        await self.entrypoint.emit("worker.registered_method", reg_method_data)
 
         # Then wait for the Node response
         success = await async_waiting_for(
@@ -337,13 +314,8 @@ class NodeHandlerService(Service):
         }
 
     @registry.on("diagnostics", bool, namespace=f"{__name__}.NodeHandlerService")
-    async def async_diagnostics(self, enable: bool) -> bool:
-
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(signal=WORKER_MESSAGE.DIAGNOSTICS, data={"enable": enable}),
-        )
-        return True
+    async def async_diagnostics(self, enable: bool):
+        await self.entrypoint.emit("worker.diagnostics", enable)
 
     @registry.on("gather_nodes", namespace=f"{__name__}.NodeHandlerService")
     async def async_gather(self) -> Dict:
@@ -354,12 +326,7 @@ class NodeHandlerService(Service):
             self.node_controllers[node_id].response = False
 
         # Request gather from Worker to Nodes
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.REQUEST_GATHER,
-            ),
-        )
+        await self.entrypoint.emit("worker.gather")
 
         # Wait until all Nodes have gather
         success = []
@@ -396,37 +363,31 @@ class NodeHandlerService(Service):
         return gather_data
 
     @registry.on("collect", namespace=f"{__name__}.NodeHandlerService")
-    async def async_collect(self) -> bool:
+    async def async_collect(self):
 
         # Request saving from Worker to Nodes
-        await self.entrypoint.emit(
-            "broadcast",
-            ServerMessage(
-                signal=WORKER_MESSAGE.REQUEST_COLLECT,
-            ),
-        )
+        await self.entrypoint.emit("worker.collect")
 
         # Now wait until all nodes have responded as CONNECTED
         success = []
-        for i in range(config.get("worker.allowed-failures")):
-            for node_id in self.state.nodes:
+        for node_id in self.state.nodes:
 
-                if await async_waiting_for(
-                    condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
-                    timeout=None,
-                ):
-                    # self.logger.debug(
-                    #     f"{self}: Node {node_id} responded to saving request: SUCCESS"
-                    # )
-                    success.append(True)
-                    break
-                else:
-                    self.logger.error(
-                        f"{self}: Node {node_id} responded to saving request: FAILED"
-                    )
-                    success.append(False)
+            if await async_waiting_for(
+                condition=lambda: self.state.nodes[node_id].fsm == "SAVED",
+                timeout=None,
+            ):
+                # self.logger.debug(
+                #     f"{self}: Node {node_id} responded to saving request: SUCCESS"
+                # )
+                success.append(True)
+                break
+            else:
+                # self.logger.error(
+                #     f"{self}: Node {node_id} responded to saving request: FAILED"
+                # )
+                # success.append(False)
+                raise NodeError(f"Node {node_id} failed to save")
 
         if not all(success):
-            self.logger.error(f"{self}: Nodes failed to report to saving")
-
-        return all(success)
+            # self.logger.error(f"{self}: Nodes failed to report to saving")
+            raise NodeError("Nodes failed to report to saving")

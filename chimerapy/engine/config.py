@@ -3,6 +3,14 @@ import os
 import pathlib
 from typing import Any, Dict
 
+# As https://github.com/lidatong/dataclasses-json/issues/202#issuecomment-1186373078
+import dataclasses_json.cfg
+
+dataclasses_json.cfg.global_config.encoders[pathlib.Path] = str
+dataclasses_json.cfg.global_config.decoders[
+    pathlib.Path
+] = pathlib.Path  # is this necessary?
+
 # Third-party Imports
 import yaml
 

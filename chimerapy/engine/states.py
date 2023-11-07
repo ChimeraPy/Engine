@@ -4,14 +4,11 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Dict, Literal, Optional
 
+from aiodistbus import global_config
 from dataclasses_json import DataClassJsonMixin, cfg
 
 from .data_protocols import NodeDiagnostics
 from .node.registered_method import RegisteredMethod
-
-# As https://github.com/lidatong/dataclasses-json/issues/202#issuecomment-1186373078
-cfg.global_config.encoders[pathlib.Path] = str
-cfg.global_config.decoders[pathlib.Path] = pathlib.Path  # is this necessary?
 
 
 @dataclass
@@ -35,7 +32,9 @@ class NodeState(DataClassJsonMixin):
     registered_methods: Dict[str, RegisteredMethod] = field(default_factory=dict)
 
     # Session logs
-    logdir: Optional[pathlib.Path] = None
+    logdir: pathlib.Path = field(
+        default_factory=lambda: pathlib.Path(tempfile.mkdtemp())
+    )
 
     # Profiler
     diagnostics: NodeDiagnostics = field(default_factory=NodeDiagnostics)
@@ -80,3 +79,15 @@ class ManagerState(DataClassJsonMixin):
 
     # Session logs
     logdir: pathlib.Path = pathlib.Path.cwd()
+
+
+# To reconstruct the state even if evented (essential to make everything to work!)
+global_config.set_dtype_mapping(
+    "abc.NodeState", f"{NodeState.__module__}.{NodeState.__name__}"
+)
+global_config.set_dtype_mapping(
+    "abc.WorkerState", f"{WorkerState.__module__}.{WorkerState.__name__}"
+)
+global_config.set_dtype_mapping(
+    "abc.ManagerState", f"{ManagerState.__module__}.{ManagerState.__name__}"
+)

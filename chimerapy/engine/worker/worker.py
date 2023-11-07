@@ -9,7 +9,7 @@ from concurrent.futures import Future
 from typing import Coroutine, Dict, List, Literal, Optional, Union
 
 import asyncio_atexit
-from aiodistbus import EntryPoint, EventBus, make_evented
+from aiodistbus import DEventBus, EntryPoint, EventBus, make_evented
 
 from chimerapy.engine import _logger, config
 
@@ -89,6 +89,10 @@ class Worker:
         self.entrypoint = EntryPoint()
         await self.entrypoint.connect(self.bus)
 
+        # Server: Worker -> Client: Node
+        self.dbus = DEventBus()
+        await self.dbus.forward(self.bus, event_type=["worker.node.*"])
+
         # Make the state evented
         self.state = make_evented(self.state, bus=self.bus)
 
@@ -100,21 +104,21 @@ class Worker:
         self.logreceiver = self._start_log_receiver()
 
         # Create the services
-        self.services.append(
-            HttpClientService(
-                name="http_client",
-                state=self.state,
-                logger=self.logger,
-                logreceiver=self.logreceiver,
-            )
-        )
-        self.services.append(
-            HttpServerService(
-                name="http_server",
-                state=self.state,
-                logger=self.logger,
-            )
-        )
+        # self.services.append(
+        #     HttpClientService(
+        #         name="http_client",
+        #         state=self.state,
+        #         logger=self.logger,
+        #         logreceiver=self.logreceiver,
+        #     )
+        # )
+        # self.services.append(
+        #     HttpServerService(
+        #         name="http_server",
+        #         state=self.state,
+        #         logger=self.logger,
+        #     )
+        # )
         self.services.append(
             NodeHandlerService(
                 name="node_handler",

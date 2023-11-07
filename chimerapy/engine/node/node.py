@@ -16,9 +16,9 @@ import pandas as pd
 from aiodistbus import EntryPoint, EventBus, make_evented
 
 # Internal Imports
-from chimerapy.engine import _logger
+from chimerapy.engine import _logger, config
 
-from ..data_protocols import PreSetupData
+from ..data_protocols import PreSetupData, WorkerInfo
 from ..networking import DataChunk
 from ..service import Service
 from ..states import NodeState
@@ -81,6 +81,9 @@ class Node:
         self._save_tasks: List[Task] = []
         self.task_futures: List[Future] = []
         self.services: List[Service] = []
+
+        # Eventbus
+        self.worker_info: Optional[WorkerInfo] = None
         self.bus: Optional[EventBus] = None
         self.entrypoint = EntryPoint()
 
@@ -126,6 +129,9 @@ class Node:
 
     def __str__(self):
         return self.__repr__()
+
+    def debug_log(self, *args, **kwargs):
+        self.logger.debug(f"DEBUG {self}: {args} {kwargs}")
 
     def get_logger(self) -> logging.Logger:
 
@@ -173,6 +179,12 @@ class Node:
 
         # Store service
         self.services.append(worker_comms)
+
+    def set_worker_info(self, worker_info: WorkerInfo):
+        self.worker_info = worker_info
+        self.node_config = worker_info.node_config
+        self.state.logdir = worker_info.logdir / self.state.name
+        os.makedirs(self.state.logdir, exist_ok=True)
 
     ####################################################################
     ## Saving Data Stream API
@@ -422,6 +434,13 @@ class Node:
                 logger=self.logger,
             )
         )
+        self.services.append(
+            WorkerCommsService(
+                name="worker_comms",
+                state=self.state,
+                logger=self.logger,
+            )
+        )
 
         # If in-bound, enable the poller service
         if self.node_config and self.node_config.in_bound:
@@ -450,9 +469,13 @@ class Node:
         for s in self.services:
             await s.attach(self.bus)
 
-        # Presetup
-        data = PreSetupData(self.state, self.logger)
-        await self.entrypoint.emit("pre_setup", data)
+        # Connect to the Worker's EventBus
+        if self.worker_info and self.bus:
+            config.update_defaults(self.worker_info.config)
+            await self.bus.link(
+                self.worker_info.host, self.worker_info.port, ["node.*"], ["worker.*"]
+            )
+            await self.entrypoint.on("worker.*", self.debug_log)
 
         # Create the directory
         if not self.state.logdir:
@@ -577,6 +600,7 @@ class Node:
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
         self.loop = asyncio.get_event_loop()
+        # self.logger.debug(f"{self}: arun")
 
         # Save parameters
         if bus:
