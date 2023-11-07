@@ -6,22 +6,23 @@ import pathlib
 import tempfile
 import uuid
 from asyncio import Task
-from concurrent.futures import Future
-from typing import Any, Coroutine, Dict, List, Literal, Optional, Tuple, Union
+from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Dict, List, Literal, Optional, Union
 
 # Third-party Imports
 import multiprocess as mp
 import numpy as np
 import pandas as pd
+from aiodistbus import EntryPoint, EventBus, make_evented
 
 # Internal Imports
 from chimerapy.engine import _logger, config
 
-from ..eventbus import Event, EventBus, make_evented
+from ..data_protocols import PreSetupData, WorkerInfo
 from ..networking import DataChunk
-from ..networking.async_loop_thread import AsyncLoopThread
+from ..service import Service
 from ..states import NodeState
-from ..utils import future_wrapper
+from ..utils import run_coroutine_in_thread
 from .fsm_service import FSMService
 
 # Service Imports
@@ -73,11 +74,18 @@ class Node:
         self.debug_port = debug_port
 
         # State variables
-        self._thread: Optional[AsyncLoopThread] = None
         self._running: Union[bool, mp.Value] = True  # type: ignore
+        self.executor: Optional[ThreadPoolExecutor] = None
         self.eventloop_future: Optional[Future] = None
         self.eventloop_task: Optional[Task] = None
+        self._save_tasks: List[Task] = []
         self.task_futures: List[Future] = []
+        self.services: List[Service] = []
+
+        # Eventbus
+        self.worker_info: Optional[WorkerInfo] = None
+        self.bus: Optional[EventBus] = None
+        self.entrypoint = EntryPoint()
 
         # Generic Node needs
         self.logger: logging.Logger = logging.getLogger("chimerapy-engine-node")
@@ -85,11 +93,6 @@ class Node:
 
         # Default values
         self.node_config = NodeConfig()
-        self.worker_comms: Optional[WorkerCommsService] = None
-        self.processor: Optional[ProcessorService] = None
-        self.recorder: Optional[RecordService] = None
-        self.poller: Optional[PollerService] = None
-        self.publisher: Optional[PublisherService] = None
 
     ####################################################################
     ## Properties
@@ -127,6 +130,9 @@ class Node:
     def __str__(self):
         return self.__repr__()
 
+    def debug_log(self, *args, **kwargs):
+        self.logger.debug(f"DEBUG {self}: {args} {kwargs}")
+
     def get_logger(self) -> logging.Logger:
 
         # Get Logger
@@ -138,10 +144,17 @@ class Node:
             return logger
 
         # If worker, add zmq handler
-        if self.worker_comms or self.debug_port:
+        if "WorkerCommsService" in self.services and isinstance(
+            self.services["WorkerCommsService"], WorkerCommsService
+        ):
+            worker_comms = self.services["WorkerCommsService"]
+        else:
+            worker_comms = None
 
-            if self.worker_comms:
-                logging_port = self.worker_comms.worker_logging_port
+        if worker_comms or self.debug_port:
+
+            if worker_comms:
+                logging_port = worker_comms.worker_logging_port
             elif self.debug_port:
                 logging_port = self.debug_port
             else:
@@ -157,10 +170,6 @@ class Node:
 
     def add_worker_comms(self, worker_comms: WorkerCommsService):
 
-        # Store service
-        self.worker_comms = worker_comms
-        self.worker_comms
-
         # Add the context information
         self.node_config = worker_comms.node_config
 
@@ -168,19 +177,14 @@ class Node:
         self.state.logdir = worker_comms.worker_logdir / self.state.name
         os.makedirs(self.state.logdir, exist_ok=True)
 
-    def _exec_coro(self, coro: Coroutine) -> Tuple[Future, Optional[Task]]:
-        if isinstance(self._thread, AsyncLoopThread):
-            future = self._thread.exec(coro)
-            task = None
-        else:
-            loop = asyncio.get_event_loop()
-            wrapper, future = future_wrapper(coro)
-            task = loop.create_task(wrapper)
+        # Store service
+        self.services.append(worker_comms)
 
-        # Saving the future for later use
-        self.task_futures.append(future)
-
-        return future, task
+    def set_worker_info(self, worker_info: WorkerInfo):
+        self.worker_info = worker_info
+        self.node_config = worker_info.node_config
+        self.state.logdir = worker_info.logdir / self.state.name
+        os.makedirs(self.state.logdir, exist_ok=True)
 
     ####################################################################
     ## Saving Data Stream API
@@ -188,24 +192,18 @@ class Node:
 
     def save_video(self, name: str, data: np.ndarray, fps: int):
 
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            timestamp = datetime.datetime.now()
-            video_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "video",
-                "fps": fps,
-                "timestamp": timestamp,
-            }
-            self.recorder.submit(video_entry)
+        timestamp = datetime.datetime.now()
+        video_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "video",
+            "fps": fps,
+            "timestamp": timestamp,
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", video_entry))
+        )
 
     def save_audio(
         self, name: str, data: np.ndarray, channels: int, format: int, rate: int
@@ -230,26 +228,20 @@ class Node:
         It is the implementation's responsibility to properly format the data
 
         """
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            audio_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "audio",
-                "channels": channels,
-                "format": format,
-                "rate": rate,
-                "recorder_version": 1,
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(audio_entry)
+        audio_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "audio",
+            "channels": channels,
+            "format": format,
+            "rate": rate,
+            "recorder_version": 1,
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", audio_entry))
+        )
 
     def save_audio_v2(
         self,
@@ -277,65 +269,48 @@ class Node:
         nframes : int
             Number of frames.
         """
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return
 
-        if self.recorder.enabled:
-            audio_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "audio",
-                "channels": channels,
-                "sampwidth": sampwidth,
-                "framerate": framerate,
-                "nframes": nframes,
-                "recorder_version": 2,
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(audio_entry)
+        audio_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "audio",
+            "channels": channels,
+            "sampwidth": sampwidth,
+            "framerate": framerate,
+            "nframes": nframes,
+            "recorder_version": 2,
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", audio_entry))
+        )
 
     def save_tabular(
         self, name: str, data: Union[pd.DataFrame, Dict[str, Any], pd.Series]
     ):
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            tabular_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "tabular",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(tabular_entry)
+        tabular_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "tabular",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", tabular_entry))
+        )
 
     def save_image(self, name: str, data: np.ndarray):
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            image_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "image",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(image_entry)
+        image_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "image",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", image_entry))
+        )
 
     def save_json(self, name: str, data: Dict[Any, Any]):
         """Record json data from the node to a JSON Lines file.
@@ -353,23 +328,16 @@ class Node:
         The data is recorded in JSON Lines format, which is a sequence of JSON objects.
         The data dictionary provided must be JSON serializable.
         """
-
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            json_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "dtype": "json",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(json_entry)
+        json_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "dtype": "json",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", json_entry))
+        )
 
     def save_text(self, name: str, data: str, suffix="txt"):
         """Record text data from the node to a text file.
@@ -390,23 +358,17 @@ class Node:
         It should be noted that new lines addition should be taken by the callee.
         """
 
-        if not self.recorder:
-            self.logger.warning(
-                f"{self}: cannot perform recording operation without RecorderService "
-                "initialization"
-            )
-            return False
-
-        if self.recorder.enabled:
-            text_entry = {
-                "uuid": uuid.uuid4(),
-                "name": name,
-                "data": data,
-                "suffix": suffix,
-                "dtype": "text",
-                "timestamp": datetime.datetime.now(),
-            }
-            self.recorder.submit(text_entry)
+        text_entry = {
+            "uuid": uuid.uuid4(),
+            "name": name,
+            "data": data,
+            "suffix": suffix,
+            "dtype": "text",
+            "timestamp": datetime.datetime.now(),
+        }
+        self._save_tasks.append(
+            self.loop.create_task(self.entrypoint.emit("record_entry", text_entry))
+        )
 
     ####################################################################
     ## Back-End Lifecycle API
@@ -414,27 +376,11 @@ class Node:
 
     async def _setup(self):
 
-        # Adding state to the WorkerCommsService
-        if self.worker_comms:
-            self.worker_comms.in_node_config(
-                state=self.state, eventbus=self.eventbus, logger=self.logger
-            )
-            if self.worker_comms.worker_config:
-                config.update_defaults(self.worker_comms.worker_config)
-        elif not self.state.logdir:
-            self.state.logdir = pathlib.Path(tempfile.mktemp())
-
-        # Create the directory
-        if self.state.logdir:
-            os.makedirs(self.state.logdir, exist_ok=True)
-        else:
-            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
-
         # Make the state evented
-        self.state = make_evented(self.state, event_bus=self.eventbus)
+        self.state = make_evented(self.state, bus=self.bus)
 
         # Add the FSM service
-        self.fsm_service = FSMService("fsm", self.state, self.eventbus, self.logger)
+        self.services.append(FSMService("fsm", self.state, self.logger))
 
         # Configure the processor's operational mode
         mode: Literal["main", "step"] = "step"  # default
@@ -460,72 +406,90 @@ class Node:
         in_bound_data = len(self.node_config.in_bound) != 0
 
         # Create services
-        self.processor = ProcessorService(
-            name="processor",
-            setup_fn=self.setup,
-            main_fn=main_fn,
-            teardown_fn=self.teardown,
-            operation_mode=mode,
-            registered_methods=self.registered_methods,
-            registered_node_fns=registered_fns,
-            state=self.state,
-            eventbus=self.eventbus,
-            in_bound_data=in_bound_data,
-            logger=self.logger,
+        self.services.append(
+            ProcessorService(
+                name="processor",
+                setup_fn=self.setup,
+                main_fn=main_fn,
+                teardown_fn=self.teardown,
+                operation_mode=mode,
+                registered_methods=self.registered_methods,
+                registered_node_fns=registered_fns,
+                state=self.state,
+                in_bound_data=in_bound_data,
+                logger=self.logger,
+            )
         )
-        self.recorder = RecordService(
-            name="recorder",
-            state=self.state,
-            eventbus=self.eventbus,
-            logger=self.logger,
+        self.services.append(
+            RecordService(
+                name="recorder",
+                state=self.state,
+                logger=self.logger,
+            )
         )
-        self.profiler = ProfilerService(
-            name="profiler",
-            state=self.state,
-            eventbus=self.eventbus,
-            logger=self.logger,
+        self.services.append(
+            ProfilerService(
+                name="profiler",
+                state=self.state,
+                logger=self.logger,
+            )
+        )
+        self.services.append(
+            WorkerCommsService(
+                name="worker_comms",
+                state=self.state,
+                logger=self.logger,
+            )
         )
 
         # If in-bound, enable the poller service
         if self.node_config and self.node_config.in_bound:
-            self.poller = PollerService(
-                name="poller",
-                in_bound=self.node_config.in_bound,
-                in_bound_by_name=self.node_config.in_bound_by_name,
-                follow=self.node_config.follow,
-                state=self.state,
-                eventbus=self.eventbus,
-                logger=self.logger,
+            self.services.append(
+                PollerService(
+                    name="poller",
+                    in_bound=self.node_config.in_bound,
+                    in_bound_by_name=self.node_config.in_bound_by_name,
+                    follow=self.node_config.follow,
+                    state=self.state,
+                    logger=self.logger,
+                )
             )
 
         # If out_bound, enable the publisher service
         if self.node_config and self.node_config.out_bound:
-            self.publisher = PublisherService(
-                "publisher",
-                state=self.state,
-                eventbus=self.eventbus,
-                logger=self.logger,
+            self.services.append(
+                PublisherService(
+                    "publisher",
+                    state=self.state,
+                    logger=self.logger,
+                )
             )
 
         # Initialize all services
-        if self.worker_comms:
-            await self.worker_comms.async_init()
-        if self.poller:
-            await self.poller.async_init()
-        if self.publisher:
-            await self.publisher.async_init()
+        for s in self.services:
+            await s.attach(self.bus)
 
-        await self.processor.async_init()
-        await self.recorder.async_init()
-        await self.profiler.async_init()
-        await self.fsm_service.async_init()
+        # Connect to the Worker's EventBus
+        if self.worker_info and self.bus:
+            config.update_defaults(self.worker_info.config)
+            await self.bus.link(
+                self.worker_info.host, self.worker_info.port, ["node.*"], ["worker.*"]
+            )
+            await self.entrypoint.on("worker.*", self.debug_log)
+
+        # Create the directory
+        if not self.state.logdir:
+            self.state.logdir = pathlib.Path(tempfile.mktemp())
+        os.makedirs(self.state.logdir, exist_ok=True)
 
         # Start all services
-        await self.eventbus.asend(Event("setup"))
+        await self.entrypoint.emit("setup")
+        # self.logger.debug(f"{self}: setup complete")
 
     async def _eventloop(self):
         # self.logger.debug(f"{self}: within event loop")
         await self._idle()  # stop, running, and collecting
+        # self.logger.debug(f"{self}: after idle")
         await self._teardown()
         # self.logger.debug(f"{self}: exiting")
         return 1
@@ -535,7 +499,8 @@ class Node:
             await asyncio.sleep(0.2)
 
     async def _teardown(self):
-        await self.eventbus.asend(Event("teardown"))
+        await asyncio.gather(*self._save_tasks)
+        await self.entrypoint.emit("teardown")
 
     ####################################################################
     ## Front-facing Node Lifecycle API
@@ -606,7 +571,7 @@ class Node:
 
     def run(
         self,
-        eventbus: Optional[EventBus] = None,
+        bus: Optional[EventBus] = None,
         running: Optional[mp.Value] = None,  # type: ignore
     ):
         """The actual method that is executed in the new process.
@@ -625,33 +590,29 @@ class Node:
         if type(running) != type(None):
             self._running = running
 
-        # Start an async loop
-        self._thread = AsyncLoopThread()
-        self._thread.start()
-
-        if not eventbus:
-            self.eventbus = EventBus(thread=self._thread)
-        else:
-            self.eventbus = eventbus
-            self.eventbus.set_thread(self._thread)
-
         # Have to run setup before letting the system continue
-        self.eventloop_future, _ = self._exec_coro(self.arun(self.eventbus))
-        return 1
+        run_func = lambda x: run_coroutine_in_thread(self.arun(x))
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.eventloop_future = self.executor.submit(run_func, bus)
+        return self.eventloop_future.result()
 
-    async def arun(self, eventbus: Optional[EventBus] = None):
+    async def arun(self, bus: Optional[EventBus] = None):
         self.logger = self.get_logger()
         self.logger.setLevel(self.logging_level)
+        self.loop = asyncio.get_event_loop()
+        # self.logger.debug(f"{self}: arun")
 
         # Save parameters
-        if eventbus:
-            self.eventbus = eventbus
+        if bus:
+            self.bus = bus
         else:
-            self.eventbus = EventBus()
+            self.bus = EventBus()
+
+        # Create an entrypoint
+        await self.entrypoint.connect(self.bus)
 
         await self._setup()
-        self.eventloop_task = asyncio.create_task(self._eventloop())
-        return 1
+        return await self._eventloop()
 
     def shutdown(self, timeout: Optional[Union[float, int]] = None):
         self.running = False
@@ -663,4 +624,5 @@ class Node:
 
     async def ashutdown(self):
         self.running = False
-        await self.eventloop_task
+        if self.eventloop_task:
+            await self.eventloop_task

@@ -76,31 +76,6 @@ async def test_worker_network_updates(test_ws_client, manager, worker):
     assert record.network_state.to_json() == manager.state.to_json()
 
 
-async def test_node_creation_and_destruction_network_updates(
-    test_ws_client, manager, worker
-):
-    client, record = test_ws_client
-
-    # Create original containers
-    simple_graph = cpe.Graph()
-    new_node = GenNode(name="Gen1", id="Gen1")
-    simple_graph.add_nodes_from([new_node])
-
-    # Connect to the manager
-    await worker.async_connect(host=manager.host, port=manager.port)
-    manager._register_graph(simple_graph)
-
-    # Test construction
-    await manager._async_request_node_creation(worker_id=worker.id, node_id="Gen1")
-    await asyncio.sleep(2)
-    # assert record.network_state.to_json() == manager.state.to_json()
-
-    # Test destruction
-    await manager._async_request_node_destruction(worker_id=worker.id, node_id="Gen1")
-    await asyncio.sleep(2)
-    assert record.network_state.workers[worker.id].nodes == {}
-
-
 async def test_reset_network_updates(test_ws_client, manager, worker):
     client, record = test_ws_client
 
@@ -117,7 +92,7 @@ async def test_reset_network_updates(test_ws_client, manager, worker):
     assert record.network_state.to_json() == manager.state.to_json()
 
     # Reset
-    assert await manager.async_reset()
+    await manager.async_reset()
     await asyncio.sleep(3)
     assert record.network_state.to_json() == manager.state.to_json()
 

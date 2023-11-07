@@ -57,6 +57,13 @@ def future_wrapper(coroutine: Coroutine) -> Tuple[Coroutine, Future]:
     return wrapper(), future
 
 
+def run_coroutine_in_thread(coro: Coroutine) -> Future:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    future = loop.run_until_complete(coro)
+    return future
+
+
 async def async_waiting_for(
     condition: Callable[[], bool],
     check_period: Union[int, float] = 0.1,

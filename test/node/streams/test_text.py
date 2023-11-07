@@ -9,16 +9,15 @@ import pytest
 
 # Internal Imports
 import chimerapy.engine as cpe
-from chimerapy.engine.eventbus import Event, EventBus
 from chimerapy.engine.records.text_record import TextRecord
 
+from ...conftest import TEST_DATA_DIR
 from .data_nodes import TextNode
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
 # Constants
 CWD = pathlib.Path(os.path.abspath(__file__)).parent.parent
-TEST_DATA_DIR = CWD / "data"
 
 
 @pytest.fixture
@@ -69,10 +68,7 @@ def test_text_record():
             assert line.strip() == (data[idx % len(data)]).strip()
 
 
-async def test_node_save_text_stream(text_node):
-
-    # Event Loop
-    eventbus = EventBus()
+async def test_node_save_text_stream(text_node, bus, entrypoint):
 
     # Check that the image was created
     expected_text_path = pathlib.Path(text_node.state.logdir) / "test.text"
@@ -82,18 +78,20 @@ async def test_node_save_text_stream(text_node):
         ...
 
     # Stream
-    await text_node.arun(eventbus=eventbus)
+    task = asyncio.create_task(text_node.arun(bus=bus))
+    await asyncio.sleep(1)
 
     # Wait to generate files
-    await eventbus.asend(Event("start"))
+    await entrypoint.emit("start")
     logger.debug("Finish start")
-    await eventbus.asend(Event("record"))
+    await entrypoint.emit("record")
     logger.debug("Finish record")
     await asyncio.sleep(3)
-    await eventbus.asend(Event("stop"))
+    await entrypoint.emit("stop")
     logger.debug("Finish stop")
 
     await text_node.ashutdown()
+    await task
 
     # Check that the image was created
     assert expected_text_path.exists()

@@ -6,28 +6,24 @@ from collections import deque
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+from aiodistbus import registry
 from psutil import Process
 
 from chimerapy.engine import config
 
 from ..async_timer import AsyncTimer
 from ..data_protocols import NodeDiagnostics
-from ..eventbus import Event, EventBus, TypedObserver
 from ..networking.data_chunk import DataChunk
 from ..service import Service
 from ..states import NodeState
-from .events import DiagnosticsReportEvent, EnableDiagnosticsEvent, NewOutBoundDataEvent
 
 
 class ProfilerService(Service):
-    def __init__(
-        self, name: str, state: NodeState, eventbus: EventBus, logger: logging.Logger
-    ):
+    def __init__(self, name: str, state: NodeState, logger: logging.Logger):
         super().__init__(name=name)
 
         # Save parameters
         self.state = state
-        self.eventbus = eventbus
         self.logger = logger
 
         # State variables
@@ -44,67 +40,42 @@ class ProfilerService(Service):
             self.diagnostics_report, config.get("diagnostics.interval")
         )
 
-        if self.state.logdir:
-            self.log_file = self.state.logdir / "diagnostics.csv"
-        else:
-            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
-
-    async def async_init(self):
-
-        # Add observers to profile
-        self.observers: Dict[str, TypedObserver] = {
-            "setup": TypedObserver("setup", on_asend=self.setup, handle_event="drop"),
-            "enable_diagnostics": TypedObserver(
-                "enable_diagnostics",
-                EnableDiagnosticsEvent,
-                on_asend=self.enable,
-                handle_event="unpack",
-            ),
-            "teardown": TypedObserver(
-                "teardown", on_asend=self.teardown, handle_event="drop"
-            ),
-        }
-        for ob in self.observers.values():
-            await self.eventbus.asubscribe(ob)
-
-        # self.logger.debug(f"{self}: log_file={self.log_file}")
-
+    @registry.on("worker.diagnostics", bool, namespace=f"{__name__}.ProfilerService")
     async def enable(self, enable: bool = True):
+        # self.logger.debug(f"Profiling enabled: {enable}")
 
         if enable != self._enable:
 
             if enable:
                 # Add a timer function
                 await self.async_timer.start()
-
-                # Add observer
-                observer = TypedObserver(
-                    "out_step",
-                    NewOutBoundDataEvent,
-                    on_asend=self.post_step,
-                    handle_event="unpack",
-                )
-                self.observers["out_step"] = observer
-                await self.eventbus.asubscribe(observer)
+                await self.entrypoint.on("out_step", self.post_step, DataChunk)
 
             else:
-                # self.logger.debug(f"{self}: disabled")
                 # Stop the timer and remove the observer
                 await self.async_timer.stop()
-
-                observer = self.observers["enable_diagnostics"]
-                await self.eventbus.aunsubscribe(observer)
+                await self.entrypoint.off("out_step")
 
             # Update
             self._enable = enable
 
+    @registry.on("setup", namespace=f"{__name__}.ProfilerService")
     async def setup(self):
+
+        # Construct the path
+        if self.state.logdir:
+            self.log_file = self.state.logdir / "diagnostics.csv"
+        else:
+            raise RuntimeError(f"{self}: logdir {self.state.logdir} not set!")
+
         self.process = Process(pid=os.getpid())
 
     async def diagnostics_report(self):
 
         if not self.process or not self._enable:
             return None
+
+        # self.logger.debug(f"{self}: Collecting diagnostics...")
 
         # Get the timestamp
         timestamp = datetime.datetime.now().isoformat()
@@ -131,6 +102,7 @@ class ProfilerService(Service):
 
         # Save information then
         diag = NodeDiagnostics(
+            node_id=self.state.id,
             timestamp=timestamp,
             latency=mean_latency,
             payload_size=total_payload,
@@ -140,12 +112,15 @@ class ProfilerService(Service):
         )
 
         # Send the information to the Worker and ultimately the Manager
-        event_data = DiagnosticsReportEvent(diag)
-        # self.logger.debug(f"{self}: data = {diag}")
-        await self.eventbus.asend(Event("diagnostics_report", event_data))
+        # await self.entrypoint.emit("node.diagnostics_report", diag)
+        self.state.diagnostics = diag
+
+        # self.logger.debug(f"{self}: collected diagnostics")
 
         # Write to a csv, if diagnostics enabled
         if config.get("diagnostics.logging-enabled"):
+
+            # self.logger.debug(f"{self}: Saving data")
 
             # Create dictionary with units
             data = {
@@ -167,6 +142,9 @@ class ProfilerService(Service):
             )
 
     async def post_step(self, data_chunk: DataChunk):
+
+        # self.logger.debug(f"{self}: Received data chunk {data_chunk._uuid}.")
+
         # assert self.process
         if not self.process:
             return None
@@ -198,5 +176,6 @@ class ProfilerService(Service):
     def get_object_kilobytes(self, payload: Any) -> float:
         return len(pickle.dumps(payload)) / 1024
 
+    @registry.on("teardown", namespace=f"{__name__}.ProfilerService")
     async def teardown(self):
         await self.async_timer.stop()

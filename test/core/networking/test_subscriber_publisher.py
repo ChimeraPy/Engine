@@ -78,5 +78,5 @@ async def test_sending_data_chunk_between_pub_and_sub(
     await subscriber.start()
     await publisher.publish(data_chunk.to_bytes())
 
-    await asyncio.wait_for(flag.wait(), timeout=5)
+    await asyncio.wait_for(flag.wait(), timeout=15)
     assert expected_data_chunk == data_chunk

@@ -67,17 +67,35 @@ jobs:
           ${{ steps.cp39.outputs.python-path }} -m pip install .[test]
           echo "MANUAL_OS_SET=Windows" >> $GITHUB_ENV
 
-      - name: Perform faster tests
+      - name: Perform ChimeraPy utils tests
         run: |
-          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "not slow" test
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m test/core
           ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
-          mv chimerapy-engine-test.log chimerapy-engine-test-fast.log
+          mv chimerapy-engine-test.log chimerapy-engine-test-utils.log
 
-      - name: Perform slower tests
+      - name: Perform ChimeraPy logger tests
         run: |
-          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m "slow" test
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m test/logger
           ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
-          mv chimerapy-engine-test.log chimerapy-engine-test-slow.log
+          mv chimerapy-engine-test.log chimerapy-engine-test-logger.log
+
+      - name: Perform ChimeraPy Node tests
+        run: |
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m test/node
+          ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
+          mv chimerapy-engine-test.log chimerapy-engine-test-node.log
+
+      - name: Perform ChimeraPy Worker tests
+        run: |
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m test/worker
+          ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
+          mv chimerapy-engine-test.log chimerapy-engine-test-worker.log
+
+      - name: Perform ChimeraPy Manager tests
+        run: |
+          ${{ steps.cp39.outputs.python-path }} -m coverage run --source=chimerapy -m pytest -v --reruns 5 --color yes --reruns-delay 5 -m test/manager
+          ${{ steps.cp39.outputs.python-path }} -m coverage combine --append
+          mv chimerapy-engine-test.log chimerapy-engine-test-manager.log
 
       - name: Combine test logs
         run : |

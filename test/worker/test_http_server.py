@@ -6,8 +6,12 @@ import pytest
 from pytest_lazyfixture import lazy_fixture
 
 from chimerapy.engine import _logger
-from chimerapy.engine.data_protocols import NodeDiagnostics, NodePubTable
-from chimerapy.engine.eventbus import EventBus
+from chimerapy.engine.data_protocols import (
+    GatherData,
+    NodeDiagnostics,
+    NodePubTable,
+    ResultsData,
+)
 from chimerapy.engine.networking.client import Client
 from chimerapy.engine.networking.data_chunk import DataChunk
 from chimerapy.engine.networking.enums import NODE_MESSAGE
@@ -26,20 +30,17 @@ def pickled_gen_node_config(gen_node):
 
 
 @pytest.fixture
-async def http_server():
-
-    # Event Loop
-    eventbus = EventBus()
+async def http_server(bus):
 
     # Requirements
     state = WorkerState()
 
     # Create the services
-    http_server = HttpServerService(
-        name="http_server", state=state, eventbus=eventbus, logger=logger
-    )
+    http_server = HttpServerService(name="http_server", state=state, logger=logger)
+    await http_server.attach(bus)
     await http_server.start()
-    return http_server
+    yield http_server
+    await http_server.shutdown()
 
 
 @pytest.fixture
@@ -103,18 +104,15 @@ async def test_http_server_routes(http_server, route_type, route, payload):
         (NODE_MESSAGE.STATUS, NodeState(logdir=None).to_dict()),
         (
             NODE_MESSAGE.REPORT_GATHER,
-            {
-                "node_id": "test",
-                "latest_value": DataChunk().to_json(),
-            },
+            GatherData(node_id="test", output=DataChunk().to_json()).to_dict(),
         ),
         (
             NODE_MESSAGE.REPORT_RESULTS,
-            {"success": True, "output": 1, "node_id": "test"},
+            ResultsData(node_id="test", success=True, output=None).to_dict(),
         ),
         (
             NODE_MESSAGE.DIAGNOSTICS,
-            {"node_id": "test", "diagnostics": NodeDiagnostics().to_dict()},
+            NodeDiagnostics().to_dict(),
         ),
     ],
 )

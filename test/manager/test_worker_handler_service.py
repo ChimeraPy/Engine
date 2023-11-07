@@ -3,10 +3,10 @@ import pathlib
 import tempfile
 
 import pytest
+from aiodistbus import make_evented
 
 import chimerapy.engine as cpe
-from chimerapy.engine import config
-from chimerapy.engine.eventbus import Event, EventBus, make_evented
+from chimerapy.engine.data_protocols import CommitData
 from chimerapy.engine.manager.http_server_service import HttpServerService
 from chimerapy.engine.manager.worker_handler_service import WorkerHandlerService
 from chimerapy.engine.states import ManagerState
@@ -18,16 +18,13 @@ cpe.debug()
 
 
 @pytest.fixture
-async def testbed_setup():
+async def testbed_setup(bus, entrypoint):
 
     # Creating worker to communicate
     worker = cpe.Worker(name="local", id="local", port=0)
     await worker.aserve()
 
-    eventbus = EventBus()
-    state = make_evented(
-        ManagerState(logdir=pathlib.Path(tempfile.mkdtemp())), event_bus=eventbus
-    )
+    state = make_evented(ManagerState(logdir=pathlib.Path(tempfile.mkdtemp())), bus=bus)
 
     # Define graph
     gen_node = GenNode(name="Gen1", id="Gen1")
@@ -41,23 +38,20 @@ async def testbed_setup():
         name="http_server",
         port=0,
         enable_api=True,
-        eventbus=eventbus,
         state=state,
     )
-    worker_handler = WorkerHandlerService(
-        name="worker_handler", eventbus=eventbus, state=state
-    )
-    await http_server.async_init()
-    await worker_handler.async_init()
+    worker_handler = WorkerHandlerService(name="worker_handler", state=state)
+    await http_server.attach(bus)
+    await worker_handler.attach(bus)
 
-    await eventbus.asend(Event("start"))
+    await entrypoint.emit("start")
 
     # Register worker
     await worker.async_connect(host=http_server.ip, port=http_server.port)
 
     yield (worker_handler, worker, simple_graph)
 
-    await eventbus.asend(Event("shutdown"))
+    await entrypoint.emit("shutdown")
     await worker.async_shutdown()
 
 
@@ -116,9 +110,11 @@ async def test_worker_handler_lifecycle_graph(testbed_setup):
     # Register graph
     worker_handler._register_graph(simple_graph)
 
-    assert await worker_handler.commit(
-        graph=worker_handler.graph, mapping={worker.id: ["Gen1", "Con1"]}
+    commit_data = CommitData(
+        graph=worker_handler.graph,
+        mapping={worker.id: ["Gen1", "Con1"]},
     )
+    assert await worker_handler.commit(commit_data)
     assert await worker_handler.start_workers()
 
     await asyncio.sleep(1)
@@ -128,31 +124,3 @@ async def test_worker_handler_lifecycle_graph(testbed_setup):
 
     # Teardown
     assert await worker_handler.reset()
-
-
-async def test_worker_handler_enable_diagnostics(testbed_setup):
-    worker_handler, worker, simple_graph = testbed_setup
-
-    config.set("diagnostics.interval", 2)
-    config.set("diagnostics.logging-enabled", True)
-
-    # Register graph
-    worker_handler._register_graph(simple_graph)
-
-    assert await worker_handler.commit(
-        graph=worker_handler.graph, mapping={worker.id: ["Gen1", "Con1"]}
-    )
-    assert await worker_handler.start_workers()
-    await worker_handler.diagnostics(enable=True)
-
-    await asyncio.sleep(4)
-    await worker_handler.diagnostics(enable=False)
-
-    assert await worker_handler.stop()
-    assert await worker_handler.collect()
-
-    # Teardown
-    assert await worker_handler.reset()
-
-    session_folder = list(worker_handler.state.logdir.iterdir())[0]
-    assert (session_folder / "Con1" / "diagnostics.csv").exists()

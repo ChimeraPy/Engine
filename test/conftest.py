@@ -7,12 +7,11 @@ import sys
 import time
 from typing import Dict
 
-import docker
 import pytest
+from aiodistbus import DEntryPoint, DEventBus, EntryPoint, EventBus
 
 import chimerapy.engine as cpe
-
-from .mock import DockeredWorker
+from chimerapy.engine.networking.publisher import Publisher
 
 logger = cpe._logger.getLogger("chimerapy-engine")
 
@@ -73,6 +72,44 @@ def event_loop():
 
 
 @pytest.fixture
+async def bus():
+    bus = EventBus()
+    yield bus
+    await bus.close()
+
+
+@pytest.fixture
+async def entrypoint(bus):
+    entrypoint = EntryPoint()
+    await entrypoint.connect(bus)
+    yield entrypoint
+    await entrypoint.close()
+
+
+@pytest.fixture
+async def dbus():
+    bus = DEventBus()
+    yield bus
+    await bus.close()
+
+
+@pytest.fixture
+async def dentrypoint(dbus):
+    entrypoint = DEntryPoint()
+    await entrypoint.connect(dbus.ip, dbus.port)
+    yield entrypoint
+    await entrypoint.close()
+
+
+@pytest.fixture
+def pub():
+    pub = Publisher()
+    pub.start()
+    yield pub
+    pub.shutdown()
+
+
+@pytest.fixture
 def logreceiver():
     listener = cpe._logger.get_node_id_zmq_listener()
     listener.start()
@@ -103,69 +140,9 @@ async def worker():
     await worker.async_shutdown()
 
 
-@pytest.fixture
-def docker_client():
-    logger.info(f"DOCKER CLIENT: {current_platform}")
-    c = docker.DockerClient(base_url="unix://var/run/docker.sock")
-    return c
-
-
 @pytest.fixture(autouse=True)
 def disable_file_logging():
     cpe.config.set("manager.logs-sink.enabled", False)
-
-
-@pytest.fixture
-def dockered_worker(docker_client):
-    logger.info(f"DOCKER WORKER: {current_platform}")
-    dockered_worker = DockeredWorker(docker_client, name="test")
-    yield dockered_worker
-    dockered_worker.shutdown()
-
-
-class LowFrequencyNode(cpe.Node):
-    def setup(self):
-        self.i = 0
-
-    def step(self):
-        data_chunk = cpe.DataChunk()
-        if self.i == 0:
-            time.sleep(0.5)
-            self.i += 1
-            data_chunk.add("i", self.i)
-            return data_chunk
-        else:
-            time.sleep(3)
-            self.i += 1
-            data_chunk.add("i", self.i)
-            return data_chunk
-
-
-class HighFrequencyNode(cpe.Node):
-    def setup(self):
-        self.i = 0
-
-    def step(self):
-        time.sleep(0.1)
-        self.i += 1
-        data_chunk = cpe.DataChunk()
-        data_chunk.add("i", self.i)
-        return data_chunk
-
-
-class SubsequentNode(cpe.Node):
-    def setup(self):
-        self.record = {}
-
-    def step(self, data: Dict[str, cpe.DataChunk]):
-
-        for k, v in data.items():
-            self.record[k] = v
-
-        data_chunk = cpe.DataChunk()
-        data_chunk.add("record", self.record)
-
-        return data_chunk
 
 
 class GenNode(cpe.Node):
@@ -229,164 +206,3 @@ def graph(gen_node, con_node):
     _graph.add_edge(src=gen_node, dst=con_node)
 
     return _graph
-
-
-@pytest.fixture
-def single_node_no_connections_manager(manager, worker, gen_node):
-
-    # Define graph
-    simple_graph = cpe.Graph()
-    simple_graph.add_nodes_from([gen_node])
-
-    # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        simple_graph,
-        {
-            worker.id: [gen_node.id],
-        },
-    ).result(timeout=30)
-
-    return manager
-
-
-@pytest.fixture
-def multiple_nodes_one_worker_manager(manager, worker, gen_node, con_node):
-
-    # Define graph
-    graph = cpe.Graph()
-    graph.add_nodes_from([gen_node, con_node])
-    graph.add_edge(gen_node, con_node)
-
-    # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        graph,
-        {
-            worker.id: [gen_node.id, con_node.id],
-        },
-    ).result(timeout=30)
-
-    return manager
-
-
-@pytest.fixture
-def multiple_nodes_multiple_workers_manager(manager, gen_node, con_node):
-
-    # Define graph
-    graph = cpe.Graph()
-    graph.add_nodes_from([gen_node, con_node])
-    graph.add_edge(gen_node, con_node)
-
-    worker1 = cpe.Worker(name="local", port=0)
-    worker2 = cpe.Worker(name="local2", port=0)
-
-    worker1.connect(method="ip", host=manager.host, port=manager.port)
-    worker2.connect(method="ip", host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    ).result(timeout=60)
-
-    yield manager
-
-    worker1.shutdown()
-    worker2.shutdown()
-
-
-@pytest.fixture
-def slow_single_node_single_worker_manager(manager, worker, slow_node):
-
-    # Define graph
-    simple_graph = cpe.Graph()
-    simple_graph.add_nodes_from([slow_node])
-
-    # Connect to the manager
-    worker.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        simple_graph,
-        {
-            worker.id: [slow_node.id],
-        },
-    ).result(timeout=30)
-
-    return manager
-
-
-@pytest.fixture
-def dockered_single_node_no_connections_manager(dockered_worker, manager, gen_node):
-
-    # Define graph
-    simple_graph = cpe.Graph()
-    simple_graph.add_nodes_from([gen_node])
-
-    # Connect to the manager
-    dockered_worker.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        simple_graph,
-        {
-            dockered_worker.id: [gen_node.id],
-        },
-    ).result(timeout=30)
-
-    return manager
-
-
-@pytest.fixture
-def dockered_multiple_nodes_one_worker_manager(
-    dockered_worker, manager, gen_node, con_node
-):
-
-    # Define graph
-    simple_graph = cpe.Graph()
-    simple_graph.add_nodes_from([gen_node, con_node])
-    simple_graph.add_edge(gen_node, con_node)
-
-    # Connect to the manager
-    dockered_worker.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        simple_graph,
-        {
-            dockered_worker.id: [gen_node.id, con_node.id],
-        },
-    ).result(timeout=30)
-
-    return manager
-
-
-@pytest.fixture
-def dockered_multiple_nodes_multiple_workers_manager(
-    docker_client, manager, gen_node, con_node
-):
-
-    # Define graph
-    graph = cpe.Graph()
-    graph.add_nodes_from([gen_node, con_node])
-    graph.add_edge(gen_node, con_node)
-
-    worker1 = DockeredWorker(docker_client, name="local")
-    worker2 = DockeredWorker(docker_client, name="local2")
-
-    worker1.connect(host=manager.host, port=manager.port)
-    worker2.connect(host=manager.host, port=manager.port)
-
-    # Then register graph to Manager
-    assert manager.commit_graph(
-        graph, {worker1.id: [gen_node.id], worker2.id: [con_node.id]}
-    ).result(timeout=30)
-
-    yield manager
-
-    worker1.shutdown()
-    worker2.shutdown()

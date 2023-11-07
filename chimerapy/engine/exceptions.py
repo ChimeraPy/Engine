@@ -1,2 +1,6 @@
+class NodeError(Exception):
+    ...
+
+
 class CommitGraphError(Exception):
     ...
